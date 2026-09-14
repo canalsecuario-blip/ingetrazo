@@ -133,14 +133,28 @@ def _rectangle(p, ink):
 
 
 def _rotated_rect(p, ink):
-    poly = QPolygonF([QPointF(9, 27), QPointF(23, 11),
-                      QPointF(39, 21), QPointF(25, 37)])
+    # Rotated rectangle as its three clicks: the pivot (bigger dot), the
+    # end of the first edge and the width — with the horizontal base line
+    # and the arc of the turn at the pivot as guides (Marco's pick,
+    # 2026-09-14, after SketchUp's icon).
+    P = (10.0, 36.0)
+    ang = math.radians(30)
+    L, W = 26.0, 16.0
+    B = (P[0] + L * math.cos(ang), P[1] - L * math.sin(ang))
+    C = (B[0] - W * math.sin(ang), B[1] - W * math.cos(ang))
+    D = (P[0] - W * math.sin(ang), P[1] - W * math.cos(ang))
     p.setBrush(Qt.NoBrush)
-    p.drawPolygon(poly)
-    _guide(p, ink, (9, 27), (23, 11), dashed=False)    # the first edge
-    _dot(p, 9, 27, 2.9)
-    _dot(p, 23, 11, 2.9)
-    _dot(p, 39, 21, 2.9)
+    p.drawPolygon(QPolygonF([QPointF(*P), QPointF(*B), QPointF(*C), QPointF(*D)]))
+    _guide(p, ink, P, (P[0] + 24, P[1]))                     # the base line
+    pen = QPen(QColor(ink.red(), ink.green(), ink.blue(), 160), 1.8)
+    pen.setCapStyle(Qt.RoundCap)
+    p.save()
+    p.setPen(pen)
+    p.drawArc(QRectF(P[0] - 10, P[1] - 10, 20, 20), 0, 30 * 16)   # the turn
+    p.restore()
+    _dot(p, P[0], P[1], 3.3)
+    _dot(p, B[0], B[1], 2.6)
+    _dot(p, C[0], C[1], 2.6)
 
 
 def _circle(p, ink):
