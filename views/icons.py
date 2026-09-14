@@ -703,13 +703,17 @@ def _view_top(p, ink):
 
 
 def _view_bottom(p, ink):
-    # The footprint from below: a plain slab in accent with a small tab.
-    slab = QRectF(9, 15, 24, 20)
+    # The slab from below, in accent, with the walls starting off it: a
+    # short diagonal stub at each corner (Marco's pick, 2026-09-14).
+    slab = QRectF(9, 11, 24, 24)
     _accent_fill(p, slab)
     p.setBrush(Qt.NoBrush)
     p.drawRect(slab)
-    p.drawRect(QRectF(17, 11, 8, 4))                       # small tab
-    p.drawLine(QPointF(9, 21), QPointF(33, 21))            # slab edge line
+    for x in (9.0, 33.0):
+        for y in (11.0, 35.0):
+            p.drawLine(QPointF(x, y),
+                       QPointF(x + (4.0 if x == 9.0 else -4.0),
+                               y + (4.0 if y == 11.0 else -4.0)))
 
 
 def _view_iso(p, ink):
