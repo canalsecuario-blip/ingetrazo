@@ -792,6 +792,16 @@ class MainWindow(QMainWindow):
         get_models_action = QAction(tr("Get more models and textures…"), self)
         get_models_action.triggered.connect(self._on_get_models)
         help_menu.addAction(get_models_action)
+        # Only as an AppImage: put a launcher in the menu, or take it away.
+        from core.appimage import appimage_path
+        if appimage_path() is not None:
+            add_act = QAction(tr("Add to the applications menu"), self)
+            add_act.triggered.connect(self.add_appimage_to_menu)
+            help_menu.addAction(add_act)
+            rm_act = QAction(tr("Remove from the applications menu"), self)
+            rm_act.triggered.connect(self.remove_appimage_from_menu)
+            help_menu.addAction(rm_act)
+            help_menu.addSeparator()
         about_action = QAction(tr("About IngeTrazo"), self)
         about_action.triggered.connect(self._on_about)
         help_menu.addAction(about_action)
@@ -3240,6 +3250,27 @@ class MainWindow(QMainWindow):
         self.viewport.history.execute(DeleteImagePlanesCommand([image]))
         self.viewport.scene.selection.discard(image)
         self.viewport.update()
+
+    def add_appimage_to_menu(self) -> None:
+        """Write the launcher + icon for the running AppImage."""
+        from core.appimage import appimage_path, integrate
+        img = appimage_path()
+        if img is None:
+            return
+        try:
+            f = integrate(img)
+        except OSError as exc:
+            QMessageBox.warning(self, tr("Add to the applications menu"),
+                                str(exc))
+            return
+        self.statusBar().showMessage(
+            tr("Launcher added: {path}", path=str(f)), 6000)
+
+    def remove_appimage_from_menu(self) -> None:
+        from core.appimage import remove
+        remove()
+        self.statusBar().showMessage(
+            tr("Launcher removed from the applications menu"), 5000)
 
     def _on_toggle_image_lock(self) -> None:
         """Lock an image so clicks fall through to what you are drawing on top

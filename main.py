@@ -248,8 +248,12 @@ def main() -> int:
             icon.addFile(str(p))
     app.setWindowIcon(icon)
     # Wayland matches the running window to its .desktop entry (and thus the
-    # dock icon) by this name — see scripts/install_desktop.sh.
-    app.setDesktopFileName("ingetrazo")
+    # dock icon) by this name — see scripts/install_desktop.sh. Inside the
+    # Flatpak the entry is the app id: a window claiming "ingetrazo" there
+    # matched nothing, so the shell (and GNOME Software's Open button, which
+    # waits for the launched app to appear) never tied it to the launcher.
+    import os as _os
+    app.setDesktopFileName(_os.environ.get("FLATPAK_ID") or "ingetrazo")
     _apply_dark_theme(app)
     _init_language()
     window = MainWindow()
@@ -313,7 +317,42 @@ def main() -> int:
         if doc.exists():
             _open_document_in(window, doc)
     window.show()
+    _offer_appimage_integration(window)
     return app.exec()
+
+
+def _offer_appimage_integration(window) -> None:
+    """Running as an AppImage that is not in the applications menu yet:
+    offer to add it, once (Help ▸ Add to the applications menu stays
+    available). The answer «not now» is remembered per AppImage path."""
+    from core.appimage import appimage_path, is_integrated
+    img = appimage_path()
+    if img is None or is_integrated(img):
+        return
+    from PySide6.QtCore import QSettings, QTimer
+    from PySide6.QtWidgets import QMessageBox
+    st = QSettings()
+    if str(st.value("appimage/declined", "")) == str(img):
+        return
+
+    def ask():
+        from core.i18n import tr
+        box = QMessageBox(window)
+        box.setWindowTitle(tr("Add IngeTrazo to the applications menu?"))
+        box.setText(tr(
+            "You are running IngeTrazo as an AppImage. Add a launcher with "
+            "its icon to your applications menu, and associate .igz files "
+            "with it? Nothing is copied: the launcher points at this file, "
+            "so keep it where it is."))
+        yes = box.addButton(tr("Add to menu"), QMessageBox.AcceptRole)
+        box.addButton(tr("Not now"), QMessageBox.RejectRole)
+        box.exec()
+        if box.clickedButton() is yes:
+            window.add_appimage_to_menu()
+        else:
+            st.setValue("appimage/declined", str(img))
+
+    QTimer.singleShot(600, ask)
 
 
 if __name__ == "__main__":

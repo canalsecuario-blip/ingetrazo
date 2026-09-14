@@ -40,6 +40,38 @@
     </p>
   </description>
   <launchable type="desktop-id">com.ingetrazo.IngeTrazo.desktop</launchable>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://ingetrazo.com/images/screenshots/principal.jpeg</image>
+      <caption>Modelling a plaza: push/pull, groups, materials and shadows</caption>
+      <caption xml:lang="es">Modelando una plaza: empujar/tirar, grupos, materiales y sombras</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://ingetrazo.com/images/screenshots/laminas.jpeg</image>
+      <caption>The sheet composer: to-scale plans with dimensions, labels and a title block</caption>
+      <caption xml:lang="es">El compositor de láminas: planos a escala con cotas, etiquetas y cajetín</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://ingetrazo.com/images/screenshots/terreno.jpeg</image>
+      <caption>Real terrain: base-map tiles, 3D elevation and survey data under the model</caption>
+      <caption xml:lang="es">Terreno real: mapa base, elevación 3D y levantamientos bajo el modelo</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://ingetrazo.com/images/screenshots/import-sketchup.jpeg</image>
+      <caption>SketchUp .skp files open natively, textures and all</caption>
+      <caption xml:lang="es">Los archivos .skp de SketchUp abren de forma nativa, con sus texturas</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://ingetrazo.com/images/screenshots/componentes.jpeg</image>
+      <caption>A component library of 1510 models and 427 textures, browsed from the tray</caption>
+      <caption xml:lang="es">Biblioteca de 1510 componentes y 427 texturas, desde la bandeja</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://ingetrazo.com/images/screenshots/bim.jpeg</image>
+      <caption>BIM tags on the geometry you drew, exported to IFC4 for quantity take-off</caption>
+      <caption xml:lang="es">Etiquetas BIM sobre lo trazado, exportadas a IFC4 para el metrado</caption>
+    </screenshot>
+  </screenshots>
   <url type="homepage">https://ingetrazo.com</url>
   <url type="bugtracker">https://github.com/ingelibre/ingetrazo/issues</url>
   <url type="vcs-browser">https://github.com/ingelibre/ingetrazo</url>
