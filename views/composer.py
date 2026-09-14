@@ -4368,6 +4368,18 @@ class ComposerWindow(QMainWindow):
                              on_menu=lambda i, pos: self.sheet_tab_menu(
                                  i, pos, self))
         self.setStatusBar(bar)
+        self._build_window_actions()
+        self._build_sidebar_handle()
+        # Toolbar arrangement: what the user drags survives sessions; a
+        # fresh profile shows the toolbars as they are laid out here
+        # (tools left, sheet + arrange top) — the factory look (Marco,
+        # 2026-09-14). Restored AFTER every toolbar exists (objectName).
+        state = QSettings().value("composer/window_state")
+        if state:
+            self.restoreState(state)
+            # Arrange's own setting stays the word on whether it shows.
+            self._arrange_tb.setVisible(str(QSettings().value(
+                "composer/arrange_toolbar", "0")) == "1")
         self._sheet_tabs = bar.tabs
         # Auto-render lives on the status row, right of the Model | sheet
         # tabs and before the cursor position (Marco, 2026-09-08: «abajo en
@@ -4490,8 +4502,8 @@ class ComposerWindow(QMainWindow):
         from PySide6.QtWidgets import QToolBar
         from views.icons import tool_icon
         tb = QToolBar(tr("Composer tools"), self)
+        tb.setObjectName("composer_tools")
         tb.setOrientation(Qt.Vertical)
-        tb.setMovable(False)
         tb.setIconSize(QSize(toolbar_icon_px(), toolbar_icon_px()))
         group = QActionGroup(self)
         group.setExclusive(True)
@@ -5070,7 +5082,6 @@ class ComposerWindow(QMainWindow):
         from views.icons import tool_icon
         tb = QToolBar(tr("Sheet"), self)
         tb.setObjectName("sheet_toolbar")
-        tb.setMovable(False)
         tb.setToolButtonStyle(Qt.ToolButtonIconOnly)   # icons, like the tools
         tb.setIconSize(QSize(toolbar_icon_px(), toolbar_icon_px()))
 
@@ -7510,7 +7521,7 @@ class ComposerWindow(QMainWindow):
         from PySide6.QtGui import QAction
         from PySide6.QtWidgets import QToolBar
         tb = QToolBar(tr("Arrange"), self)
-        tb.setMovable(False)
+        tb.setObjectName("arrange_toolbar")
         tb.setIconSize(QSize(toolbar_icon_px(), toolbar_icon_px()))
         from views.icons import tool_icon
         for icon, label, slot in self._arrange_entries():
@@ -10185,9 +10196,171 @@ class ComposerWindow(QMainWindow):
     # ---- lifecycle -----------------------------------------------------------
     def closeEvent(self, event) -> None:
         from PySide6.QtCore import QSettings
-        QSettings().setValue("composer/panel_width",
-                             self._splitter.sizes()[1])
+        st = QSettings()
+        if self._panel.isVisible():
+            st.setValue("composer/panel_width", self._splitter.sizes()[1])
+        # The toolbar arrangement IS a preference; closing mid-presentation
+        # must remember the workspace, not the clean screen's nothing.
+        clean = getattr(self, "_clean_screen_state", None)
+        st.setValue("composer/window_state",
+                    clean if (self._act_clean_screen.isChecked()
+                              and clean is not None) else self.saveState())
         super().closeEvent(event)
+
+    # ---- Window: sidebar handle + clean screen (as in the model window) ------
+    def _build_window_actions(self) -> None:
+        """Ctrl+F5 folds the right panel away and back; Ctrl+0 is
+        AutoCAD's clean screen — only the page, for presenting — with a
+        small exit button for whoever does not know the key."""
+        from PySide6.QtGui import QAction, QKeySequence
+        act = QAction(tr("Sidebar"), self)
+        act.setCheckable(True)
+        act.setChecked(True)
+        act.setShortcut(QKeySequence("Ctrl+F5"))
+        act.setToolTip(tr("Show or hide the sidebar (Ctrl+F5)"))
+        act.toggled.connect(self._set_sidebar_visible)
+        self.addAction(act)
+        self._act_sidebar = act
+        clean = QAction(tr("Clean screen"), self)
+        clean.setShortcut(QKeySequence("Ctrl+0"))
+        clean.setCheckable(True)
+        clean.toggled.connect(self._toggle_clean_screen)
+        self.addAction(clean)
+        self._act_clean_screen = clean
+
+    @property
+    def _panel(self):
+        return self._splitter.widget(1)
+
+    def _set_sidebar_visible(self, on: bool) -> None:
+        from PySide6.QtCore import QSettings
+        from views.icons import tool_icon
+        panel = self._panel
+        if on:
+            panel.show()
+            saved = QSettings().value("composer/panel_width", 300, int)
+            self._splitter.setSizes([max(self.width() - saved, 400), saved])
+        else:
+            if panel.isVisible():
+                QSettings().setValue("composer/panel_width",
+                                     self._splitter.sizes()[1])
+            panel.hide()
+        btn = getattr(self, "_sidebar_handle", None)
+        if btn is not None:
+            btn.setIcon(tool_icon("side_collapse" if on else "side_expand"))
+            QTimer.singleShot(0, self._place_sidebar_handle)
+
+    def _build_sidebar_handle(self) -> None:
+        """LibreOffice's handle on the splitter line, half-way down: click
+        folds the panel away, the handle rests at the window's edge
+        pointing back in, click brings the panel back (Marco, 2026-09-14:
+        «en composiciones implementa ese mismo botón»)."""
+        from PySide6.QtCore import QSize
+        from PySide6.QtWidgets import QToolButton
+        from views.icons import tool_icon
+        btn = QToolButton(self)
+        btn.setObjectName("sidebar_handle")
+        btn.setFixedSize(14, 56)
+        btn.setIconSize(QSize(12, 12))
+        btn.setIcon(tool_icon("side_collapse"))
+        btn.setToolTip(self._act_sidebar.toolTip())
+        btn.setCursor(Qt.PointingHandCursor)
+        btn.setAutoRaise(True)
+        btn.setStyleSheet(
+            "QToolButton { background: palette(mid); border: none;"
+            " border-radius: 4px; }"
+            "QToolButton:hover { background: rgb(243, 115, 41); }")
+        btn.clicked.connect(
+            lambda: self._act_sidebar.setChecked(
+                not self._act_sidebar.isChecked()))
+        self._sidebar_handle = btn
+        area = self._splitter.widget(0)
+        area.installEventFilter(self)
+        self._splitter.splitterMoved.connect(
+            lambda *_a: self._place_sidebar_handle())
+        self._place_sidebar_handle()
+
+    def _place_sidebar_handle(self) -> None:
+        btn = getattr(self, "_sidebar_handle", None)
+        if btn is None:
+            return
+        from PySide6.QtCore import QPoint
+        area = self._splitter.widget(0)
+        edge = area.mapTo(self, QPoint(area.width(), 0))
+        x = edge.x() + self._splitter.handleWidth() // 2 - btn.width() // 2
+        x = max(0, min(x, self.width() - btn.width()))
+        y = edge.y() + (area.height() - btn.height()) // 2
+        btn.move(x, max(0, y))
+        btn.raise_()
+        btn.setVisible(not self._act_clean_screen.isChecked())
+
+    def _toggle_clean_screen(self, on: bool) -> None:
+        from PySide6.QtWidgets import QToolBar
+        if on:
+            self._clean_screen_state = self.saveState()
+            self._clean_screen_panel = self._act_sidebar.isChecked()
+            for tb in self.findChildren(QToolBar):
+                tb.hide()
+            self._panel.hide()
+            self.statusBar().hide()
+            self.ruler_h.hide()
+            self.ruler_v.hide()
+            self._clean_screen_exit_button().show()
+            self._place_clean_screen_exit()
+            self._sidebar_handle.hide()
+        else:
+            btn = getattr(self, "_clean_exit_btn", None)
+            if btn is not None:
+                btn.hide()
+            state = getattr(self, "_clean_screen_state", None)
+            if state is not None:
+                self.restoreState(state)
+            self.statusBar().show()
+            self.ruler_h.show()
+            self.ruler_v.show()
+            if getattr(self, "_clean_screen_panel", True):
+                self._set_sidebar_visible(True)
+            QTimer.singleShot(0, self._place_sidebar_handle)
+
+    def _clean_screen_exit_button(self):
+        btn = getattr(self, "_clean_exit_btn", None)
+        if btn is not None:
+            return btn
+        from PySide6.QtWidgets import QToolButton
+        btn = QToolButton(self._view)
+        btn.setObjectName("clean_screen_exit")
+        btn.setText("✕  " + tr("Exit clean screen"))
+        btn.setToolTip(tr("Back to the workspace (Ctrl+0)"))
+        btn.setCursor(Qt.PointingHandCursor)
+        btn.setAutoRaise(True)
+        btn.setStyleSheet(
+            "QToolButton { background: rgba(30, 36, 44, 170); color: white;"
+            " border: 1px solid rgba(255, 255, 255, 90); border-radius: 6px;"
+            " padding: 4px 10px; font-weight: bold; }"
+            "QToolButton:hover { background: rgba(243, 115, 41, 220); }")
+        btn.clicked.connect(lambda: self._act_clean_screen.setChecked(False))
+        btn.hide()
+        self._clean_exit_btn = btn
+        self._view.installEventFilter(self)
+        return btn
+
+    def _place_clean_screen_exit(self) -> None:
+        btn = getattr(self, "_clean_exit_btn", None)
+        if btn is None or not btn.isVisible():
+            return
+        btn.adjustSize()
+        btn.move(self._view.width() - btn.width() - 12, 12)
+        btn.raise_()
+
+    def eventFilter(self, obj, event):  # noqa: N802 — Qt override
+        from PySide6.QtCore import QEvent
+        if event.type() in (QEvent.Resize, QEvent.Move, QEvent.Show):
+            if obj is getattr(self, "_view", None):
+                self._place_clean_screen_exit()
+            split = getattr(self, "_splitter", None)
+            if split is not None and obj is split.widget(0):
+                self._place_sidebar_handle()
+        return super().eventFilter(obj, event)
 
     def showEvent(self, event) -> None:
         QTimer.singleShot(0, self._auto_render_stale)

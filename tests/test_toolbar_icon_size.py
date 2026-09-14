@@ -151,3 +151,81 @@ def test_the_sidebar_handle_sits_on_the_resize_line_and_folds_the_trays(settings
     finally:
         win._saved_version = win.viewport.scene.version
         win.close()
+
+
+def _composer(monkeypatch):
+    from views.composer import ComposerWindow
+    from views.main_window import MainWindow
+    monkeypatch.setattr(ComposerWindow, "render_frame", lambda self, f: None)
+    win = MainWindow()
+    comp = ComposerWindow(win)
+    win._composer = comp
+    return win, comp
+
+
+def test_the_composer_has_the_same_handle_and_clean_screen(settings_file, monkeypatch):
+    """Marco, 2026-09-14: «en composiciones implementa ese mismo botón…
+    también Ctrl+0». The handle sits on the splitter line, folds the
+    right panel away; Ctrl+0 leaves only the page plus the exit button."""
+    win, comp = _composer(monkeypatch)
+    try:
+        comp.resize(1200, 800)
+        comp.show()
+        QApplication.processEvents()
+        btn = comp._sidebar_handle
+        panel = comp._splitter.widget(1)
+        area = comp._splitter.widget(0)
+        assert btn.isVisible() and panel.isVisible()
+        edge = area.mapTo(comp, area.rect().topRight()).x()
+        assert abs((btn.x() + btn.width() // 2) - edge) <= comp._splitter.handleWidth()
+        btn.click()
+        QApplication.processEvents()
+        assert not panel.isVisible() and not comp._act_sidebar.isChecked()
+        QApplication.processEvents()
+        assert btn.x() + btn.width() >= comp.width() - 2
+        comp._act_sidebar.setChecked(True)
+        QApplication.processEvents()
+        assert panel.isVisible()
+        # Ctrl+0
+        comp._act_clean_screen.setChecked(True)
+        QApplication.processEvents()
+        assert not any(tb.isVisible() for tb in comp.findChildren(QToolBar))
+        assert not panel.isVisible() and not btn.isVisible()
+        exit_btn = comp._clean_exit_btn
+        assert exit_btn.isVisible()
+        assert exit_btn.x() + exit_btn.width() <= comp._view.width()
+        exit_btn.click()
+        QApplication.processEvents()
+        assert comp._sheet_tb.isVisible() and panel.isVisible() and btn.isVisible()
+    finally:
+        comp.close()
+        win._saved_version = win.viewport.scene.version
+        win.close()
+
+
+def test_the_composer_toolbars_are_movable_and_their_arrangement_is_remembered(settings_file, monkeypatch):
+    """The factory look is the code's (tools left, sheet top); what the
+    user drags is saved on close and restored next time."""
+    from PySide6.QtCore import Qt
+    win, comp = _composer(monkeypatch)
+    try:
+        comp.show()
+        QApplication.processEvents()
+        tools = comp.findChild(QToolBar, "composer_tools")
+        assert tools.isMovable() and comp._sheet_tb.isMovable()
+        assert comp.toolBarArea(tools) == Qt.LeftToolBarArea
+        assert comp.toolBarArea(comp._sheet_tb) == Qt.TopToolBarArea
+        comp.addToolBar(Qt.RightToolBarArea, tools)     # the user drags it
+        comp.close()
+        QApplication.processEvents()
+        comp2 = type(comp)(win)
+        try:
+            comp2.show()
+            QApplication.processEvents()
+            t2 = comp2.findChild(QToolBar, "composer_tools")
+            assert comp2.toolBarArea(t2) == Qt.RightToolBarArea
+        finally:
+            comp2.close()
+    finally:
+        win._saved_version = win.viewport.scene.version
+        win.close()
