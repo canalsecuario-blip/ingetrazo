@@ -75,9 +75,10 @@ def test_a_fresh_install_gets_marcos_layout_and_large_icons(settings_file, monke
     the top, as Marco arranged them (2026-09-14: «así como está… por
     defecto para cualquier persona que instale el programa»)."""
     from PySide6.QtCore import Qt
-    from views.icons import toolbar_icon_px
+    from views import icons
     from views.main_window import MainWindow
-    assert toolbar_icon_px() == 32
+    monkeypatch.setattr(icons, "default_toolbar_icon_px", lambda: 32)   # a desktop screen
+    assert icons.toolbar_icon_px() == 32
     win = MainWindow()
     try:
         assert win.toolBarArea(win.toolbars["draw"]) == Qt.LeftToolBarArea
@@ -239,3 +240,30 @@ def test_the_composer_toolbars_are_movable_and_their_arrangement_is_remembered(s
     finally:
         win._saved_version = win.viewport.scene.version
         win.close()
+
+
+def test_a_laptop_screen_starts_at_24_px_and_a_choice_wins(settings_file, monkeypatch):
+    """The factory layout at 32 px overflows a 1366×768 screen (Annotate
+    and Panels lose icons behind the chevron); a fresh profile on such a
+    screen starts at 24 px, and a saved choice is never second-guessed."""
+    from PySide6.QtCore import QRect
+    from PySide6.QtGui import QGuiApplication
+    from views import icons
+
+    class _Screen:
+        def __init__(self, h):
+            self._h = h
+
+        def availableGeometry(self):
+            return QRect(0, 0, 1366, self._h)
+
+    monkeypatch.setattr(QGuiApplication, "primaryScreen",
+                        staticmethod(lambda: _Screen(740)))
+    assert icons.toolbar_icon_px() == 24
+    monkeypatch.setattr(QGuiApplication, "primaryScreen",
+                        staticmethod(lambda: _Screen(1050)))
+    assert icons.toolbar_icon_px() == 32
+    icons.save_toolbar_icon_px(40)
+    monkeypatch.setattr(QGuiApplication, "primaryScreen",
+                        staticmethod(lambda: _Screen(740)))
+    assert icons.toolbar_icon_px() == 40
