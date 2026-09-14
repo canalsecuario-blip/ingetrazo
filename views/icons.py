@@ -514,53 +514,49 @@ def _orbit(p, ink):
 
 
 def _pan(p, ink):
-    # Pan as a DRAG gesture — the reference Marco sent (2026-09-14): a
-    # pointing hand (index up, three fingers folded, thumb out) in solid
-    # ink, a horizontal double arrow above it and an arc of touch over the
-    # fingertip in the accent.
-    from PySide6.QtGui import QPainterPath, QTransform
-    path = QPainterPath()
-    palm = QPainterPath()
-    palm.addRoundedRect(QRectF(17, 27, 17, 15), 5, 5)          # palm
-    path = path.united(palm)
-    for fx in (23.5, 28.0, 32.0):                              # folded knuckles
-        k = QPainterPath()
-        k.addEllipse(QPointF(fx, 27.5), 2.6, 2.6)
-        path = path.united(k)
-    idx = QPainterPath()
-    idx.addRoundedRect(QRectF(19.5, 12, 5.2, 20), 2.6, 2.6)    # index finger
-    path = path.united(idx)
-    t = QPainterPath()
-    t.addRoundedRect(QRectF(-2.5, -2.8, 12, 5.6), 2.8, 2.8)    # thumb
-    tr = QTransform()
-    tr.translate(18.5, 33)
-    tr.rotate(-40)
-    path = path.united(tr.map(t))
-    w = QPainterPath()
-    w.addRoundedRect(QRectF(20, 39, 12, 6), 2, 2)              # wrist
-    path = path.united(w)
-    p.save()
-    p.setPen(Qt.NoPen)
-    p.setBrush(QBrush(ink))
-    p.drawPath(path)
-    p.restore()
-    # The double arrow (ink) and the touch arc (accent).
-    pen = QPen(ink, 2.6)
-    pen.setCapStyle(Qt.RoundCap)
+    # Pan as a drag gesture, drawn in LINE like the reference Marco sent
+    # (2026-09-14): an outlined pointing hand — index up with a rounded
+    # tip, three folded fingers as bumps, the thumb tucked at the left, a
+    # tapered wrist — a touch arc over the fingertip and a horizontal
+    # double arrow at that level.
+    from PySide6.QtGui import QPainterPath
+    P = QPainterPath()
+    P.moveTo(17.5, 33.0)
+    P.lineTo(17.5, 14.5)                          # index, left edge
+    P.cubicTo(17.5, 9.5, 24.5, 9.5, 24.5, 14.5)   # rounded tip
+    P.lineTo(24.5, 26.0)
+    P.cubicTo(25.0, 22.5, 30.5, 22.5, 31.0, 26.0)  # folded fingers
+    P.cubicTo(31.5, 23.5, 36.5, 23.5, 37.0, 27.0)
+    P.cubicTo(37.5, 25.0, 42.0, 25.5, 42.0, 29.0)
+    P.lineTo(42.0, 34.0)
+    P.cubicTo(42.0, 41.0, 37.0, 45.0, 31.0, 45.0)  # into the wrist
+    P.lineTo(23.0, 45.0)
+    P.cubicTo(17.0, 45.0, 13.0, 41.0, 12.0, 37.0)
+    P.cubicTo(11.0, 34.0, 8.0, 32.5, 8.5, 29.0)    # thumb
+    P.cubicTo(9.0, 26.5, 12.5, 26.0, 14.5, 28.0)
+    P.cubicTo(15.5, 29.5, 16.5, 31.5, 17.5, 33.0)
+    P.closeSubpath()
+    pen = QPen(ink, 2.8)
     pen.setJoinStyle(Qt.RoundJoin)
+    pen.setCapStyle(Qt.RoundCap)
     p.save()
     p.setPen(pen)
     p.setBrush(Qt.NoBrush)
-    y = 9.5
-    p.drawLine(QPointF(9, y), QPointF(17, y))
-    p.drawLine(QPointF(9, y), QPointF(12.5, y - 3.5))
-    p.drawLine(QPointF(9, y), QPointF(12.5, y + 3.5))
-    p.drawLine(QPointF(31, y), QPointF(39, y))
-    p.drawLine(QPointF(39, y), QPointF(35.5, y - 3.5))
-    p.drawLine(QPointF(39, y), QPointF(35.5, y + 3.5))
-    p.setPen(QPen(_accent(), 2.4))
-    r = 5.5
-    p.drawArc(QRectF(22.1 - r, 12.5 - r, 2 * r, 2 * r), 20 * 16, 140 * 16)
+    p.drawPath(P)
+    r = 7.0
+    p.setPen(QPen(ink, 2.4, Qt.SolidLine, Qt.RoundCap))
+    p.drawArc(QRectF(21.0 - r, 13.5 - r, 2 * r, 2 * r), 20 * 16, 140 * 16)
+    pen = QPen(ink, 2.5)
+    pen.setCapStyle(Qt.RoundCap)
+    pen.setJoinStyle(Qt.RoundJoin)
+    p.setPen(pen)
+    y = 13.5
+    p.drawLine(QPointF(3.5, y), QPointF(11.5, y))
+    p.drawLine(QPointF(3.5, y), QPointF(7.0, y - 3.5))
+    p.drawLine(QPointF(3.5, y), QPointF(7.0, y + 3.5))
+    p.drawLine(QPointF(30.5, y), QPointF(38.5, y))
+    p.drawLine(QPointF(38.5, y), QPointF(35.0, y - 3.5))
+    p.drawLine(QPointF(38.5, y), QPointF(35.0, y + 3.5))
     p.restore()
 
 
