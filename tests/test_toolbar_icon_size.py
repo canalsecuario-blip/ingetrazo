@@ -216,6 +216,15 @@ def test_the_composer_toolbars_are_movable_and_their_arrangement_is_remembered(s
         assert tools.isMovable() and comp._sheet_tb.isMovable()
         assert comp.toolBarArea(tools) == Qt.LeftToolBarArea
         assert comp.toolBarArea(comp._sheet_tb) == Qt.TopToolBarArea
+        # The drawing tools on their own TOP bar: 23 in one column did not
+        # fit a 768 px laptop screen (Marco, 2026-09-14).
+        draw = comp.findChild(QToolBar, "composer_draw")
+        assert comp.toolBarArea(draw) == Qt.TopToolBarArea
+        assert len(tools.actions()) == 14 and len(draw.actions()) == 9
+        assert comp._tool_actions["cota"] in draw.actions()
+        assert comp._tool_actions["vista"] in tools.actions()
+        comp._tool_actions["cota"].trigger()          # one exclusive group
+        assert comp.tool_mode == "cota" and not comp._tool_actions["select"].isChecked()
         comp.addToolBar(Qt.RightToolBarArea, tools)     # the user drags it
         comp.close()
         QApplication.processEvents()

@@ -4498,6 +4498,13 @@ class ComposerWindow(QMainWindow):
         for tb in self.findChildren(QToolBar):
             tb.setIconSize(QSize(int(px), int(px)))
 
+    #: The drawing tools go on a bar of their own along the TOP: 23 tools in
+    #: one vertical bar at 32 px ran past a laptop's 768 px and the last
+    #: ones vanished behind the overflow chevron (Marco, 2026-09-14). The
+    #: sheet-item tools (14) stay at the left, as in LayOut.
+    DRAW_TOOLS = ("linea", "flecha", "terreno", "rect", "elipse", "poligono",
+                  "cota", "cota_cadena", "cota_ang")
+
     def _build_tools_toolbar(self) -> None:
         from PySide6.QtGui import QAction, QActionGroup
         from PySide6.QtWidgets import QToolBar
@@ -4506,6 +4513,9 @@ class ComposerWindow(QMainWindow):
         tb.setObjectName("composer_tools")
         tb.setOrientation(Qt.Vertical)
         tb.setIconSize(QSize(toolbar_icon_px(), toolbar_icon_px()))
+        draw = QToolBar(tr("Draw"), self)
+        draw.setObjectName("composer_draw")
+        draw.setIconSize(QSize(toolbar_icon_px(), toolbar_icon_px()))
         group = QActionGroup(self)
         group.setExclusive(True)
         self._tool_actions = {}
@@ -4516,9 +4526,12 @@ class ComposerWindow(QMainWindow):
             act.triggered.connect(
                 lambda _c, m=mode: self._set_tool_mode(m))
             group.addAction(act)
-            tb.addAction(act)
+            (draw if mode in self.DRAW_TOOLS else tb).addAction(act)
             self._tool_actions[mode] = act
         self.addToolBar(Qt.LeftToolBarArea, tb)
+        self.addToolBar(Qt.TopToolBarArea, draw)
+        self._tools_tb = tb
+        self._draw_tb = draw
 
     def _set_tool_mode(self, mode: str) -> None:
         if hasattr(self, "_view"):
