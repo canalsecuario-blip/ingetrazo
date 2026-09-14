@@ -531,10 +531,36 @@ def _paint(p, ink):
     p.drawPath(drop)
 
 
+def _dim_tick(p, ink, x: float, y: float, s: float = 3.5) -> None:
+    """SketchUp's slash tick at a dimension line's end."""
+    pen = QPen(ink, 3.0)
+    pen.setCapStyle(Qt.RoundCap)
+    p.save()
+    p.setPen(pen)
+    p.drawLine(QPointF(x - s, y + s), QPointF(x + s, y - s))
+    p.restore()
+
+
 def _dimension(p, ink):
-    p.drawLine(QPointF(12, 30), QPointF(36, 30))
-    p.drawLine(QPointF(12, 24), QPointF(12, 36))
-    p.drawLine(QPointF(36, 24), QPointF(36, 36))
+    # A dimension the way it reads on a plan: line, extension lines, slash
+    # ticks, a value — a plain «3» — and the two measured points in the
+    # accent (Marco's pick, 2026-09-14: the bare bracket looked «muy
+    # simple»).
+    p.drawLine(QPointF(9, 30), QPointF(39, 30))
+    p.drawLine(QPointF(9, 23), QPointF(9, 37))
+    p.drawLine(QPointF(39, 23), QPointF(39, 37))
+    _dim_tick(p, ink, 9, 30)
+    _dim_tick(p, ink, 39, 30)
+    f = p.font()
+    f.setPixelSize(13)
+    f.setBold(True)
+    p.save()
+    p.setFont(f)
+    p.setPen(ink)
+    p.drawText(QRectF(14, 13, 20, 14), Qt.AlignCenter, "3")
+    p.restore()
+    _dot(p, 9, 37, 2.9)
+    _dot(p, 39, 37, 2.9)
 
 
 def _dimension_style(p, ink):
@@ -557,13 +583,19 @@ def _dimension_style(p, ink):
 
 
 def _dimension_chain(p, ink):
-    # Two dimension segments sharing one line, the total stacked above.
+    # Two dimension segments sharing one line, the total stacked above —
+    # with the slash ticks and the measured points, to match Dimension.
     p.drawLine(QPointF(8, 32), QPointF(40, 32))
     for x in (8, 24, 40):
         p.drawLine(QPointF(x, 27), QPointF(x, 37))
+        _dim_tick(p, ink, x, 32, 3.0)
     p.drawLine(QPointF(8, 18), QPointF(40, 18))
     p.drawLine(QPointF(8, 14), QPointF(8, 22))
     p.drawLine(QPointF(40, 14), QPointF(40, 22))
+    _dim_tick(p, ink, 8, 18, 3.0)
+    _dim_tick(p, ink, 40, 18, 3.0)
+    for x in (8, 24, 40):
+        _dot(p, x, 37, 2.6)
 
 
 def _geopath(p, ink):
