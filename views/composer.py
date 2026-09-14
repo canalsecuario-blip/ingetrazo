@@ -4351,6 +4351,7 @@ class ComposerWindow(QMainWindow):
         split.setStretchFactor(0, 1)      # the canvas absorbs resizes
         split.setStretchFactor(1, 0)
         split.setCollapsible(0, False)
+        split.setHandleWidth(10)          # room for the sidebar handle
         saved = QSettings().value("composer/panel_width", 300, int)
         split.setSizes([max(self.width() - saved, 400), saved])
         split.splitterMoved.connect(
@@ -10287,8 +10288,9 @@ class ComposerWindow(QMainWindow):
         from PySide6.QtCore import QPoint
         area = self._splitter.widget(0)
         edge = area.mapTo(self, QPoint(area.width(), 0))
-        x = edge.x() + self._splitter.handleWidth() // 2 - btn.width() // 2
-        x = max(0, min(x, self.width() - btn.width()))
+        # Starts AT the canvas' edge, never over its scroll bar (Marco,
+        # 2026-09-14): the splitter handle plus the panel's margin hold it.
+        x = max(0, min(edge.x(), self.width() - btn.width()))
         y = edge.y() + (area.height() - btn.height()) // 2
         btn.move(x, max(0, y))
         btn.raise_()

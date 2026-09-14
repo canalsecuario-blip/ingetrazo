@@ -177,7 +177,8 @@ def test_the_composer_has_the_same_handle_and_clean_screen(settings_file, monkey
         area = comp._splitter.widget(0)
         assert btn.isVisible() and panel.isVisible()
         edge = area.mapTo(comp, area.rect().topRight()).x()
-        assert abs((btn.x() + btn.width() // 2) - edge) <= comp._splitter.handleWidth()
+        assert btn.x() >= edge                 # never over the canvas' scroll bar
+        assert btn.x() <= edge + comp._splitter.handleWidth()
         btn.click()
         QApplication.processEvents()
         assert not panel.isVisible() and not comp._act_sidebar.isChecked()
