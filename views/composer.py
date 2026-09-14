@@ -4338,8 +4338,11 @@ class ComposerWindow(QMainWindow):
                             | QPainter.SmoothPixmapTransform)
         view.setBackgroundBrush(QColor(70, 76, 84))
         self._view = view
-        self._build_tools_toolbar()
+        # Factory arrangement (Marco, 2026-09-14: «como están organizados
+        # ahora es la que será por defecto»): the sheet-item tools down the
+        # left; along the top, Sheet, then Draw, then Arrange — shown.
         self._build_sheet_toolbar()
+        self._build_tools_toolbar()
         self._build_arrange_toolbar()
 
         panel = self._build_panel()
@@ -4380,7 +4383,7 @@ class ComposerWindow(QMainWindow):
             self.restoreState(state)
             # Arrange's own setting stays the word on whether it shows.
             self._arrange_tb.setVisible(str(QSettings().value(
-                "composer/arrange_toolbar", "0")) == "1")
+                "composer/arrange_toolbar", "1")) == "1")
         self._sheet_tabs = bar.tabs
         # Auto-render lives on the status row, right of the Model | sheet
         # tabs and before the cursor position (Marco, 2026-09-08: «abajo en
@@ -7532,10 +7535,11 @@ class ComposerWindow(QMainWindow):
             ("arr_lock", tr("Lock / unlock (Ctrl+L)"), self.lock_selected)]
 
     def _build_arrange_toolbar(self) -> None:
-        """The Arrange toolbar — hidden by default (Marco, 2026-09-05: «nunca
-        la he usado, ocupa espacio»): every command lives in the items'
-        right-click menu and on the keys; right-click the tools toolbar
-        to show it again, and the choice is remembered."""
+        """The Arrange toolbar: shown by default since 2026-09-14 (Marco kept
+        it open once its icons were redrawn; on 2026-09-05 it was hidden —
+        «nunca la he usado, ocupa espacio»). Every command also lives in
+        the items' right-click menu and on the keys; right-click a toolbar
+        to hide or show it, and the choice is remembered."""
         from PySide6.QtCore import QSettings
         from PySide6.QtGui import QAction
         from PySide6.QtWidgets import QToolBar
@@ -7552,7 +7556,7 @@ class ComposerWindow(QMainWindow):
         self._arrange_tb = tb
         from views.icons import style_overflow_button
         style_overflow_button(tb)
-        shown = str(QSettings().value("composer/arrange_toolbar", "0")) == "1"
+        shown = str(QSettings().value("composer/arrange_toolbar", "1")) == "1"
         tb.setVisible(shown)
         tb.toggleViewAction().toggled.connect(
             lambda on: QSettings().setValue("composer/arrange_toolbar",

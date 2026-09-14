@@ -203,17 +203,23 @@ def test_optional_sections_hide_their_rows_when_they_do_not_apply():
     assert form.rowWrapPolicy() == QFormLayout.WrapLongRows
 
 
-def test_the_arrange_toolbar_hides_by_default_and_its_commands_stay_reachable():
-    """Marco, 2026-09-05: «la toolbar de Arrange nunca la he usado, ocupa
-    espacio» — hidden unless the user shows it (remembered), the same
-    commands in the items' right-click menu."""
+def test_the_arrange_toolbar_shows_by_default_and_the_choice_is_remembered():
+    """Marco, 2026-09-14: the composer's arrangement as it stands is the
+    factory one — Arrange shown (on 2026-09-05 it was hidden: «nunca la he
+    usado»); hiding it is remembered, and the same commands stay in the
+    items' right-click menu."""
     from PySide6.QtCore import QSettings
     QSettings().remove("composer/arrange_toolbar")
+    QSettings().remove("composer/window_state")
     composer, _host = _composer()
-    assert composer._arrange_tb.isHidden()
+    assert not composer._arrange_tb.isHidden()
     assert len(composer._arrange_entries()) == 12
+    # The context menu's toggle writes the choice (the fake host is never
+    # shown, so the action starts unchecked and checking it is the signal).
     composer._arrange_tb.toggleViewAction().setChecked(True)
     assert str(QSettings().value("composer/arrange_toolbar")) == "1"
+    QSettings().setValue("composer/arrange_toolbar", "0")       # hidden it
     again = ComposerWindow(_host)
-    assert not again._arrange_tb.isHidden()
+    assert again._arrange_tb.isHidden()
     QSettings().remove("composer/arrange_toolbar")
+    QSettings().remove("composer/window_state")

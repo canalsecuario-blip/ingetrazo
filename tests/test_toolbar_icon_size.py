@@ -221,6 +221,12 @@ def test_the_composer_toolbars_are_movable_and_their_arrangement_is_remembered(s
         # fit a 768 px laptop screen (Marco, 2026-09-14).
         draw = comp.findChild(QToolBar, "composer_draw")
         assert comp.toolBarArea(draw) == Qt.TopToolBarArea
+        # Factory order along the top: Sheet, Draw, Arrange (Marco, 14-09).
+        top = sorted((tb for tb in comp.findChildren(QToolBar)
+                      if comp.toolBarArea(tb) == Qt.TopToolBarArea and tb.isVisible()),
+                     key=lambda tb: tb.x())
+        assert [tb.objectName() for tb in top] == [
+            "sheet_toolbar", "composer_draw", "arrange_toolbar"]
         assert len(tools.actions()) == 14 and len(draw.actions()) == 9
         assert comp._tool_actions["cota"] in draw.actions()
         assert comp._tool_actions["vista"] in tools.actions()
