@@ -18,10 +18,15 @@ _app = QApplication.instance() or QApplication([])
 
 @pytest.fixture
 def settings_file(tmp_path, monkeypatch):
+    """A throwaway INI for every QSettings() the windows open — the name
+    imported into views.main_window included, or the MainWindow reads
+    (and, on close, WRITES) the layout of whatever test ran before."""
     path = tmp_path / "prefs.ini"
+    factory = lambda *a: QSettings(str(path), QSettings.IniFormat)  # noqa: E731
     import PySide6.QtCore as qc
-    monkeypatch.setattr(qc, "QSettings",
-                        lambda *a: QSettings(str(path), QSettings.IniFormat))
+    import views.main_window as mw
+    monkeypatch.setattr(qc, "QSettings", factory)
+    monkeypatch.setattr(mw, "QSettings", factory)
     return path
 
 
