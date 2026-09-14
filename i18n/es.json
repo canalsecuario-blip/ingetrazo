@@ -1601,5 +1601,11 @@
  "Set a location first (Go to location).": "Primero fija una ubicación (Ir a la ubicación).",
  "Could not straighten: {error}": "No se pudo enderezar: {error}",
  "Model straightened: north angle {deg}°": "Modelo enderezado: ángulo del norte {deg}°",
- "Large toolbar icons": "Iconos grandes en las barras"
+ "Large toolbar icons": "Iconos grandes en las barras",
+ "Toolbar icons:": "Iconos de las barras:",
+ "Small": "Pequeños",
+ "Normal": "Normales",
+ "Large": "Grandes",
+ "Extra large": "Muy grandes",
+ "Size of the icons on every toolbar — the model's and the sheet composer's. Applies at once.": "Tamaño de los iconos de todas las barras: las del modelo y las del compositor de láminas. Se aplica al momento."
 }

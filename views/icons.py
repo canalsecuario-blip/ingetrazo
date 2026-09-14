@@ -1065,3 +1065,35 @@ def tool_cursor(key: str | None) -> QCursor | None:
     cursor = QCursor(out, hx, hy)
     _cursor_cache[cache_key] = cursor
     return cursor
+
+
+# ---- Toolbar icon size ----------------------------------------------------
+#: Sizes offered in Preferences ▸ General (pixels). 24 is the classic; the
+#: first version had only a «large» toggle (32) on the toolbar's right-click
+#: menu — moved here so it lives with the other settings and reaches the
+#: composer's toolbars too (Marco, 2026-09-14).
+TOOLBAR_ICON_SIZES = ((20, "Small"), (24, "Normal"), (32, "Large"),
+                      (40, "Extra large"))
+
+
+def toolbar_icon_px() -> int:
+    """The toolbar icon size in pixels from the settings, migrating the
+    old «large icons» toggle on first read."""
+    from PySide6.QtCore import QSettings
+    st = QSettings()
+    raw = st.value("ui/toolbar_icon_px")
+    if raw is None or str(raw) == "":
+        px = 32 if str(st.value("ui/large_toolbar_icons", "0")) == "1" else 24
+    else:
+        try:
+            px = int(raw)
+        except (TypeError, ValueError):
+            px = 24
+    return px if px in {s for s, _ in TOOLBAR_ICON_SIZES} else 24
+
+
+def save_toolbar_icon_px(px: int) -> None:
+    from PySide6.QtCore import QSettings
+    st = QSettings()
+    st.setValue("ui/toolbar_icon_px", int(px))
+    st.remove("ui/large_toolbar_icons")

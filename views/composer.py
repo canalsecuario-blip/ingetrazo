@@ -15,7 +15,7 @@ import datetime
 import math
 from typing import Optional
 
-from PySide6.QtCore import QPoint, QPointF, QRectF, Qt, QTimer
+from PySide6.QtCore import QPoint, QPointF, QRectF, QSize, Qt, QTimer
 from PySide6.QtGui import (QBrush, QColor, QFont, QImage, QKeySequence,
                            QPageLayout, QPageSize, QPainter, QPdfWriter,
                            QPen, QShortcut, QTransform, QVector3D)
@@ -40,6 +40,7 @@ from core.composition import pen_px
 from core.saved_views import apply_shadow_state, georef_objects
 from PySide6.QtWidgets import QGraphicsLineItem, QGridLayout, QWidget as _QWidget  # noqa: E402
 from views.filedialogs import file_dialogs
+from views.icons import toolbar_icon_px
 
 PT_TO_MM = 25.4 / 72.0
 _HANDLE_MM = 3.0          # corner resize handle, in paper mm
@@ -4477,6 +4478,12 @@ class ComposerWindow(QMainWindow):
          "Draw an angular dimension (vertex, two points, then the arc)", False),
     )
 
+    def set_toolbar_icon_size(self, px: int) -> None:
+        """Every toolbar of the composer at ``px`` (Preferences ▸ General)."""
+        from PySide6.QtWidgets import QToolBar
+        for tb in self.findChildren(QToolBar):
+            tb.setIconSize(QSize(int(px), int(px)))
+
     def _build_tools_toolbar(self) -> None:
         from PySide6.QtGui import QAction, QActionGroup
         from PySide6.QtWidgets import QToolBar
@@ -4484,6 +4491,7 @@ class ComposerWindow(QMainWindow):
         tb = QToolBar(tr("Composer tools"), self)
         tb.setOrientation(Qt.Vertical)
         tb.setMovable(False)
+        tb.setIconSize(QSize(toolbar_icon_px(), toolbar_icon_px()))
         group = QActionGroup(self)
         group.setExclusive(True)
         self._tool_actions = {}
@@ -5063,6 +5071,7 @@ class ComposerWindow(QMainWindow):
         tb.setObjectName("sheet_toolbar")
         tb.setMovable(False)
         tb.setToolButtonStyle(Qt.ToolButtonIconOnly)   # icons, like the tools
+        tb.setIconSize(QSize(toolbar_icon_px(), toolbar_icon_px()))
 
         def act(icon, text, tip, slot):
             a = QAction(tool_icon(icon), text, self)
@@ -7501,6 +7510,7 @@ class ComposerWindow(QMainWindow):
         from PySide6.QtWidgets import QToolBar
         tb = QToolBar(tr("Arrange"), self)
         tb.setMovable(False)
+        tb.setIconSize(QSize(toolbar_icon_px(), toolbar_icon_px()))
         for text, tip, slot in self._arrange_entries():
             act = QAction(text, self)
             act.setToolTip(tip)

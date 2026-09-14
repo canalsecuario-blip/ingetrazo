@@ -310,35 +310,26 @@ class MainWindow(QMainWindow):
         tb.setMovable(True)
         tb.setFloatable(True)
         tb.setAllowedAreas(Qt.AllToolBarAreas)
-        px = 32 if getattr(self, "_large_icons", False) else 24
+        from views.icons import toolbar_icon_px
+        px = toolbar_icon_px()
         tb.setIconSize(QSize(px, px))
         tb.setToolButtonStyle(Qt.ToolButtonIconOnly)
         self.addToolBar(Qt.TopToolBarArea, tb)
         return tb
 
-    def createPopupMenu(self) -> QMenu:
-        """Right-click menu on the toolbars: Qt's default list of toolbars and
-        docks, plus — after a separator — our "Large toolbar icons" checkbox."""
-        menu = super().createPopupMenu()
-        if menu is None:
-            menu = QMenu(self)
-        if not menu.isEmpty():          # separator only if a list precedes it
-            menu.addSeparator()
-        act = QAction(tr("Large toolbar icons"), self)
-        act.setCheckable(True)
-        act.setChecked(getattr(self, "_large_icons", False))
-        act.toggled.connect(self._set_large_toolbar_icons)
-        menu.addAction(act)
-        return menu
-
-    def _set_large_toolbar_icons(self, on: bool) -> None:
-        """Enlarge (32 px) or restore (24 px) every toolbar's icons."""
+    def set_toolbar_icon_size(self, px: int) -> None:
+        """Icon size for every toolbar — this window's and the composer's
+        (open now or later: it reads the setting when it builds). From
+        Preferences ▸ General; persisted."""
         from PySide6.QtCore import QSize
-        self._large_icons = bool(on)
-        px = 32 if on else 24
+        from views.icons import save_toolbar_icon_px
+        px = int(px)
+        save_toolbar_icon_px(px)
         for tb in self.findChildren(QToolBar):
             tb.setIconSize(QSize(px, px))
-        QSettings().setValue("ui/large_toolbar_icons", "1" if on else "0")
+        comp = getattr(self, "_composer", None)
+        if comp is not None and hasattr(comp, "set_toolbar_icon_size"):
+            comp.set_toolbar_icon_size(px)
 
     def _add_tool_button(self, tb: QToolBar, key: str) -> QAction:
         tool = self._tools[key]
@@ -365,10 +356,7 @@ class MainWindow(QMainWindow):
         self._tool_group = QActionGroup(self)
         self._tool_group.setExclusive(True)
         self.toolbars: dict[str, QToolBar] = {}
-        # Icon size: normal (24 px) or large (32 px). Persisted so the choice
-        # survives a restart; toggled from the toolbar right-click menu.
-        self._large_icons = str(
-            QSettings().value("ui/large_toolbar_icons", "0")) == "1"
+        # Icon size: Preferences ▸ General (views.icons.toolbar_icon_px).
         # (action, icon_key) pairs so programmatic icons can be re-drawn when
         # the palette flips (dark ↔ light) at runtime — see changeEvent below.
         self._icon_actions: list[tuple[QAction, str]] = []

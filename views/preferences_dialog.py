@@ -120,6 +120,17 @@ class PreferencesDialog(QDialog):
         self._msaa.setCurrentIndex(max(0, self._msaa.findData(
             msaa_now if msaa_now in (0, 2, 4, 8) else 4)))
         form.addRow(tr("Anti-aliasing (MSAA):"), self._msaa)
+
+        from views.icons import TOOLBAR_ICON_SIZES, toolbar_icon_px
+        self._icon_px = QComboBox()
+        for px, label in TOOLBAR_ICON_SIZES:
+            self._icon_px.addItem(f"{tr(label)} ({px} px)", px)
+        self._icon_px.setCurrentIndex(max(0, self._icon_px.findData(
+            toolbar_icon_px())))
+        self._icon_px.setToolTip(tr(
+            "Size of the icons on every toolbar — the model's and the "
+            "sheet composer's. Applies at once."))
+        form.addRow(tr("Toolbar icons:"), self._icon_px)
         tabs.addTab(general, tr("General"))
 
         # ---- Import ---------------------------------------------------------
@@ -240,6 +251,16 @@ class PreferencesDialog(QDialog):
             update = getattr(vp, "update", None)
             if callable(update):
                 update()
+
+        px = int(self._icon_px.currentData())
+        from views.icons import toolbar_icon_px
+        if px != toolbar_icon_px():
+            apply_px = getattr(self._window, "set_toolbar_icon_size", None)
+            if callable(apply_px):
+                apply_px(px)             # persists and resizes every toolbar
+            else:
+                from views.icons import save_toolbar_icon_px
+                save_toolbar_icon_px(px)
 
         st.setValue("import/obj_unit", self._obj_unit.currentData())
         st.setValue("import/dxf_unit", self._dxf_unit.currentData())
