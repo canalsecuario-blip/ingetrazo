@@ -675,13 +675,15 @@ def _eraser(p, ink):
 
 
 def _tape(p, ink):
-    # A tape-measure body with the tape pulled out and a hook.
+    # A tape-measure body (right) with the tape pulled out to the left and
+    # a hook — mirrored at Marco's request (2026-09-14: «el circulito al
+    # lado derecho»).
     p.setBrush(Qt.NoBrush)
-    p.drawEllipse(QPointF(18, 20), 8.5, 8.5)
-    p.drawEllipse(QPointF(18, 20), 2.6, 2.6)
-    p.drawLine(QPointF(18, 28.5), QPointF(38, 28.5))   # the tape
-    p.drawLine(QPointF(38, 25.5), QPointF(38, 31.5))   # end hook
-    for x in (24, 29, 34):                              # tick marks
+    p.drawEllipse(QPointF(30, 20), 8.5, 8.5)
+    p.drawEllipse(QPointF(30, 20), 2.6, 2.6)
+    p.drawLine(QPointF(30, 28.5), QPointF(10, 28.5))   # the tape
+    p.drawLine(QPointF(10, 25.5), QPointF(10, 31.5))   # end hook
+    for x in (24, 19, 14):                              # tick marks
         p.drawLine(QPointF(x, 28.5), QPointF(x, 25.8))
 
 
@@ -1281,7 +1283,7 @@ _CURSOR_HOTSPOTS = {
     "paint": (13, 35),              # the spout / falling drop
     "eyedropper": (9.5, 38.5),      # the pipette's tip (drawn at 85 %)
     "eraser": (13, 28),             # the rubber's working corner
-    "tape": (38, 28),               # the tape's end hook
+    "tape": (10, 28),               # the tape's end hook (now at the left)
     "protractor": (24, 24),         # the protractor's vertex
     "orbit": (24, 24),              # camera navigation (wheel-drag / modes)
     "pan": (24, 24),
