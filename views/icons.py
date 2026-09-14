@@ -351,30 +351,30 @@ def _move(p, ink):
 def _eyedropper(p, ink):
     """The Paint tool while Alt is held: SketchUp swaps the bucket for an
     eyedropper, which is how you know the next click SAMPLES instead of
-    paints. A slanted pipette — bulb top-right, barrel down-left, tip at the
-    hotspot — with the accent showing through the glass."""
-    barrel = QPen(ink, 3.4)
-    barrel.setCapStyle(Qt.RoundCap)
-    barrel.setJoinStyle(Qt.RoundJoin)
-    # Barrel: from the tip (lower-left) up to the collar.
-    tip, collar = QPointF(7.0, 41.0), QPointF(27.0, 21.0)
-    p.setPen(Qt.NoPen)
-    p.setBrush(_accent())
-    p.drawPolygon(QPolygonF([QPointF(9.0, 39.0), QPointF(26.0, 22.0),
-                             QPointF(29.0, 25.0), QPointF(12.0, 42.0)]))
-    p.setPen(barrel)
+    paints. Drawn like Inkscape's dropper (Marco, 2026-09-14): a slanted
+    outlined tube from the tip at the hotspot up to a collar, a solid
+    rubber bulb top-right, a drop of the sampled colour at the tip."""
+    pen = QPen(ink, 3.0)
+    pen.setCapStyle(Qt.RoundCap)
+    pen.setJoinStyle(Qt.RoundJoin)
+    p.setPen(pen)
     p.setBrush(Qt.NoBrush)
-    p.drawPolygon(QPolygonF([tip, QPointF(24.5, 18.5), QPointF(30.5, 24.5),
-                             QPointF(11.0, 44.0)]))
-    # Collar and bulb.
-    p.setPen(QPen(ink, 3.4, Qt.SolidLine, Qt.RoundCap))
-    p.drawLine(QPointF(23.0, 22.0), QPointF(30.0, 15.0))
-    p.setBrush(QBrush(ink))
+    # Tube: two parallel edges, converging at the tip.
+    p.drawLine(QPointF(26.5, 17.0), QPointF(11.0, 32.5))
+    p.drawLine(QPointF(31.0, 21.5), QPointF(15.5, 37.0))
+    p.drawLine(QPointF(11.0, 32.5), QPointF(8.0, 40.0))
+    p.drawLine(QPointF(15.5, 37.0), QPointF(8.0, 40.0))
+    # Collar across the tube.
+    p.drawLine(QPointF(23.5, 14.5), QPointF(33.5, 24.5))
+    # Bulb up-right of the collar, with a glint so it reads as rubber.
+    p.save()
     p.setPen(Qt.NoPen)
-    p.drawEllipse(QPointF(35.0, 12.0), 8.5, 8.5)
-    # A drop leaving the tip, so it reads as "picks up material".
-    p.setBrush(_accent())
-    p.drawEllipse(QPointF(5.0, 44.0), 2.6, 2.6)
+    p.setBrush(QBrush(ink))
+    p.drawRoundedRect(QRectF(26.5, 5.0, 16.0, 16.0), 6.5, 6.5)
+    p.restore()
+    p.drawLine(QPointF(29.5, 12.0), QPointF(35.5, 18.0))
+    # The drop leaving the tip: what the tool picks up.
+    _dot(p, 5.5, 43.5, 2.6)
 
 
 def _paint(p, ink):
