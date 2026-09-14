@@ -275,7 +275,7 @@ class MainWindow(QMainWindow):
         for panel, key, title in (
                 (self.styles_panel, "styles", tr("Styles")),
                 (self.shadows_panel, "shadows", tr("Shadows")),
-                (self.dimstyle_panel, "dimension", tr("Dimension style"))):
+                (self.dimstyle_panel, "dimension_style", tr("Dimension style"))):
             btn = QToolButton(panels_tb)
             btn.setIcon(tool_icon(key))
             btn.setToolTip(title)

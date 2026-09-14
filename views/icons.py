@@ -501,6 +501,25 @@ def _dimension(p, ink):
     p.drawLine(QPointF(36, 24), QPointF(36, 36))
 
 
+def _dimension_style(p, ink):
+    # The Dimension-style panel: a dimension with a brush over it (the
+    # look of the cotas), so it no longer reads as the Dimension tool
+    # (Marco's pick, 2026-09-14).
+    p.drawLine(QPointF(9, 36), QPointF(39, 36))
+    p.drawLine(QPointF(9, 30), QPointF(9, 42))
+    p.drawLine(QPointF(39, 30), QPointF(39, 42))
+    p.save()
+    pen = QPen(ink, 3.0)
+    pen.setCapStyle(Qt.RoundCap)
+    p.setPen(pen)
+    p.drawLine(QPointF(40, 8), QPointF(28, 20))            # handle
+    p.setPen(Qt.NoPen)
+    p.setBrush(QBrush(_accent()))
+    p.drawPolygon(QPolygonF([QPointF(29, 18), QPointF(31, 22),
+                             QPointF(25, 26), QPointF(22, 23)]))   # bristles
+    p.restore()
+
+
 def _dimension_chain(p, ink):
     # Two dimension segments sharing one line, the total stacked above.
     p.drawLine(QPointF(8, 32), QPointF(40, 32))
@@ -1177,6 +1196,7 @@ _DRAW = {
     "rotate": _rotate, "scale": _scale, "flip": _flip, "followme": _followme, "pushpull": _pushpull, "offset": _offset,
     "move": _move, "paint": _paint, "eyedropper": _eyedropper,
     "dimension": _dimension, "dimension_chain": _dimension_chain,
+    "dimension_style": _dimension_style,
     "geopath": _geopath, "orbit": _orbit, "pan": _pan,
     "text": _text, "text3d": _text3d,
     "eraser": _eraser, "tape": _tape, "protractor": _protractor,
