@@ -367,7 +367,8 @@ class MainWindow(QMainWindow):
             ("draw", tr("Draw"),
              ["line", "freehand", "rectangle", "rotated_rect", "circle",
               "polygon", "arc", "arc3", "center_arc", "pie"]),
-            ("modify", tr("Modify"), ["move", "rotate", "scale", "flip", "pushpull", "followme", "offset"]),
+            # Push/Pull first (Marco, 2026-09-14), then move, rotate, scale, flip…
+            ("modify", tr("Modify"), ["pushpull", "move", "rotate", "scale", "flip", "followme", "offset"]),
             ("annotate", tr("Annotate"), ["tape", "protractor", "dimension", "text", "geopath"]),
             ("sections", tr("Sections"), ["section"]),
         ]
