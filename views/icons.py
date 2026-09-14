@@ -543,10 +543,11 @@ def _pan(p, ink):
     p.setPen(pen)
     p.setBrush(Qt.NoBrush)
     p.drawPath(P)
+    # The gesture — touch arc and double arrow — in the accent (Marco: «la C»).
     r = 7.0
-    p.setPen(QPen(ink, 2.4, Qt.SolidLine, Qt.RoundCap))
+    p.setPen(QPen(_accent(), 2.4, Qt.SolidLine, Qt.RoundCap))
     p.drawArc(QRectF(21.0 - r, 13.5 - r, 2 * r, 2 * r), 20 * 16, 140 * 16)
-    pen = QPen(ink, 2.5)
+    pen = QPen(_accent(), 2.5)
     pen.setCapStyle(Qt.RoundCap)
     pen.setJoinStyle(Qt.RoundJoin)
     p.setPen(pen)
