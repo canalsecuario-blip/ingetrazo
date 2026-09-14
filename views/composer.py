@@ -4532,6 +4532,9 @@ class ComposerWindow(QMainWindow):
         self.addToolBar(Qt.TopToolBarArea, draw)
         self._tools_tb = tb
         self._draw_tb = draw
+        from views.icons import style_overflow_button
+        style_overflow_button(tb)
+        style_overflow_button(draw)
 
     def _set_tool_mode(self, mode: str) -> None:
         if hasattr(self, "_view"):
@@ -5124,6 +5127,8 @@ class ComposerWindow(QMainWindow):
             self._on_print_preview)
         self.addToolBar(Qt.TopToolBarArea, tb)
         self._sheet_tb = tb
+        from views.icons import style_overflow_button
+        style_overflow_button(tb)
 
     def _page_none(self) -> QWidget:
         w = QWidget()
@@ -7545,6 +7550,8 @@ class ComposerWindow(QMainWindow):
             tb.addAction(act)
         self.addToolBar(Qt.TopToolBarArea, tb)
         self._arrange_tb = tb
+        from views.icons import style_overflow_button
+        style_overflow_button(tb)
         shown = str(QSettings().value("composer/arrange_toolbar", "0")) == "1"
         tb.setVisible(shown)
         tb.toggleViewAction().toggled.connect(

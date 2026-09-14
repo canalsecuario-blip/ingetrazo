@@ -316,6 +316,8 @@ class MainWindow(QMainWindow):
         tb.setIconSize(QSize(px, px))
         tb.setToolButtonStyle(Qt.ToolButtonIconOnly)
         self.addToolBar(Qt.TopToolBarArea, tb)
+        from views.icons import style_overflow_button
+        style_overflow_button(tb)
         return tb
 
     def set_toolbar_icon_size(self, px: int) -> None:

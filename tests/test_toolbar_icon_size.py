@@ -267,3 +267,29 @@ def test_a_laptop_screen_starts_at_24_px_and_a_choice_wins(settings_file, monkey
     monkeypatch.setattr(QGuiApplication, "primaryScreen",
                         staticmethod(lambda: _Screen(740)))
     assert icons.toolbar_icon_px() == 40
+
+
+def test_the_overflow_button_wears_the_program_chevron(settings_file, monkeypatch):
+    """A toolbar that does not fit grows Qt's extension button; ours shows
+    a double chevron with a tooltip rather than the style's grey stub
+    (Marco, 2026-09-14, on a small window)."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QToolButton
+    from views.main_window import MainWindow
+    win = MainWindow()
+    try:
+        win.resize(700, 420)
+        win.show()
+        QApplication.processEvents()
+        draw = win.toolbars["draw"]
+        ext = draw.findChild(QToolButton, "qt_toolbar_ext_button")
+        assert not ext.icon().isNull()
+        assert ext.toolTip()
+        vertical = draw.orientation() == Qt.Vertical
+        icon_v = ext.icon().cacheKey()
+        win.addToolBar(Qt.TopToolBarArea if vertical else Qt.LeftToolBarArea, draw)
+        QApplication.processEvents()
+        assert ext.icon().cacheKey() != icon_v            # re-drawn for the new orientation
+    finally:
+        win._saved_version = win.viewport.scene.version
+        win.close()

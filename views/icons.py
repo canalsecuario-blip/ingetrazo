@@ -1263,6 +1263,32 @@ def _side_collapse(p, ink):
     p.restore()
 
 
+def _overflow_h(p, ink):
+    # Double chevron «»»: the toolbar's hidden tools, on a horizontal bar.
+    pen = QPen(_accent(), 3.4)
+    pen.setCapStyle(Qt.RoundCap)
+    pen.setJoinStyle(Qt.RoundJoin)
+    p.save()
+    p.setPen(pen)
+    for x in (10, 24):
+        p.drawLine(QPointF(x, 14), QPointF(x + 10, 24))
+        p.drawLine(QPointF(x + 10, 24), QPointF(x, 34))
+    p.restore()
+
+
+def _overflow_v(p, ink):
+    # The same, pointing down, for a vertical bar.
+    pen = QPen(_accent(), 3.4)
+    pen.setCapStyle(Qt.RoundCap)
+    pen.setJoinStyle(Qt.RoundJoin)
+    p.save()
+    p.setPen(pen)
+    for y in (10, 24):
+        p.drawLine(QPointF(14, y), QPointF(24, y + 10))
+        p.drawLine(QPointF(24, y + 10), QPointF(34, y))
+    p.restore()
+
+
 def _side_expand(p, ink):
     pen = QPen(ink, 3.4)
     pen.setCapStyle(Qt.RoundCap)
@@ -1277,6 +1303,7 @@ def _side_expand(p, ink):
 _DRAW = {
     "select": _select, "line": _line, "freehand": _freehand,
     "side_collapse": _side_collapse,
+    "overflow_h": _overflow_h, "overflow_v": _overflow_v,
     "side_expand": _side_expand,
     "arr_left": _arr_left, "arr_right": _arr_right, "arr_top": _arr_top,
     "arr_bottom": _arr_bottom, "arr_hcenter": _arr_hcenter,
@@ -1535,3 +1562,28 @@ def save_toolbar_icon_px(px: int) -> None:
     st = QSettings()
     st.setValue("ui/toolbar_icon_px", int(px))
     st.remove("ui/large_toolbar_icons")
+
+
+def style_overflow_button(tb) -> None:
+    """The «more tools» button a toolbar grows when its icons do not fit
+    (Qt's extension button) drawn in the program's style — a double
+    chevron in the accent with a tooltip — instead of the style's faint
+    stub, which on a small screen read as a grey blank (Marco, 2026-09-14).
+    Qt resets the button's icon on every orientation change, so it is
+    reapplied then."""
+    from PySide6.QtCore import QSize
+    from PySide6.QtWidgets import QToolButton
+    from core.i18n import tr
+    btn = tb.findChild(QToolButton, "qt_toolbar_ext_button")
+    if btn is None:
+        return
+
+    def apply(*_a):
+        vertical = tb.orientation() == Qt.Vertical
+        btn.setIcon(tool_icon("overflow_v" if vertical else "overflow_h"))
+        btn.setIconSize(QSize(16, 16))
+        btn.setToolTip(tr("More tools of this bar"))
+        btn.setCursor(Qt.PointingHandCursor)
+    apply()
+    tb.orientationChanged.connect(apply)
+    tb.iconSizeChanged.connect(apply)
