@@ -834,12 +834,56 @@ class MainWindow(QMainWindow):
                 dock.hide()
             self.menuBar().hide()
             self.statusBar().hide()
+            self._clean_screen_exit_button().show()
+            self._place_clean_screen_exit()
         else:
+            btn = getattr(self, "_clean_exit_btn", None)
+            if btn is not None:
+                btn.hide()
             state = getattr(self, "_clean_screen_state", None)
             if state is not None:
                 self.restoreState(state)
             self.menuBar().show()
             self.statusBar().show()
+
+    def _clean_screen_exit_button(self):
+        """A small «Exit clean screen» button floating at the viewport's
+        top-right corner while everything else is hidden — the way out for
+        whoever does not know Ctrl+0 (Marco, 2026-09-14)."""
+        btn = getattr(self, "_clean_exit_btn", None)
+        if btn is not None:
+            return btn
+        from PySide6.QtWidgets import QToolButton
+        btn = QToolButton(self.viewport)
+        btn.setObjectName("clean_screen_exit")
+        btn.setText("✕  " + tr("Exit clean screen"))
+        btn.setToolTip(tr("Back to the workspace (Ctrl+0)"))
+        btn.setCursor(Qt.PointingHandCursor)
+        btn.setAutoRaise(True)
+        btn.setStyleSheet(
+            "QToolButton { background: rgba(30, 36, 44, 170); color: white;"
+            " border: 1px solid rgba(255, 255, 255, 90); border-radius: 6px;"
+            " padding: 4px 10px; font-weight: bold; }"
+            "QToolButton:hover { background: rgba(243, 115, 41, 220); }")
+        btn.clicked.connect(lambda: self._act_clean_screen.setChecked(False))
+        btn.hide()
+        self._clean_exit_btn = btn
+        self.viewport.installEventFilter(self)
+        return btn
+
+    def _place_clean_screen_exit(self) -> None:
+        btn = getattr(self, "_clean_exit_btn", None)
+        if btn is None or not btn.isVisible():
+            return
+        btn.adjustSize()
+        btn.move(self.viewport.width() - btn.width() - 12, 12)
+        btn.raise_()
+
+    def eventFilter(self, obj, event):  # noqa: N802 — Qt override
+        from PySide6.QtCore import QEvent
+        if obj is getattr(self, "viewport", None) and event.type() == QEvent.Resize:
+            self._place_clean_screen_exit()
+        return super().eventFilter(obj, event)
 
     def _on_preferences(self) -> None:
         """Window ▸ Preferences: the scattered QSettings in one dialog."""

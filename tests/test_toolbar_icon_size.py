@@ -88,3 +88,23 @@ def test_a_fresh_install_gets_marcos_layout_and_large_icons(settings_file, monke
     finally:
         win._saved_version = win.viewport.scene.version
         win.close()
+
+
+def test_clean_screen_shows_an_exit_button_at_the_top_right(settings_file):
+    """Ctrl+0 hides everything; a floating «Exit clean screen» button at
+    the viewport's top-right brings the workspace back for whoever does
+    not know the key (Marco, 2026-09-14)."""
+    from views.main_window import MainWindow
+    win = MainWindow()
+    try:
+        win.show()
+        win._act_clean_screen.setChecked(True)
+        btn = win._clean_exit_btn
+        assert btn.isVisible() and not win.menuBar().isVisible()
+        assert btn.x() + btn.width() <= win.viewport.width() and btn.y() == 12
+        btn.click()
+        assert not win._act_clean_screen.isChecked()
+        assert not btn.isVisible() and win.menuBar().isVisible()
+    finally:
+        win._saved_version = win.viewport.scene.version
+        win.close()
