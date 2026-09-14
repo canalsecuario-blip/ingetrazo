@@ -70,6 +70,7 @@ class _RadialTool(PlaneLock, Tool):
         self.start_point: QVector3D | None = None   # centre (also drives work plane)
         self.hover_point: QVector3D | None = None
         self.work_plane: tuple[QVector3D, QVector3D] | None = None
+        self._viewport = None
 
     # ---- Lifecycle ----------------------------------------------------------
     def on_activate(self, viewport) -> None:
@@ -93,7 +94,9 @@ class _RadialTool(PlaneLock, Tool):
 
     def on_hover(self, ctx: ToolContext) -> None:
         self.note_plane(ctx.viewport)
+        self._viewport = ctx.viewport
         self.hover_point = ctx.world
+        self.wireframe_color = self.lock_color()
         ctx.viewport.update()
 
     def on_value(self, viewport, value) -> bool:
@@ -126,8 +129,10 @@ class _RadialTool(PlaneLock, Tool):
 
     # ---- Preview ------------------------------------------------------------
     def rubber_band_lines(self):
-        if self.start_point is None or self.hover_point is None:
+        if self.hover_point is None:
             return []
+        if self.start_point is None:
+            return self._cursor_preview()
         pts = self._points(self.start_point, self.hover_point)
         return [(pts[i], pts[(i + 1) % len(pts)]) for i in range(len(pts))] \
             if pts else []
@@ -139,6 +144,26 @@ class _RadialTool(PlaneLock, Tool):
         return (f"R {r:.2f} m  ({self.sides} lados)", self.hover_point)
 
     # ---- Internals ----------------------------------------------------------
+    def _cursor_preview(self):
+        """SketchUp's ring on the cursor before the centre is placed: the
+        shape at a fixed screen size, lying on the plane it would take —
+        so an arrow-key lock (drawn in the axis colour) or a face under
+        the cursor is visible before committing (Rafael's review: «pulsas
+        flechita y el círculo se te va orientando»)."""
+        vp = self._viewport
+        if vp is None:
+            return []
+        point, normal = self.preview_plane(vp, self.hover_point)
+        u, v = plane_axes(normal)
+        scale = self.world_per_pixel(vp, self.hover_point, u)
+        if scale is None:
+            return []
+        r = self.PREVIEW_PX * scale
+        n = max(int(self.sides), 3)
+        pts = [self.hover_point + u * (r * math.cos(2 * math.pi * i / n))
+               + v * (r * math.sin(2 * math.pi * i / n)) for i in range(n)]
+        return [(pts[i], pts[(i + 1) % n]) for i in range(n)]
+
     def _axes(self) -> tuple[QVector3D, QVector3D]:
         return plane_axes(self.drawing_plane()[1])
 
@@ -195,6 +220,7 @@ class _RadialTool(PlaneLock, Tool):
         self.start_point = None
         self.work_plane = None
         self.hover_plane = None
+        self.wireframe_color = None
         self.plane_lock = None
 
 

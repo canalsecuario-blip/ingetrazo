@@ -60,6 +60,7 @@ class RectangleTool(PlaneLock, Tool):
         # (point, normal) of the face the rectangle was started on, if any.
         # The viewport reads this to keep the opposite corner coplanar.
         self.work_plane: tuple[QVector3D, QVector3D] | None = None
+        self._viewport = None
 
     # ---- Lifecycle ----------------------------------------------------------
     def on_activate(self, viewport) -> None:
@@ -82,7 +83,9 @@ class RectangleTool(PlaneLock, Tool):
 
     def on_hover(self, ctx: ToolContext) -> None:
         self.note_plane(ctx.viewport)
+        self._viewport = ctx.viewport
         self.hover_point = ctx.world
+        self.wireframe_color = self.lock_color()
         ctx.viewport.update()
 
     def on_value(self, viewport, value) -> bool:
@@ -111,8 +114,10 @@ class RectangleTool(PlaneLock, Tool):
 
     # ---- Visual preview -----------------------------------------------------
     def rubber_band_lines(self):
-        if self.start_point is None or self.hover_point is None:
+        if self.hover_point is None:
             return []
+        if self.start_point is None:
+            return self._cursor_preview()
         far, is_square = self._square_corner(self.start_point, self.hover_point)
         c = self._corners(self.start_point, far)
         lines = [
@@ -141,6 +146,23 @@ class RectangleTool(PlaneLock, Tool):
         return (text, mid)
 
     # ---- Internals ----------------------------------------------------------
+    def _cursor_preview(self):
+        """SketchUp's little square on the cursor before the first corner,
+        lying on the plane the rectangle would take (an arrow-key lock in
+        its axis colour, a face under the cursor, or the view's plane)."""
+        vp = self._viewport
+        if vp is None:
+            return []
+        point, normal = self.preview_plane(vp, self.hover_point)
+        u, v = _plane_axes(normal)
+        scale = self.world_per_pixel(vp, self.hover_point, u)
+        if scale is None:
+            return []
+        h = 0.5 * self.PREVIEW_PX * scale
+        c = self.hover_point
+        pts = [c + u * h + v * h, c - u * h + v * h, c - u * h - v * h, c + u * h - v * h]
+        return [(pts[i], pts[(i + 1) % 4]) for i in range(4)]
+
     def _axes(self) -> tuple[QVector3D, QVector3D]:
         """In-plane horizontal/vertical axes for the drawing plane: the
         captured / locked one, else the plane of the last hit (which follows
@@ -207,4 +229,5 @@ class RectangleTool(PlaneLock, Tool):
         self.chain_first_point = None
         self.work_plane = None
         self.hover_plane = None
+        self.wireframe_color = None
         self.plane_lock = None
