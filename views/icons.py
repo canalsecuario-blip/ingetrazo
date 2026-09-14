@@ -540,6 +540,9 @@ def _pan(p, ink):
     pen.setJoinStyle(Qt.RoundJoin)
     pen.setCapStyle(Qt.RoundCap)
     p.save()
+    p.translate(24.0, 25.0)             # 88 %: a touch smaller than the
+    p.scale(0.88, 0.88)                 # other tools (Marco, 2026-09-14)
+    p.translate(-24.0, -25.0)
     p.setPen(pen)
     p.setBrush(Qt.NoBrush)
     p.drawPath(P)
