@@ -283,68 +283,90 @@ def _followme(p, ink):
 
 
 
+# ---- Sections: a square, the plane as a dashed accent line, the cut edge ----
+# Marco's pick (2026-09-14, the minimal family): the tool shows the plane
+# through a box with the arrow of the side that goes away; "planes" is the
+# bare frame with its corner brackets; "cuts" keeps the half that stays
+# with the cut edge thick in the accent; "fill" paints that cut face.
+
+def _solid_arrow(p, color, x0, y0, x1, y1, w=2.8, head=6.0):
+    dx, dy = x1 - x0, y1 - y0
+    L = math.hypot(dx, dy) or 1.0
+    ux, uy = dx / L, dy / L
+    bx, by = x1 - ux * head, y1 - uy * head
+    pen = QPen(color, w)
+    pen.setCapStyle(Qt.FlatCap)
+    p.save()
+    p.setPen(pen)
+    p.drawLine(QPointF(x0, y0), QPointF(bx + ux, by + uy))
+    p.setPen(Qt.NoPen)
+    p.setBrush(QBrush(color))
+    hw = head * 0.7
+    p.drawPolygon(QPolygonF([QPointF(x1, y1),
+                             QPointF(bx - uy * hw, by + ux * hw),
+                             QPointF(bx + uy * hw, by - ux * hw)]))
+    p.restore()
+
+
+_SECTION_FRAME = [QPointF(9, 30), QPointF(26, 39), QPointF(39, 21), QPointF(22, 12)]
+
+
 def _section(p, ink):
-    # A section plane: a foreshortened frame with corner brackets and the
-    # normal arrow showing the side that gets cut away (SketchUp Sections).
-    quad = [QPointF(10, 30), QPointF(26, 38), QPointF(38, 24), QPointF(22, 16)]
     p.setBrush(Qt.NoBrush)
-    p.drawPolygon(QPolygonF(quad))
-    # Corner brackets.
-    for i in range(4):
-        c = quad[i]
-        for j in (1, 3):
-            n = quad[(i + j) % 4]
-            dx, dy = n.x() - c.x(), n.y() - c.y()
-            ln = math.hypot(dx, dy) or 1.0
-            k = 4.5 / ln
-            p.drawLine(c, QPointF(c.x() + dx * k, c.y() + dy * k))
-    # The normal arrow (cut direction).
-    a0, a1 = QPointF(24, 27), QPointF(29, 9)
-    p.setPen(QPen(_accent(), 3.0, Qt.SolidLine, Qt.RoundCap))
-    p.drawLine(a0, a1)
-    p.drawLine(a1, QPointF(24.5, 12.5))
-    p.drawLine(a1, QPointF(31.5, 14.5))
-    p.setPen(QPen(ink, 3.0))
+    p.drawRect(QRectF(9, 13, 30, 22))
+    pen = QPen(_accent(), 3.0, Qt.DashLine)
+    pen.setCapStyle(Qt.RoundCap)
+    p.save()
+    p.setPen(pen)
+    p.drawLine(QPointF(24, 6), QPointF(24, 42))            # the plane
+    p.restore()
+    _solid_arrow(p, _accent(), 28, 9, 38, 9)                # the side cut away
 
 
 def _section_planes(p, ink):
-    # Display Section Planes: the bare plane frame with corner brackets.
-    quad = [QPointF(10, 30), QPointF(26, 38), QPointF(38, 24), QPointF(22, 16)]
+    quad = QPolygonF(_SECTION_FRAME)
+    dash = QPen(QColor(ink.red(), ink.green(), ink.blue(), 110), 1.8,
+                Qt.DashLine)
+    p.save()
+    p.setPen(dash)
     p.setBrush(Qt.NoBrush)
-    p.drawPolygon(QPolygonF(quad))
-    for i in range(4):
-        c = quad[i]
-        for j in (1, 3):
-            n = quad[(i + j) % 4]
+    p.drawPolygon(quad)
+    p.restore()
+    pen = QPen(ink, 3.0)
+    pen.setCapStyle(Qt.RoundCap)
+    p.save()
+    p.setPen(pen)
+    pts = _SECTION_FRAME
+    for i, c in enumerate(pts):                            # corner brackets
+        for j in (1, -1):
+            n = pts[(i + j) % 4]
             dx, dy = n.x() - c.x(), n.y() - c.y()
-            ln = math.hypot(dx, dy) or 1.0
-            k = 5.5 / ln
-            p.drawLine(c, QPointF(c.x() + dx * k, c.y() + dy * k))
+            L = math.hypot(dx, dy) or 1.0
+            p.drawLine(c, QPointF(c.x() + dx * 7.0 / L, c.y() + dy * 7.0 / L))
+    p.restore()
 
 
 def _section_cuts(p, ink):
-    # Display Section Cuts: a solid sliced open — outline + thick cut chord.
     p.setBrush(Qt.NoBrush)
-    p.drawRect(QRectF(12, 18, 24, 18))
-    p.drawLine(QPointF(12, 18), QPointF(20, 10))
-    p.drawLine(QPointF(36, 18), QPointF(40, 12))
-    cut = QPen(_accent(), 4.0)
-    cut.setCapStyle(Qt.RoundCap)
-    p.setPen(cut)
-    p.drawLine(QPointF(10, 26), QPointF(38, 26))
-    p.setPen(QPen(ink, 3.0))
+    p.drawLine(QPointF(24, 13), QPointF(39, 13))
+    p.drawLine(QPointF(39, 13), QPointF(39, 35))
+    p.drawLine(QPointF(39, 35), QPointF(24, 35))
+    pen = QPen(_accent(), 4.0)
+    pen.setCapStyle(Qt.RoundCap)
+    p.save()
+    p.setPen(pen)
+    p.drawLine(QPointF(24, 13), QPointF(24, 35))            # the cut edge
+    p.restore()
 
 
 def _section_fill(p, ink):
-    # Display Section Fill: the cut face painted solid.
-    p.setBrush(Qt.NoBrush)
-    p.drawRect(QRectF(12, 12, 24, 24))
+    _section_cuts(p, ink)
+    acc = _accent()
     p.save()
     p.setPen(Qt.NoPen)
-    p.setBrush(QBrush(_accent()))
-    p.drawRect(QRectF(13.5, 25, 21, 9.5))
+    p.setBrush(QColor(acc.red(), acc.green(), acc.blue(), 150))
+    p.drawRect(QRectF(24, 13, 15, 22))                     # the cut face
     p.restore()
-    p.drawLine(QPointF(12, 24), QPointF(36, 24))
 
 
 def _protractor(p, ink):
