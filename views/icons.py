@@ -979,32 +979,32 @@ def _arr_boxes(p, ink, a: QRectF, b: QRectF, accent_line=None) -> None:
 
 
 def _arr_left(p, ink):
-    _arr_boxes(p, ink, QRectF(14, 11, 20, 9), QRectF(14, 27, 12, 9),
+    _arr_boxes(p, ink, QRectF(14, 13, 20, 6), QRectF(14, 29, 12, 6),
                (QPointF(10, 8), QPointF(10, 40)))
 
 
 def _arr_right(p, ink):
-    _arr_boxes(p, ink, QRectF(14, 11, 20, 9), QRectF(22, 27, 12, 9),
+    _arr_boxes(p, ink, QRectF(14, 13, 20, 6), QRectF(22, 29, 12, 6),
                (QPointF(38, 8), QPointF(38, 40)))
 
 
 def _arr_top(p, ink):
-    _arr_boxes(p, ink, QRectF(11, 14, 9, 20), QRectF(27, 14, 9, 12),
+    _arr_boxes(p, ink, QRectF(13, 14, 6, 20), QRectF(29, 14, 6, 12),
                (QPointF(8, 10), QPointF(40, 10)))
 
 
 def _arr_bottom(p, ink):
-    _arr_boxes(p, ink, QRectF(11, 14, 9, 20), QRectF(27, 22, 9, 12),
+    _arr_boxes(p, ink, QRectF(13, 14, 6, 20), QRectF(29, 22, 6, 12),
                (QPointF(8, 38), QPointF(40, 38)))
 
 
 def _arr_hcenter(p, ink):
-    _arr_boxes(p, ink, QRectF(12, 11, 24, 9), QRectF(17, 27, 14, 9),
+    _arr_boxes(p, ink, QRectF(12, 13, 24, 6), QRectF(17, 29, 14, 6),
                (QPointF(24, 7), QPointF(24, 41)))
 
 
 def _arr_vcenter(p, ink):
-    _arr_boxes(p, ink, QRectF(11, 12, 9, 24), QRectF(27, 17, 9, 14),
+    _arr_boxes(p, ink, QRectF(13, 12, 6, 24), QRectF(29, 17, 6, 14),
                (QPointF(7, 24), QPointF(41, 24)))
 
 
