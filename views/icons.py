@@ -649,16 +649,15 @@ def _chimney(p, ink, x: float, roof_y: float, h: float = 6.0, w: float = 4.0):
 
 
 def _view_front(p, ink):
-    # Gable end seen head-on: door, window, chimney RIGHT of the apex. (Front)
+    # Gable end seen head-on: ONE wide door, chimney RIGHT of the apex —
+    # SketchUp's front, no window (Marco: «solo puerta y ancha»). (Front)
     p.setBrush(Qt.NoBrush)
     p.drawRect(QRectF(12, 22, 22, 15))                     # wall
     p.drawPolygon(QPolygonF([QPointF(9, 22), QPointF(23, 9),
                              QPointF(37, 22)]))            # gable roof
     _chimney(p, ink, 31.0, 15.0, h=6.5)
     p.setBrush(QBrush(ink))
-    p.drawRect(QRectF(15, 29, 6, 8))                       # door
-    p.setBrush(Qt.NoBrush)
-    p.drawRect(QRectF(25, 27, 6, 5))                       # window
+    p.drawRect(QRectF(18, 28, 10, 9))                      # wide door
     _view_letter(p, ink, "view_front")
 
 
