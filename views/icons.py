@@ -514,25 +514,54 @@ def _orbit(p, ink):
 
 
 def _pan(p, ink):
-    # An open hand — Pan (grab-and-slide the view). Built from a rounded palm
-    # plus rounded-cap finger strokes so the fingertips are soft, not blocky;
-    # everything is the same ink, so the pieces merge into one clean hand.
+    # Pan as a DRAG gesture — the reference Marco sent (2026-09-14): a
+    # pointing hand (index up, three fingers folded, thumb out) in solid
+    # ink, a horizontal double arrow above it and an arc of touch over the
+    # fingertip in the accent.
+    from PySide6.QtGui import QPainterPath, QTransform
+    path = QPainterPath()
+    palm = QPainterPath()
+    palm.addRoundedRect(QRectF(17, 27, 17, 15), 5, 5)          # palm
+    path = path.united(palm)
+    for fx in (23.5, 28.0, 32.0):                              # folded knuckles
+        k = QPainterPath()
+        k.addEllipse(QPointF(fx, 27.5), 2.6, 2.6)
+        path = path.united(k)
+    idx = QPainterPath()
+    idx.addRoundedRect(QRectF(19.5, 12, 5.2, 20), 2.6, 2.6)    # index finger
+    path = path.united(idx)
+    t = QPainterPath()
+    t.addRoundedRect(QRectF(-2.5, -2.8, 12, 5.6), 2.8, 2.8)    # thumb
+    tr = QTransform()
+    tr.translate(18.5, 33)
+    tr.rotate(-40)
+    path = path.united(tr.map(t))
+    w = QPainterPath()
+    w.addRoundedRect(QRectF(20, 39, 12, 6), 2, 2)              # wrist
+    path = path.united(w)
+    p.save()
     p.setPen(Qt.NoPen)
     p.setBrush(QBrush(ink))
-    p.drawRoundedRect(QRectF(15, 23, 18, 16), 5.5, 5.5)      # palm
-    fingers = QPen(ink, 3.8)
-    fingers.setCapStyle(Qt.RoundCap)
-    p.setPen(fingers)
-    # Four fingers rising from the palm (middle tallest, little shortest).
-    p.drawLine(QPointF(18.2, 25), QPointF(18.2, 15.5))
-    p.drawLine(QPointF(22.4, 25), QPointF(22.4, 12.5))
-    p.drawLine(QPointF(26.6, 25), QPointF(26.6, 13.5))
-    p.drawLine(QPointF(30.6, 25), QPointF(30.6, 16.5))
-    # Thumb, angled out from the lower-left of the palm.
-    thumb = QPen(ink, 4.2)
-    thumb.setCapStyle(Qt.RoundCap)
-    p.setPen(thumb)
-    p.drawLine(QPointF(16.5, 30), QPointF(10.5, 24))
+    p.drawPath(path)
+    p.restore()
+    # The double arrow (ink) and the touch arc (accent).
+    pen = QPen(ink, 2.6)
+    pen.setCapStyle(Qt.RoundCap)
+    pen.setJoinStyle(Qt.RoundJoin)
+    p.save()
+    p.setPen(pen)
+    p.setBrush(Qt.NoBrush)
+    y = 9.5
+    p.drawLine(QPointF(9, y), QPointF(17, y))
+    p.drawLine(QPointF(9, y), QPointF(12.5, y - 3.5))
+    p.drawLine(QPointF(9, y), QPointF(12.5, y + 3.5))
+    p.drawLine(QPointF(31, y), QPointF(39, y))
+    p.drawLine(QPointF(39, y), QPointF(35.5, y - 3.5))
+    p.drawLine(QPointF(39, y), QPointF(35.5, y + 3.5))
+    p.setPen(QPen(_accent(), 2.4))
+    r = 5.5
+    p.drawArc(QRectF(22.1 - r, 12.5 - r, 2 * r, 2 * r), 20 * 16, 140 * 16)
+    p.restore()
 
 
 def _eraser(p, ink):
