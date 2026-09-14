@@ -324,12 +324,39 @@ def _protractor(p, ink):
 
 
 def _pushpull(p, ink):
-    # A face with an up arrow (extrude).
+    """Push/Pull as SketchUp draws it, in the program's line style: a cube
+    seen from above, its top face tinted with the accent, and a heavy arrow
+    rising off that face (Marco, 2026-09-14: «en SketchUp es como en 3D…
+    la línea vertical más gruesa»)."""
     p.setBrush(Qt.NoBrush)
-    p.drawRect(QRectF(12, 26, 18, 12))
-    p.drawLine(QPointF(21, 26), QPointF(21, 10))
-    p.drawLine(QPointF(21, 10), QPointF(16, 16))
-    p.drawLine(QPointF(21, 10), QPointF(26, 16))
+    top = QPolygonF([QPointF(9, 28), QPointF(24, 21), QPointF(39, 28),
+                     QPointF(24, 35)])
+    acc = _accent()
+    p.save()
+    p.setPen(Qt.NoPen)
+    p.setBrush(QColor(acc.red(), acc.green(), acc.blue(), 130))
+    p.drawPolygon(top)
+    p.restore()
+    p.drawPolygon(top)
+    for x in (9, 24, 39):
+        y = 35 if x == 24 else 28
+        p.drawLine(QPointF(x, y), QPointF(x, y + 11))
+    p.drawLine(QPointF(9, 39), QPointF(24, 46))
+    p.drawLine(QPointF(24, 46), QPointF(39, 39))
+    shaft = QPen(ink, 5.0)
+    shaft.setCapStyle(Qt.RoundCap)
+    p.save()
+    p.setPen(shaft)
+    p.drawLine(QPointF(24, 27), QPointF(24, 9))
+    p.restore()
+    head = QPen(ink, 4.5)
+    head.setCapStyle(Qt.RoundCap)
+    head.setJoinStyle(Qt.RoundJoin)
+    p.save()
+    p.setPen(head)
+    p.drawLine(QPointF(24, 7), QPointF(17, 14))
+    p.drawLine(QPointF(24, 7), QPointF(31, 14))
+    p.restore()
 
 
 def _offset(p, ink):
@@ -357,6 +384,10 @@ def _eyedropper(p, ink):
     pen = QPen(ink, 3.0)
     pen.setCapStyle(Qt.RoundCap)
     pen.setJoinStyle(Qt.RoundJoin)
+    p.save()
+    p.translate(24.0, 24.0)             # 85 %: it read too big beside the
+    p.scale(0.85, 0.85)                 # other tools (Marco, 2026-09-14)
+    p.translate(-24.0, -24.0)
     p.setPen(pen)
     p.setBrush(Qt.NoBrush)
     # Tube: two parallel edges, converging at the tip.
@@ -375,6 +406,7 @@ def _eyedropper(p, ink):
     p.drawLine(QPointF(29.5, 12.0), QPointF(35.5, 18.0))
     # The drop leaving the tip: what the tool picks up.
     _dot(p, 5.5, 43.5, 2.6)
+    p.restore()
 
 
 def _paint(p, ink):
@@ -946,7 +978,7 @@ _CURSOR_HOTSPOTS = {
     "dimension": (12, 30),          # left end of the dimension line
     "text": (24, 24), "text3d": (24, 24),
     "paint": (13, 35),              # the spout / falling drop
-    "eyedropper": (7, 41),          # the pipette's tip
+    "eyedropper": (9.5, 38.5),      # the pipette's tip (drawn at 85 %)
     "eraser": (13, 28),             # the rubber's working corner
     "tape": (38, 28),               # the tape's end hook
     "protractor": (24, 24),         # the protractor's vertex
