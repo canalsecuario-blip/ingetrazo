@@ -377,11 +377,24 @@ class MainWindow(QMainWindow):
             for key in keys:
                 self._add_tool_button(tb, key)
 
+        # Save, first on the Main bar (the composer's Sheet bar has had it
+        # since the start; Marco, 2026-09-14: «el icono de guardar también en
+        # modelo, antes de la flechita»). The shortcut stays on the menu
+        # action, so Ctrl+S never becomes ambiguous.
+        main_tb = self.toolbars["main"]
+        act_save = QAction(tool_icon("save"), tr("Save"), self)
+        act_save.setToolTip(tr("Save the document (Ctrl+S)"))
+        act_save.triggered.connect(self._on_save)
+        first = main_tb.actions()[0] if main_tb.actions() else None
+        main_tb.insertAction(first, act_save)
+        main_tb.insertSeparator(first)
+        self._icon_actions.append((act_save, "save"))
+        self._act_save_tb = act_save
+
         # SketchUp keeps a pipette beside the material you paint with: it is
         # how you FIND the eyedropper. Alt+click does the same for people who
         # know the modifier — Marco asked for the button because that is what
         # he reaches for ("hay un icono al costado de pintura").
-        main_tb = self.toolbars["main"]
         self._act_eyedropper = QAction(
             tool_icon("eyedropper"), tr("Sample material"), self)
         self._act_eyedropper.setCheckable(True)

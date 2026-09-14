@@ -44,3 +44,21 @@ def test_the_size_reaches_the_composer_toolbars_live_and_on_build(settings_file,
     finally:
         win._saved_version = win.viewport.scene.version
         win.close()
+
+
+def test_the_main_toolbar_starts_with_save(settings_file, monkeypatch):
+    """Marco, 2026-09-14: the Save icon on the model's Main bar too, before
+    the Select arrow; it triggers the same save as the menu."""
+    from views.main_window import MainWindow
+    win = MainWindow()
+    try:
+        acts = [a for a in win.toolbars["main"].actions() if not a.isSeparator()]
+        assert acts[0] is win._act_save_tb and acts[0].text() == "Save"
+        assert acts[1] is win._tool_actions["select"]
+        called = []
+        monkeypatch.setattr(win, "_on_save", lambda: called.append(True))
+        win._act_save_tb.trigger()
+        assert called == [True]
+    finally:
+        win._saved_version = win.viewport.scene.version
+        win.close()
