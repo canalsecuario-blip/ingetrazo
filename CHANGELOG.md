@@ -6,6 +6,122 @@ follow [SemVer](https://semver.org).
 
 ## [Sin publicar]
 
+## [0.3.20] — 2026-09-14
+
+**El ortomosaico, las etiquetas con varias flechas y la cara nueva de las
+barras.** Una sesión entera sobre las láminas de la plaza de Yanque: el
+ortomosaico del dron entra como GeoTIFF sin instalar nada, las escenas
+recuerdan el mapa y el sol, las etiquetas del compositor señalan dos o tres
+cosas con un mismo texto, y las barras de herramientas estrenan iconos
+dibujados uno a uno con Marco, tamaño configurable y una barra lateral
+que se pliega como en LibreOffice. También la primera tanda de la revisión
+de Rafael: capturas en la tienda, icono del AppImage y el «Abrir» de GNOME
+Software.
+
+### Añadido
+- **Importar ▸ Ortomosaico (GeoTIFF).** El lector propio (`georef/geotiff.py`)
+  lee la cabecera —escala de píxel y punto de amarre o matriz, zona UTM por
+  las GeoKeys o por la cita, PixelIsPoint— y descodifica los píxeles sin
+  GDAL ni Pillow: sin comprimir, Deflate, PackBits, LZW (filas de teselas
+  repartidas en procesos) y JPEG dentro del TIFF, reduciendo al vuelo hasta
+  el techo de textura. La imagen aterriza sobre el datum a su tamaño y en su
+  sitio, como imagen de referencia bloqueada. Medido: 3 MB JPEG 0,1 s;
+  170 Mpx Deflate 6,8 s; 665 Mpx LZW 33 s.
+- **Opacidad de imágenes y del mapa base.** Clic derecho sobre una imagen
+  para darle transparencia (deshacible); el mapa base tiene su deslizador
+  en Terreno y se guarda en el `.igz`. El clic derecho alcanza a una imagen
+  BLOQUEADA (Desbloquear / Eliminar) aunque haya geometría dibujada encima:
+  antes un escaneo bloqueado no volvía a seleccionarse nunca.
+- **Las escenas recuerdan el mapa base, el terreno, el levantamiento y las
+  sombras** tal como se capturaron, y los marcos de las láminas se renderizan
+  con eso mismo: una escena sin mapa sale sin mapa en la lámina, una con
+  sombras sale con sombras. Las escenas anteriores a estos campos no tocan
+  nada.
+- **Etiquetas con varias flechas en el compositor.** El segundo clic de la
+  herramienta Etiqueta sobre una etiqueta existente le añade otra flecha
+  (anclada al modelo si el punto se pegó a un marco); Ctrl+arrastrar una
+  punta saca una nueva; soltar una punta sobre las letras la quita. Un punto
+  donde cada guía sale del texto (casilla en el panel). La esquina de la
+  etiqueta redimensiona el ancho de ajuste, que estaba dibujado pero inerte.
+- **Fondo de las etiquetas y textos pegado a las letras**: ancho por la línea
+  más ancha, alto por los glifos (0,25 × tamaño sobre las mayúsculas para las
+  tildes, 0,05 × bajo el último descendente), líneas apiladas al paso real del
+  pintor; margen lateral 1,0 → 0,5 mm.
+- **Plumas ráster en las láminas**: los marcos ráster toman los grosores de
+  Aristas y Perfiles del estilo (el render redibuja las líneas GL con
+  desplazamientos subpíxel hasta el grosor de la pluma); un píxel a 300 ppp
+  era un pelo de 0,085 mm que casi no se veía.
+- **Iconos nuevos** en las barras, elegidos entre propuestas dibujadas:
+  cuentagotas al estilo Inkscape, Empujar/Tirar como losa con flecha maciza,
+  las vistas estándar como una misma casita a dos aguas con la pared que se
+  mira en naranja, la mano de desplazar como gesto de arrastre, las
+  herramientas de dibujo con sus puntos y guías de construcción, rectángulo
+  girado con sus tres clics, Cota con puntos, líneas de extensión y un «3»,
+  Estilo de cota con brocha, secciones mínimas (caja, plano punteado, borde
+  de corte, relleno), cinta métrica espejada, y las órdenes de Organizar del
+  compositor en el mismo estilo.
+- **Tamaño de los iconos como Preferencia** (Ventana ▸ Preferencias ▸
+  General ▸ Iconos de las barras: 20/24/32/40 px), aplicado en vivo a todas
+  las barras de la ventana del modelo Y del compositor. Por defecto 32 px, y
+  la distribución de barras de fábrica es la de Marco (Dibujar y Anotar a la
+  izquierda, el resto arriba); un perfil que ya guardó la suya la conserva.
+- **Barra lateral plegable como en LibreOffice**: una manija sobre la línea
+  donde se redimensiona la barra de la derecha, a media altura; clic pliega
+  las tres bandejas (Propiedades, BIM, Terreno) y otro clic las devuelve;
+  Ctrl+F5 o Ventana ▸ Barra lateral hacen lo mismo. Igual en el compositor
+  con su panel derecho.
+- **Pantalla limpia (Ctrl+0) con botón de salida** arriba a la derecha, para
+  quien no conoce el atajo; también en el compositor (oculta barras, panel,
+  reglas y barra de estado).
+- **Las barras del compositor se pueden mover** y su distribución se guarda
+  al cerrar; una instalación nueva ve la de fábrica: las 14 herramientas de
+  elementos de lámina a la izquierda y, arriba, Lámina → **Dibujo** (barra
+  nueva con línea, flecha, terreno, rectángulo, elipse, polígono y las tres
+  cotas: 23 iconos en una sola columna no cabían en una laptop) →
+  Organizar, que ahora se muestra por defecto.
+- **Tamaño de icono según la pantalla** en una instalación nueva: 32 px con
+  900 px o más de alto disponible, 24 px en pantallas menores (medido:
+  a 32 px la distribución de fábrica desborda una laptop de 1366×768).
+  Lo que el usuario elija en Preferencias manda siempre.
+- **Botón de desbordamiento de las barras** con doble flecha naranja y
+  tooltip «Más herramientas de esta barra»: cuando una barra no cabe, Qt
+  esconde el resto tras un botón que en tema oscuro era un bloque gris sin
+  flecha visible.
+- **Tienda y escritorio (revisión de Rafael, parte A):** el metainfo lleva
+  seis capturas con pie en los dos idiomas (GNOME Software mostraba «Sin
+  capturas»); dentro del Flatpak la ventana declara el id de la app como
+  archivo `.desktop`, para que el shell la asocie a su lanzador; el AppImage
+  se ofrece a instalar su lanzador e icono en el menú de aplicaciones la
+  primera vez (`core/appimage.py`; Ayuda ▸ Añadir/Quitar del menú).
+
+### Arreglado
+- **Sombras con una imagen translúcida activa**: al orbitar aparecía un
+  agujero blanco bajo el modelo. El pase de imágenes apagaba el blending
+  tras una imagen desvanecida y no lo reencendía, y el receptor de sombras
+  escribía alfa 0 sobre el suelo en cada cuadro que reutilizaba el mapa de
+  sombras. El blending es ahora estado del cuadro (test con GL real).
+- **La pestaña Diseño del compositor saltaba a propiedades del elemento**
+  con cada clic en las flechas de un cuadro numérico; solo salta cuando se
+  selecciona un elemento DISTINTO.
+- **El editor en sitio de las etiquetas** tenía un margen de documento de
+  1,5 mm que descolocaba y reajustaba el texto de otra manera; sin margen y
+  con tarjeta opaca.
+- **Enderezar modelo** avisa cuando el grupo seleccionado no está girado ni
+  movido en lugar de no hacer nada en silencio.
+- **Listas de las bandejas sin scroll dentro del scroll**: Capas, Escenas,
+  Componentes en el modelo y la tabla BIM crecen a sus filas; el único
+  scroll es el de la bandeja.
+- **Guardar** es el primer botón de la barra Principal del modelo, como en
+  el compositor.
+
+### Cambiado
+- Orden de la barra Modificar: Empujar/Tirar, Mover, Rotar, Escalar,
+  Simetría, Sígueme, Equidistancia. Orden de las vistas estándar: iso,
+  superior, frontal, derecha, izquierda, posterior, inferior.
+- El manual de trampas del AI Bridge: nunca reemplazar en caliente un
+  método virtual de Qt (`paintGL`, `boundingRect`, `eventFilter`…) en una
+  clase viva; solo métodos normales, y relanzar para el resto.
+
 ## [0.3.19] — 2026-09-14
 
 **El norte del proyecto.** La plaza de Yanque, dibujada a escuadra con los

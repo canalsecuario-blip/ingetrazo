@@ -77,6 +77,39 @@
   <url type="vcs-browser">https://github.com/ingelibre/ingetrazo</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.3.20" date="2026-09-14">
+      <description>
+        <p>The orthomosaic, labels with several arrows, and the toolbars'
+        new face. A drone orthomosaic comes in as a GeoTIFF with nothing to
+        install — a built-in reader handles Deflate, LZW, PackBits and JPEG
+        tiles and lands the picture on the map at its true size and place;
+        images and the base map take an opacity; scenes remember the base
+        map, the terrain and the sun, and sheet views render with exactly
+        that. In the sheet composer a label can point at two or three things
+        with one text, its background hugs the letters, and raster views
+        honour the edge and profile pens. The toolbars get icons drawn one by
+        one, a size setting (Preferences), a sidebar that folds away like
+        LibreOffice's and a clean screen (Ctrl+0) with a way out — in the
+        model window and the composer alike. Plus store screenshots, the
+        Flatpak window tied to its launcher, and an AppImage that offers to
+        add itself to the applications menu.</p>
+        <p xml:lang="es">El ortomosaico, las etiquetas con varias flechas y
+        la cara nueva de las barras. El ortomosaico del dron entra como
+        GeoTIFF sin instalar nada —un lector propio maneja Deflate, LZW,
+        PackBits y teselas JPEG y deja la imagen sobre el mapa a su tamaño y
+        en su sitio—; las imágenes y el mapa base tienen opacidad; las
+        escenas recuerdan el mapa base, el terreno y el sol, y las vistas de
+        las láminas se renderizan con eso mismo. En el compositor una
+        etiqueta señala dos o tres cosas con un solo texto, su fondo se pega
+        a las letras y las vistas ráster respetan las plumas de aristas y
+        perfiles. Las barras estrenan iconos dibujados uno a uno, tamaño
+        configurable (Preferencias), una barra lateral que se pliega como en
+        LibreOffice y una pantalla limpia (Ctrl+0) con salida — en la ventana
+        del modelo y en el compositor. Además capturas en la tienda, la
+        ventana del Flatpak ligada a su lanzador y un AppImage que se ofrece
+        a añadirse al menú de aplicaciones.</p>
+      </description>
+    </release>
     <release version="0.3.19" date="2026-09-14">
       <description>
         <p>The project north. A model drawn square to the axes no longer has
