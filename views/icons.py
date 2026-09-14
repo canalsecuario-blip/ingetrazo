@@ -324,37 +324,38 @@ def _protractor(p, ink):
 
 
 def _pushpull(p, ink):
-    """Push/Pull as SketchUp draws it, in the program's line style: a cube
-    seen from above, its top face tinted with the accent, and a solid arrow
-    — thick shaft, filled head — rising off that face (Marco, 2026-09-14:
-    «en SketchUp es como en 3D… me gusta la flecha maciza»)."""
-    p.setBrush(Qt.NoBrush)
-    top = QPolygonF([QPointF(9, 28), QPointF(24, 21), QPointF(39, 28),
-                     QPointF(24, 35)])
+    """Push/Pull in the program's line style: a flat SLAB seen from above
+    — top face tinted with the accent, a 5 px edge band — and a solid
+    arrow (thick shaft, filled head) rising off its centre. Marco chose it
+    among cubes, ghosts and thinner slabs (2026-09-14: «me encanta la
+    losa, solo la flecha no tan larga»)."""
+    cx, y_top, half_w, half_h, thick = 24.0, 33.0, 15.0, 7.0, 5.0
+    top = QPolygonF([QPointF(cx - half_w, y_top), QPointF(cx, y_top - half_h),
+                     QPointF(cx + half_w, y_top), QPointF(cx, y_top + half_h)])
     acc = _accent()
+    p.setBrush(Qt.NoBrush)
     p.save()
     p.setPen(Qt.NoPen)
     p.setBrush(QColor(acc.red(), acc.green(), acc.blue(), 130))
     p.drawPolygon(top)
     p.restore()
     p.drawPolygon(top)
-    for x in (9, 24, 39):
-        y = 35 if x == 24 else 28
-        p.drawLine(QPointF(x, y), QPointF(x, y + 11))
-    p.drawLine(QPointF(9, 39), QPointF(24, 46))
-    p.drawLine(QPointF(24, 46), QPointF(39, 39))
-    # A solid arrow, like SketchUp's: thick shaft, filled triangular head.
+    for x, y in ((cx - half_w, y_top), (cx, y_top + half_h), (cx + half_w, y_top)):
+        p.drawLine(QPointF(x, y), QPointF(x, y + thick))
+    p.drawLine(QPointF(cx - half_w, y_top + thick), QPointF(cx, y_top + half_h + thick))
+    p.drawLine(QPointF(cx, y_top + half_h + thick), QPointF(cx + half_w, y_top + thick))
+    # The arrow: shorter than the first draft, its head still clear of the slab.
     shaft = QPen(ink, 5.0)
     shaft.setCapStyle(Qt.FlatCap)
     p.save()
     p.setPen(shaft)
-    p.drawLine(QPointF(24, 27), QPointF(24, 15))
+    p.drawLine(QPointF(cx, 32.0), QPointF(cx, 21.0))
     p.restore()
     p.save()
     p.setPen(Qt.NoPen)
     p.setBrush(QBrush(ink))
-    p.drawPolygon(QPolygonF([QPointF(24, 5), QPointF(15.5, 16),
-                             QPointF(32.5, 16)]))
+    p.drawPolygon(QPolygonF([QPointF(cx, 11.0), QPointF(cx - 8.5, 22.0),
+                             QPointF(cx + 8.5, 22.0)]))
     p.restore()
 
 
