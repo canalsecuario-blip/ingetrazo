@@ -108,21 +108,47 @@ def _freehand(p, ink):
     _dot(p, 10, 34)
 
 
+def _guide(p, ink, a, b, dashed: bool = True) -> None:
+    """A thin construction line — the diagonal, radius or chord the tool
+    is built on — in the ink at 55 %, dashed."""
+    pen = QPen(QColor(ink.red(), ink.green(), ink.blue(), 140), 1.8,
+               Qt.DashLine if dashed else Qt.SolidLine)
+    pen.setCapStyle(Qt.RoundCap)
+    p.save()
+    p.setPen(pen)
+    p.drawLine(QPointF(*a), QPointF(*b))
+    p.restore()
+
+
+# Drawing tools: the shape in ink, its DEFINING POINTS as accent dots and the
+# construction line it is built on as a thin dashed guide — SketchUp's red
+# dots and blue guides, in the program's own colours (Marco, 2026-09-14).
+
 def _rectangle(p, ink):
     p.setBrush(Qt.NoBrush)
-    p.drawRect(QRectF(12, 14, 24, 20))
+    p.drawRect(QRectF(11, 14, 26, 20))
+    _guide(p, ink, (11, 34), (37, 14))                 # the diagonal
+    _dot(p, 11, 34, 2.9)
+    _dot(p, 37, 14, 2.9)
 
 
 def _rotated_rect(p, ink):
-    poly = QPolygonF([QPointF(12, 26), QPointF(26, 12),
-                      QPointF(36, 22), QPointF(22, 36)])
+    poly = QPolygonF([QPointF(9, 27), QPointF(23, 11),
+                      QPointF(39, 21), QPointF(25, 37)])
     p.setBrush(Qt.NoBrush)
     p.drawPolygon(poly)
+    _guide(p, ink, (9, 27), (23, 11), dashed=False)    # the first edge
+    _dot(p, 9, 27, 2.9)
+    _dot(p, 23, 11, 2.9)
+    _dot(p, 39, 21, 2.9)
 
 
 def _circle(p, ink):
     p.setBrush(Qt.NoBrush)
     p.drawEllipse(QPointF(24, 24), 13, 13)
+    _guide(p, ink, (24, 24), (37, 24))                 # the radius
+    _dot(p, 24, 24, 2.9)
+    _dot(p, 37, 24, 2.9)
 
 
 def _polygon(p, ink):
@@ -132,33 +158,49 @@ def _polygon(p, ink):
         pts.append(QPointF(24 + 13 * math.cos(a), 24 + 13 * math.sin(a)))
     p.setBrush(Qt.NoBrush)
     p.drawPolygon(QPolygonF(pts))
+    _guide(p, ink, (24, 24), (pts[0].x(), pts[0].y()))  # the radius
+    _dot(p, 24, 24, 2.9)
+    _dot(p, pts[0].x(), pts[0].y(), 2.9)
 
 
 def _arc(p, ink):
+    # Two-point arc: the ends, the chord and the bulge.
     path = QPainterPath()
-    path.moveTo(12, 34)
-    path.quadTo(24, 6, 36, 34)
+    path.moveTo(11, 34)
+    path.quadTo(24, 4, 37, 34)
     p.setBrush(Qt.NoBrush)
     p.drawPath(path)
-    _dot(p, 12, 34)
-    _dot(p, 36, 34)
+    _guide(p, ink, (11, 34), (37, 34))                 # the chord
+    _guide(p, ink, (24, 34), (24, 19))                 # the bulge
+    _dot(p, 11, 34, 2.9)
+    _dot(p, 37, 34, 2.9)
+    _dot(p, 24, 19, 2.4)
 
 
 def _arc3(p, ink):
-    _arc(p, ink)
-    _dot(p, 24, 15)
+    # Three-point arc: the three points, nothing else to construct.
+    path = QPainterPath()
+    path.moveTo(11, 34)
+    path.quadTo(24, 4, 37, 34)
+    p.setBrush(Qt.NoBrush)
+    p.drawPath(path)
+    _dot(p, 11, 34, 2.9)
+    _dot(p, 37, 34, 2.9)
+    _dot(p, 24, 19, 2.9)
 
 
 def _pie(p, ink):
     # SketchUp's Pie: a closed wedge — arc plus its two radius edges.
     p.setBrush(Qt.NoBrush)
     p.drawArc(QRectF(10, 10, 28, 28), 15 * 16, 115 * 16)
-    import math as _m
     for adeg in (15, 130):
-        a = _m.radians(adeg)
+        a = math.radians(adeg)
         p.drawLine(QPointF(24, 24),
-                   QPointF(24 + 14 * _m.cos(a), 24 - 14 * _m.sin(a)))
-    _dot(p, 24, 24)
+                   QPointF(24 + 14 * math.cos(a), 24 - 14 * math.sin(a)))
+    _dot(p, 24, 24, 2.9)
+    for adeg in (15, 130):
+        a = math.radians(adeg)
+        _dot(p, 24 + 14 * math.cos(a), 24 - 14 * math.sin(a), 2.5)
 
 
 def _rotate(p, ink):
@@ -186,14 +228,16 @@ def _rotate(p, ink):
 
 
 def _center_arc(p, ink):
-    # Compass arc: centre dot, radius arm, swept arc.
+    # Compass arc: centre, the two radius arms as guides, the swept arc.
     p.setBrush(Qt.NoBrush)
     p.drawArc(QRectF(10, 10, 28, 28), 0, 105 * 16)
-    p.drawLine(QPointF(24, 24), QPointF(38, 24))
-    _dot(p, 24, 24)
-    _dot(p, 38, 24, 2.6)
-    _dot(p, 17, 12, 2.6)
-
+    ex = 24 + 14 * math.cos(math.radians(105))
+    ey = 24 - 14 * math.sin(math.radians(105))
+    _guide(p, ink, (24, 24), (38, 24))
+    _guide(p, ink, (24, 24), (ex, ey))
+    _dot(p, 24, 24, 2.9)
+    _dot(p, 38, 24, 2.9)
+    _dot(p, ex, ey, 2.9)
 
 
 def _flip(p, ink):
