@@ -39,6 +39,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QSlider,
     QSpinBox,
     QToolButton,
@@ -105,6 +106,28 @@ class _Section(QWidget):
     def _on_toggle(self, on: bool) -> None:
         self._content.setVisible(on)
         self._btn.setArrowType(Qt.DownArrow if on else Qt.RightArrow)
+
+
+def fit_rows(view, min_rows: int = 3) -> None:
+    """Grow a list / tree to show ALL its rows — no scroll bar of its own,
+    so the only scrolling in a tray is the tray's (Marco, 2026-09-14: «no
+    me gusta hacer scroll dentro del scroll»). Call after every refill;
+    ``min_rows`` keeps an empty list from collapsing to a sliver."""
+    from PySide6.QtWidgets import QAbstractItemView, QTreeView
+    view.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+    view.setSizePolicy(view.sizePolicy().horizontalPolicy(), QSizePolicy.Fixed)
+    model = view.model()
+    rows = model.rowCount() if model is not None else 0
+    if isinstance(view, QTreeView):
+        row_h = view.sizeHintForRow(0) if rows else 0
+        header = view.header().height() if not view.header().isHidden() else 0
+    else:
+        row_h = view.sizeHintForRow(0) if rows else 0
+        header = 0
+    if row_h <= 0:
+        row_h = view.fontMetrics().height() + 8
+    h = header + max(rows, min_rows) * row_h + 2 * view.frameWidth() + 2
+    view.setFixedHeight(h)
 
 
 def _color_pixmap(rgb, size=_SWATCH) -> QPixmap:
@@ -944,7 +967,7 @@ class ComponentsPanel(QWidget):
             "Components placed in this drawing — click one to select its "
             "copies"))
         self._in_model.itemClicked.connect(self._select_component)
-        lay.addWidget(self._in_model, 1)
+        lay.addWidget(self._in_model)
         self.refresh_in_model()
 
     def _components_in_model(self) -> list:
@@ -971,6 +994,7 @@ class ComponentsPanel(QWidget):
             self._in_model.addItem(item)
         if self._in_model.count() == 0:
             self._in_model.addItem(QListWidgetItem(tr("No components yet")))
+        fit_rows(self._in_model)
 
     def _select_component(self, item) -> None:
         groups = item.data(Qt.UserRole)
@@ -2254,6 +2278,7 @@ class LayersPanel(QWidget):
             item.setCheckState(1, Qt.Checked if ly.visible else Qt.Unchecked)
             item.setCheckState(2, Qt.Checked if ly.locked else Qt.Unchecked)
             self.tree.addTopLevelItem(item)
+        fit_rows(self.tree)
         self._updating = False
 
     # ---- View → model --------------------------------------------------------
@@ -2448,6 +2473,7 @@ class ScenesPanel(QWidget):
             item.setData(Qt.UserRole, view)
             item.setFlags(item.flags() | Qt.ItemIsEditable)
             self.list.addItem(item)
+        fit_rows(self.list)
         self._updating = False
 
     # ---- View → model --------------------------------------------------------
@@ -2710,6 +2736,7 @@ class BimPanel(QWidget):
                 item.setToolTip(3, tr(
                     "Not watertight on its own — no volume"))
             self.tree.addTopLevelItem(item)
+        fit_rows(self.tree)
 
 
 class Tray(QDockWidget):
