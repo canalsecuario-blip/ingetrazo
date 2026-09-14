@@ -1580,5 +1580,6 @@
  "Select the placed model: one top-level component (the group you turned and dragged onto the site).": "Selecciona el modelo colocado: un componente de primer nivel (el grupo que giraste y arrastraste sobre el sitio).",
  "Set a location first (Go to location).": "Primero fija una ubicación (Ir a la ubicación).",
  "Could not straighten: {error}": "No se pudo enderezar: {error}",
- "Model straightened: north angle {deg}°": "Modelo enderezado: ángulo del norte {deg}°"
+ "Model straightened: north angle {deg}°": "Modelo enderezado: ángulo del norte {deg}°",
+ "Large toolbar icons": "Iconos grandes en las barras"
 }
