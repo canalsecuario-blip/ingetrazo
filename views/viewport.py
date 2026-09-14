@@ -4918,7 +4918,9 @@ class Viewport(QOpenGLWidget):
                 gc = snap.guide_color if snap.guide_color is not None else (r, g, b)
                 dash = QPen(QColor.fromRgbF(gc[0], gc[1], gc[2], 0.9), 2.0, Qt.DashLine)
                 painter.setPen(dash)
-                painter.drawLine(QPointF(*gp0), QPointF(*gp1))
+                vis = self._clip_pixel_line(gp0, gp1)
+                if vis is not None:
+                    painter.drawLine(QPointF(*vis[0]), QPointF(*vis[1]))
         # A white halo under the marker lifts it off busy geometry, then
         # the coloured marker on top — bigger and bolder than before so the
         # snap point reads at a glance (a common request: the dots were too
@@ -5386,6 +5388,45 @@ class Viewport(QOpenGLWidget):
                                     half * 2, half * 2))
         painter.setPen(box_pen)
 
+    def _clip_pixel_line(
+        self, p0: tuple[float, float], p1: tuple[float, float],
+        margin: float = 64.0,
+    ) -> Optional[tuple[tuple[float, float], tuple[float, float]]]:
+        """Liang-Barsky clip of a 2D pixel segment to the widget rect (plus a
+        margin). Overlay guides are only clipped in 3D to the part in front of
+        the camera (``_clip_segment_front``), so their on-screen endpoints land
+        MILLIONS of pixels from origin. Qt's dash stroker runs in fixed point
+        and collapses a dashed pen into a solid line at that scale (measured:
+        a guide of 400 k px still dashes, 4 M px comes out solid). Trimming to
+        the visible area first keeps the dashes — and spares the rasteriser
+        hundreds of thousands of dash repeats. Returns the clipped endpoints,
+        or ``None`` when the segment misses the widget entirely."""
+        x0, y0 = p0
+        x1, y1 = p1
+        dx, dy = x1 - x0, y1 - y0
+        xmin, ymin = -margin, -margin
+        xmax, ymax = self.width() + margin, self.height() + margin
+        t0, t1 = 0.0, 1.0
+        for p, q in ((-dx, x0 - xmin), (dx, xmax - x0),
+                     (-dy, y0 - ymin), (dy, ymax - y0)):
+            if p == 0.0:
+                if q < 0.0:
+                    return None
+                continue
+            r = q / p
+            if p < 0.0:
+                if r > t1:
+                    return None
+                if r > t0:
+                    t0 = r
+            else:
+                if r < t0:
+                    return None
+                if r < t1:
+                    t1 = r
+        return ((x0 + t0 * dx, y0 + t0 * dy),
+                (x0 + t1 * dx, y0 + t1 * dy))
+
     def _draw_guides(self, painter: QPainter) -> None:
         """Draw construction guides: fine dashed lines (and small crosses for
         guide points), SketchUp-style scaffolding."""
@@ -5393,7 +5434,9 @@ class Viewport(QOpenGLWidget):
         if not guides:
             return
         pen = QPen(QColor(70, 90, 120), 1, Qt.DashLine)
+        pen.setDashPattern([14.0, 10.0])                      # traço 14px / falha 10px
         sel_pen = QPen(QColor(243, 115, 41), 2, Qt.DashLine)  # selection orange
+        sel_pen.setDashPattern([14.0, 10.0])
         selection = self.scene.selection
         for g in guides:
             painter.setPen(sel_pen if g in selection else pen)
@@ -5404,7 +5447,13 @@ class Viewport(QOpenGLWidget):
                 pa = self._world_to_pixel(seg[0])
                 pb = self._world_to_pixel(seg[1])
                 if pa is not None and pb is not None:
-                    painter.drawLine(QPointF(*pa), QPointF(*pb))
+                    # Trim to the visible rect BEFORE drawing: a clipped guide
+                    # endpoint sits beside the camera plane and projects to
+                    # millions of px, where Qt draws the dash solid (see
+                    # _clip_pixel_line).
+                    vis = self._clip_pixel_line(pa, pb)
+                    if vis is not None:
+                        painter.drawLine(QPointF(*vis[0]), QPointF(*vis[1]))
             else:
                 q = self._world_to_pixel(g.point)
                 if q is not None:

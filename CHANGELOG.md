@@ -6,6 +6,26 @@ follow [SemVer](https://semver.org).
 
 ## [Sin publicar]
 
+### Arreglado
+- **Las guías de construcción salían a línea llena en vez de punteadas.** La
+  Cinta de medir trazaba sus guías continuas, sin el punteado fino de
+  SketchUp. El lápiz siempre fue `Qt.DashLine`: lo que fallaba era la ESCALA.
+  Una guía se recorta en `_clip_segment_front` justo delante del plano de la
+  cámara (con `w = 1e-3`), de modo que su extremo se proyecta a MILLONES de
+  píxeles del origen, y el trazador de trazos de Qt —que trabaja en punto
+  fijo— colapsa el patrón a una línea sólida a esa distancia. Medido con una
+  sonda sobre un `QOpenGLWidget` real: un segmento de 400 000 px todavía
+  puntea (8 huecos), uno de 4 000 000 px sale lleno (0 huecos), y da igual el
+  color o el grosor del lápiz. Arreglo: `_clip_pixel_line` recorta el
+  segmento —en espacio de píxel, por Liang-Barsky— a la ventana ANTES de
+  dibujarlo, de forma que el `drawLine` nunca recibe más que la diagonal de la
+  vista y el punteado se conserva; de paso el rasterizador deja de generar
+  cientos de miles de trazos que iba a descartar. Vale para las guías
+  (`_draw_guides`) y para la línea punteada de inferencia del snap
+  (`_draw_snap_indicator`), los dos únicos trazos punteados de extensión
+  ilimitada del visor: la caja de selección, los contornos de imagen y los
+  planos de sección viven dentro de la pantalla y no sufrían esto.
+
 ## [0.3.18] — 2026-09-12
 
 **Mobiliario en la plaza.** La segunda sesión sobre la Plaza Yanque: los
