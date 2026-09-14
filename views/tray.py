@@ -287,16 +287,30 @@ class BaseMapPanel(QWidget):
         self._show.toggled.connect(self._on_toggle_visible)
         grid.addWidget(self._show, 13, 0, 1, 2)
 
+        # Map opacity: fade the imagery so the model and its lines read on
+        # top of it (a plan sheet over the satellite). Document state, lives
+        # on the tile layer and travels in the .igz.
+        self._opacity = QSlider(Qt.Horizontal)
+        self._opacity.setRange(10, 100)
+        self._opacity.setValue(100)
+        self._opacity.setToolTip(tr(
+            "Map opacity: fade the imagery so the model and its lines read "
+            "on top of it"))
+        self._opacity.valueChanged.connect(self._on_opacity_changed)
+        self._opacity_label = QLabel(tr("Opacity") + " 100 %")
+        grid.addWidget(self._opacity_label, 14, 0)
+        grid.addWidget(self._opacity, 14, 1)
+
         self._terrain3d = QCheckBox(tr("3D terrain"))
         self._terrain3d.toggled.connect(self._on_toggle_terrain)
-        grid.addWidget(self._terrain3d, 14, 0, 1, 2)
+        grid.addWidget(self._terrain3d, 15, 0, 1, 2)
 
         # The drone survey (Track G, G6). Disabled until one is imported —
         # a checkbox you can tick with nothing behind it just looks broken.
         self._photo_mesh = QCheckBox(tr("Photogrammetric survey"))
         self._photo_mesh.setEnabled(False)
         self._photo_mesh.toggled.connect(self._on_toggle_photo_mesh)
-        grid.addWidget(self._photo_mesh, 15, 0, 1, 2)
+        grid.addWidget(self._photo_mesh, 16, 0, 1, 2)
 
         # Which layer the survey carries. The import puts it on its own so it
         # can be switched off without taking the model with it; this is for
@@ -306,13 +320,13 @@ class BaseMapPanel(QWidget):
         self._photo_layer.setToolTip(tr(
             "Layer the survey is on. Hiding that layer hides the survey."))
         self._photo_layer.currentTextChanged.connect(self._on_photo_layer_changed)
-        grid.addWidget(QLabel(tr("Layer")), 16, 0)
-        grid.addWidget(self._photo_layer, 16, 1)
+        grid.addWidget(QLabel(tr("Layer")), 17, 0)
+        grid.addWidget(self._photo_layer, 17, 1)
 
         self._attribution = QLabel("")
         self._attribution.setWordWrap(True)
         self._attribution.setStyleSheet("color:#9aa3b2; font-size:10px; margin-top:4px;")
-        grid.addWidget(self._attribution, 17, 0, 1, 2)
+        grid.addWidget(self._attribution, 18, 0, 1, 2)
 
         self._restore_saved_source()
         self._sync_from_scene()
@@ -688,7 +702,7 @@ class BaseMapPanel(QWidget):
     def _on_straighten(self) -> None:
         """Undo the turn+drag placement of the selected model by turning the
         map instead (StraightenModelCommand); one undo step."""
-        from core.history import StraightenModelCommand
+        from core.history import StraightenModelCommand, placement_is_identity
         vp = self._window.viewport
         scene = vp.scene
         groups = [g for g in scene.selection
@@ -705,6 +719,16 @@ class BaseMapPanel(QWidget):
             QMessageBox.information(
                 self, tr("Straighten model on the map"),
                 tr("Set a location first (Go to location)."))
+            return
+        if placement_is_identity(groups[0].xform):
+            # Nothing to take out of this placement — the user picked the
+            # wrong group (the DWG instead of the plaza he turned: eleven
+            # silent no-ops, Marco 2026-09-14).
+            QMessageBox.information(
+                self, tr("Straighten model on the map"),
+                tr("“{name}” is not turned or moved. Select the model you "
+                   "turned and dragged onto the site.",
+                   name=groups[0].name))
             return
         cmd = StraightenModelCommand(groups[0])
         vp.history.execute(cmd)
@@ -729,6 +753,13 @@ class BaseMapPanel(QWidget):
         layer = getattr(self._window.viewport.scene, "tile_layer", None)
         if layer is not None:
             layer.visible = on
+            self._window.viewport.update()
+
+    def _on_opacity_changed(self, value: int) -> None:
+        self._opacity_label.setText(tr("Opacity") + f" {value} %")
+        layer = getattr(self._window.viewport.scene, "tile_layer", None)
+        if layer is not None:
+            layer.opacity = value / 100.0
             self._window.viewport.update()
 
     def _on_toggle_terrain(self, on: bool) -> None:
@@ -796,7 +827,17 @@ class BaseMapPanel(QWidget):
         layer = getattr(scene, "tile_layer", None)
         blockers = [QSignalBlocker(w) for w in
                     (self._source, self._lat, self._lon, self._zoom, self._show,
-                     self._north)]
+                     self._north, self._terrain3d, self._photo_mesh,
+                     self._opacity)]
+        # A scene recalls the terrain / survey visibility too: keep the
+        # boxes honest (an unchecked box over a hidden terrain re-shows it).
+        terrain = getattr(scene, "terrain", None)
+        hidden = terrain is not None and not getattr(terrain, "visible", True)
+        self._terrain3d.setChecked(
+            bool(getattr(self._window, "_terrain_on", False)) and not hidden)
+        mesh = getattr(scene, "photo_mesh", None)
+        if mesh is not None:
+            self._photo_mesh.setChecked(getattr(mesh, "visible", False))
         if datum is not None:
             self._lat.setValue(datum.lat)
             self._lon.setValue(datum.lon)
@@ -808,6 +849,9 @@ class BaseMapPanel(QWidget):
                 self._source.setCurrentIndex(idx)
             self._zoom.setValue(layer.zoom)
             self._show.setChecked(layer.visible)
+            pct = int(round(100 * float(getattr(layer, "opacity", 1.0))))
+            self._opacity.setValue(pct)
+            self._opacity_label.setText(tr("Opacity") + f" {pct} %")
             self._attribution.setText(layer.source.attribution)
         else:
             self._attribution.setText(self._current_source().attribution

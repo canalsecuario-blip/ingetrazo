@@ -220,3 +220,18 @@ def test_tray_north_field_retargets_the_datum_and_refreshes_the_map():
     assert win.viewport.resets == 1
     panel._on_north_edited()                  # same value: nothing happens
     assert win.viewport.scene.georef is new and win.viewport.resets == 1
+
+
+def test_placement_is_identity_spots_a_group_that_was_never_turned():
+    """The Straighten button on a group at identity is a silent no-op —
+    Marco pressed it eleven times on the DWG instead of the plaza he had
+    turned (2026-09-14); the panel now says which group to pick."""
+    from core.history import placement_is_identity
+    assert placement_is_identity(None)
+    assert placement_is_identity(QMatrix4x4())
+    turned = QMatrix4x4()
+    turned.rotate(2.5, 0.0, 0.0, 1.0)
+    assert not placement_is_identity(turned)
+    moved = QMatrix4x4()
+    moved.translate(0.0, 0.0, -3182.0)
+    assert not placement_is_identity(moved)

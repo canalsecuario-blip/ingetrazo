@@ -1003,6 +1003,7 @@ class MainWindow(QMainWindow):
             (tr("glTF/GLB (.glb)…"), self._on_import_glb),
             (tr("Wavefront OBJ (.obj)…"), self._on_import_obj),
             (tr("Image (PNG / JPG)…"), self._on_import_image),
+            (tr("Orthomosaic (GeoTIFF)…"), self._on_import_orthophoto),
             (tr("AutoCAD DWG (.dwg)…"), self._on_import_dwg),
             (tr("AutoCAD DXF (.dxf)…"), self._on_import_dxf),
             (tr("Georeference (KML / GeoJSON)…"), self._on_import_georef),
@@ -1539,8 +1540,11 @@ class MainWindow(QMainWindow):
             act.blockSignals(False)
         self.viewport._apply_tool_cursor()
 
-    def show_viewport_context_menu(self, global_pos) -> None:
-        """SketchUp-style right-click menu, tailored to what's selected."""
+    def show_viewport_context_menu(self, global_pos, locked_image=None) -> None:
+        """SketchUp-style right-click menu, tailored to what's selected.
+        ``locked_image``: a locked reference image under the cursor that the
+        click did not select (geometry sat on top of it) — it gets its own
+        Unlock / Delete entries, or it could never be reached again."""
         from core.mesh import Edge, Face
         from core.dimension import Dimension
         from georef.geopath import GeoPath
@@ -1552,6 +1556,14 @@ class MainWindow(QMainWindow):
         has_mesh = any(isinstance(e, (Edge, Face)) for e in sel)
         sec_planes = [e for e in sel if isinstance(e, SectionPlane)]
         menu = QMenu(self)
+
+        if locked_image is not None and locked_image not in sel:
+            name = getattr(locked_image, "name", "") or tr("image")
+            menu.addAction(tr("Unlock image “{name}”", name=name),
+                           lambda im=locked_image: self._unlock_image(im))
+            menu.addAction(tr("Delete image “{name}”", name=name),
+                           lambda im=locked_image: self._delete_image(im))
+            menu.addSeparator()
 
         if sec_planes:
             # SketchUp's section-plane context menu.
@@ -1567,6 +1579,7 @@ class MainWindow(QMainWindow):
         images = [e for e in sel if isinstance(e, ImagePlane)]
         if images:
             menu.addAction(tr("Image size…"), self._on_image_size)
+            menu.addAction(tr("Image opacity…"), self._on_image_opacity)
             act_lock = menu.addAction(tr("Lock"), self._on_toggle_image_lock)
             act_lock.setCheckable(True)
             act_lock.setChecked(bool(images[0].locked))
@@ -1895,6 +1908,11 @@ class MainWindow(QMainWindow):
     def set_terrain_enabled(self, on: bool) -> None:
         self._terrain_on = on
         if on:
+            terrain = getattr(self.viewport.scene, "terrain", None)
+            if terrain is not None and not getattr(terrain, "visible", True):
+                terrain.visible = True      # hidden by a scene: just show it
+                self.viewport.update()
+                return
             self._build_terrain()
         else:
             self.viewport.scene.terrain = None
@@ -1948,7 +1966,9 @@ class MainWindow(QMainWindow):
             return                         # DEM grid not fully loaded yet
         first = scene.terrain is None
         terrain.texture_image = build_mosaic(terrain, layer.images)
-        terrain.visible = True
+        # An async rebuild keeps the visibility a scene may have set.
+        terrain.visible = True if first else bool(
+            getattr(scene.terrain, "visible", True))
         scene.terrain = terrain
         self.viewport.upload_terrain(terrain)
         # Frame the terrain only the first time it appears (not on async rebuilds).
@@ -3057,6 +3077,165 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(
             tr("Image resized to {w:.2f} × {h:.2f} m",
                w=u.length(), h=v.length()), 4000)
+
+    def _on_image_opacity(self) -> None:
+        """Fade a reference image so the model and its lines read over it
+        (the same control the base map has)."""
+        from PySide6.QtWidgets import QInputDialog
+        from core.image_plane import ImagePlane
+        from core.history import SetImagePlaneOpacityCommand
+        sel = [e for e in self.viewport.scene.selection
+               if isinstance(e, ImagePlane)]
+        if not sel:
+            return
+        image = sel[0]
+        pct, ok = QInputDialog.getInt(
+            self, tr("Image opacity"), tr("Opacity (%):"),
+            int(round(100 * float(getattr(image, "opacity", 1.0)))), 5, 100, 5)
+        if not ok:
+            return
+        self.viewport.history.execute(
+            SetImagePlaneOpacityCommand(image, pct / 100.0))
+        self.viewport.update()
+
+    def _on_import_orthophoto(self) -> None:
+        """Import a GeoTIFF orthomosaic (a WebODM ``odm_orthophoto.tif``, a
+        QGIS export) as a georeferenced reference image: the file's own
+        pixel → UTM transform places it on the scene's datum at its true
+        size and orientation, so the model is traced over the real ground.
+        Display-only, like every reference image (invariant #4); locked on
+        arrival so a stray drag never moves the survey."""
+        from georef.datum import SceneDatum
+        from georef.geotiff import (GeoTiffError, describe, read_info,
+                                    read_rgba, rgba_to_qimage,
+                                    unsupported_reason)
+
+        path_str, _ = file_dialogs.getOpenFileName(
+            self, tr("Import orthomosaic"), "",
+            tr("GeoTIFF (*.tif *.tiff);;All files (*)"))
+        if not path_str:
+            return
+        path = Path(path_str)
+        try:
+            info = read_info(path)
+        except (GeoTiffError, OSError) as exc:
+            QMessageBox.critical(self, tr("Import orthomosaic"), str(exc))
+            return
+        if not info.georeferenced:
+            QMessageBox.warning(
+                self, tr("Import orthomosaic"),
+                tr("{name} carries no georeference (no map transform or an "
+                   "unknown coordinate system). Import it with "
+                   "File ▸ Import ▸ Image and size it by hand.",
+                   name=path.name))
+            return
+        reason = unsupported_reason(info)
+        if reason:
+            QMessageBox.critical(
+                self, tr("Import orthomosaic"),
+                tr("{name}: {reason} is not supported by this reader.",
+                   name=path.name, reason=reason))
+            return
+
+        scene = self.viewport.scene
+        corners = info.corners_geodetic()
+        datum = getattr(scene, "georef", None)
+        datum_existed = datum is not None
+        if datum is None:
+            # The picture knows where it is — anchor the scene on its centre
+            # rather than asking for coordinates the user would look up.
+            lat = sum(c[0] for c in corners) / 4.0
+            lon = sum(c[1] for c in corners) / 4.0
+            datum = SceneDatum(lat, lon)
+            scene.georef = datum
+
+        dlg, cb = self._import_progress(tr("Importing {name}…", name=path.name))
+        max_px = 8192
+        try:
+            max_px = max(1024, min(8192, int(self.viewport.max_texture_size())))
+        except Exception:  # noqa: BLE001 — no GL context yet: keep the default
+            pass
+        try:
+            rgba, factor = read_rgba(
+                info, max_px=max_px,
+                progress=lambda fr: (cb(fr * 0.9, "Decoding the orthomosaic…")
+                                     or True))
+        except (GeoTiffError, OSError, MemoryError) as exc:
+            dlg.close()
+            QMessageBox.critical(self, tr("Import orthomosaic"), str(exc))
+            return
+        cb(0.92, "Storing the picture…")
+        image = rgba_to_qimage(rgba)
+        del rgba
+        from PySide6.QtCore import QBuffer, QByteArray
+        from core.texture import cache_image
+        data = QByteArray()
+        buf = QBuffer(data)
+        buf.open(QBuffer.WriteOnly)
+        ext = "webp"
+        if not image.save(buf, "WEBP", 92):        # no WebP plugin: PNG
+            buf.close()
+            data = QByteArray()
+            buf = QBuffer(data)
+            buf.open(QBuffer.WriteOnly)
+            image.save(buf, "PNG")
+            ext = "png"
+        buf.close()
+        try:
+            cached = cache_image(bytes(data), f"{path.stem}.{ext}", "imported")
+        except OSError as exc:
+            dlg.close()
+            QMessageBox.critical(self, tr("Import orthomosaic"), str(exc))
+            return
+        dlg.close()
+
+        # Place it: the plane's origin is the picture's bottom-left, u its
+        # width, v its height — the corners come in that order, already
+        # turned by the datum's north angle. On the datum plane (Z = 0),
+        # like the base map.
+        from core.image_plane import ImagePlane
+        from core.history import AddImagePlaneCommand
+        bl, br, _tr, tl = [datum.geodetic_to_local(lat, lon)
+                           for lat, lon in corners]
+        u, v = br - bl, tl - bl
+        aspect = v.length() / u.length() if u.length() > 1e-9 else 1.0
+        plane = ImagePlane(str(cached), bl, u, v, aspect=aspect,
+                           name=path.stem, locked=True)
+        self.viewport.history.execute(AddImagePlaneCommand(plane))
+        if not datum_existed:
+            lo, hi = QVector3D(bl), QVector3D(bl)
+            for c in plane.corners():
+                lo = QVector3D(min(lo.x(), c.x()), min(lo.y(), c.y()), 0.0)
+                hi = QVector3D(max(hi.x(), c.x()), max(hi.y(), c.y()), 0.0)
+            self.georef_tray.base_map.setup_for_bounds(datum, lo, hi)
+            self.viewport.camera.set_view("top")
+            self.viewport.camera.fit_to(lo, hi)
+        self.georef_tray.on_scene_changed()
+        self.viewport.update()
+        w_m, h_m = u.length(), v.length()
+        self.statusBar().showMessage(
+            tr("Imported {name} — {w:.0f} × {h:.0f} m, {info}{reduced}",
+               name=path.name, w=w_m, h=h_m, info=describe(info),
+               reduced=(tr(", reduced {k}×", k=factor) if factor > 1 else "")),
+            8000)
+
+    def _unlock_image(self, image) -> None:
+        """Unlock one reference image (from the right-click over it) and
+        select it, so the next click can move, resize or delete it."""
+        image.locked = False
+        scene = self.viewport.scene
+        scene.select([image])
+        scene.version += 1
+        self.viewport.update()
+        self.statusBar().showMessage(
+            tr("Image unlocked: {name}", name=image.name), 3000)
+
+    def _delete_image(self, image) -> None:
+        """Delete one reference image (from the right-click over it)."""
+        from core.history import DeleteImagePlanesCommand
+        self.viewport.history.execute(DeleteImagePlanesCommand([image]))
+        self.viewport.scene.selection.discard(image)
+        self.viewport.update()
 
     def _on_toggle_image_lock(self) -> None:
         """Lock an image so clicks fall through to what you are drawing on top

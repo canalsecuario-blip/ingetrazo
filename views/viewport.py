@@ -157,6 +157,14 @@ class _SnapEdge:
 # OpenGL constants — kept as literals so we don't depend on PyOpenGL.
 GL_FLOAT = 0x1406
 GL_LINES = 0x0001
+
+
+def _shifted_mvp(mvp, dx_ndc: float, dy_ndc: float):
+    """``mvp`` nudged by a clip-space offset (sub-pixel line thickening)."""
+    from PySide6.QtGui import QMatrix4x4
+    m = QMatrix4x4()
+    m.translate(dx_ndc, dy_ndc, 0.0)
+    return m * mvp
 GL_TRIANGLES = 0x0004
 GL_COLOR_BUFFER_BIT = 0x00004000
 GL_DEPTH_BUFFER_BIT = 0x00000100
@@ -678,6 +686,10 @@ class Viewport(QOpenGLWidget):
         # FBO and stops there (no blit, no widget overlay) — the hi-res image
         # export path (render_image) reads the FBO back instead.
         self._export_size: Optional[tuple[int, int]] = None
+        #: Pen widths in PIXELS for the next export render (edges and
+        #: profiles); 1 = the plain GL hairline. See ``_line_jitter``.
+        self._export_edge_px = 1
+        self._export_profile_px = 1
         # Sheet-composer technical style: None (shaded), "tecnico" (white
         # faces + dark edges on white, no axes/sky) or "lineas" (edges only).
         # Set around a composer render; never persists across frames.
@@ -1523,30 +1535,45 @@ class Viewport(QOpenGLWidget):
         self._set_section_clip(True)
         show_edges = style.edges or mode == "wireframe"
         ec = style.edge_color
-        if self._edges_count > 0 and show_edges:
-            self._set_color(ec[0], ec[1], ec[2], 1.0)
-            self._edges_vao.bind()
-            _espans = getattr(self, "_frame_edge_spans",
-                              ((0, self._edges_count),))
-            if split_e is None:
-                for _vs, _vc in _espans:
-                    self._gl.glDrawArrays(GL_LINES, _vs, _vc)
-            else:
-                # Same two-tier draw as the faces: washed-out surroundings,
-                # then the edited group's own edges at full strength.
-                self._program.setUniformValue1f(self._loc_fade,
-                                                EDIT_REST_FADE)
-                for _vs, _vc in _espans:
-                    if _vs < split_e:
+        # Line weight for sheet renders: a GL line is one pixel whatever
+        # the DPI (core-profile Mesa clamps glLineWidth), and one pixel at
+        # 300 dpi is a 0.085 mm hairline that vanishes on paper and on the
+        # composer's scaled preview (Marco, 2026-09-14: «casi no se ven»).
+        # The frame asks for a pen in pixels and the pass is redrawn at
+        # sub-pixel offsets to reach it — exports only, never the screen.
+        _jit_e = self._line_jitter(self._export_edge_px, w, h)
+        _jit_p = self._line_jitter(self._export_profile_px, w, h)
+        for _dx, _dy in _jit_e:
+            if _dx or _dy:
+                self._program.setUniformValue(self._loc_mvp,
+                                              _shifted_mvp(mvp, _dx, _dy))
+            if self._edges_count > 0 and show_edges:
+                self._set_color(ec[0], ec[1], ec[2], 1.0)
+                self._edges_vao.bind()
+                _espans = getattr(self, "_frame_edge_spans",
+                                  ((0, self._edges_count),))
+                if split_e is None:
+                    for _vs, _vc in _espans:
                         self._gl.glDrawArrays(GL_LINES, _vs, _vc)
-                self._program.setUniformValue1f(self._loc_fade, 0.0)
-                for _vs, _vc in _espans:
-                    if _vs >= split_e:
-                        self._gl.glDrawArrays(GL_LINES, _vs, _vc)
-            self._edges_vao.release()
-        if show_edges:
-            self._set_color(ec[0], ec[1], ec[2], 1.0)
-            self._draw_instanced_edges()
+                else:
+                    # Same two-tier draw as the faces: washed-out
+                    # surroundings, then the edited group's own edges at
+                    # full strength.
+                    self._program.setUniformValue1f(self._loc_fade,
+                                                    EDIT_REST_FADE)
+                    for _vs, _vc in _espans:
+                        if _vs < split_e:
+                            self._gl.glDrawArrays(GL_LINES, _vs, _vc)
+                    self._program.setUniformValue1f(self._loc_fade, 0.0)
+                    for _vs, _vc in _espans:
+                        if _vs >= split_e:
+                            self._gl.glDrawArrays(GL_LINES, _vs, _vc)
+                self._edges_vao.release()
+            if show_edges:
+                self._set_color(ec[0], ec[1], ec[2], 1.0)
+                self._draw_instanced_edges()
+        if len(_jit_e) > 1:
+            self._program.setUniformValue(self._loc_mvp, mvp)
 
         # Profile (silhouette) edges: soft seams of a curved surface are hidden,
         # except where the surface turns away from the viewer — the cylinder's
@@ -1556,8 +1583,14 @@ class Viewport(QOpenGLWidget):
             if sil_count > 0:
                 self._set_color(ec[0], ec[1], ec[2], 1.0)
                 self._silhouette_vao.bind()
-                self._gl.glDrawArrays(GL_LINES, 0, sil_count)
+                for _dx, _dy in _jit_p:
+                    if _dx or _dy:
+                        self._program.setUniformValue(
+                            self._loc_mvp, _shifted_mvp(mvp, _dx, _dy))
+                    self._gl.glDrawArrays(GL_LINES, 0, sil_count)
                 self._silhouette_vao.release()
+                if len(_jit_p) > 1:
+                    self._program.setUniformValue(self._loc_mvp, mvp)
         _fmark("edges")
 
         # Selected edges (drawn on top, highlighted) — never in an export
@@ -2305,7 +2338,18 @@ class Viewport(QOpenGLWidget):
         # scan with soft edges would come out with its alpha chopped.
         self._program.setUniformValue(self._loc_hard_cutout, 0)
         self._gl.glDepthMask(GL_FALSE)
-        blending = False
+        # Blending is the frame's default state (paintGL enables it up
+        # front for cutouts, glass and the shadow catcher) — a faded image
+        # simply relies on it. This pass used to switch blending OFF after a
+        # translucent image and never back on: every later blended pass ran
+        # opaque, and the shadow catcher (translucent black, alpha 0 where
+        # lit) then WROTE alpha 0 over the ground — a transparent hole the
+        # size of the model's shadow square, white on screen. Only on
+        # frames that reused the cached shadow map (orbit, zoom): a rebuild
+        # re-enables blending on its way out, which hid the bug behind
+        # every edit (Marco, 2026-09-14: «puse sombras con el tif y orbité»).
+        self._gl.glEnable(GL_BLEND)
+        self._gl.glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
         for im, tex in drawn:
             c = im.corners()
             # Two triangles, UV (0,0) at ``origin``: _get_texture uploads the
@@ -2316,10 +2360,6 @@ class Viewport(QOpenGLWidget):
             raw = b"".join(struct.pack("<5f", v.x(), v.y(), v.z(), u, w)
                            for v, u, w in quad)
             opacity = max(0.0, min(1.0, float(getattr(im, "opacity", 1.0))))
-            if opacity < 1.0 and not blending:
-                self._gl.glEnable(GL_BLEND)
-                self._gl.glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
-                blending = True
             self._program.setUniformValue1f(self._loc_opacity, opacity)
             self._img_vbo.bind()
             self._img_vbo.allocate(raw, len(raw))
@@ -2329,8 +2369,6 @@ class Viewport(QOpenGLWidget):
             self._gl.glDrawArrays(GL_TRIANGLES, 0, 6)
             tex.release(0)
             vao.release()
-        if blending:
-            self._gl.glDisable(GL_BLEND)
         self._program.setUniformValue1f(self._loc_opacity, 1.0)
         self._gl.glDepthMask(GL_TRUE)
         self._program.setUniformValue(self._loc_use_tex, 0)
@@ -2378,6 +2416,37 @@ class Viewport(QOpenGLWidget):
         locked images, so a click on an aligned scan falls through to the
         geometry being drawn on it."""
         return self.image_plane_at(screen_x, screen_y, selectable_only=True)
+
+    def pick_locked_image_plane(self, screen_x: float, screen_y: float):
+        """The right-click's last resort: a LOCKED image under the cursor
+        (its layer still visible and unlocked). A locked image refuses
+        clicks by design, but the context menu is the only door back to
+        Unlock / Delete — SketchUp offers Unlock on a right-click too.
+        Without this a locked scan could never be selected again (Marco,
+        2026-09-14, the orthomosaic that arrives locked)."""
+        images = getattr(self.scene, "image_planes", None)
+        if not images:
+            return None
+        origin, direction = self._pixel_to_ray(screen_x, screen_y)
+        if origin is None or direction is None:
+            return None
+        best, best_t = None, float("inf")
+        for im in images:
+            if not getattr(im, "locked", False):
+                continue
+            if not self.scene.entity_visible(im) or not self.scene.entity_selectable(im):
+                continue
+            n = im.normal()
+            denom = QVector3D.dotProduct(n, direction)
+            if abs(denom) < 1e-9:
+                continue
+            t = QVector3D.dotProduct(n, im.center() - origin) / denom
+            if t < 0.0 or t > best_t:
+                continue
+            fu, fv = im.project(origin + direction * t)
+            if im.contains_uv(fu, fv):
+                best, best_t = im, t
+        return best
 
     def _draw_image_outlines(self, painter: QPainter) -> None:
         """Border of each reference image: faint normally, selection orange
@@ -2520,6 +2589,21 @@ class Viewport(QOpenGLWidget):
         return (round(min(1.0, base[0] * shade) * 64.0) / 64.0,
                 round(min(1.0, base[1] * shade) * 64.0) / 64.0,
                 round(min(1.0, base[2] * shade) * 64.0) / 64.0)
+
+    # ---- Line weight for exports --------------------------------------------
+    def _line_jitter(self, px: int, w: int, h: int) -> list:
+        """NDC offsets that thicken a 1-px GL line to about ``px`` pixels by
+        redrawing it shifted — a disc of sub-pixel samples (2 px = the four
+        half-pixel corners, 3 px = a cross, …). Only export renders ask for
+        more than one; on screen the list is the single origin."""
+        if px <= 1 or self._export_size is None:
+            return [(0.0, 0.0)]
+        px = min(int(px), 8)
+        r = (px - 1) / 2.0
+        offs = [-r + i for i in range(px)]
+        return [(dx * 2.0 / max(w, 1), dy * 2.0 / max(h, 1))
+                for dx in offs for dy in offs
+                if dx * dx + dy * dy <= r * r + 0.51]
 
     # ---- Base-map tiles (Track G) -------------------------------------------
     def _base_map_showing(self) -> bool:
@@ -3287,6 +3371,10 @@ class Viewport(QOpenGLWidget):
         self._tex_budget = self._TEX_PER_FRAME
         self._tex_deferred = False
         self._program.setUniformValue(self._loc_use_tex, 1)
+        # A faded map (opacity < 1) blends over the background so the
+        # model and its lines read on top of the imagery.
+        opacity = max(0.0, min(1.0, float(getattr(layer, "opacity", 1.0))))
+        self._program.setUniformValue1f(self._loc_opacity, opacity)
         self._gl.glDepthMask(GL_FALSE)
         self._tile_quad_vao.bind()
         for (x, y, start) in runs:
@@ -3298,6 +3386,7 @@ class Viewport(QOpenGLWidget):
             tex.release(0)
         self._tile_quad_vao.release()
         self._gl.glDepthMask(GL_TRUE)
+        self._program.setUniformValue1f(self._loc_opacity, 1.0)
         self._program.setUniformValue(self._loc_use_tex, 0)
         if self._tex_deferred:            # more tiles to upload — schedule a frame
             self.update()
@@ -8714,11 +8803,17 @@ class Viewport(QOpenGLWidget):
                   or self.pick_section_plane(x, y)
                   or self.pick_guide(x, y)
                   or self.pick_face(x, y)
-                  or self.pick_image_plane(x, y))
+                  or self.pick_image_plane(x, y)
+                  or self.pick_locked_image_plane(x, y))
         if picked is not None and picked not in self.scene.selection:
             self.scene.select([picked])
             self.update()
-        win.show_viewport_context_menu(ev.globalPos())
+        # A locked image under the cursor is offered even when the click
+        # landed on geometry drawn over it (the plaza on its orthomosaic):
+        # the menu is the only way back to Unlock / Delete for it.
+        under = self.pick_locked_image_plane(x, y)
+        win.show_viewport_context_menu(
+            ev.globalPos(), locked_image=under if under is not picked else None)
 
     def mousePressEvent(self, ev) -> None:
         self._input_t = _time_mod.monotonic()   # P0: input→paint latency

@@ -1326,6 +1326,24 @@ class TransformImagePlaneCommand(Command):
         scene.version += 1
 
 
+class SetImagePlaneOpacityCommand(Command):
+    """Fade a reference image (a scan you trace over, an orthomosaic under
+    the model) — one undoable step."""
+
+    def __init__(self, image, opacity: float) -> None:
+        self.image = image
+        self.opacity = max(0.0, min(1.0, float(opacity)))
+        self._old = float(getattr(image, "opacity", 1.0))
+
+    def do(self, scene) -> None:
+        self.image.opacity = self.opacity
+        scene.version += 1
+
+    def undo(self, scene) -> None:
+        self.image.opacity = self._old
+        scene.version += 1
+
+
 class MoveImagePlanesCommand(Command):
     """Translate reference images (the Move tool). Only the origin corner
     moves — the edge vectors carry size and orientation, so a move can never
@@ -2925,6 +2943,17 @@ class MoveGroupCommand(Command):
 
     def undo(self, scene) -> None:
         self._shift(scene, -self.delta)
+
+
+def placement_is_identity(xform, tol: float = 1e-6) -> bool:
+    """True when a placement neither turns nor moves anything (within
+    ``tol``) — straightening it would be a silent no-op."""
+    if xform is None:
+        return True
+    from PySide6.QtGui import QMatrix4x4
+    ident = QMatrix4x4()
+    return all(abs(xform(r, c) - ident(r, c)) <= tol
+               for r in range(4) for c in range(4))
 
 
 def placement_rotation_deg(xform) -> float:
