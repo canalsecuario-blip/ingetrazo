@@ -254,7 +254,7 @@ class MainWindow(QMainWindow):
         for dock in (self.tray, self.bim_tray, self.georef_tray):
             dock.setTitleBarWidget(QWidget(dock))
         self.tray.raise_()
-        self._build_sidebar_strip()
+        self._build_sidebar_handle()
         self.viewport.sceneVersionChanged.connect(
             lambda _v: self.tray.on_scene_changed())
         self.viewport.sceneVersionChanged.connect(
@@ -831,46 +831,58 @@ class MainWindow(QMainWindow):
                             getattr(self, "bim_tray", None),
                             getattr(self, "georef_tray", None)) if d is not None]
 
-    def _build_sidebar_strip(self) -> None:
-        """A slim vertical bar at the right edge, always there: one tab per
-        tray (click = show the sidebar with that tray on top; click the tab
-        already on top = fold the sidebar away) and a chevron that folds /
-        unfolds the whole sidebar. Window ▸ Sidebar (Ctrl+F5) does the same
-        (Marco, 2026-09-14: «mostrar y ocultar la barra vertical derecha,
+    def _build_sidebar_handle(self) -> None:
+        """LibreOffice's sidebar handle: a slim button sitting ON the line
+        where the sidebar is resized, half-way down, with a chevron — click
+        folds the three trays away; the handle then rests at the window's
+        right edge, chevron pointing back in, and click brings them back.
+        Window ▸ Sidebar (Ctrl+F5) is the same toggle (Marco, 2026-09-14:
+        «ponerlo justo en esa línea donde redimensiono la barra vertical,
         como lo hace LibreOffice»)."""
         from PySide6.QtCore import QSize
-        strip = QToolBar(tr("Sidebar tabs"), self)
-        strip.setObjectName("sidebar_strip")
-        strip.setOrientation(Qt.Vertical)
-        strip.setMovable(False)
-        strip.setFloatable(False)
-        strip.setAllowedAreas(Qt.RightToolBarArea | Qt.LeftToolBarArea)
-        strip.setIconSize(QSize(22, 22))
-        strip.setToolButtonStyle(Qt.ToolButtonIconOnly)
-        self.addToolBar(Qt.RightToolBarArea, strip)
-        self._sidebar_strip = strip
-
-        act = QAction(tool_icon("side_collapse"), tr("Sidebar"), self)
+        from PySide6.QtWidgets import QToolButton
+        act = QAction(tr("Sidebar"), self)
         act.setCheckable(True)
         act.setChecked(True)
         act.setShortcut(QKeySequence("Ctrl+F5"))
         act.setToolTip(tr("Show or hide the sidebar (Ctrl+F5)"))
         act.toggled.connect(self._set_sidebar_visible)
         self.addAction(act)
-        strip.addAction(act)
         self._act_sidebar = act
-        self._icon_actions.append((act, "side_collapse"))
-        strip.addSeparator()
-        self._sidebar_tab_actions = {}
-        for dock, key, title in ((self.tray, "side_properties", tr("Properties")),
-                                 (self.bim_tray, "side_bim", tr("BIM")),
-                                 (self.georef_tray, "side_terrain", tr("Terrain"))):
-            tab = QAction(tool_icon(key), title, self)
-            tab.setToolTip(title)
-            tab.triggered.connect(lambda _c, d=dock: self._sidebar_tab_clicked(d))
-            strip.addAction(tab)
-            self._sidebar_tab_actions[key] = tab
-            self._icon_actions.append((tab, key))
+
+        btn = QToolButton(self)
+        btn.setObjectName("sidebar_handle")
+        btn.setFixedSize(14, 56)
+        btn.setIconSize(QSize(12, 12))
+        btn.setIcon(tool_icon("side_collapse"))
+        btn.setToolTip(act.toolTip())
+        btn.setCursor(Qt.PointingHandCursor)
+        btn.setAutoRaise(True)
+        btn.setStyleSheet(
+            "QToolButton { background: palette(mid); border: none;"
+            " border-radius: 4px; }"
+            "QToolButton:hover { background: rgb(243, 115, 41); }")
+        btn.clicked.connect(lambda: act.setChecked(not act.isChecked()))
+        self._sidebar_handle = btn
+        self._icon_actions.append((btn, "side_collapse"))
+        self.viewport.installEventFilter(self)
+        self._place_sidebar_handle()
+
+    def _place_sidebar_handle(self) -> None:
+        """On the resize line between the viewport and the trays, centred
+        vertically; at the window's edge when the trays are folded."""
+        btn = getattr(self, "_sidebar_handle", None)
+        if btn is None:
+            return
+        from PySide6.QtCore import QPoint
+        edge = self.viewport.mapTo(self, QPoint(self.viewport.width(), 0))
+        x = edge.x() - btn.width() // 2
+        x = max(0, min(x, self.width() - btn.width()))
+        y = edge.y() + (self.viewport.height() - btn.height()) // 2
+        btn.move(x, max(0, y))
+        btn.raise_()
+        btn.setVisible(not self._act_clean_screen.isChecked()
+                       if hasattr(self, "_act_clean_screen") else True)
 
     def _sidebar_visible(self) -> bool:
         return any(d.isVisible() for d in self._sidebar_docks())
@@ -892,26 +904,14 @@ class MainWindow(QMainWindow):
                                       and not d.visibleRegion().isEmpty()), None)
             for d in docks:
                 d.hide()
-        act = getattr(self, "_act_sidebar", None)
-        if act is not None:
-            act.setIcon(tool_icon("side_collapse" if on else "side_expand"))
+        btn = getattr(self, "_sidebar_handle", None)
+        if btn is not None:
             key = "side_collapse" if on else "side_expand"
-            self._icon_actions = [(a, (key if a is act else k))
+            btn.setIcon(tool_icon(key))
+            self._icon_actions = [(a, (key if a is btn else k))
                                   for a, k in self._icon_actions]
-
-    def _sidebar_tab_clicked(self, dock) -> None:
-        """A tab on the strip: show the sidebar with that tray on top; the
-        tray already on top folds the sidebar away (LibreOffice)."""
-        act = self._act_sidebar
-        on_top = (dock.isVisible() and not dock.visibleRegion().isEmpty())
-        if act.isChecked() and on_top:
-            act.setChecked(False)
-            return
-        if not act.isChecked():
-            self._sidebar_was = list({*(getattr(self, "_sidebar_was", None) or []), dock})
-            act.setChecked(True)
-        dock.show()
-        dock.raise_()
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(0, self._place_sidebar_handle)   # after the relayout
 
     def _toggle_clean_screen(self, on: bool) -> None:
         """AutoCAD's Ctrl+0: fold away every toolbar, dock and bar so only
@@ -928,6 +928,8 @@ class MainWindow(QMainWindow):
             self.statusBar().hide()
             self._clean_screen_exit_button().show()
             self._place_clean_screen_exit()
+            if getattr(self, "_sidebar_handle", None) is not None:
+                self._sidebar_handle.hide()
         else:
             btn = getattr(self, "_clean_exit_btn", None)
             if btn is not None:
@@ -937,6 +939,8 @@ class MainWindow(QMainWindow):
                 self.restoreState(state)
             self.menuBar().show()
             self.statusBar().show()
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(0, self._place_sidebar_handle)
 
     def _clean_screen_exit_button(self):
         """A small «Exit clean screen» button floating at the viewport's
@@ -973,8 +977,10 @@ class MainWindow(QMainWindow):
 
     def eventFilter(self, obj, event):  # noqa: N802 — Qt override
         from PySide6.QtCore import QEvent
-        if obj is getattr(self, "viewport", None) and event.type() == QEvent.Resize:
+        if obj is getattr(self, "viewport", None) and event.type() in (
+                QEvent.Resize, QEvent.Move, QEvent.Show):
             self._place_clean_screen_exit()
+            self._place_sidebar_handle()
         return super().eventFilter(obj, event)
 
     def _on_preferences(self) -> None:

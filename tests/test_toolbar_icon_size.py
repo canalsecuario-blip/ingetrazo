@@ -110,32 +110,36 @@ def test_clean_screen_shows_an_exit_button_at_the_top_right(settings_file):
         win.close()
 
 
-def test_the_sidebar_folds_and_unfolds_from_the_strip_and_ctrl_f5(settings_file):
-    """LibreOffice-style sidebar (Marco, 2026-09-14): Window ▸ Sidebar
-    (Ctrl+F5) folds the three trays away and brings back the ones that were
-    open; the strip at the right edge stays, its tabs show the sidebar with
-    that tray on top, and the tab already on top folds it away."""
+def test_the_sidebar_handle_sits_on_the_resize_line_and_folds_the_trays(settings_file):
+    """LibreOffice's handle (Marco, 2026-09-14): a slim button on the line
+    between the viewport and the trays, half-way down; click (or Window ▸
+    Sidebar, Ctrl+F5) folds the three trays away, the handle rests at the
+    window's edge, click brings back the trays that were open."""
+    from PySide6.QtWidgets import QApplication
     from views.main_window import MainWindow
     win = MainWindow()
     try:
+        win.resize(1200, 800)
         win.show()
+        QApplication.processEvents()
+        btn = win._sidebar_handle
         docks = win._sidebar_docks()
-        assert win._sidebar_strip.isVisible()
-        assert win._act_sidebar.isChecked() and win.tray.isVisible()
-        win._act_sidebar.setChecked(False)                     # fold
-        assert not any(d.isVisible() for d in docks)
-        assert win._sidebar_strip.isVisible()                  # the strip stays
-        win._act_sidebar.setChecked(True)                      # unfold
-        assert win.tray.isVisible()
-        # a tab brings the sidebar back with that tray on top
-        win._act_sidebar.setChecked(False)
-        win._sidebar_tab_clicked(win.georef_tray)
-        assert win._act_sidebar.isChecked() and win.georef_tray.isVisible()
-        assert not win.georef_tray.visibleRegion().isEmpty()
-        # the tab already on top folds it away again
-        win._sidebar_tab_clicked(win.georef_tray)
+        assert btn.isVisible() and win.tray.isVisible()
+        edge = win.viewport.mapTo(win, win.viewport.rect().topRight()).x()
+        assert abs((btn.x() + btn.width() // 2) - edge) <= 2       # on the line
+        assert abs(btn.y() + btn.height() // 2
+                   - (win.viewport.mapTo(win, win.viewport.rect().topLeft()).y()
+                      + win.viewport.height() // 2)) <= 2           # half-way down
+        assert edge < win.width() - 50                              # trays take room
+        btn.click()                                                 # fold
+        QApplication.processEvents()
         assert not win._act_sidebar.isChecked()
-        assert not win.georef_tray.isVisible()
+        assert not any(d.isVisible() for d in docks)
+        QApplication.processEvents()
+        assert btn.isVisible() and btn.x() + btn.width() >= win.width() - 2   # at the edge
+        win._act_sidebar.setChecked(True)                           # unfold (Ctrl+F5)
+        QApplication.processEvents()
+        assert win.tray.isVisible()
     finally:
         win._saved_version = win.viewport.scene.version
         win.close()
