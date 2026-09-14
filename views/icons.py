@@ -840,13 +840,15 @@ def _house_side(mirror: bool):
         if mirror:
             p.translate(48, 0)
             p.scale(-1, 1)
-        wall = QRectF(9, 23, 30, 14)
+        # As wide as the front: the house is square in plan (Marco,
+        # 2026-09-14: «se ven largos cuando la casita es tipo cuadrado»).
+        wall = QRectF(12, 23, 24, 14)
         _accent_fill(p, wall)
         p.setBrush(Qt.NoBrush)
         p.drawRect(wall)
-        p.drawPolygon(QPolygonF([QPointF(7, 23), QPointF(13, 15),
-                                 QPointF(35, 15), QPointF(41, 23)]))  # roof
-        _chimney(p, ink, 33.0, 15.0, h=6.0)
+        p.drawPolygon(QPolygonF([QPointF(10, 23), QPointF(15, 15),
+                                 QPointF(33, 15), QPointF(38, 23)]))  # roof
+        _chimney(p, ink, 31.0, 15.0, h=6.0)
         p.restore()
     return draw
 
