@@ -254,6 +254,7 @@ class MainWindow(QMainWindow):
         for dock in (self.tray, self.bim_tray, self.georef_tray):
             dock.setTitleBarWidget(QWidget(dock))
         self.tray.raise_()
+        self._build_sidebar_strip()
         self.viewport.sceneVersionChanged.connect(
             lambda _v: self.tray.on_scene_changed())
         self.viewport.sceneVersionChanged.connect(
@@ -778,6 +779,9 @@ class MainWindow(QMainWindow):
         self.addAction(clean_action)
         window_menu.addAction(clean_action)
         self._act_clean_screen = clean_action
+        # LibreOffice's Ctrl+F5: the whole sidebar (the three trays) folds
+        # away and comes back; the strip at the right edge stays.
+        window_menu.addAction(self._act_sidebar)
 
         window_menu.addSeparator()
         prefs_action = QAction(tr("Preferences…"), self)
@@ -820,6 +824,94 @@ class MainWindow(QMainWindow):
             action.triggered.connect(lambda _checked, c=code: self._on_set_language(c))
             group.addAction(action)
             lang_menu.addAction(action)
+
+    # ---- Sidebar strip (LibreOffice-style) ---------------------------------
+    def _sidebar_docks(self) -> list:
+        return [d for d in (getattr(self, "tray", None),
+                            getattr(self, "bim_tray", None),
+                            getattr(self, "georef_tray", None)) if d is not None]
+
+    def _build_sidebar_strip(self) -> None:
+        """A slim vertical bar at the right edge, always there: one tab per
+        tray (click = show the sidebar with that tray on top; click the tab
+        already on top = fold the sidebar away) and a chevron that folds /
+        unfolds the whole sidebar. Window ▸ Sidebar (Ctrl+F5) does the same
+        (Marco, 2026-09-14: «mostrar y ocultar la barra vertical derecha,
+        como lo hace LibreOffice»)."""
+        from PySide6.QtCore import QSize
+        strip = QToolBar(tr("Sidebar tabs"), self)
+        strip.setObjectName("sidebar_strip")
+        strip.setOrientation(Qt.Vertical)
+        strip.setMovable(False)
+        strip.setFloatable(False)
+        strip.setAllowedAreas(Qt.RightToolBarArea | Qt.LeftToolBarArea)
+        strip.setIconSize(QSize(22, 22))
+        strip.setToolButtonStyle(Qt.ToolButtonIconOnly)
+        self.addToolBar(Qt.RightToolBarArea, strip)
+        self._sidebar_strip = strip
+
+        act = QAction(tool_icon("side_collapse"), tr("Sidebar"), self)
+        act.setCheckable(True)
+        act.setChecked(True)
+        act.setShortcut(QKeySequence("Ctrl+F5"))
+        act.setToolTip(tr("Show or hide the sidebar (Ctrl+F5)"))
+        act.toggled.connect(self._set_sidebar_visible)
+        self.addAction(act)
+        strip.addAction(act)
+        self._act_sidebar = act
+        self._icon_actions.append((act, "side_collapse"))
+        strip.addSeparator()
+        self._sidebar_tab_actions = {}
+        for dock, key, title in ((self.tray, "side_properties", tr("Properties")),
+                                 (self.bim_tray, "side_bim", tr("BIM")),
+                                 (self.georef_tray, "side_terrain", tr("Terrain"))):
+            tab = QAction(tool_icon(key), title, self)
+            tab.setToolTip(title)
+            tab.triggered.connect(lambda _c, d=dock: self._sidebar_tab_clicked(d))
+            strip.addAction(tab)
+            self._sidebar_tab_actions[key] = tab
+            self._icon_actions.append((tab, key))
+
+    def _sidebar_visible(self) -> bool:
+        return any(d.isVisible() for d in self._sidebar_docks())
+
+    def _set_sidebar_visible(self, on: bool) -> None:
+        """Fold the trays away (remembering which were open) or bring
+        them back; the chevron turns to point the way."""
+        docks = self._sidebar_docks()
+        if on:
+            shown = getattr(self, "_sidebar_was", None) or docks[:1]
+            for d in docks:
+                d.setVisible(d in shown)
+            top = getattr(self, "_sidebar_top", None)
+            if top is not None and top in shown:
+                top.raise_()
+        else:
+            self._sidebar_was = [d for d in docks if d.isVisible()]
+            self._sidebar_top = next((d for d in docks if d.isVisible()
+                                      and not d.visibleRegion().isEmpty()), None)
+            for d in docks:
+                d.hide()
+        act = getattr(self, "_act_sidebar", None)
+        if act is not None:
+            act.setIcon(tool_icon("side_collapse" if on else "side_expand"))
+            key = "side_collapse" if on else "side_expand"
+            self._icon_actions = [(a, (key if a is act else k))
+                                  for a, k in self._icon_actions]
+
+    def _sidebar_tab_clicked(self, dock) -> None:
+        """A tab on the strip: show the sidebar with that tray on top; the
+        tray already on top folds the sidebar away (LibreOffice)."""
+        act = self._act_sidebar
+        on_top = (dock.isVisible() and not dock.visibleRegion().isEmpty())
+        if act.isChecked() and on_top:
+            act.setChecked(False)
+            return
+        if not act.isChecked():
+            self._sidebar_was = list({*(getattr(self, "_sidebar_was", None) or []), dock})
+            act.setChecked(True)
+        dock.show()
+        dock.raise_()
 
     def _toggle_clean_screen(self, on: bool) -> None:
         """AutoCAD's Ctrl+0: fold away every toolbar, dock and bar so only

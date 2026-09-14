@@ -1249,8 +1249,76 @@ def _arr_lock(p, ink):
     _dot(p, 24, 30, 2.6)
 
 
+# ---- Sidebar strip (LibreOffice-style): one tab per tray + the collapse
+# chevron ------------------------------------------------------------------
+
+def _side_properties(p, ink):
+    # Entity info: a card with three rows, the first ticked in the accent.
+    p.setBrush(Qt.NoBrush)
+    p.drawRoundedRect(QRectF(10, 9, 28, 30), 4, 4)
+    for y in (17, 24, 31):
+        p.drawLine(QPointF(20, y), QPointF(33, y))
+    _dot(p, 15.5, 17, 2.4)
+    _dot(p, 15.5, 24, 2.4, QColor(ink))
+    _dot(p, 15.5, 31, 2.4, QColor(ink))
+
+
+def _side_bim(p, ink):
+    # A building block with a BIM tag hanging off it.
+    p.setBrush(Qt.NoBrush)
+    p.drawRect(QRectF(9, 15, 18, 24))
+    for y in (22, 29):
+        p.drawLine(QPointF(13, y), QPointF(23, y))
+    p.drawLine(QPointF(18, 15), QPointF(18, 39))
+    tag = QPolygonF([QPointF(27, 22), QPointF(38, 22), QPointF(42, 27),
+                     QPointF(38, 32), QPointF(27, 32)])
+    p.save()
+    p.setPen(Qt.NoPen)
+    p.setBrush(QBrush(_accent()))
+    p.drawPolygon(tag)
+    p.restore()
+
+
+def _side_terrain(p, ink):
+    # Hills under a sun: the terrain / location workspace.
+    path = QPainterPath()
+    path.moveTo(6, 38)
+    path.cubicTo(14, 22, 20, 22, 26, 32)
+    path.cubicTo(30, 26, 36, 24, 42, 38)
+    p.setBrush(Qt.NoBrush)
+    p.drawPath(path)
+    p.drawLine(QPointF(6, 38), QPointF(42, 38))
+    _dot(p, 34, 14, 4.0)
+
+
+def _side_collapse(p, ink):
+    # A chevron pointing right: fold the sidebar away (points left to open).
+    pen = QPen(ink, 3.4)
+    pen.setCapStyle(Qt.RoundCap)
+    pen.setJoinStyle(Qt.RoundJoin)
+    p.save()
+    p.setPen(pen)
+    p.drawLine(QPointF(19, 13), QPointF(30, 24))
+    p.drawLine(QPointF(30, 24), QPointF(19, 35))
+    p.restore()
+
+
+def _side_expand(p, ink):
+    pen = QPen(ink, 3.4)
+    pen.setCapStyle(Qt.RoundCap)
+    pen.setJoinStyle(Qt.RoundJoin)
+    p.save()
+    p.setPen(pen)
+    p.drawLine(QPointF(29, 13), QPointF(18, 24))
+    p.drawLine(QPointF(18, 24), QPointF(29, 35))
+    p.restore()
+
+
 _DRAW = {
     "select": _select, "line": _line, "freehand": _freehand,
+    "side_properties": _side_properties, "side_bim": _side_bim,
+    "side_terrain": _side_terrain, "side_collapse": _side_collapse,
+    "side_expand": _side_expand,
     "arr_left": _arr_left, "arr_right": _arr_right, "arr_top": _arr_top,
     "arr_bottom": _arr_bottom, "arr_hcenter": _arr_hcenter,
     "arr_vcenter": _arr_vcenter, "arr_dist_h": _arr_dist_h,

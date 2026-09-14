@@ -108,3 +108,34 @@ def test_clean_screen_shows_an_exit_button_at_the_top_right(settings_file):
     finally:
         win._saved_version = win.viewport.scene.version
         win.close()
+
+
+def test_the_sidebar_folds_and_unfolds_from_the_strip_and_ctrl_f5(settings_file):
+    """LibreOffice-style sidebar (Marco, 2026-09-14): Window ▸ Sidebar
+    (Ctrl+F5) folds the three trays away and brings back the ones that were
+    open; the strip at the right edge stays, its tabs show the sidebar with
+    that tray on top, and the tab already on top folds it away."""
+    from views.main_window import MainWindow
+    win = MainWindow()
+    try:
+        win.show()
+        docks = win._sidebar_docks()
+        assert win._sidebar_strip.isVisible()
+        assert win._act_sidebar.isChecked() and win.tray.isVisible()
+        win._act_sidebar.setChecked(False)                     # fold
+        assert not any(d.isVisible() for d in docks)
+        assert win._sidebar_strip.isVisible()                  # the strip stays
+        win._act_sidebar.setChecked(True)                      # unfold
+        assert win.tray.isVisible()
+        # a tab brings the sidebar back with that tray on top
+        win._act_sidebar.setChecked(False)
+        win._sidebar_tab_clicked(win.georef_tray)
+        assert win._act_sidebar.isChecked() and win.georef_tray.isVisible()
+        assert not win.georef_tray.visibleRegion().isEmpty()
+        # the tab already on top folds it away again
+        win._sidebar_tab_clicked(win.georef_tray)
+        assert not win._act_sidebar.isChecked()
+        assert not win.georef_tray.isVisible()
+    finally:
+        win._saved_version = win.viewport.scene.version
+        win.close()
