@@ -542,25 +542,27 @@ def _dim_tick(p, ink, x: float, y: float, s: float = 3.5) -> None:
 
 
 def _dimension(p, ink):
-    # A dimension the way it reads on a plan: line, extension lines, slash
-    # ticks, a value — a plain «3» — and the two measured points in the
-    # accent (Marco's pick, 2026-09-14: the bare bracket looked «muy
-    # simple»).
-    p.drawLine(QPointF(9, 30), QPointF(39, 30))
-    p.drawLine(QPointF(9, 23), QPointF(9, 37))
-    p.drawLine(QPointF(39, 23), QPointF(39, 37))
-    _dim_tick(p, ink, 9, 30)
-    _dim_tick(p, ink, 39, 30)
+    # A dimension as it is drawn: the measured edge with its two points in
+    # the accent (the clicks), extension lines up to the dimension line,
+    # slash ticks and a plain «3» as the value (Marco's pick, 2026-09-14,
+    # after SketchUp's icon; «1.20» read as noise at toolbar size).
+    A, B = (10.0, 39.0), (38.0, 39.0)
+    p.drawLine(QPointF(*A), QPointF(*B))                     # the measured edge
+    _guide(p, ink, (A[0], 37.0), (A[0], 17.0))               # extension lines
+    _guide(p, ink, (B[0], 37.0), (B[0], 17.0))
+    p.drawLine(QPointF(A[0], 21.0), QPointF(B[0], 21.0))     # dimension line
+    _dim_tick(p, ink, A[0], 21.0)
+    _dim_tick(p, ink, B[0], 21.0)
     f = p.font()
     f.setPixelSize(13)
     f.setBold(True)
     p.save()
     p.setFont(f)
     p.setPen(ink)
-    p.drawText(QRectF(14, 13, 20, 14), Qt.AlignCenter, "3")
+    p.drawText(QRectF(14.0, 5.0, 20.0, 14.0), Qt.AlignCenter, "3")
     p.restore()
-    _dot(p, 9, 37, 2.9)
-    _dot(p, 39, 37, 2.9)
+    _dot(p, A[0], A[1], 2.9)
+    _dot(p, B[0], B[1], 2.9)
 
 
 def _dimension_style(p, ink):
