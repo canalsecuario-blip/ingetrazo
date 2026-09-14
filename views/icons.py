@@ -662,19 +662,18 @@ def _view_front(p, ink):
 
 
 def _view_back(p, ink):
-    # Same gable end from behind: no door, one window, chimney LEFT. (Back)
+    # Same gable end from behind: blank wall, chimney LEFT. (Back)
     p.setBrush(Qt.NoBrush)
     p.drawRect(QRectF(12, 22, 22, 15))
     p.drawPolygon(QPolygonF([QPointF(9, 22), QPointF(23, 9),
                              QPointF(37, 22)]))
     _chimney(p, ink, 15.0, 15.0, h=6.5)
-    p.drawRect(QRectF(20, 27, 6, 5))                       # window
     _view_letter(p, ink, "view_back")
 
 
 def _house_side(mirror: bool):
-    # Long wall seen side-on: a wide box, a low trapezoidal roof, two windows,
-    # the chimney toward the BACK end (left from the right side). Right and
+    # Long wall seen side-on: a wide box, a low trapezoidal roof, no windows
+    # (Marco), the chimney toward the BACK end (left from the right side). Right and
     # Left are mirror images.
     def draw(p, ink):
         p.save()
@@ -686,8 +685,6 @@ def _house_side(mirror: bool):
         p.drawPolygon(QPolygonF([QPointF(7, 23), QPointF(13, 15),
                                  QPointF(35, 15), QPointF(41, 23)]))  # roof
         _chimney(p, ink, 17.0, 15.0, h=6.0)
-        p.drawRect(QRectF(13, 27, 6, 5))                   # windows
-        p.drawRect(QRectF(29, 27, 6, 5))
         p.restore()
         _view_letter(p, ink, "view_left" if mirror else "view_right")
     return draw
