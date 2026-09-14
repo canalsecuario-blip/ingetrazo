@@ -140,6 +140,14 @@ def test_the_sidebar_handle_sits_on_the_resize_line_and_folds_the_trays(settings
         win._act_sidebar.setChecked(True)                           # unfold (Ctrl+F5)
         QApplication.processEvents()
         assert win.tray.isVisible()
+        # Switching the tabbed trays (Terrain ↔ BIM) must not bury the handle.
+        for dock in (win.bim_tray, win.georef_tray, win.tray):
+            dock.show()
+            dock.raise_()
+            QApplication.processEvents()
+            QApplication.processEvents()
+            top = win.childAt(btn.geometry().center())
+            assert top is btn or btn.isAncestorOf(top), dock.objectName()
     finally:
         win._saved_version = win.viewport.scene.version
         win.close()

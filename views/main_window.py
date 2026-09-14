@@ -866,7 +866,19 @@ class MainWindow(QMainWindow):
         self._sidebar_handle = btn
         self._icon_actions.append((btn, "side_collapse"))
         self.viewport.installEventFilter(self)
+        self._follow_sidebar_docks()
         self._place_sidebar_handle()
+
+    def _follow_sidebar_docks(self) -> None:
+        """Raising a tabbed tray (Terrain ↔ BIM) restacks the window's
+        children above the handle, which then vanishes behind the dock
+        (Marco, 2026-09-14) — every dock change re-places (and re-raises) it."""
+        from PySide6.QtCore import QTimer
+        bump = lambda *_: QTimer.singleShot(0, self._place_sidebar_handle)
+        for d in self._sidebar_docks():
+            d.visibilityChanged.connect(bump)
+            d.dockLocationChanged.connect(bump)
+            d.topLevelChanged.connect(bump)
 
     def _place_sidebar_handle(self) -> None:
         """On the resize line between the viewport and the trays, centred
