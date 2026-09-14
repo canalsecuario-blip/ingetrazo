@@ -486,14 +486,16 @@ class MainWindow(QMainWindow):
         # Standard-views toolbar: one-shot camera orientations, icon-only.
         views_tb = self._new_toolbar(tr("Standard Views"), "views")
         self.toolbars["views"] = views_tb
+        # Order as Marco reads them (2026-09-14): iso, top, front, right,
+        # left, back, bottom — the two you use most right after the iso.
         for key, label, icon in [
             ("iso", "Isometric", "view_iso"),
             ("top", "Top", "view_top"),
-            ("bottom", "Bottom", "view_bottom"),
             ("front", "Front", "view_front"),
-            ("back", "Back", "view_back"),
-            ("left", "Left", "view_left"),
             ("right", "Right", "view_right"),
+            ("left", "Left", "view_left"),
+            ("back", "Back", "view_back"),
+            ("bottom", "Bottom", "view_bottom"),
         ]:
             act = QAction(tool_icon(icon), tr(label), self)
             act.setToolTip(tr(label))
