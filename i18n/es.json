@@ -1572,5 +1572,13 @@
  "That face belongs to a group — double-click to open it first, then push inside": "Esa cara es de un grupo: entra con doble clic y empuja adentro",
  "That edge is perpendicular to the drawing plane — lock another one with the arrow keys, or start on the face you want to draw on": "Esa arista es perpendicular al plano de dibujo — bloquea otro con las flechas, o empieza sobre la cara en la que quieras dibujar",
  "The width is zero — move away from the base edge, or type the width (and the angle after a comma)": "El ancho es cero — aléjate de la arista base, o escribe el ancho (y el ángulo después de un punto y coma)",
- "Width; angle": "Ancho; ángulo"
+ "Width; angle": "Ancho; ángulo",
+ "North:": "Norte:",
+ "Where true north lies, in degrees clockwise from the green (Y) axis. Turns the base map, the terrain and every geographic import under the model; the model itself does not move, so its front/right/top views and axis locks stay square.": "Hacia dónde queda el norte verdadero, en grados en sentido horario desde el eje verde (Y). Gira el mapa base, el terreno y toda importación geográfica bajo el modelo; el modelo no se mueve, así que sus vistas frontal/derecha/planta y los bloqueos de eje siguen a escuadra.",
+ "Straighten model on the map": "Enderezar modelo sobre el mapa",
+ "Select the model you turned and dragged onto the site (one top-level component): it goes back to its own axes and the map turns under it instead — the north angle and the origin are set for you, nothing moves on the map.": "Selecciona el modelo que giraste y arrastraste sobre el sitio (un componente de primer nivel): vuelve a sus propios ejes y en su lugar gira el mapa por debajo — el ángulo del norte y el origen quedan puestos, nada se mueve sobre el mapa.",
+ "Select the placed model: one top-level component (the group you turned and dragged onto the site).": "Selecciona el modelo colocado: un componente de primer nivel (el grupo que giraste y arrastraste sobre el sitio).",
+ "Set a location first (Go to location).": "Primero fija una ubicación (Ir a la ubicación).",
+ "Could not straighten: {error}": "No se pudo enderezar: {error}",
+ "Model straightened: north angle {deg}°": "Modelo enderezado: ángulo del norte {deg}°"
 }

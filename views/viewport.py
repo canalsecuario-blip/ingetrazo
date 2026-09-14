@@ -2859,7 +2859,8 @@ class Viewport(QOpenGLWidget):
         patches (not per frame), returning ``[(x, y, vert_start), ...]``. The
         capture is static, so a strip of many tiles still draws fast — each
         frame just binds textures and draws slices; no per-tile re-allocation."""
-        key = (id(datum), tuple(layer.patches), layer.zoom, layer.source.id)
+        key = (id(datum), getattr(datum, "north", 0.0), tuple(layer.patches),
+               layer.zoom, layer.source.id)
         cache = getattr(self, "_tile_geom", None)
         if cache is not None and cache[0] == key:
             return cache[1]
@@ -3014,7 +3015,14 @@ class Viewport(QOpenGLWidget):
             when = sh.when_utc(lon, year=_dt.date.today().year)
         except ValueError:
             return None
-        return sun.sun_direction(lat, lon, when)
+        d = sun.sun_direction(lat, lon, when)
+        if d is None or datum is None or not getattr(datum, "north", 0.0):
+            return d
+        # The sun comes in grid axes (east, north); the model's frame may be
+        # turned by the datum's north angle — a shadow must fall the same way
+        # on the site whichever way the axes were drawn.
+        x, y = datum.grid_to_local_xy(d[0], d[1])
+        return (x, y, d[2])
 
     @staticmethod
     def _light_vp(d, lo, hi):
