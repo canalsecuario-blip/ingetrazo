@@ -1403,12 +1403,15 @@ def tool_cursor(key: str | None) -> QCursor | None:
 
 
 # ---- Toolbar icon size ----------------------------------------------------
-#: Sizes offered in Preferences ▸ General (pixels). 24 is the classic; the
-#: first version had only a «large» toggle (32) on the toolbar's right-click
-#: menu — moved here so it lives with the other settings and reaches the
-#: composer's toolbars too (Marco, 2026-09-14).
+#: Sizes offered in Preferences ▸ General (pixels). The first version had
+#: only a «large» toggle (32) on the toolbar's right-click menu — moved
+#: here so it lives with the other settings and reaches the composer's
+#: toolbars too. 32 is the factory default: what Marco settled on after
+#: the icon pass of 2026-09-14 («configúralo por defecto para cualquier
+#: persona que instale el programa»).
 TOOLBAR_ICON_SIZES = ((20, "Small"), (24, "Normal"), (32, "Large"),
                       (40, "Extra large"))
+DEFAULT_TOOLBAR_ICON_PX = 32
 
 
 def toolbar_icon_px() -> int:
@@ -1418,13 +1421,15 @@ def toolbar_icon_px() -> int:
     st = QSettings()
     raw = st.value("ui/toolbar_icon_px")
     if raw is None or str(raw) == "":
-        px = 32 if str(st.value("ui/large_toolbar_icons", "0")) == "1" else 24
+        px = (32 if str(st.value("ui/large_toolbar_icons", "0")) == "1"
+              else DEFAULT_TOOLBAR_ICON_PX)
     else:
         try:
             px = int(raw)
         except (TypeError, ValueError):
-            px = 24
-    return px if px in {s for s, _ in TOOLBAR_ICON_SIZES} else 24
+            px = DEFAULT_TOOLBAR_ICON_PX
+    return (px if px in {s for s, _ in TOOLBAR_ICON_SIZES}
+            else DEFAULT_TOOLBAR_ICON_PX)
 
 
 def save_toolbar_icon_px(px: int) -> None:

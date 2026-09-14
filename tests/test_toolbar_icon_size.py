@@ -62,3 +62,24 @@ def test_the_main_toolbar_starts_with_save(settings_file, monkeypatch):
     finally:
         win._saved_version = win.viewport.scene.version
         win.close()
+
+
+def test_a_fresh_install_gets_marcos_layout_and_large_icons(settings_file, monkeypatch):
+    """No saved state → the factory blob (resources/ui/default_layout.state)
+    and 32 px icons: Draw and Annotate stand at the left, the rest along
+    the top, as Marco arranged them (2026-09-14: «así como está… por
+    defecto para cualquier persona que instale el programa»)."""
+    from PySide6.QtCore import Qt
+    from views.icons import toolbar_icon_px
+    from views.main_window import MainWindow
+    assert toolbar_icon_px() == 32
+    win = MainWindow()
+    try:
+        assert win.toolBarArea(win.toolbars["draw"]) == Qt.LeftToolBarArea
+        assert win.toolBarArea(win.toolbars["annotate"]) == Qt.LeftToolBarArea
+        for name in ("main", "modify", "view", "sections", "views"):
+            assert win.toolBarArea(win.toolbars[name]) == Qt.TopToolBarArea, name
+        assert all(tb.iconSize().width() == 32 for tb in win.toolbars.values())
+    finally:
+        win._saved_version = win.viewport.scene.version
+        win.close()
