@@ -608,71 +608,125 @@ def _zoom_extents(p, ink):
 
 # ---- Standard-view icons: a little house drawn from each viewpoint ----------
 # Like SketchUp, each orthographic view shows a recognisable house from that
-# direction (front with a door, sides with a window, the roof from above, an
-# isometric 3D house) — far more intuitive than an abstract highlighted cube.
+# direction. ONE house, consistently: the door is on the front gable, the
+# chimney stands on the right roof slope toward the back — so it shows right
+# of the apex from the front, left of it from the back, near the far end from
+# each side and as a square at the back-right of the roof from above. And a
+# letter badge (F · R · B · L · T · Bo, translated) on every view, so nobody
+# has to guess again (Marco, 2026-09-14: «muchas veces he tenido que adivinar
+# cuál es frontal, derecho, posterior»).
+
+def _view_letter(p, ink, key: str) -> None:
+    """The view's letter in a badge at the bottom-right corner."""
+    from core.i18n import tr
+    text = tr({"view_front": "F", "view_back": "B", "view_right": "R",
+               "view_left": "L", "view_top": "T", "view_bottom": "Bo"}[key])
+    wide = len(text) > 1
+    w, h = (23.0 if wide else 17.0), 17.0
+    x, y = 48.0 - w - 1.0, 48.0 - h - 1.0
+    f = p.font()
+    f.setPixelSize(11 if wide else 15)
+    f.setBold(True)
+    p.save()
+    p.setFont(f)
+    p.setPen(Qt.NoPen)
+    p.setBrush(QBrush(ink))
+    p.drawRoundedRect(QRectF(x, y, w, h), 4.0, 4.0)
+    # Letter in the toolbar's own tone: white on dark ink, dark on light ink.
+    p.setPen(QColor(255, 255, 255) if ink.lightness() < 128
+             else QColor(43, 47, 54))
+    p.drawText(QRectF(x, y, w, h), Qt.AlignCenter, text)
+    p.restore()
+
+
+def _chimney(p, ink, x: float, roof_y: float, h: float = 6.0, w: float = 4.0):
+    """A chimney stack rising ``h`` above the roof line at ``x``."""
+    p.save()
+    p.setBrush(QBrush(ink))
+    p.setPen(Qt.NoPen)
+    p.drawRect(QRectF(x - w / 2, roof_y - h, w, h))
+    p.restore()
+
 
 def _view_front(p, ink):
-    # Gable end seen head-on, with a door. (Front / South)
+    # Gable end seen head-on: door, window, chimney RIGHT of the apex. (Front)
     p.setBrush(Qt.NoBrush)
-    p.drawRect(QRectF(14, 23, 20, 14))                     # wall
-    p.drawPolygon(QPolygonF([QPointF(11, 23), QPointF(24, 11),
-                             QPointF(37, 23)]))            # gable roof
+    p.drawRect(QRectF(12, 22, 22, 15))                     # wall
+    p.drawPolygon(QPolygonF([QPointF(9, 22), QPointF(23, 9),
+                             QPointF(37, 22)]))            # gable roof
+    _chimney(p, ink, 31.0, 15.0, h=6.5)
     p.setBrush(QBrush(ink))
-    p.drawRect(QRectF(21, 30, 6, 7))                       # door
+    p.drawRect(QRectF(15, 29, 6, 8))                       # door
+    p.setBrush(Qt.NoBrush)
+    p.drawRect(QRectF(25, 27, 6, 5))                       # window
+    _view_letter(p, ink, "view_front")
 
 
 def _view_back(p, ink):
-    # Same gable end, but blank with a window instead of a door. (Back / North)
+    # Same gable end from behind: no door, one window, chimney LEFT. (Back)
     p.setBrush(Qt.NoBrush)
-    p.drawRect(QRectF(14, 23, 20, 14))
-    p.drawPolygon(QPolygonF([QPointF(11, 23), QPointF(24, 11),
-                             QPointF(37, 23)]))
-    p.drawRect(QRectF(20.5, 27, 7, 6))                     # window
+    p.drawRect(QRectF(12, 22, 22, 15))
+    p.drawPolygon(QPolygonF([QPointF(9, 22), QPointF(23, 9),
+                             QPointF(37, 22)]))
+    _chimney(p, ink, 15.0, 15.0, h=6.5)
+    p.drawRect(QRectF(20, 27, 6, 5))                       # window
+    _view_letter(p, ink, "view_back")
 
 
 def _house_side(mirror: bool):
-    # Long wall seen side-on: a wide box, a low trapezoidal roof, a window and a
-    # door toward one end. Right and Left are mirror images. (East / West)
+    # Long wall seen side-on: a wide box, a low trapezoidal roof, two windows,
+    # the chimney toward the BACK end (left from the right side). Right and
+    # Left are mirror images.
     def draw(p, ink):
         p.save()
         if mirror:
             p.translate(48, 0)
             p.scale(-1, 1)
         p.setBrush(Qt.NoBrush)
-        p.drawRect(QRectF(11, 23, 26, 14))                 # long wall
-        p.drawPolygon(QPolygonF([QPointF(9, 23), QPointF(15, 16),
-                                 QPointF(33, 16), QPointF(39, 23)]))  # roof
-        p.drawRect(QRectF(15, 27, 6, 6))                   # window
-        p.setBrush(QBrush(ink))
-        p.drawRect(QRectF(28, 30, 5, 7))                   # door (one end)
+        p.drawRect(QRectF(9, 23, 30, 14))                  # long wall
+        p.drawPolygon(QPolygonF([QPointF(7, 23), QPointF(13, 15),
+                                 QPointF(35, 15), QPointF(41, 23)]))  # roof
+        _chimney(p, ink, 17.0, 15.0, h=6.0)
+        p.drawRect(QRectF(13, 27, 6, 5))                   # windows
+        p.drawRect(QRectF(29, 27, 6, 5))
         p.restore()
+        _view_letter(p, ink, "view_left" if mirror else "view_right")
     return draw
 
 
 def _view_top(p, ink):
-    # The roof seen from directly above: footprint + hip lines to the ridge.
+    # The roof from directly above: footprint, ridge, hips, and the chimney
+    # as a square at the back-right.
     p.setBrush(Qt.NoBrush)
-    p.drawRect(QRectF(13, 14, 22, 20))
-    p.drawLine(QPointF(13, 14), QPointF(20, 21))
-    p.drawLine(QPointF(35, 14), QPointF(28, 21))
-    p.drawLine(QPointF(13, 34), QPointF(20, 27))
-    p.drawLine(QPointF(35, 34), QPointF(28, 27))
-    p.drawLine(QPointF(20, 21), QPointF(20, 27))           # ridge
-    p.drawLine(QPointF(28, 21), QPointF(28, 27))
-    p.drawLine(QPointF(20, 24), QPointF(28, 24))
+    p.drawRect(QRectF(9, 11, 24, 24))
+    p.drawLine(QPointF(9, 11), QPointF(16, 18))
+    p.drawLine(QPointF(33, 11), QPointF(26, 18))
+    p.drawLine(QPointF(9, 35), QPointF(16, 28))
+    p.drawLine(QPointF(33, 35), QPointF(26, 28))
+    p.drawLine(QPointF(16, 18), QPointF(16, 28))           # ridge
+    p.drawLine(QPointF(26, 18), QPointF(26, 28))
+    p.drawLine(QPointF(16, 23), QPointF(26, 23))
+    p.save()
+    p.setBrush(QBrush(ink))
+    p.setPen(Qt.NoPen)
+    p.drawRect(QRectF(27.5, 13.5, 4.5, 4.5))               # chimney
+    p.restore()
+    _view_letter(p, ink, "view_top")
 
 
 def _view_bottom(p, ink):
-    # The footprint seen from below: a plain slab (no roof lines) with a small
-    # tab, so it reads apart from Top's roof-from-above at a glance.
+    # The footprint from below: a plain slab with a small tab, apart from the
+    # roof-from-above at a glance.
     p.setBrush(Qt.NoBrush)
-    p.drawRect(QRectF(13, 16, 22, 20))
-    p.drawRect(QRectF(20, 12, 8, 4))            # small tab on top
-    p.drawLine(QPointF(13, 22), QPointF(35, 22))   # slab edge line
+    p.drawRect(QRectF(9, 15, 24, 20))
+    p.drawRect(QRectF(17, 11, 8, 4))                       # small tab
+    p.drawLine(QPointF(9, 21), QPointF(33, 21))            # slab edge line
+    _view_letter(p, ink, "view_bottom")
 
 
 def _view_iso(p, ink):
-    # A 3D house in isometric: two walls + a pyramid roof + a door.
+    # The same house in isometric: two walls, a pyramid roof, the door on
+    # the front-left wall and the chimney at the back-right.
     p.setBrush(Qt.NoBrush)
     wl, wf, wr = QPointF(13, 22), QPointF(24, 28), QPointF(35, 22)
     bl, bf, br = QPointF(13, 33), QPointF(24, 39), QPointF(35, 33)
@@ -682,6 +736,7 @@ def _view_iso(p, ink):
     p.drawLine(wl, apex)                                   # roof edges
     p.drawLine(wf, apex)
     p.drawLine(wr, apex)
+    _chimney(p, ink, 31.0, 18.5, h=6.0, w=3.5)
     p.setBrush(QBrush(ink))
     p.drawPolygon(QPolygonF([QPointF(18, 31), QPointF(21, 32.6),
                              QPointF(21, 38.6), QPointF(18, 37)]))   # door
