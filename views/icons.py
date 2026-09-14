@@ -325,9 +325,9 @@ def _protractor(p, ink):
 
 def _pushpull(p, ink):
     """Push/Pull as SketchUp draws it, in the program's line style: a cube
-    seen from above, its top face tinted with the accent, and a heavy arrow
-    rising off that face (Marco, 2026-09-14: «en SketchUp es como en 3D…
-    la línea vertical más gruesa»)."""
+    seen from above, its top face tinted with the accent, and a solid arrow
+    — thick shaft, filled head — rising off that face (Marco, 2026-09-14:
+    «en SketchUp es como en 3D… me gusta la flecha maciza»)."""
     p.setBrush(Qt.NoBrush)
     top = QPolygonF([QPointF(9, 28), QPointF(24, 21), QPointF(39, 28),
                      QPointF(24, 35)])
@@ -343,19 +343,18 @@ def _pushpull(p, ink):
         p.drawLine(QPointF(x, y), QPointF(x, y + 11))
     p.drawLine(QPointF(9, 39), QPointF(24, 46))
     p.drawLine(QPointF(24, 46), QPointF(39, 39))
+    # A solid arrow, like SketchUp's: thick shaft, filled triangular head.
     shaft = QPen(ink, 5.0)
-    shaft.setCapStyle(Qt.RoundCap)
+    shaft.setCapStyle(Qt.FlatCap)
     p.save()
     p.setPen(shaft)
-    p.drawLine(QPointF(24, 27), QPointF(24, 9))
+    p.drawLine(QPointF(24, 27), QPointF(24, 15))
     p.restore()
-    head = QPen(ink, 4.5)
-    head.setCapStyle(Qt.RoundCap)
-    head.setJoinStyle(Qt.RoundJoin)
     p.save()
-    p.setPen(head)
-    p.drawLine(QPointF(24, 7), QPointF(17, 14))
-    p.drawLine(QPointF(24, 7), QPointF(31, 14))
+    p.setPen(Qt.NoPen)
+    p.setBrush(QBrush(ink))
+    p.drawPolygon(QPolygonF([QPointF(24, 5), QPointF(15.5, 16),
+                             QPointF(32.5, 16)]))
     p.restore()
 
 
