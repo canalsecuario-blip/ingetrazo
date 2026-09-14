@@ -172,8 +172,9 @@ def test_panel_edits_the_title_without_redoing_the_render():
 
 def test_optional_sections_hide_their_rows_when_they_do_not_apply():
     """Marco, 2026-09-05: the panel at 480 px was cut and too long — the
-    title rows only show with the title on, the pen rows only for the
-    vector style, and the checkboxes span the whole width."""
+    title rows only show with the title on, the cut pen and poché rows only
+    for the vector style (a raster style keeps the Edges / Profiles pens,
+    2026-09-14), and the checkboxes span the whole width."""
     composer, _host = _composer()
     frame = composer.comp.frames[0]
     frame.style = "sombreado"
@@ -184,7 +185,11 @@ def test_optional_sections_hide_their_rows_when_they_do_not_apply():
     form = composer._frame_form
     assert composer._title_rows and composer._pen_rows
     assert not any(form.isRowVisible(r) for r in composer._title_rows)
-    assert not any(form.isRowVisible(r) for r in composer._pen_rows)
+    vector_only = [r for r in composer._pen_rows
+                   if r not in composer._pen_rows_raster]
+    assert vector_only
+    assert not any(form.isRowVisible(r) for r in vector_only)
+    assert all(form.isRowVisible(r) for r in composer._pen_rows_raster)
     composer.title_check.setChecked(True)
     assert all(form.isRowVisible(r) for r in composer._title_rows)
     composer.style_combo.setCurrentIndex(composer.style_combo.findData("vectorial"))

@@ -36,6 +36,8 @@ from core.composition import (COMMON_SCALES, NEW_FRAME_STYLE, PAPER_SIZES_MM, RE
                               PerfilTerreno, RemoveItemCommand, TextoItem,
                               apply_frame_camera, snap_mm)
 from core.i18n import tr
+from core.composition import pen_px
+from core.saved_views import apply_shadow_state, georef_objects
 from PySide6.QtWidgets import QGraphicsLineItem, QGridLayout, QWidget as _QWidget  # noqa: E402
 from views.filedialogs import file_dialogs
 
@@ -1246,8 +1248,71 @@ def paint_cota_mm(painter: QPainter, ct: CotaItem) -> None:
     painter.restore()
 
 
+def _text_metrics(size_mm: float, bold: bool = False,
+                  family: str = "Sans Serif"):
+    """``(QFontMetricsF, scale)`` for the font :func:`_draw_text_mm` uses."""
+    from PySide6.QtGui import QFontMetricsF
+    font = QFont(family or "Sans Serif")
+    font.setPixelSize(100)
+    font.setBold(bold)
+    return QFontMetricsF(font), size_mm / 100.0 * 0.75
+
+
+def _line_count(text: str, width_mm: float, size_mm: float,
+                bold: bool = False, family: str = "Sans Serif") -> int:
+    """Lines *text* takes word-wrapped in ``width_mm`` (typed breaks and
+    automatic ones), read off the font's bounding box."""
+    if not text:
+        return 0
+    fm, s = _text_metrics(size_mm, bold, family)
+    box = QRectF(0, 0, max(width_mm, 0.5) / s, 1e6)
+    need = fm.boundingRect(box, int(Qt.AlignLeft | Qt.AlignTop | Qt.TextWordWrap), text)
+    return max(1, int(round(need.height() / max(fm.height(), 1e-6))))
+
+
+def _laid_out_height_mm(text: str, width_mm: float, size_mm: float,
+                        bold: bool = False, family: str = "Sans Serif") -> float:
+    """Height :func:`_draw_text_mm` really lays *text* out in: the first
+    line's ascent + descent, then the font's LINE SPACING per extra line
+    (QPainter stacks lines at that pitch — measured 4.0 mm at 11 pt while
+    ``QFontMetricsF.boundingRect`` summed bare line heights and came out
+    short: a three-line label's last descender poked out of its
+    background)."""
+    n = _line_count(text, width_mm, size_mm, bold, family)
+    if n == 0:
+        return 0.0
+    fm, s = _text_metrics(size_mm, bold, family)
+    return (fm.ascent() + fm.descent() + (n - 1) * fm.lineSpacing()) * s
+
+
+def text_bg_span_mm(text: str, width_mm: float, size_mm: float,
+                    bold: bool = False, family: str = "Sans Serif") -> tuple:
+    """``(y0, y1)`` of a background slab that hugs the LETTERS of *text*
+    laid out from y = 0: a line box carries ~1 mm of air above the
+    capitals at 11 pt, so a slab hugging the box read as a wide band above
+    and below the words (Marco, 2026-09-14: «arriba y abajo… reducirlo
+    más»). Measured against the painter: the slab starts 0.25 × the size
+    above the capitals (room for accents) and ends 0.05 × the size under
+    the last line's descent."""
+    n = _line_count(text, width_mm, size_mm, bold, family)
+    fm, s = _text_metrics(size_mm, bold, family)
+    if n == 0:
+        return 0.0, size_mm
+    y0 = (fm.ascent() - fm.capHeight()) * s - 0.25 * size_mm
+    y1 = (fm.ascent() + fm.descent() + (n - 1) * fm.lineSpacing()) * s + 0.05 * size_mm
+    return y0, y1
+
+
 def _label_block_h(et: EtiquetaItem) -> float:
-    return et.h_mm
+    """The label's inked height: the wrapped lines as painted, plus a hair.
+    The model's ``h_mm`` (1.4 × size per line, 6 mm floor) is a generous
+    guess that left a blank band under every label's background — the
+    three-line «Escultura de campesino con pedestal» sat on 4 mm of empty
+    white (Marco, 2026-09-14: «ese fondo blanco… ocupa mucho espacio»)."""
+    size_mm = et.size_pt * PT_TO_MM
+    h = _laid_out_height_mm(expand_fields(et.text), float(et.w_mm), size_mm,
+                            et.bold)
+    return max(size_mm * 1.15, h)
 
 
 def etiqueta_ink_w_mm(et: EtiquetaItem) -> float:
@@ -1259,13 +1324,24 @@ def etiqueta_ink_w_mm(et: EtiquetaItem) -> float:
     size_mm = et.size_pt * PT_TO_MM
     widest = max((_text_width_mm(line, size_mm, et.bold)
                   for line in text.split("\n")), default=0.0)
-    return max(2.0, min(float(et.w_mm), widest + 0.5))
+    return max(2.0, min(float(et.w_mm), widest + 0.2))
 
 
-def etiqueta_leader_start(et: EtiquetaItem) -> tuple:
-    """Where the leader leaves the text: the midpoint of the text box's
-    edge that faces the pointed-at spot."""
-    ax, ay = et.ax_mm, et.ay_mm
+def etiqueta_bg_rect_mm(et: EtiquetaItem) -> QRectF:
+    """The label's background slab: the inked text plus the side pad,
+    hugging the letters top and bottom — ``w_mm`` stays the WRAP width,
+    not the painted one."""
+    y0, y1 = text_bg_span_mm(expand_fields(et.text), float(et.w_mm),
+                             et.size_pt * PT_TO_MM, et.bold)
+    return QRectF(-TEXT_BG_PAD_MM, y0,
+                  etiqueta_ink_w_mm(et) + 2 * TEXT_BG_PAD_MM, max(1.0, y1 - y0))
+
+
+def etiqueta_leader_start(et: EtiquetaItem, spot=None) -> tuple:
+    """Where a leader leaves the text: the midpoint of the text box's
+    edge that faces the pointed-at spot (the first one, or ``spot`` =
+    ``(ax_mm, ay_mm)`` of an extra leader)."""
+    ax, ay = (et.ax_mm, et.ay_mm) if spot is None else spot
     tw, h = etiqueta_ink_w_mm(et), _label_block_h(et)
     cx, cy = tw / 2, h / 2
     if ax < 0:
@@ -1286,34 +1362,45 @@ def paint_etiqueta_mm(painter: QPainter, et: EtiquetaItem) -> None:
     size_mm = et.size_pt * PT_TO_MM
     h = _label_block_h(et)
     color = QColor(et.color)
-    ax, ay = et.ax_mm, et.ay_mm
-    sx, sy = etiqueta_leader_start(et)
     pen = QPen(color)
     pen.setWidthF(et.stroke_mm)
     pen.setCapStyle(Qt.RoundCap)
-    painter.setPen(pen)
-    painter.setBrush(Qt.NoBrush)
-    painter.drawLine(QPointF(sx, sy), QPointF(ax, ay))
-    if et.arrow:
-        ang = _math.atan2(sy - ay, sx - ax)        # from the tip back
-        L = max(1.8, et.stroke_mm * 7)
-        base = _math.radians(14)
-        painter.save()
-        painter.setBrush(QBrush(color))
-        painter.setPen(Qt.NoPen)
-        painter.drawPolygon(QPolygonF([
-            QPointF(ax, ay),
-            QPointF(ax + L * _math.cos(ang + base), ay + L * _math.sin(ang + base)),
-            QPointF(ax + L * _math.cos(ang - base), ay + L * _math.sin(ang - base))]))
-        painter.restore()
+    # One leader per pointed-at spot: the first, then the extra ones (a
+    # multileader — «BUZÓN» naming three manholes with one word).
+    dot_r = max(0.45, et.stroke_mm * 1.8) if getattr(et, "dot", True) else 0.0
+    for ax, ay in et.spots():
+        sx, sy = etiqueta_leader_start(et, (ax, ay))
+        painter.setPen(pen)
+        painter.setBrush(Qt.NoBrush)
+        painter.drawLine(QPointF(sx, sy), QPointF(ax, ay))
+        if dot_r:
+            painter.save()
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QBrush(color))
+            painter.drawEllipse(QPointF(sx, sy), dot_r, dot_r)
+            painter.restore()
+        if et.arrow:
+            ang = _math.atan2(sy - ay, sx - ax)        # from the tip back
+            L = max(1.8, et.stroke_mm * 7)
+            base = _math.radians(14)
+            painter.save()
+            painter.setBrush(QBrush(color))
+            painter.setPen(Qt.NoPen)
+            painter.drawPolygon(QPolygonF([
+                QPointF(ax, ay),
+                QPointF(ax + L * _math.cos(ang + base), ay + L * _math.sin(ang + base)),
+                QPointF(ax + L * _math.cos(ang - base), ay + L * _math.sin(ang - base))]))
+            painter.restore()
     bg = et.bg_color or ""
     if bg:
+        # The background hugs the inked text (like the leader does), not
+        # the 50 mm wrap box: a one-word label used to sit in a wide white
+        # slab that blanked the drawing beside it (Marco, 2026-09-14,
+        # «BUZÓN» on the plaza sheet).
         painter.save()
         painter.setPen(Qt.NoPen)
         painter.setBrush(QBrush(_with_opacity(bg, et.bg_opacity)))
-        painter.drawRect(QRectF(-TEXT_BG_PAD_MM, -TEXT_BG_PAD_MM,
-                                et.w_mm + 2 * TEXT_BG_PAD_MM,
-                                h + 2 * TEXT_BG_PAD_MM))
+        painter.drawRect(etiqueta_bg_rect_mm(et))
         painter.restore()
     _draw_text_mm(painter, QRectF(0, 0, et.w_mm, h + size_mm), text, size_mm,
                   et.bold, align=Qt.AlignLeft | Qt.AlignTop, color=color,
@@ -1549,7 +1636,11 @@ def paint_cota_angular_mm(painter: QPainter, ca: CotaAngularItem) -> None:
                   align=Qt.AlignHCenter | Qt.AlignVCenter, color=tcol)
 
 
-TEXT_BG_PAD_MM = 1.0
+#: Margin of a text / label background around the inked words. 1 mm read
+#: as a wide slab around a one-word label at plan scale (Marco, 2026-09-14:
+#: «sigue viéndose ancho»); 0.5 mm is a hair of paper, enough to lift the
+#: words off the drawing.
+TEXT_BG_PAD_MM = 0.5
 
 
 def _with_opacity(color: str, opacity) -> QColor:
@@ -1599,15 +1690,19 @@ def paint_text_mm(painter: QPainter, item: TextoItem) -> None:
     text = expand_fields(item.text, getattr(item, "frame_uid", "") or "")
     bg = getattr(item, "bg_color", "") or ""
     if bg:
-        lines = item.text.count("\n") + 1
-        block_h = max(6.0, size_mm * 1.4 * lines)
+        # The fill is as tall as the wrapped words really are (auto-wrapped
+        # lines included — the old line count saw only typed newlines, so
+        # a wrapped block's fill fell short while a one-liner's sat on a
+        # blank band; Marco, 2026-09-14).
+        y0, y1 = text_bg_span_mm(text, float(item.w_mm), size_mm, item.bold,
+                                 getattr(item, "family", "") or "Sans Serif")
         painter.save()
         painter.setPen(Qt.NoPen)
         painter.setBrush(QBrush(_with_opacity(
             bg, getattr(item, "bg_opacity", 1.0))))
-        painter.drawRect(QRectF(-TEXT_BG_PAD_MM, -TEXT_BG_PAD_MM,
+        painter.drawRect(QRectF(-TEXT_BG_PAD_MM, y0,
                                 item.w_mm + 2 * TEXT_BG_PAD_MM,
-                                block_h + 2 * TEXT_BG_PAD_MM))
+                                max(1.0, y1 - y0)))
         painter.restore()
     rect = QRectF(0, 0, item.w_mm, size_mm * 1.35 * (text.count("\n") + 3))
     align = {"left": Qt.AlignLeft, "center": Qt.AlignHCenter,
@@ -1941,6 +2036,12 @@ class InlineTextEditor(QGraphicsTextItem):
         self.setDefaultTextColor(QColor(getattr(m, "color", "#1e242c")))
         s = size_mm / 100.0 * 0.75            # …scaled like _draw_text_mm
         self.setScale(s)
+        # No document margin: QGraphicsTextItem pads its text by 4 units,
+        # which shifted the editor's words ~1.5 mm off the painted ones
+        # AND narrowed the wrap width, so a two-word label wrapped
+        # differently in the editor than on the sheet — the «distorted»
+        # doubled text Marco saw on double-click (2026-09-14).
+        self.document().setDocumentMargin(0.0)
         self.setTextWidth(max(10.0, float(m.w_mm)) / s)
         self.setPlainText(m.text)
         self.setPos(item.pos())
@@ -1949,11 +2050,13 @@ class InlineTextEditor(QGraphicsTextItem):
         self._done = False
 
     def paint(self, painter, option, widget=None) -> None:
-        # a white card under the words so the item beneath does not bleed
+        # an opaque white card under the words so the item beneath never
+        # bleeds through (a translucent card ghosted the painted text)
+        pad = TEXT_BG_PAD_MM / max(self.scale(), 1e-6)   # item units
         painter.save()
         painter.setPen(QPen(QColor(58, 110, 165), 0.0))
-        painter.setBrush(QBrush(QColor(255, 255, 255, 235)))
-        painter.drawRect(self.boundingRect())
+        painter.setBrush(QBrush(QColor(255, 255, 255)))
+        painter.drawRect(self.boundingRect().adjusted(-pad, -pad, pad, pad))
         painter.restore()
         super().paint(painter, option, widget)
 
@@ -2658,64 +2761,127 @@ class EtiquetaCanvasItem(_SheetItem):
     spot's handle moves only the spot; double-click edits the text."""
 
     def size_mm(self):
-        return (self.model.w_mm, self.model.h_mm)
+        return (self.model.w_mm, _label_block_h(self.model))
 
     def boundingRect(self) -> QRectF:
         m = self.model
-        x0 = min(0.0, m.ax_mm) - 3.0
-        y0 = min(0.0, m.ay_mm) - 3.0
-        x1 = max(m.w_mm, m.ax_mm) + 3.0
-        y1 = max(m.h_mm, m.ay_mm) + 3.0
+        xs = [ax for ax, _ay in m.spots()]
+        ys = [ay for _ax, ay in m.spots()]
+        x0 = min(0.0, *xs) - 3.0
+        y0 = min(0.0, *ys) - 3.0
+        x1 = max(m.w_mm, *xs) + 3.0
+        y1 = max(_label_block_h(m), *ys) + 3.0
         return QRectF(x0, y0, x1 - x0, y1 - y0)
 
     def shape(self):
         from PySide6.QtGui import QPainterPath, QPainterPathStroker
         m = self.model
         path = QPainterPath()
-        path.addRect(QRectF(-1, -1, m.w_mm + 2, m.h_mm + 2))
+        # Clickable where it is visible: the inked text, not the wrap box…
+        path.addRect(QRectF(-1, -1, etiqueta_ink_w_mm(m) + 2,
+                            _label_block_h(m) + 2))
+        # …plus the corner handle of the wrap box while selected: it sits
+        # past the words, and a press outside the shape never reaches the
+        # item — the handle showed but could not be grabbed (Marco,
+        # 2026-09-14: «redimensionar el cuadradito azul… no»).
+        if self.isSelected():
+            w, h = self.size_mm()
+            path.addRect(QRectF(w - _HANDLE_MM, h - _HANDLE_MM,
+                                2 * _HANDLE_MM, 2 * _HANDLE_MM))
         line = QPainterPath()
-        line.moveTo(*etiqueta_leader_start(m))
-        line.lineTo(m.ax_mm, m.ay_mm)
+        for ax, ay in m.spots():
+            line.moveTo(*etiqueta_leader_start(m, (ax, ay)))
+            line.lineTo(ax, ay)
         stroker = QPainterPathStroker()
         stroker.setWidth(2.0 * _HANDLE_MM)
         path.addPath(stroker.createStroke(line))
+        # Winding fill: where a leader's stroke overlaps the words, the
+        # default odd-even rule would read the overlap as OUTSIDE.
+        path.setFillRule(Qt.WindingFill)
         return path
 
-    def _on_resize_handle(self, pos: QPointF) -> bool:
-        return False
+    #: The wrap box can't be narrower than this (a couple of letters).
+    MIN_W_MM = 4.0
+
+    def _spot_at(self, pos: QPointF):
+        """Index of the arrow-tip handle under ``pos``: 0 = the first spot,
+        1… = the extra leaders, ``None`` = none. Extra leaders first, so a
+        tip dropped near the first one stays reachable."""
+        spots = self.model.spots()
+        for i in range(len(spots) - 1, -1, -1):
+            ax, ay = spots[i]
+            if abs(pos.x() - ax) <= _HANDLE_MM and abs(pos.y() - ay) <= _HANDLE_MM:
+                return i
+        return None
 
     def _on_anchor_handle(self, pos: QPointF) -> bool:
-        return (abs(pos.x() - self.model.ax_mm) <= _HANDLE_MM
-                and abs(pos.y() - self.model.ay_mm) <= _HANDLE_MM)
+        return self._spot_at(pos) is not None
 
     def hoverMoveEvent(self, event) -> None:
-        if not getattr(self.model, "locked", False) and \
-                self._on_anchor_handle(event.pos()):
+        locked = getattr(self.model, "locked", False)
+        if not locked and self._on_anchor_handle(event.pos()):
             self.setCursor(Qt.CrossCursor)
+        elif not locked and self._on_resize_handle(event.pos()):
+            self.setCursor(Qt.SizeHorCursor)     # width only: height follows the text
         else:
             self.unsetCursor()
         super(_SheetItem, self).hoverMoveEvent(event)
+
+    def _snapshot(self) -> dict:
+        m = self.model
+        return {"x_mm": m.x_mm, "y_mm": m.y_mm, "w_mm": m.w_mm,
+                "ax_mm": m.ax_mm, "ay_mm": m.ay_mm,
+                "anchor_uid": m.anchor_uid, "a_world": m.a_world,
+                "leaders": [dict(ld) for ld in (m.leaders or [])]}
 
     def mousePressEvent(self, event) -> None:
         note = getattr(self.composer, "note_drag_start", None)
         if note is not None:
             note()
-        self._press_state = {k: getattr(self.model, k)
-                             for k in ("x_mm", "y_mm", "ax_mm", "ay_mm")}
-        self._anchor_drag = (not getattr(self.model, "locked", False)
-                             and self._on_anchor_handle(event.pos()))
-        if self._anchor_drag:
+        self._press_state = self._snapshot()
+        locked = getattr(self.model, "locked", False)
+        spot = None if locked else self._spot_at(event.pos())
+        self._anchor_drag = spot is not None
+        self._drag_spot = spot
+        if self._anchor_drag and event.modifiers() & Qt.ControlModifier:
+            # Ctrl-drag an arrow tip: a NEW leader for the same words
+            # (the copy idiom), dragged off the one it was pulled from.
+            ax, ay = self.model.spots()[spot]
+            self.model.add_leader(ax, ay)
+            self._drag_spot = len(self.model.spots()) - 1
+        # The corner handle resizes the WRAP box (the dashed rectangle):
+        # it was drawn but did nothing (Marco, 2026-09-14: «me gustaría
+        # poder redimensionarlo»). The painted background hugs the text
+        # whatever the box; the box sets where a long label wraps.
+        self._resizing = (not locked and not self._anchor_drag
+                          and self._on_resize_handle(event.pos()))
+        if self._anchor_drag or self._resizing:
             event.accept()
             self.setSelected(True)
             return
         QGraphicsItem.mousePressEvent(self, event)
 
+    def _set_spot(self, index: int, x: float, y: float) -> None:
+        """Move a pointed-at spot by hand: it comes off the model (a
+        reprojection would snap it right back); undo restores the anchor."""
+        m = self.model
+        if index == 0:
+            m.ax_mm, m.ay_mm = x, y
+            m.anchor_uid, m.a_world = "", None
+        else:
+            ld = m.leaders[index - 1]
+            ld["ax_mm"], ld["ay_mm"] = x, y
+            ld["anchor_uid"], ld["a_world"] = "", None
+
     def mouseMoveEvent(self, event) -> None:
         if getattr(self, "_anchor_drag", False):
             self.prepareGeometryChange()
-            self.model.ax_mm = event.pos().x()
-            self.model.ay_mm = event.pos().y()
-            self.model.anchor_uid, self.model.a_world = "", None   # re-anchor by hand later
+            self._set_spot(self._drag_spot, event.pos().x(), event.pos().y())
+            self.update()
+            return
+        if getattr(self, "_resizing", False):
+            self.prepareGeometryChange()
+            self.model.w_mm = max(self.MIN_W_MM, float(event.pos().x()))
             self.update()
             return
         QGraphicsItem.mouseMoveEvent(self, event)
@@ -2724,24 +2890,39 @@ class EtiquetaCanvasItem(_SheetItem):
         if change == QGraphicsItem.ItemPositionHasChanged and \
                 getattr(self, "_press_state", None) is not None and \
                 not getattr(self, "_anchor_drag", False):
-            # the block moved: keep the pointed-at spot where it was
+            # the block moved: keep every pointed-at spot where it was
             dx = self.pos().x() - self._press_state["x_mm"]
             dy = self.pos().y() - self._press_state["y_mm"]
             self.model.ax_mm = self._press_state["ax_mm"] - dx
             self.model.ay_mm = self._press_state["ay_mm"] - dy
+            before = self._press_state.get("leaders") or []
+            for ld, was in zip(self.model.leaders or [], before):
+                ld["ax_mm"] = was["ax_mm"] - dx
+                ld["ay_mm"] = was["ay_mm"] - dy
             self.prepareGeometryChange()
         return super().itemChange(change, value)
 
     def mouseReleaseEvent(self, event) -> None:
-        was = getattr(self, "_anchor_drag", False)
+        was = (getattr(self, "_anchor_drag", False)
+               or getattr(self, "_resizing", False))
+        spot = getattr(self, "_drag_spot", None)
         self._anchor_drag = False
+        self._resizing = False
+        self._drag_spot = None
         QGraphicsItem.mouseReleaseEvent(self, event)
         if self._press_state is None:
             return
-        current = {k: getattr(self.model, k) for k in self._press_state}
+        m = self.model
+        # An extra leader dropped back on the words is taken away — the
+        # one gesture that removes it (the first spot IS the label).
+        if was and spot is not None and spot > 0:
+            ax, ay = m.spots()[spot]
+            if 0.0 <= ax <= etiqueta_ink_w_mm(m) and 0.0 <= ay <= _label_block_h(m):
+                self.prepareGeometryChange()
+                m.leaders = [ld for i, ld in enumerate(m.leaders) if i != spot - 1]
+        current = self._snapshot()
         if current != self._press_state:
-            self.composer.push_geometry_edit(self.model, current,
-                                             self._press_state)
+            self.composer.push_geometry_edit(m, current, self._press_state)
         self._press_state = None
         if was:
             self.composer.on_item_geometry(self, final=True)
@@ -2753,6 +2934,19 @@ class EtiquetaCanvasItem(_SheetItem):
     def paint(self, painter, option, widget=None) -> None:
         paint_etiqueta_mm(painter, self.model)
         self._paint_selection(painter)
+        if self.isSelected():
+            # A handle on every arrow tip: green when tied to the model,
+            # blue when paper-only. Drag one to move it, Ctrl-drag to pull
+            # a NEW leader off it, drop it on the words to remove it.
+            m = self.model
+            anchored = [m.anchored] + [bool(ld.get("anchor_uid") and ld.get("a_world"))
+                                       for ld in (m.leaders or [])]
+            painter.setPen(QPen(QColor(255, 255, 255), 0.3))
+            for (ax, ay), tied in zip(m.spots(), anchored):
+                painter.setBrush(QBrush(QColor(41, 158, 92) if tied
+                                        else QColor(58, 110, 165)))
+                painter.drawRect(QRectF(ax - _HANDLE_MM / 2, ay - _HANDLE_MM / 2,
+                                        _HANDLE_MM, _HANDLE_MM))
 
 
 class LlamadaCanvasItem(_SheetItem):
@@ -4343,6 +4537,21 @@ class ComposerWindow(QMainWindow):
         self.tool_mode = "select"
         self._tool_actions["select"].setChecked(True)
 
+    def _etiqueta_at_page(self, x_mm: float, y_mm: float):
+        """The label whose text block covers page point (x, y), topmost
+        first, or ``None``."""
+        best = None
+        for et in getattr(self.comp, "etiquetas", []) or []:
+            if getattr(et, "locked", False):
+                continue
+            if (et.x_mm - TEXT_BG_PAD_MM <= x_mm
+                    <= et.x_mm + etiqueta_ink_w_mm(et) + TEXT_BG_PAD_MM
+                    and et.y_mm - TEXT_BG_PAD_MM <= y_mm
+                    <= et.y_mm + _label_block_h(et) + TEXT_BG_PAD_MM):
+                if best is None or getattr(et, "z", 0.0) >= getattr(best, "z", 0.0):
+                    best = et
+        return best
+
     def place_tool(self, x0: float, y0: float, x1: float, y1: float,
                    sep_mm: float = 0.0, anchors=None, hit_a=None) -> None:
         """A click (or drag) landed on the page with a placement tool
@@ -4362,7 +4571,29 @@ class ComposerWindow(QMainWindow):
         elif mode == "texto":
             item = TextoItem(x_mm=x0, y_mm=y0, text=tr("Text"))
         elif mode == "etiqueta":
-            # first click = the pointed-at spot, second = the text block
+            # first click = the pointed-at spot, second = the text block.
+            # A second click ON an existing label adds the spot to THAT
+            # label as another leader (one word, several arrows — Marco,
+            # 2026-09-14: «señalar 2 o 3 cosas con la misma etiqueta»).
+            target = self._etiqueta_at_page(x1, y1)
+            if target is not None:
+                anchor_uid, a_world = "", None
+                if hit_a is not None and hit_a[3] is not None:
+                    frame = hit_a[3]
+                    if not frame.uid:
+                        import uuid
+                        frame.uid = uuid.uuid4().hex
+                    anchor_uid, a_world = frame.uid, list(hit_a[2])
+                before = [dict(ld) for ld in (target.leaders or [])]
+                after = before + [{"ax_mm": x0 - target.x_mm,
+                                   "ay_mm": y0 - target.y_mm,
+                                   "anchor_uid": anchor_uid,
+                                   "a_world": a_world}]
+                self._pending_sel = target
+                self.history.execute(EditItemCommand(
+                    target, {"leaders": after}, {"leaders": before}))
+                self._after_place()
+                return
             item = EtiquetaItem(x_mm=x1, y_mm=y1, ax_mm=x0 - x1,
                                 ay_mm=y0 - y1, text=tr("Label"))
             if hit_a is not None and hit_a[3] is not None:
@@ -4878,6 +5109,9 @@ class ComposerWindow(QMainWindow):
         self._frame_form = form
         self._title_rows: list = []
         self._pen_rows: list = []
+        #: The subset of pen rows a RASTER frame shows too (edge and profile
+        #: weights thicken its GL lines; cut pen and poché are vector-only).
+        self._pen_rows_raster: list = []
 
         def _row(rows, label, widget) -> None:
             if label is None:
@@ -5060,10 +5294,14 @@ class ComposerWindow(QMainWindow):
             lambda: self._pick_item_color("border_color",
                                           self.frame_border_btn))
         form.addRow(tr("Border colour"), self.frame_border_btn)
-        # Vector style: the three pen weights of a plan and the poché.
-        pens = QLabel(tr("Vector pens (mm)"))
+        # Pens: the three weights of a plan and the poché. The vector style
+        # takes all of them; a raster style takes Edges and Profiles, which
+        # set how thick its GL lines render on paper (Marco, 2026-09-14: at
+        # 300 dpi the one-pixel lines «casi no se ven»).
+        pens = QLabel(tr("Pens (mm)"))
         pens.setStyleSheet("font-weight: bold; margin-top: 6px;")
         _row(self._pen_rows, None, pens)
+        self._pen_rows_raster.append(self._pen_rows[-1])
 
         def _pen_spin(default: float, tip: str) -> QDoubleSpinBox:
             sp = QDoubleSpinBox()
@@ -5082,9 +5320,11 @@ class ComposerWindow(QMainWindow):
             "Silhouettes and outlines against the background — SketchUp's "
             "Profiles."))
         _row(self._pen_rows, tr("Profiles"), self.pen_profile_spin)
+        self._pen_rows_raster.append(self._pen_rows[-1])
         self.pen_edge_spin = _pen_spin(0.18, tr(
             "Every other edge, between two visible faces."))
         _row(self._pen_rows, tr("Edges"), self.pen_edge_spin)
+        self._pen_rows_raster.append(self._pen_rows[-1])
         self.profiles_check = QCheckBox(tr("Draw profiles thicker"))
         self.profiles_check.setChecked(True)
         self.profiles_check.setToolTip(tr(
@@ -5557,7 +5797,13 @@ class ComposerWindow(QMainWindow):
         self.et_arrow = QCheckBox(tr("Arrow head"))
         self.et_arrow.setChecked(True)
         self.et_arrow.toggled.connect(self._on_etiqueta_props)
-        form.addRow("", self.et_arrow)
+        self.et_dot = QCheckBox(tr("Dot at the text"))
+        self.et_dot.setChecked(True)
+        self.et_dot.toggled.connect(self._on_etiqueta_props)
+        ends = QHBoxLayout()
+        ends.addWidget(self.et_arrow)
+        ends.addWidget(self.et_dot)
+        form.addRow("", ends)
         self.et_stroke = QDoubleSpinBox()
         self.et_stroke.setRange(0.1, 1.5)
         self.et_stroke.setSingleStep(0.05)
@@ -6236,6 +6482,14 @@ class ComposerWindow(QMainWindow):
         if self._updating:
             return
         item = self._selected_item()
+        # Jump to the properties tab only when a DIFFERENT item got
+        # selected. Every rebuild restores the selection and lands here,
+        # so a sheet edit from the Layout tab (the page's corner radius,
+        # one spinbox click at a time) used to throw the panel over to the
+        # properties of whatever was selected (Marco, 2026-09-14).
+        model = item.model if item is not None else None
+        fresh = model is not getattr(self, "_panel_model", None)
+        self._panel_model = model
         self._updating = True
         try:
             if isinstance(item, FrameItem):
@@ -6485,6 +6739,7 @@ class ComposerWindow(QMainWindow):
                 self.et_underline.setChecked(
                     bool(getattr(m, "underline", False)))
                 self.et_arrow.setChecked(m.arrow)
+                self.et_dot.setChecked(bool(getattr(m, "dot", True)))
                 self.et_stroke.setValue(m.stroke_mm)
                 self.et_color_btn.setStyleSheet(f"background: {m.color};")
                 self.et_bg_check.setChecked(bool(m.bg_color))
@@ -6565,7 +6820,7 @@ class ComposerWindow(QMainWindow):
                 self.props.setCurrentIndex(10)
             else:
                 self.props.setCurrentIndex(0)
-            if item is not None and hasattr(self, "_tabs"):
+            if item is not None and fresh and hasattr(self, "_tabs"):
                 self._tabs.setCurrentIndex(2)     # jump to properties
             self._sync_items_list(item)
         finally:
@@ -8324,18 +8579,21 @@ class ComposerWindow(QMainWindow):
         self._rebuild_canvas()               # anchored cotas turn along
 
     def _sync_vector_widgets(self, frame) -> None:
-        """The pen and poché controls only mean something to the vector
-        style; grey them out for the raster ones."""
+        """The cut pen and the poché only mean something to the vector
+        style; the edge and profile pens serve every style (a raster frame
+        renders its lines that thick)."""
         on = frame.style == "vectorial"
-        for w in (self.pen_cut_spin, self.pen_profile_spin,
-                  self.pen_edge_spin, self.profiles_check,
+        for w in (self.pen_cut_spin, self.profiles_check,
                   self.cut_fill_combo, self.cut_fill_btn,
                   self.cut_hatch_spin):
             w.setEnabled(on)
+        for w in (self.pen_profile_spin, self.pen_edge_spin):
+            w.setEnabled(True)
         form = getattr(self, "_frame_form", None)
         if form is not None:
+            raster_rows = set(getattr(self, "_pen_rows_raster", []))
             for r in getattr(self, "_pen_rows", []):
-                form.setRowVisible(r, on)
+                form.setRowVisible(r, on or r in raster_rows)
 
     def _sync_title_widgets(self, frame) -> None:
         """Alignment and position mean nothing to the vertical bar."""
@@ -8390,8 +8648,13 @@ class ComposerWindow(QMainWindow):
         recompute = (changes["profiles"] != getattr(m, "profiles", True)
                      or ((changes["cut_fill"] == "none")
                          != (getattr(m, "cut_fill", "solid") == "none")))
+        # A raster frame bakes the edge / profile pens into its pixels.
+        rerender = (m.style != "vectorial" and (
+            changes["pen_edge_mm"] != getattr(m, "pen_edge_mm", 0.18)
+            or changes["pen_profile_mm"] != getattr(m, "pen_profile_mm",
+                                                     0.35)))
         self._panel_edit(item, changes)
-        if recompute and m.style == "vectorial":
+        if (recompute and m.style == "vectorial") or rerender:
             self._forget_frame(m)
             self.render_frame(m)
         item.update()
@@ -8836,6 +9099,7 @@ class ComposerWindow(QMainWindow):
             "italic": self.et_italic.isChecked(),
             "underline": self.et_underline.isChecked(),
             "arrow": self.et_arrow.isChecked(),
+            "dot": self.et_dot.isChecked(),
             "stroke_mm": self.et_stroke.value()})
 
     def _on_cota_ang_props(self, *_a) -> None:
@@ -9264,6 +9528,14 @@ class ComposerWindow(QMainWindow):
             getattr(scene, "show_section_planes", True),
             getattr(scene, "show_section_cuts", True))
         keep_style = getattr(scene, "display_style", None)
+        # Base map / terrain / survey: a scene records their visibility too
+        # (a plan sheet WITH the map next to a detail WITHOUT it).
+        keep_georef = [(obj, obj.visible) for _key, obj in georef_objects(scene)
+                       if obj is not None and hasattr(obj, "visible")]
+        # Shadows too: a scene captured with the sun on renders its frame
+        # with shadows; the live viewport gets its own settings back.
+        shadows = getattr(scene, "shadows", None)
+        keep_shadows = shadows.to_dict() if shadows is not None else None
         try:
             apply_frame_camera(cam, frame, saved_view, scene)
             return fn()
@@ -9278,6 +9550,10 @@ class ComposerWindow(QMainWindow):
                 scene.show_section_cuts = keep_section[2]
             if hasattr(scene, "display_style"):
                 scene.display_style = keep_style
+            for obj, visible in keep_georef:
+                obj.visible = visible
+            if keep_shadows is not None:
+                apply_shadow_state(scene, keep_shadows)
             vp.update()
 
     #: Above this many hard edges the EXACT hidden-line snap pass (minutes
@@ -9486,6 +9762,17 @@ class ComposerWindow(QMainWindow):
                 et.ax_mm, et.ay_mm = px - et.x_mm, py - et.y_mm
             except Exception:  # noqa: BLE001
                 pass
+        # …and every extra leader that is anchored, the same way.
+        for et in getattr(self.comp, "etiquetas", []) or []:
+            for ld in getattr(et, "leaders", None) or []:
+                frame = frames.get(ld.get("anchor_uid") or "")
+                if frame is None or not ld.get("a_world"):
+                    continue
+                try:
+                    (px, py), = self._frame_world_to_page(frame, [ld["a_world"]])
+                    ld["ax_mm"], ld["ay_mm"] = px - et.x_mm, py - et.y_mm
+                except Exception:  # noqa: BLE001
+                    pass
         # Level marks: the point follows the model (and so does the height
         # it reads); the mark keeps its slide from the point.
         for nv in getattr(self.comp, "niveles", []) or []:
@@ -9624,10 +9911,18 @@ class ComposerWindow(QMainWindow):
                         vp._effective_style(), background=(1.0, 1.0, 1.0),
                         sky=False)
                 w_px, h_px = frame.render_px(RENDER_DPI)
+                # The edge / profile pens, in pixels at the render dpi:
+                # the GL pass thickens its one-pixel lines to match.
+                vp._export_edge_px = pen_px(
+                    getattr(frame, "pen_edge_mm", 0.18), RENDER_DPI)
+                vp._export_profile_px = pen_px(
+                    getattr(frame, "pen_profile_mm", 0.35), RENDER_DPI)
                 return vp.render_image(w_px, h_px, overlays=False)
             finally:
                 vp.plano_style = None
                 vp.style_override = None
+                vp._export_edge_px = 1
+                vp._export_profile_px = 1
 
         image = self._with_frame_camera(frame, run)
         if image is not None and image.hasAlphaChannel():

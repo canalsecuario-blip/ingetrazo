@@ -37,6 +37,12 @@ RENDER_DPI = 300
 PT_TO_MM = 25.4 / 72.0
 
 
+def pen_px(mm: float, dpi: int = RENDER_DPI) -> int:
+    """A pen width on paper as whole render pixels (at least the one-pixel
+    hairline): 0.18 mm at 300 dpi is 2 px, 0.35 mm is 4 px."""
+    return max(1, int(round(float(mm or 0.0) / 25.4 * dpi)))
+
+
 def mm_to_px(mm: float, dpi: int = RENDER_DPI) -> int:
     """Paper millimetres → device pixels at ``dpi`` (rounded)."""
     return max(int(round(mm / 25.4 * dpi)), 1)
@@ -530,9 +536,18 @@ class EtiquetaItem:
     bg_color: str = ""
     bg_opacity: float = 1.0
     arrow: bool = True
+    #: A dot where the leader leaves the words (LayOut's label leader,
+    #: AutoCAD's landing dot) — Marco, 2026-09-14: «el inicio de la línea
+    #: donde está el texto debería ser un punto».
+    dot: bool = True
     stroke_mm: float = 0.25
     anchor_uid: str = ""         # frame whose geometry the point sits on
     a_world: Optional[list] = None
+    #: Further pointed-at spots for the SAME words (AutoCAD's multileader:
+    #: «BUZÓN» with an arrow to each of three manholes). Each is a dict
+    #: ``{"ax_mm", "ay_mm", "anchor_uid", "a_world"}`` relative to the
+    #: block, exactly like the first spot above (Marco, 2026-09-14).
+    leaders: list = field(default_factory=list)
     uid: str = ""
     z: float = 0.0
     locked: bool = False
@@ -546,6 +561,22 @@ class EtiquetaItem:
     def h_mm(self) -> float:
         size_mm = self.size_pt * PT_TO_MM
         return max(6.0, size_mm * 1.4 * (self.text.count("\n") + 1))
+
+    # ---- Every pointed-at spot, the first one included ----------------------
+    def spots(self) -> list:
+        """``[(ax_mm, ay_mm), …]`` — the first spot then the extra leaders."""
+        out = [(float(self.ax_mm), float(self.ay_mm))]
+        for ld in self.leaders or []:
+            out.append((float(ld.get("ax_mm", 0.0)), float(ld.get("ay_mm", 0.0))))
+        return out
+
+    def add_leader(self, ax_mm: float, ay_mm: float, anchor_uid: str = "",
+                   a_world=None) -> dict:
+        ld = {"ax_mm": float(ax_mm), "ay_mm": float(ay_mm),
+              "anchor_uid": anchor_uid or "",
+              "a_world": list(a_world) if a_world else None}
+        self.leaders = list(self.leaders or []) + [ld]
+        return ld
 
 
 @dataclass(eq=False)
