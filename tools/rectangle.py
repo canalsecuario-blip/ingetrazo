@@ -71,6 +71,7 @@ class RectangleTool(PlaneLock, Tool):
 
     # ---- Spatial input ------------------------------------------------------
     def on_click(self, ctx: ToolContext) -> None:
+        self.note_plane(ctx.viewport)
         if self.start_point is None:
             self.start_point = ctx.world
             if self.work_plane is None:
@@ -80,6 +81,7 @@ class RectangleTool(PlaneLock, Tool):
         self._commit_rect(ctx.viewport, self._corners(self.start_point, far))
 
     def on_hover(self, ctx: ToolContext) -> None:
+        self.note_plane(ctx.viewport)
         self.hover_point = ctx.world
         ctx.viewport.update()
 
@@ -140,11 +142,10 @@ class RectangleTool(PlaneLock, Tool):
 
     # ---- Internals ----------------------------------------------------------
     def _axes(self) -> tuple[QVector3D, QVector3D]:
-        """In-plane horizontal/vertical axes for the current work plane. Without
-        a captured plane this is world +X / +Y (the legacy Z=0 layout)."""
-        if self.work_plane is None:
-            return QVector3D(1.0, 0.0, 0.0), QVector3D(0.0, 1.0, 0.0)
-        _, normal = self.work_plane
+        """In-plane horizontal/vertical axes for the drawing plane: the
+        captured / locked one, else the plane of the last hit (which follows
+        the camera), else world +X / +Y."""
+        _, normal = self.drawing_plane()
         return _plane_axes(normal)
 
     def _dimensions(self, a: QVector3D, b: QVector3D) -> tuple[float, float]:
@@ -205,4 +206,5 @@ class RectangleTool(PlaneLock, Tool):
         self.start_point = None
         self.chain_first_point = None
         self.work_plane = None
+        self.hover_plane = None
         self.plane_lock = None

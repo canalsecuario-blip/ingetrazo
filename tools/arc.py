@@ -121,6 +121,7 @@ class ArcTool(PlaneLock, Tool):
 
     # ---- Spatial input ------------------------------------------------------
     def on_click(self, ctx: ToolContext) -> None:
+        self.note_plane(ctx.viewport)
         if self.start_point is None:
             self.start_point = ctx.world
             if self.work_plane is None:
@@ -136,6 +137,7 @@ class ArcTool(PlaneLock, Tool):
             self._commit(ctx.viewport, pts)
 
     def on_hover(self, ctx: ToolContext) -> None:
+        self.note_plane(ctx.viewport)
         self.hover_point = ctx.world
         ctx.viewport.update()
 
@@ -196,8 +198,7 @@ class ArcTool(PlaneLock, Tool):
 
     # ---- Internals ----------------------------------------------------------
     def _axes(self) -> tuple[QVector3D, QVector3D]:
-        normal = (self.work_plane[1] if self.work_plane is not None
-                  else QVector3D(0.0, 0.0, 1.0))
+        normal = self.drawing_plane()[1]
         return plane_axes(normal)
 
     def _to2(self, p, u, v):
@@ -245,6 +246,7 @@ class ArcTool(PlaneLock, Tool):
         self.start_point = None
         self.end_point = None
         self.work_plane = None
+        self.hover_plane = None
         self.plane_lock = None
 
 
@@ -271,6 +273,7 @@ class ThreePointArcTool(PlaneLock, Tool):
         self.hover_point = None
 
     def on_click(self, ctx: ToolContext) -> None:
+        self.note_plane(ctx.viewport)
         if self.start_point is None:
             self.start_point = ctx.world
             if self.work_plane is None:
@@ -286,6 +289,7 @@ class ThreePointArcTool(PlaneLock, Tool):
             self._commit(ctx.viewport, pts)
 
     def on_hover(self, ctx: ToolContext) -> None:
+        self.note_plane(ctx.viewport)
         self.hover_point = ctx.world
         ctx.viewport.update()
 
@@ -302,8 +306,7 @@ class ThreePointArcTool(PlaneLock, Tool):
         return [(pts[i], pts[i + 1]) for i in range(len(pts) - 1)]
 
     def _axes(self):
-        normal = (self.work_plane[1] if self.work_plane is not None
-                  else QVector3D(0.0, 0.0, 1.0))
+        normal = self.drawing_plane()[1]
         return plane_axes(normal)
 
     def _points(self, end: QVector3D) -> list[QVector3D]:
@@ -332,6 +335,7 @@ class ThreePointArcTool(PlaneLock, Tool):
         self.start_point = None
         self.mid_point = None
         self.work_plane = None
+        self.hover_plane = None
         self.plane_lock = None
 
 
@@ -366,6 +370,7 @@ class CenterArcTool(PlaneLock, Tool):
 
     # ---- Spatial input ------------------------------------------------------
     def on_click(self, ctx: ToolContext) -> None:
+        self.note_plane(ctx.viewport)
         if self.start_point is None:
             self.start_point = ctx.world
             if self.work_plane is None:
@@ -381,6 +386,7 @@ class CenterArcTool(PlaneLock, Tool):
             self._commit(ctx.viewport, pts)
 
     def on_hover(self, ctx: ToolContext) -> None:
+        self.note_plane(ctx.viewport)
         self.hover_point = ctx.world
         ctx.viewport.update()
 
@@ -425,8 +431,7 @@ class CenterArcTool(PlaneLock, Tool):
 
     # ---- Internals ----------------------------------------------------------
     def _axes(self):
-        normal = (self.work_plane[1] if self.work_plane is not None
-                  else QVector3D(0.0, 0.0, 1.0))
+        normal = self.drawing_plane()[1]
         return plane_axes(normal)
 
     def _sweep_to(self, cursor: QVector3D) -> float:
@@ -473,6 +478,7 @@ class CenterArcTool(PlaneLock, Tool):
         self.start_point = None
         self.arm_point = None
         self.work_plane = None
+        self.hover_plane = None
         self.plane_lock = None
 
 

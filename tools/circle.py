@@ -81,6 +81,7 @@ class _RadialTool(PlaneLock, Tool):
 
     # ---- Spatial input ------------------------------------------------------
     def on_click(self, ctx: ToolContext) -> None:
+        self.note_plane(ctx.viewport)
         if self.start_point is None:
             self.start_point = ctx.world
             if self.work_plane is None:
@@ -91,6 +92,7 @@ class _RadialTool(PlaneLock, Tool):
             self._commit(ctx.viewport, pts)
 
     def on_hover(self, ctx: ToolContext) -> None:
+        self.note_plane(ctx.viewport)
         self.hover_point = ctx.world
         ctx.viewport.update()
 
@@ -138,9 +140,7 @@ class _RadialTool(PlaneLock, Tool):
 
     # ---- Internals ----------------------------------------------------------
     def _axes(self) -> tuple[QVector3D, QVector3D]:
-        if self.work_plane is None:
-            return QVector3D(1.0, 0.0, 0.0), QVector3D(0.0, 1.0, 0.0)
-        return plane_axes(self.work_plane[1])
+        return plane_axes(self.drawing_plane()[1])
 
     def _points(self, center: QVector3D, rim: QVector3D) -> list[QVector3D]:
         u, v = self._axes()
@@ -194,6 +194,7 @@ class _RadialTool(PlaneLock, Tool):
     def _reset(self) -> None:
         self.start_point = None
         self.work_plane = None
+        self.hover_plane = None
         self.plane_lock = None
 
 

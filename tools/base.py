@@ -45,6 +45,31 @@ class PlaneLock:
     like SketchUp's."""
 
     plane_lock: str | None = None
+    #: The plane the viewport used for the last cursor hit (`_last_work_plane`).
+    #: A shape started on a free point (no face, no lock) has no captured
+    #: ``work_plane``; its geometry is laid out on THIS plane instead, which
+    #: the viewport picks from the camera — horizontal at working tilts,
+    #: vertical facing the camera near the horizon — so the shape follows
+    #: the view like SketchUp's (Rafael's review, 2026-09-10: a rectangle
+    #: at eye level read «5.74 × 0.00 m», its second point on a vertical
+    #: plane while the sides were measured along X/Y).
+    hover_plane: tuple | None = None
+
+    def note_plane(self, viewport) -> None:
+        """Remember the plane the viewport just hit — call on every hover
+        and click before using the point."""
+        plane = getattr(viewport, "_last_work_plane", None)
+        if plane is not None:
+            self.hover_plane = plane
+
+    def drawing_plane(self):
+        """``(point, normal)`` the shape is laid out on: the captured or
+        locked plane, else the plane of the last hit, else the ground."""
+        if self.work_plane is not None:
+            return self.work_plane
+        if self.hover_plane is not None:
+            return self.hover_plane
+        return QVector3D(0.0, 0.0, 0.0), QVector3D(0.0, 0.0, 1.0)
 
     def plane_lock_key(self, viewport, key: int) -> bool:
         if getattr(self, "start_point", None) is not None:

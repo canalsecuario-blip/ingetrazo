@@ -6157,10 +6157,14 @@ class Viewport(QOpenGLWidget):
             # rise in Z. Vertical captured planes (walls) already allow it.
             start = (getattr(tool, "start_point", None)
                      if tool is not None else None)
+            from tools.base import PlaneLock
             if (start is not None and abs(captured[1].normalized().z()) > 0.94
-                    and getattr(tool, "plane_lock", None) is None):
+                    and getattr(tool, "plane_lock", None) is None
+                    and not isinstance(tool, PlaneLock)):
                 # (an arrow-key plane lock is exactly what the user asked
-                # for: it never yields)
+                # for: it never yields; and a PLANAR shape — rectangle,
+                # circle, arc — lives in its captured plane by definition:
+                # handing it points on another plane squashed it to a line)
                 vertical = self._near_horizon_vertical(start)
                 if vertical is not None:
                     return vertical
