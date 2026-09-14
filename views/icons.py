@@ -960,8 +960,135 @@ def _shadows_icon(p, ink):
     p.restore()
 
 
+# ---- Composer: Arrange (align / distribute / group / lock) -------------------
+# Two boxes and a reference line, in the same ink and accent as every other
+# tool. They replaced Unicode glyphs (⇤ ⤒ ⊞ 🔒…) that drew in the text
+# font, thin and off-theme (Marco, 2026-09-14).
+
+def _arr_boxes(p, ink, a: QRectF, b: QRectF, accent_line=None) -> None:
+    p.setBrush(Qt.NoBrush)
+    p.drawRect(a)
+    p.drawRect(b)
+    if accent_line is not None:
+        pen = QPen(_accent(), 3.0)
+        pen.setCapStyle(Qt.RoundCap)
+        p.save()
+        p.setPen(pen)
+        p.drawLine(*accent_line)
+        p.restore()
+
+
+def _arr_left(p, ink):
+    _arr_boxes(p, ink, QRectF(14, 11, 20, 9), QRectF(14, 27, 12, 9),
+               (QPointF(10, 8), QPointF(10, 40)))
+
+
+def _arr_right(p, ink):
+    _arr_boxes(p, ink, QRectF(14, 11, 20, 9), QRectF(22, 27, 12, 9),
+               (QPointF(38, 8), QPointF(38, 40)))
+
+
+def _arr_top(p, ink):
+    _arr_boxes(p, ink, QRectF(11, 14, 9, 20), QRectF(27, 14, 9, 12),
+               (QPointF(8, 10), QPointF(40, 10)))
+
+
+def _arr_bottom(p, ink):
+    _arr_boxes(p, ink, QRectF(11, 14, 9, 20), QRectF(27, 22, 9, 12),
+               (QPointF(8, 38), QPointF(40, 38)))
+
+
+def _arr_hcenter(p, ink):
+    _arr_boxes(p, ink, QRectF(12, 11, 24, 9), QRectF(17, 27, 14, 9),
+               (QPointF(24, 7), QPointF(24, 41)))
+
+
+def _arr_vcenter(p, ink):
+    _arr_boxes(p, ink, QRectF(11, 12, 9, 24), QRectF(27, 17, 9, 14),
+               (QPointF(7, 24), QPointF(41, 24)))
+
+
+def _arr_dist_h(p, ink):
+    # three boxes, equal gaps; the accent marks the gaps
+    p.setBrush(Qt.NoBrush)
+    for x in (8, 20, 32):
+        p.drawRect(QRectF(x, 16, 8, 16))
+    pen = QPen(_accent(), 2.6)
+    pen.setCapStyle(Qt.RoundCap)
+    p.save()
+    p.setPen(pen)
+    p.drawLine(QPointF(17, 24), QPointF(19, 24))
+    p.drawLine(QPointF(29, 24), QPointF(31, 24))
+    p.restore()
+
+
+def _arr_dist_v(p, ink):
+    p.setBrush(Qt.NoBrush)
+    for y in (8, 20, 32):
+        p.drawRect(QRectF(16, y, 16, 8))
+    pen = QPen(_accent(), 2.6)
+    pen.setCapStyle(Qt.RoundCap)
+    p.save()
+    p.setPen(pen)
+    p.drawLine(QPointF(24, 17), QPointF(24, 19))
+    p.drawLine(QPointF(24, 29), QPointF(24, 31))
+    p.restore()
+
+
+def _arr_duplicate(p, ink):
+    # a box and its copy, offset; the copy's corner marked with the accent
+    p.setBrush(Qt.NoBrush)
+    p.drawRect(QRectF(10, 10, 20, 20))
+    p.drawRect(QRectF(18, 18, 20, 20))
+    _dot(p, 38, 38, 2.8)
+
+
+def _arr_group(p, ink):
+    # two boxes inside a dashed frame
+    p.setBrush(Qt.NoBrush)
+    p.drawRect(QRectF(12, 15, 9, 9))
+    p.drawRect(QRectF(27, 24, 9, 9))
+    pen = QPen(_accent(), 2.4, Qt.DashLine)
+    pen.setCapStyle(Qt.RoundCap)
+    p.save()
+    p.setPen(pen)
+    p.drawRect(QRectF(7, 10, 34, 28))
+    p.restore()
+
+
+def _arr_ungroup(p, ink):
+    # the same two boxes, the frame broken open (two corner brackets)
+    p.setBrush(Qt.NoBrush)
+    p.drawRect(QRectF(12, 15, 9, 9))
+    p.drawRect(QRectF(27, 24, 9, 9))
+    pen = QPen(_accent(), 2.4)
+    pen.setCapStyle(Qt.RoundCap)
+    p.save()
+    p.setPen(pen)
+    p.drawLine(QPointF(7, 18), QPointF(7, 10))
+    p.drawLine(QPointF(7, 10), QPointF(15, 10))
+    p.drawLine(QPointF(41, 30), QPointF(41, 38))
+    p.drawLine(QPointF(41, 38), QPointF(33, 38))
+    p.restore()
+
+
+def _arr_lock(p, ink):
+    # a padlock: body in ink, shackle in line
+    p.setBrush(Qt.NoBrush)
+    p.drawArc(QRectF(16, 9, 16, 16), 0, 180 * 16)
+    p.drawLine(QPointF(16, 17), QPointF(16, 22))
+    p.drawLine(QPointF(32, 17), QPointF(32, 22))
+    _solid(p, ink, QRectF(12, 22, 24, 16))
+    _dot(p, 24, 30, 2.6)
+
+
 _DRAW = {
     "select": _select, "line": _line, "freehand": _freehand,
+    "arr_left": _arr_left, "arr_right": _arr_right, "arr_top": _arr_top,
+    "arr_bottom": _arr_bottom, "arr_hcenter": _arr_hcenter,
+    "arr_vcenter": _arr_vcenter, "arr_dist_h": _arr_dist_h,
+    "arr_dist_v": _arr_dist_v, "arr_duplicate": _arr_duplicate,
+    "arr_group": _arr_group, "arr_ungroup": _arr_ungroup, "arr_lock": _arr_lock,
     "rectangle": _rectangle,
     "image": _image_icon,
     "comp_vista": _comp_vista, "comp_norte": _comp_norte,
