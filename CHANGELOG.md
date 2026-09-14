@@ -6,7 +6,46 @@ follow [SemVer](https://semver.org).
 
 ## [Sin publicar]
 
+## [0.3.19] — 2026-09-14
+
+**El norte del proyecto.** La plaza de Yanque, dibujada a escuadra con los
+ejes, se había girado 33,5° como grupo para encajar en el satélite — y las
+vistas Frontal, Derecha e Izquierda dejaron de significar nada. Esta
+versión hace lo que SketchUp: el modelo se queda en sus ejes y el que gira
+es el mapa. Y llegan los tres primeros arreglos de un colaborador externo,
+@pacaeiro, con sus issues: el bloqueo de eje con Shift, las guías
+punteadas y los iconos grandes.
+
+### Añadido
+- **Norte del proyecto: el mapa gira bajo el modelo, no el modelo bajo el
+  mapa.** En el panel Terreno/Mapa base, el campo **Norte** dice hacia dónde
+  queda el norte verdadero, en grados en sentido horario desde el eje verde
+  (0° = el verde apunta al norte; la misma convención que Solar North de
+  SketchUp). Al cambiarlo giran por debajo el mapa base, el terreno 3D, las
+  rutas y puntos importados, la lectura UTM de la barra de estado y el sol
+  de las sombras; el modelo no se toca, así que las vistas estándar, los
+  bloqueos de eje y el rectángulo siguen a escuadra. Se guarda en el `.igz`
+  (clave `north`, solo si no es 0: los documentos y lectores anteriores no
+  ven nada nuevo).
+- **Enderezar modelo sobre el mapa.** Para un modelo que ya se giró y
+  arrastró como grupo para encajar en el sitio: se selecciona ese componente
+  y con un botón vuelve a sus propios ejes, el origen pasa a su esquina y el
+  ángulo del norte queda calculado, de modo que ningún punto cambia de
+  latitud/longitud. Viajan con él los demás grupos, la geometría suelta, las
+  cotas, textos, guías, planos de sección, imágenes, rutas y puntos, las
+  escenas guardadas y los marcos y cotas ancladas de las láminas. Un paso de
+  deshacer. Un modelo inclinado o escalado se rechaza (no hay norte para
+  eso); la parte vertical de la colocación se descarta, porque el mapa solo
+  puede estar en z = 0.
+- **Iconos grandes en las barras** (@pacaeiro, #15): clic derecho sobre una
+  barra ▸ «Iconos grandes en las barras» pasa de 24 a 32 px; se recuerda
+  entre sesiones y viene apagado.
+
 ### Arreglado
+- **Shift bloqueaba una dirección torcida** (@pacaeiro, #13): con la
+  inferencia de eje activa, Shift capturaba la dirección del cursor —unos
+  grados fuera del eje— en vez del eje X, Y o Z exacto. Ahora bloquea el
+  eje inferido, conservando el sentido.
 - **Las guías de construcción salían a línea llena en vez de punteadas.** La
   Cinta de medir trazaba sus guías continuas, sin el punteado fino de
   SketchUp. El lápiz siempre fue `Qt.DashLine`: lo que fallaba era la ESCALA.

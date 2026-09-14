@@ -45,6 +45,31 @@
   <url type="vcs-browser">https://github.com/ingelibre/ingetrazo</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.3.19" date="2026-09-14">
+      <description>
+        <p>The project north. A model drawn square to the axes no longer has
+        to be turned to fit its site: the Terrain panel gets a North angle
+        (degrees clockwise from the green axis, as in SketchUp) that turns the
+        base map, the 3D terrain, imported paths and points and the sun under
+        the model, while the model — and its front/right/top views and axis
+        locks — stays put. "Straighten model on the map" converts a model
+        that was already turned and dragged into place, without moving a
+        single point on the ground. Plus the first three contributions from
+        an outside tester: Shift locks the exact axis, construction guides
+        are dashed again, and toolbar icons can be made larger.</p>
+        <p xml:lang="es">El norte del proyecto. Un modelo dibujado a escuadra
+        con los ejes ya no tiene que girarse para encajar en su sitio: el
+        panel Terreno tiene un ángulo del Norte (grados en sentido horario
+        desde el eje verde, como en SketchUp) que gira el mapa base, el
+        terreno 3D, las rutas y puntos importados y el sol bajo el modelo,
+        mientras el modelo —y sus vistas frontal/derecha/planta y bloqueos de
+        eje— se queda quieto. «Enderezar modelo sobre el mapa» convierte un
+        modelo que ya se giró y arrastró, sin mover un solo punto sobre el
+        terreno. Y las tres primeras contribuciones de un probador externo:
+        Shift bloquea el eje exacto, las guías vuelven a ser punteadas y los
+        iconos de las barras pueden agrandarse.</p>
+      </description>
+    </release>
     <release version="0.3.18" date="2026-09-12">
       <description>
         <p>Nested groups, the way SketchUp does them: a group can hold groups,
