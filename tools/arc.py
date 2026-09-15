@@ -177,8 +177,36 @@ class ArcTool(PlaneLock, Tool):
         mesh = getattr(scene, "mesh", None)
         if mesh is None or self.start_point is None:
             return None
+        # The loose mesh first, then every placed group / component in its
+        # own space (SketchUp infers to geometry inside them from outside).
+        spaces = [(mesh, None)]
+        placements = getattr(viewport, "_placements", None)
+        if callable(placements):
+            for g in placements():
+                gm = getattr(g, "mesh", None)
+                if gm is not None and gm.edges and not getattr(g, "billboard", False):
+                    spaces.append((gm, getattr(g, "xform", None)))
+        for gm, xf in spaces:
+            inv = None
+            if xf is not None:
+                inv, ok = xf.inverted()
+                if not ok:
+                    continue
+            P = inv.map(self.start_point) if inv is not None else self.start_point
+            t = self._tangent_in_mesh(gm, P)
+            if t is None:
+                continue
+            if xf is not None:
+                t = xf.mapVector(t)
+                if t.length() < 1e-9:
+                    continue
+                t = t.normalized()
+            return t
+        return None
+
+    @staticmethod
+    def _tangent_in_mesh(mesh, P: QVector3D) -> QVector3D | None:
         from core.snap import fit_circle
-        P = self.start_point
         for edge in mesh.edges:
             if getattr(edge, "curve", None) is None:
                 continue

@@ -210,6 +210,7 @@ class PushPullTool(Tool):
     shortcut = "P"
     shortcut_alt = "U"
     uses_snap = False  # picks a face to extrude; no snap markers
+    hover_group_edges = True  # …but its distance infers to a group's edge too
     vcb_label = "Distance"
     # Preview lines in the normal edge colour, not the loose orange rubber band,
     # and depth-tested so the forming box hides its own back edges.

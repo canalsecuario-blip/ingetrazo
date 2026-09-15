@@ -800,6 +800,8 @@
  "Ollama URL:": "URL de Ollama:",
  "On edge": "En arista",
  "On line": "Sobre la línea",
+ "in group": "en grupo",
+ "in component": "en componente",
  "Arc midpoint": "Punto medio del arco",
  "Component origin": "Origen del componente",
  "Tangent at vertex": "Tangente en el vértice",

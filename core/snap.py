@@ -68,6 +68,9 @@ class SnapResult:
     # Extra dashed guides, ``[(a, b, rgb), ...]`` — the two-point 'from point'
     # draws one from each encouraged point.
     guides: Optional[list] = None
+    # ``"group"`` / ``"component"`` when the point belongs to one — the
+    # ScreenTip adds "in group" / "in component" (SketchUp).
+    context: Optional[str] = None
 
 
 # ---- Helpers ---------------------------------------------------------------
@@ -833,6 +836,7 @@ def compute_snap(
         kind: str,
         color: tuple[float, float, float],
         occludable: bool = True,
+        context: Optional[str] = None,
     ) -> None:
         nonlocal best
         px = world_to_pixel(world)
@@ -847,7 +851,7 @@ def compute_snap(
         if occludable and is_occluded is not None and is_occluded(world):
             return
         if best is None or d < best[0]:
-            best = (d, world, kind, color)
+            best = (d, world, kind, color, context)
 
     # 4. Vertex snaps (close, endpoint) — the highest-priority discrete points.
     if (
@@ -885,10 +889,10 @@ def compute_snap(
             # SketchUp paints every point inference magenta when the
             # geometry is inside a group or component.
             col = COLOR_IN_GROUP if getattr(edge, "in_group", False) else COLOR_ENDPOINT
-            _consider(edge.a, "endpoint", col)
-            _consider(edge.b, "endpoint", col)
+            _consider(edge.a, "endpoint", col, context=getattr(edge, "context", None))
+            _consider(edge.b, "endpoint", col, context=getattr(edge, "context", None))
     if best is not None:
-        return SnapResult(best[1], best[2], best[3])
+        return SnapResult(best[1], best[2], best[3], context=best[4])
 
     # 4b. Perpendicular to a wall you started on: drawing square to it locks the
     #     exact perpendicular (magenta) and predicts the connection — where that
@@ -1018,10 +1022,10 @@ def compute_snap(
             continue
         _consider((edge.a + edge.b) * 0.5, "midpoint",
                   COLOR_IN_GROUP if getattr(edge, "in_group", False)
-                  else COLOR_MIDPOINT)
+                  else COLOR_MIDPOINT, context=getattr(edge, "context", None))
     _consider(QVector3D(0.0, 0.0, 0.0), "origin", COLOR_ORIGIN)
     if best is not None:
-        return SnapResult(best[1], best[2], best[3])
+        return SnapResult(best[1], best[2], best[3], context=best[4])
 
     # 7. On-edge: an arbitrary point along an edge. An edge is a big linear
     #    target, so it gets a more generous radius than the point snaps —
@@ -1056,7 +1060,7 @@ def compute_snap(
             return SnapResult(on_pt, "on_line", COLOR_ON_EDGE)   # a guide line
         return SnapResult(on_pt, "on_edge",
                           COLOR_IN_GROUP if getattr(edge, "in_group", False)
-                          else COLOR_ON_EDGE)
+                          else COLOR_ON_EDGE, context=getattr(edge, "context", None))
 
     # 8b. Acquired-edge parallel inference. An edge the cursor hovered while
     #     drawing is held as a reference; when the draw runs parallel to it the

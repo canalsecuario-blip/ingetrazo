@@ -299,3 +299,144 @@ def test_an_arc_started_at_another_arcs_end_snaps_tangent_to_it():
     assert "Tangent" in arc.value_label()[0]
     arc.on_hover(ctx(V(3, -0.5, 0)))                   # too far from tangent: free bulge
     assert arc._snap_bulge is None and arc.wireframe_color is None
+
+
+# ---------------------------------------------------------------------------
+# Groups and components: SketchUp infers to what is inside them from outside,
+# without opening them — magenta, and the tip says "in group"/"in component".
+
+def _offscreen_vp():
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication
+    QApplication.instance() or QApplication([])
+    from views.viewport import Viewport
+    vp = Viewport(None)
+    vp.resize(1000, 600)
+    vp.camera.set_aspect(1000, 600)
+    vp.flash_status = lambda *a, **k: None
+    vp.camera.set_view("top")
+    return vp
+
+
+def _arc_mesh():
+    """A mesh holding one half-circle arc (0,0)→(2,0) over (1,1), drawn with
+    the real tool into a scratch scene."""
+    from PySide6.QtCore import QPointF, Qt
+    from core.scene import Scene
+    from core.history import History
+    from tools.arc import ArcTool
+    from tools.base import ToolContext
+
+    class _Stub:
+        def __init__(self):
+            self.scene = Scene()
+            self.history = History(self.scene)
+
+        def update(self):
+            pass
+
+        def flash_status(self, *a, **k):
+            pass
+    st = _Stub()
+    arc = ArcTool()
+    for w in (V(0, 0, 0), V(2, 0, 0), V(1, 1, 0)):
+        arc.on_click(ToolContext(viewport=st, world=w, screen=QPointF(0, 0),
+                                 modifiers=Qt.NoModifier, snap=None))
+    assert any(getattr(e, "curve", None) is not None for e in st.scene.mesh.edges)
+    return st.scene.mesh
+
+
+def _placed(vp, mesh, dx, dy):
+    from PySide6.QtGui import QMatrix4x4
+    from core.group import Group
+    g = Group(mesh, "pieza")
+    xf = QMatrix4x4()
+    xf.translate(dx, dy, 0)
+    g.xform = xf
+    vp.scene.groups.append(g)
+    vp.scene.version += 1
+    return g
+
+
+def test_the_hovered_edge_can_be_a_components_and_the_tip_says_so():
+    from PySide6.QtCore import QPointF, Qt
+    from core.mesh import Mesh
+    from tools.line import LineTool
+    from core.snap import COLOR_IN_GROUP
+    vp = _offscreen_vp()
+    vp.camera.target = V(6, 5, 0)
+    vp.camera.distance = 12
+    mesh = Mesh()
+    mesh.add_face([V(0, 0, 0), V(2, 0, 0), V(2, 2, 0), V(0, 2, 0)])
+    _placed(vp, mesh, 5, 4)                                  # square at (5..7, 4..6)
+    vp.set_active_tool(LineTool())
+    px = vp._world_to_pixel(V(6, 4.02, 0))                   # its bottom edge, mid
+    vp._process_hover(QPointF(*px), Qt.NoModifier)
+    edge = vp._hover_edge
+    assert edge is not None and getattr(edge, "in_group", False)
+    assert edge.context == "component"
+    assert (edge.a - edge.b).length() > 1.9                  # the world edge (5,4)-(7,4)
+    snap = vp.last_snap
+    assert snap.kind == "midpoint" and snap.color == COLOR_IN_GROUP
+    assert snap.context == "component"
+
+
+def test_arc_midpoint_and_tangent_reach_arcs_inside_a_component():
+    from PySide6.QtCore import QPointF, Qt
+    from tools.line import LineTool
+    from tools.arc import ArcTool
+    from tools.base import ToolContext
+    vp = _offscreen_vp()
+    vp.camera.target = V(6, 4, 0)
+    vp.camera.distance = 12
+    _placed(vp, _arc_mesh(), 5, 4)                           # arc (5,4)→(7,4) over (6,5)
+    vp.set_active_tool(LineTool())
+    px = vp._world_to_pixel(V(6, 5.02, 0))                   # the placed arc's apex
+    vp._process_hover(QPointF(*px), Qt.NoModifier)
+    assert vp.last_snap.kind == "arc_midpoint", vp.last_snap.kind
+    assert (vp.last_snap.point - V(6, 5, 0)).length() < 0.02
+    arc = ArcTool()
+    vp.set_active_tool(arc)
+
+    def ctx(world):
+        return ToolContext(viewport=vp, world=world, screen=QPointF(0, 0),
+                           modifiers=Qt.NoModifier, snap=None)
+    arc.on_click(ctx(V(7, 4, 0)))                            # the placed arc's end
+    arc.on_click(ctx(V(9, 4, 0)))
+    assert arc._tangent_dir is not None
+    assert (arc._tangent_dir - V(0, -1, 0)).length() < 1e-6
+
+
+def test_the_centre_of_a_components_circle_comes_from_its_rim():
+    from PySide6.QtCore import QPointF, Qt
+    from tools.circle import CircleTool
+    from tools.base import ToolContext
+    from core.scene import Scene
+    from core.history import History
+    vp = _offscreen_vp()
+    vp.camera.target = V(7, 6, 0)
+    vp.camera.distance = 12
+
+    class _Stub:
+        def __init__(self):
+            self.scene = Scene()
+            self.history = History(self.scene)
+
+        def update(self):
+            pass
+
+        def flash_status(self, *a, **k):
+            pass
+    st = _Stub()
+    circ = CircleTool()
+    for w in (V(2, 2, 0), V(3, 2, 0)):
+        circ.on_click(ToolContext(viewport=st, world=w, screen=QPointF(0, 0),
+                                  modifiers=Qt.NoModifier, snap=None))
+    _placed(vp, st.scene.mesh, 5, 4)                         # circle centre (7,6), r = 1
+    vp.set_active_tool(CircleTool())
+    a0, a1 = 0.0, 2 * math.pi / circ.sides
+    rim = V(7 + (math.cos(a0) + math.cos(a1)) / 2, 6 + (math.sin(a0) + math.sin(a1)) / 2, 0)
+    vp._process_hover(QPointF(*vp._world_to_pixel(rim)), Qt.NoModifier)
+    ref = vp._valid_center_ref()
+    assert ref is not None and (ref[0] - V(7, 6, 0)).length() < 1e-3

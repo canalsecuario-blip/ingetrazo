@@ -147,11 +147,11 @@ class _SnapEdge:
     marks the degenerate one that carries a circle's centre."""
 
     __slots__ = ("a", "b", "center", "component_origin", "arc_midpoint",
-                 "guide", "in_group")
+                 "guide", "in_group", "context", "group")
 
     def __init__(self, a, b, center: bool = False, component_origin: bool = False,
                  arc_midpoint: bool = False, guide: bool = False,
-                 in_group: bool = False) -> None:
+                 in_group: bool = False, context=None, group=None) -> None:
         self.a = a
         self.b = b
         self.center = center
@@ -159,6 +159,20 @@ class _SnapEdge:
         self.arc_midpoint = arc_midpoint           # the middle of an arc's sweep
         self.guide = guide                         # a construction guide: 'on line'
         self.in_group = in_group                   # magenta point inferences
+        self.context = context                     # "group" / "component" for the tip
+        self.group = group                         # the top-level owner, when known
+
+
+def _group_pseudo_edge(idx, i: int) -> _SnapEdge:
+    """The i-th group hard edge of the pick index as a world pseudo-edge
+    that knows its owner and whether that is a group or a component."""
+    gi = getattr(idx, "gedge_gi", None)
+    groups = getattr(idx, "gedge_groups", None)
+    owner = groups[int(gi[i])] if gi is not None and groups else None
+    is_comp = getattr(owner, "is_instance", None)
+    context = "component" if (is_comp is not None and is_comp()) else "group"
+    return _SnapEdge(QVector3D(*idx.gedge_a[i]), QVector3D(*idx.gedge_b[i]),
+                     in_group=True, context=context, group=owner)
 
 
 # OpenGL constants — kept as literals so we don't depend on PyOpenGL.
@@ -514,6 +528,11 @@ class Viewport(QOpenGLWidget):
 
     #: How long the cursor must rest on a point to encourage it (ms).
     ENCOURAGE_MS = 250
+    #: Snap kinds whose point can be encouraged (a definite point, not a
+    #: place along an edge or on a face).
+    _ENCOURAGING_KINDS = frozenset((
+        "endpoint", "midpoint", "arc_midpoint", "center", "component_origin",
+        "origin", "intersection", "close"))
 
     _SNAP_LABELS = {
         "endpoint": "Endpoint",
@@ -5114,6 +5133,11 @@ class Viewport(QOpenGLWidget):
         label = self._SNAP_LABELS.get(snap.kind)
         if label:
             label = tr(label)
+            ctx_ = getattr(snap, "context", None)
+            if ctx_ == "component":
+                label += " " + tr("in component")
+            elif ctx_ == "group":
+                label += " " + tr("in group")
             font = QFont()
             font.setPointSize(9)
             painter.setFont(font)
@@ -7767,6 +7791,28 @@ class Viewport(QOpenGLWidget):
         self._gedge_px_cache = (key, data)
         return data
 
+    def _gedge_dist(self, px: float, py: float):
+        """Screen distance from the cursor to every group hard edge — one
+        vectorised pass per hover position, shared by the hovered-edge
+        pick and the snap prefilter (both used to compute it)."""
+        import numpy as np
+        proj = self._gedge_screen()
+        # Whole pixels: the hovered-edge pick gets the float position and
+        # the snap scene the rounded one — the same pass must serve both.
+        key = (id(proj), int(round(px)), int(round(py)))
+        cached = getattr(self, "_gedge_dist_cache", None)
+        if cached is not None and cached[0] == key:
+            return cached[1]
+        ax, ay, bx, by, ok = proj
+        dx, dy = bx - ax, by - ay
+        l2 = dx * dx + dy * dy
+        safe = np.where(l2 > 1e-12, l2, 1.0)
+        t = np.clip(((px - ax) * dx + (py - ay) * dy) / safe, 0.0, 1.0)
+        d = np.hypot(ax + t * dx - px, ay + t * dy - py)
+        d = np.where(ok, d, np.inf)
+        self._gedge_dist_cache = (key, d)
+        return d
+
     def _ledge_screen(self):
         """Screen-projected endpoints of every LOOSE edge — the
         ``_gedge_screen`` twin for the snap prefilter after an explode
@@ -7824,22 +7870,43 @@ class Viewport(QOpenGLWidget):
         if proj is None:
             return []
         import numpy as np
-        ax, ay, bx, by, ok = proj
-        if not ok.any():
+        if not proj[4].any():
             return []
-        dx, dy = bx - ax, by - ay
-        l2 = dx * dx + dy * dy
-        safe = np.where(l2 > 1e-12, l2, 1.0)
-        t = np.clip(((px - ax) * dx + (py - ay) * dy) / safe, 0.0, 1.0)
-        d = np.hypot(ax + t * dx - px, ay + t * dy - py)
-        d = np.where(ok, d, np.inf)
+        dist = getattr(self, "_gedge_dist", None)          # stub VPs in tests
+        d = dist(px, py) if dist is not None else Viewport._gedge_dist(self, px, py)
         cand = np.where(d < radius_px)[0]
         if len(cand) > cap:
             cand = cand[np.argsort(d[cand])[:cap]]
         idx = self._pick_index()
         ga, gb = idx.gedge_a, idx.gedge_b
-        return [_SnapEdge(QVector3D(*ga[i]), QVector3D(*gb[i]), in_group=True)
-                for i in cand]
+        return [_group_pseudo_edge(idx, int(i)) for i in cand]
+
+    def pick_edge_any(self, screen_x: float, screen_y: float):
+        """The edge under the cursor, loose OR a group's (as a world
+        pseudo-edge with ``in_group``), nearest first — what the linear
+        inferences hover: parallel / perpendicular to a component's edge,
+        the reference lock, Push/Pull level with it (SketchUp reads groups
+        from outside without opening them)."""
+        loose = self.pick_edge(screen_x, screen_y)
+        proj = self._gedge_screen()
+        if proj is None:
+            return loose
+        import numpy as np
+        ax, ay, bx, by, ok = proj
+        if not ok.any():
+            return loose
+        d = self._gedge_dist(screen_x, screen_y)
+        i = int(np.argmin(d))
+        if d[i] >= self.pick_threshold_px:
+            return loose
+        if loose is not None:
+            pa = self._world_to_pixel(loose.a)
+            pb = self._world_to_pixel(loose.b)
+            if pa is not None and pb is not None:
+                dl, _t = _closest_on_segment_2d((screen_x, screen_y), pa, pb)
+                if dl <= d[i]:
+                    return loose
+        return _group_pseudo_edge(self._pick_index(), i)
 
     #: How close (px) the cursor must come to a component's origin or an
     #: arc's midpoint for it to enter the snap scene at all.
@@ -7849,16 +7916,31 @@ class Viewport(QOpenGLWidget):
         """SketchUp's "Component Origin Point": each placed group's own
         origin (its insertion point), as a degenerate pseudo-edge when it
         lies near the cursor. One projection per placement."""
-        out: list = []
+        import numpy as np
+        cache = getattr(self, "_corigin_cache", None)
+        key = (self.scene.version, id(self.scene.edit_group))
+        if cache is None or cache[0] != key:
+            groups, pts = [], []
+            for g in self._placements():
+                xf = getattr(g, "xform", None)
+                if xf is None or getattr(g, "billboard", False):
+                    continue
+                o = xf.map(QVector3D(0.0, 0.0, 0.0))
+                groups.append(g)
+                pts.append((o.x(), o.y(), o.z()))
+            cache = (key, groups, np.array(pts, dtype=np.float64).reshape(-1, 3))
+            self._corigin_cache = cache
+        _k, groups, pts = cache
+        if not len(pts):
+            return []
+        sx, sy, ok = self._project_px(pts)
+        d = np.where(ok, np.hypot(sx - px, sy - py), np.inf)
         moving = getattr(self.active_tool, "_group", None)
-        for g in self._placements():
-            xf = getattr(g, "xform", None)
-            if xf is None or g is moving or getattr(g, "billboard", False):
+        out: list = []
+        for i in np.flatnonzero(d <= self.POINT_INFERENCE_PX):
+            if groups[i] is moving:
                 continue
-            o = xf.map(QVector3D(0.0, 0.0, 0.0))
-            pc = self._world_to_pixel(o)
-            if pc is None or math.hypot(pc[0] - px, pc[1] - py) > self.POINT_INFERENCE_PX:
-                continue
+            o = QVector3D(*pts[i])
             out.append(_SnapEdge(o, QVector3D(o), component_origin=True))
         return out
 
@@ -7869,34 +7951,19 @@ class Viewport(QOpenGLWidget):
         scene version, offered when near the cursor."""
         cache = getattr(self, "_arc_mid_cache", None)
         if cache is None or cache[0] != self.scene.version:
-            from core.snap import fit_circle
-            mesh = self.scene.mesh
-            by_curve: dict = {}
-            for e in mesh.edges:
-                cid = getattr(e, "curve", None)
-                if cid is not None:
-                    by_curve.setdefault(cid, []).append(e)
-            mids = []
-            for edges in by_curve.values():
-                degree: dict = {}
-                pos: dict = {}
-                for e in edges:
-                    for v in (e.v0, e.v1):
-                        degree[id(v)] = degree.get(id(v), 0) + 1
-                        pos[id(v)] = v.position
-                ends = [pos[k] for k, n in degree.items() if n == 1]
-                if len(ends) != 2 or len(pos) < 3:
-                    continue                     # a circle, or not a chain
-                fit = fit_circle(list(pos.values()))
-                if fit is None:
+            mids = list(self._mesh_arc_midpoints(self.scene.mesh))
+            # …and the arcs inside every placed group / component (shared
+            # prototypes are walked once), through each placement's matrix.
+            local: dict = {}
+            for g in self._placements():
+                mesh = getattr(g, "mesh", None)
+                if mesh is None or getattr(g, "billboard", False):
                     continue
-                c, r = fit[0], fit[1]
-                m = QVector3D(0.0, 0.0, 0.0)
-                for pt in pos.values():
-                    m += (pt - c)
-                if m.length() < 1e-9:
-                    continue
-                mids.append(c + m.normalized() * r)
+                if id(mesh) not in local:
+                    local[id(mesh)] = self._mesh_arc_midpoints(mesh)
+                xf = getattr(g, "xform", None)
+                mids += [xf.map(m) if xf is not None else QVector3D(m)
+                         for m in local[id(mesh)]]
             cache = (self.scene.version, mids)
             self._arc_mid_cache = cache
         out: list = []
@@ -7906,6 +7973,39 @@ class Viewport(QOpenGLWidget):
                 continue
             out.append(_SnapEdge(QVector3D(m), QVector3D(m), arc_midpoint=True))
         return out
+
+    @staticmethod
+    def _mesh_arc_midpoints(mesh) -> list:
+        """The sweep midpoint of every open curve chain of ``mesh`` (in the
+        mesh's own space)."""
+        from core.snap import fit_circle
+        by_curve: dict = {}
+        for e in mesh.edges:
+            cid = getattr(e, "curve", None)
+            if cid is not None:
+                by_curve.setdefault(cid, []).append(e)
+        mids = []
+        for edges in by_curve.values():
+            degree: dict = {}
+            pos: dict = {}
+            for e in edges:
+                for v in (e.v0, e.v1):
+                    degree[id(v)] = degree.get(id(v), 0) + 1
+                    pos[id(v)] = v.position
+            ends = [pos[k] for k, n in degree.items() if n == 1]
+            if len(ends) != 2 or len(pos) < 3:
+                continue                     # a circle, or not a chain
+            fit = fit_circle(list(pos.values()))
+            if fit is None:
+                continue
+            c, r = fit[0], fit[1]
+            m = QVector3D(0.0, 0.0, 0.0)
+            for pt in pos.values():
+                m += (pt - c)
+            if m.length() < 1e-9:
+                continue
+            mids.append(c + m.normalized() * r)
+        return mids
 
     def _billboard_snap_edges(self) -> list:
         """Pseudo-edges for face-me billboards: the base edge and the vertical
@@ -8075,6 +8175,8 @@ class Viewport(QOpenGLWidget):
         edge = self._hover_edge
         if getattr(edge, "curve", None) is not None:
             found = self._center_of_edge(edge, self.scene.mesh)
+        elif getattr(edge, "in_group", False) and getattr(edge, "group", None) is not None:
+            found = self._center_of_group_edge(edge)
         if found is None:
             face, group = self.pick_face_any(x, y)
             if face is not None:
@@ -8085,6 +8187,40 @@ class Viewport(QOpenGLWidget):
             return found
         self._valid_center_ref()
         return None
+
+    def _center_of_group_edge(self, pseudo):
+        """The rim of a circle inside a top-level group / component: the
+        world pseudo-edge is matched to the group's own edge (positions in
+        its space) and the curve's centre comes back through its matrix."""
+        g = pseudo.group
+        mesh = getattr(g, "mesh", None)
+        xf = getattr(g, "xform", None)
+        if mesh is None or not mesh.edges:
+            return None
+        inv = None
+        if xf is not None:
+            inv, ok = xf.inverted()
+            if not ok:
+                return None
+        la = inv.map(pseudo.a) if inv is not None else pseudo.a
+        lb = inv.map(pseudo.b) if inv is not None else pseudo.b
+        key = (id(mesh), self.scene.version)
+        table = getattr(self, "_group_edge_table", None)
+        if table is None or table[0] != key:
+            def k(p):
+                return (round(p.x(), 4), round(p.y(), 4), round(p.z(), 4))
+            table = (key, {frozenset((k(e.a), k(e.b))): e for e in mesh.edges})
+            self._group_edge_table = table
+        def k(p):
+            return (round(p.x(), 4), round(p.y(), 4), round(p.z(), 4))
+        edge = table[1].get(frozenset((k(la), k(lb))))
+        if edge is None or getattr(edge, "curve", None) is None:
+            return None
+        found = self._center_of_edge(edge, mesh)
+        if found is None:
+            return None
+        c = xf.map(found[0]) if xf is not None else found[0]
+        return (c, found[1], found[2], found[3], found[4], found[5], g)
 
     def _center_of_edge(self, edge, mesh):
         from core.snap import fit_circle
@@ -8164,6 +8300,10 @@ class Viewport(QOpenGLWidget):
                              self.scene.version, src, mesh, group)
         elif src in mesh.edges:
             fresh = self._center_of_edge(src, mesh)
+            xf = getattr(group, "xform", None) if group is not None else None
+            if fresh is not None and xf is not None:
+                fresh = (xf.map(fresh[0]), fresh[1], fresh[2], fresh[3],
+                         fresh[4], fresh[5], group)
         self._center_ref = fresh
         return fresh
 
@@ -8215,21 +8355,38 @@ class Viewport(QOpenGLWidget):
         same answer the old per-edge scan produced)."""
         import numpy as np
         idx = self._pick_index()
-        parts = []
+        # On the projections the viewport already caches per camera pose
+        # (this runs on EVERY hover now — encouraged points): one numpy
+        # distance pass, no re-projection of the model per mouse move.
+        xs, ys, oks = [], [], []
         n = 0
-        if idx.edge_a is not None:
-            parts += [idx.edge_a, idx.edge_b]
+        ledge = getattr(self, "_ledge_screen", None)      # stub VPs in tests
+        lp = ledge() if ledge is not None else None
+        if lp is None and idx.edge_a is not None and len(idx.edge_a):
+            ax, ay, oka = self._project_px(idx.edge_a)
+            bx, by, okb = self._project_px(idx.edge_b)
+            lp = (ax, ay, bx, by, oka & okb)
+        if lp is not None:
+            ax, ay, bx, by, ok = lp
+            xs += [ax, bx]; ys += [ay, by]; oks += [ok, ok]
             n = len(idx.edges)
         m = 0
-        if idx.gedge_a is not None and len(idx.gedge_a):
+        gp = self._gedge_screen()
+        if gp is not None:
             # Group corners too — dimensioning/drawing over an imported
             # reference model needs its vertices as 'from points'.
-            parts += [idx.gedge_a, idx.gedge_b]
+            ax, ay, bx, by, ok = gp
+            xs += [ax, bx]; ys += [ay, by]; oks += [ok, ok]
             m = len(idx.gedge_a)
-        if not parts:
+        if not xs:
             return None
-        pts = np.concatenate(parts)
-        px, py, ok = self._project_px(pts)
+        # The concatenation is the same until the scene or camera moves.
+        ckey = (id(lp), id(gp), n, m)
+        cat = getattr(self, "_vertex_px_cache", None)
+        if cat is None or cat[0] != ckey:
+            cat = (ckey, np.concatenate(xs), np.concatenate(ys), np.concatenate(oks))
+            self._vertex_px_cache = cat
+        _c, px, py, ok = cat
         d = np.where(ok, np.hypot(px - screen_x, py - screen_y), np.inf)
         cand = np.where(d < self.pick_threshold_px)[0]
         for i in cand[np.argsort(d[cand])]:
@@ -9184,7 +9341,12 @@ class Viewport(QOpenGLWidget):
         win = self.window()
         if hasattr(win, "on_viewport_hover"):
             win.on_viewport_hover(ev.position().x(), ev.position().y())
-        self._hover_edge = self.pick_edge(ev.position().x(), ev.position().y())
+        tool = self.active_tool
+        if tool is not None and (tool.uses_snap
+                                 or getattr(tool, "hover_group_edges", False)):
+            self._hover_edge = self.pick_edge_any(ev.position().x(), ev.position().y())
+        else:
+            self._hover_edge = self.pick_edge(ev.position().x(), ev.position().y())
         _hmark("pickedge")
         if self.active_tool is not None and self.active_tool.uses_snap:
             # Only the tools that snap can use a centre; Select and
@@ -9205,18 +9367,12 @@ class Viewport(QOpenGLWidget):
             self.active_tool is not None
             and getattr(self.active_tool, "start_point", None) is not None
         )
-        if self.active_tool is not None and self.active_tool.uses_snap:
+        if drawing and self.active_tool.uses_snap:
+            # Mid-segment: the corner under the cursor is a soft, instant
+            # reference (through point / from point), as always.
             corner = self.pick_vertex(ev.position().x(), ev.position().y())
-            center = getattr(self, "_hover_center", None)
-            # A circle's rim: its centre is the point worth remembering, not
-            # the facet vertex the cursor happens to sit on; on a face with
-            # arcs a real corner under the cursor still wins.
-            point = corner
-            if center is not None and (corner is None or center[2][0] == "edge"):
-                point = QVector3D(center[0])
-            if drawing and point is not None:
-                self._acquired_point = point       # soft, instant, as before
-            self._dwell_on(point)
+            if corner is not None:
+                self._acquired_point = corner
         if not drawing:
             self._acquired_edge = None
             self._acquired_face_normal = None
@@ -9237,6 +9393,18 @@ class Viewport(QOpenGLWidget):
         if ctx is None:
             return
         self.last_snap = ctx.snap
+        if self.active_tool.uses_snap:
+            # Encouraging: the point the snap already found — no extra pick
+            # per hover. A circle's rim encourages its CENTRE (found by the
+            # centre reference while the cursor is on the rim); on a face
+            # with arcs a real corner under the cursor still wins.
+            center = getattr(self, "_hover_center", None)
+            point = None
+            if ctx.snap.kind in self._ENCOURAGING_KINDS:
+                point = ctx.snap.point
+            if center is not None and (point is None or center[2][0] == "edge"):
+                point = QVector3D(center[0])
+            self._dwell_on(point)
         self.active_tool.on_hover(ctx)
         _hmark("tool")
         self.measurementChanged.emit(self._measurement_text())
