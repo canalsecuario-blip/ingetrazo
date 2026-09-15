@@ -1253,13 +1253,13 @@ class MainWindow(QMainWindow):
                              on_menu=self._sheet_tab_menu)
         self.setStatusBar(bar)
         self._sheet_tabs = bar.tabs
-        bar.showMessage(tr(
-            "Orbit (O) / Pan (H) buttons: left-drag to move the view  ·  "
-            "MMB-drag: orbit  ·  Shift+MMB-drag: pan  ·  Wheel / 2-finger: zoom  ·  "
-            "Shift+P: persp/parallel  ·  →←↑: lock X/Y/Z  ·  ↓: par/perp to ref  ·  "
-            "Shift: lock inference  ·  Type N + Enter: exact length  ·  "
-            "Rectangle: type W;H + Enter  ·  Type X;Y;Z + Enter: 3D delta"
-        ))
+        # ONE hint for the tool and its step (SketchUp's status bar), as a
+        # normal status widget: a timed message (flash_status) covers it
+        # and it comes back by itself when the message expires. It replaced
+        # a strip of every shortcut at once (Marco, 2026-09-15).
+        self._hint_label = QLabel("")
+        self._hint_label.setStyleSheet("padding:0 6px;")
+        bar.addWidget(self._hint_label, 1)
         self._tool_label = QLabel(tr("Tool: none"))
         bar.addPermanentWidget(self._tool_label)
         self._refresh_sheet_tabs()
@@ -1324,7 +1324,26 @@ class MainWindow(QMainWindow):
         if not self._status_timer.isActive():
             self._status_timer.start()
 
+    def _tool_key(self, tool) -> str | None:
+        for key, t in self._tools.items():
+            if t is tool:
+                return key
+        return None
+
+    def _update_status_hint(self) -> None:
+        """Refresh the one-line hint for the active tool and its step."""
+        label = getattr(self, "_hint_label", None)
+        if label is None:
+            return
+        from views.status_hints import hint_for
+        vp = self.viewport
+        tool = vp.active_tool
+        text = hint_for(self._tool_key(tool), tool, getattr(vp, "nav_mode", None))
+        if text != label.text():
+            label.setText(text)
+
     def _flush_status_texts(self) -> None:
+        self._update_status_hint()
         pending, self._status_pending = self._status_pending, {}
         coord = pending.get("coordinate")
         if coord is not None and coord != self._coord_label.text():
@@ -1366,6 +1385,7 @@ class MainWindow(QMainWindow):
             action.setChecked(True)
         self._tool_label.setText(tr("Tool: {name}", name=tr(tool.name)))
         self._refresh_vcb()
+        self._update_status_hint()
 
     def _activate_nav(self, key: str) -> None:
         self.viewport.set_nav_mode(key)
@@ -1375,6 +1395,7 @@ class MainWindow(QMainWindow):
         self._tool_label.setText(
             tr("Nav: {name}", name=tr(key.capitalize())))
         self._refresh_vcb()
+        self._update_status_hint()
 
     def _on_make_group(self) -> None:
         """SketchUp's Make Group (G) over the selection.

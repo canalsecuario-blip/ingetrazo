@@ -106,6 +106,9 @@ de mediciones sobre la plaza de Yanque.
   por cuadro (~11 ms) y la caja del grupo editado (~9 ms) en los arrastres.
 
 ### Cambiado
+- **Barra de estado a la SketchUp**: una sola pista para la herramienta y el
+  paso en que está («Clic en el punto final, o teclea la longitud y Enter…»),
+  en vez de la tira con todos los atajos a la vez.
 - **La bandeja aprovecha el ancho**: las muestras de materiales y los
   botones de componentes fluyen en tantas columnas como quepan al ensanchar
   la barra lateral (antes, 5 y 3 fijas con la mitad derecha en blanco).
