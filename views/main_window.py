@@ -1253,13 +1253,13 @@ class MainWindow(QMainWindow):
                              on_menu=self._sheet_tab_menu)
         self.setStatusBar(bar)
         self._sheet_tabs = bar.tabs
-        # ONE hint for the tool and its step (SketchUp's status bar), as a
-        # normal status widget: a timed message (flash_status) covers it
-        # and it comes back by itself when the message expires. It replaced
-        # a strip of every shortcut at once (Marco, 2026-09-15).
-        self._hint_label = QLabel("")
-        self._hint_label.setStyleSheet("padding:0 6px;")
-        bar.addWidget(self._hint_label, 1)
+        # ONE hint for the tool and its step (SketchUp's status bar) goes in
+        # as the bar's BASE message — SheetStatusBar keeps the Model | Sheet
+        # strip glued to the left and restores the base after a timed
+        # message (flash_status). A widget of our own here landed LEFT of
+        # the strip (Marco, 2026-09-15: «la ubicación de modelo y
+        # composiciones siempre debe ser primero»). It replaced a strip of
+        # every shortcut at once.
         self._tool_label = QLabel(tr("Tool: none"))
         bar.addPermanentWidget(self._tool_label)
         self._refresh_sheet_tabs()
@@ -1331,16 +1331,28 @@ class MainWindow(QMainWindow):
         return None
 
     def _update_status_hint(self) -> None:
-        """Refresh the one-line hint for the active tool and its step."""
-        label = getattr(self, "_hint_label", None)
-        if label is None:
+        """Refresh the one-line hint for the active tool and its step: the
+        status bar's base message, under any timed one."""
+        bar = self.statusBar()
+        if bar is None:
             return
         from views.status_hints import hint_for
         vp = self.viewport
         tool = vp.active_tool
         text = hint_for(self._tool_key(tool), tool, getattr(vp, "nav_mode", None))
-        if text != label.text():
-            label.setText(text)
+        if text != getattr(bar, "_base", None):
+            if hasattr(bar, "_base"):
+                # Keep a running timed message; only the base changes.
+                bar._base = text
+                if not bar._timer.isActive():
+                    bar._msg.setText(text)
+            else:
+                bar.showMessage(text)
+
+    @property
+    def status_hint(self) -> str:
+        bar = self.statusBar()
+        return getattr(bar, "_base", None) or (bar.currentMessage() if bar else "")
 
     def _flush_status_texts(self) -> None:
         self._update_status_hint()
