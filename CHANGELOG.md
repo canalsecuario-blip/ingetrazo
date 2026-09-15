@@ -6,7 +6,39 @@ follow [SemVer](https://semver.org).
 
 ## [Sin publicar]
 
+**Lo que pidió Pedro Caeiro.** @pacaeiro, delineante, prueba IngeTrazo como
+si fuera SketchUp y anota cada gesto que no responde igual. Esta semana
+caen sus cuatro pendientes de inferencia y herramientas, todos paridad con
+SketchUp.
+
+### Añadido
+- **Mover + Ctrl copia, y «3x» / «/3» hacen una matriz** (issue #20). Un
+  toque de Ctrl durante Mover deja el original quieto y estampa una copia
+  trasladada en el segundo clic (la copia se previsualiza como alambre; una
+  instancia de componente se copia como hermana, O(1)). Justo después,
+  tecleando `3x` (o `3*`, `*3`) salen tres copias a múltiplos de la
+  distancia, y con `/3` (o `3/`) tres copias que la dividen; re-teclear
+  rehace la matriz y todo cabe en UN deshacer. La ventana se cierra con el
+  siguiente clic, Esc o cambio de herramienta. La «x» solo entra en el
+  cuadro de valores después de un dígito: sola sigue siendo el atajo de
+  Texto.
+- **La cinta métrica saca una guía a partir de otra guía** (issue #22).
+  Clic en el cuerpo de una guía y tirar (o teclear la distancia) coloca una
+  segunda guía paralela: así se traza una retícula. Antes solo valían las
+  aristas de la malla, porque el selector de la cinta no veía guías. El
+  cruce de dos guías (la X verde) es un punto y mide en vez de tirar.
+- **El transportador se inclina con clic y arrastre** (issue #10). Como en
+  SketchUp: clic en el vértice y arrastre fijan el eje del instrumento a lo
+  largo del arrastre, fuera de los planos ortogonales; el ángulo se mide y
+  la guía se coloca en ese plano inclinado. Rotar ya tenía el gesto; ahora
+  lo comparten. Un clic seco conserva el plano inferido.
+
 ### Arreglado
+- **Mover y Rotar ya no infieren contra sí mismos** (issue #19). Lo que se
+  está arrastrando o girando queda fuera de los candidatos del snap —como
+  hace SketchUp con las entidades en movimiento—, así que arrastrar una
+  cara a lo largo de un muro ya no se pega a las esquinas de la propia
+  cara. En modo copia el original no se mueve y no se excluye nada.
 - **Dos guías que se cruzan vuelven a dar su intersección** (PR #21 de @pacaeiro, issue #18). El motor de
   snaps solo fabricaba el punto «intersection» con una línea de bloqueo
   activa (una flecha de eje, un trazo perpendicular, una extensión), así
