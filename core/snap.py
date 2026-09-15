@@ -427,6 +427,38 @@ def _vertex_on_line(
     return (rel - proj).length() < tol
 
 
+def _first_point_from_point(
+    ref, candidate, cx, cy, world_to_pixel, threshold_px, is_occluded=None,
+) -> Optional[SnapResult]:
+    """The foot of the cursor on the axis line through ``ref`` (the last
+    hovered corner), when the cursor sits within the snap radius of one of
+    the three axis lines — a green 'from point' with the axis-coloured
+    dotted guide back to the corner. Sitting ON the corner is the endpoint
+    snap's job, not this one's."""
+    best = None
+    for axis, a in _AXIS_VECTORS.items():
+        s = QVector3D.dotProduct(candidate - ref, a)
+        if abs(s) < 1e-3:
+            continue
+        foot = ref + a * s
+        fp = world_to_pixel(foot)
+        if fp is None:
+            continue
+        d = math.hypot(fp[0] - cx, fp[1] - cy)
+        if d > threshold_px:
+            continue
+        if is_occluded is not None and is_occluded(foot):
+            continue
+        if best is None or d < best[0]:
+            best = (d, foot, axis)
+    if best is None:
+        return None
+    _, foot, axis = best
+    return SnapResult(foot, "from_point", COLOR_ENDPOINT,
+                      guide=(QVector3D(ref), foot),
+                      guide_color=AXIS_COLORS[axis])
+
+
 def _extension_snap(
     candidate_world, cx, cy, scene, world_to_pixel, et, start_point, is_occluded
 ) -> Optional[SnapResult]:
@@ -870,6 +902,21 @@ def compute_snap(
             scene, start_point, candidate_world - start_point,
             cx, cy, world_to_pixel, threshold_px, is_occluded,
             extra_point=acquired_point,
+        )
+        if fp is not None:
+            return fp
+
+    # 5c. 'From point' for the FIRST click — SketchUp's encouraged point: with
+    #     no segment in progress, the cursor lines up along an axis with the
+    #     corner it hovered last, on a dotted axis-coloured line from that
+    #     corner. This is how a window's first corner lands level with the
+    #     door's top (Rafael's review, 2026-09-10: «te salía una línea de
+    #     extensión para poder dibujar aquí la ventana»); the 'from point'
+    #     above only knew segments already under way.
+    if allow_axis and start_point is None and acquired_point is not None:
+        fp = _first_point_from_point(
+            acquired_point, candidate_world, cx, cy, world_to_pixel,
+            threshold_px, is_occluded,
         )
         if fp is not None:
             return fp

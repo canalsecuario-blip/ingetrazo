@@ -9037,21 +9037,24 @@ class Viewport(QOpenGLWidget):
 
         # While a segment is being drawn, hovering an edge acquires it as a soft
         # parallel reference; the acquisition is dropped once nothing is in
-        # progress, so it never goes stale across separate draws.
+        # progress, so it never goes stale across separate draws. A hovered
+        # CORNER is kept even before the first click (SketchUp's encouraged
+        # point): the first corner of a window lines up with the door's on a
+        # dotted line from it (Rafael's review, 2026-09-10).
         drawing = (
             self.active_tool is not None
             and getattr(self.active_tool, "start_point", None) is not None
         )
+        if self.active_tool is not None and self.active_tool.uses_snap:
+            corner = self.pick_vertex(ev.position().x(), ev.position().y())
+            if corner is not None:
+                self._acquired_point = corner
         if not drawing:
             self._acquired_edge = None
-            self._acquired_point = None
             self._acquired_face_normal = None
         else:
             if self._hover_edge is not None:
                 self._acquired_edge = self._hover_edge
-            corner = self.pick_vertex(ev.position().x(), ev.position().y())
-            if corner is not None:
-                self._acquired_point = corner
             face, _g = self.pick_face_any(ev.position().x(), ev.position().y())
             if face is not None:
                 from core.snap import face_plane_world
