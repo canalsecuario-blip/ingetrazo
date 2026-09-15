@@ -264,3 +264,62 @@ def test_a_first_click_on_a_components_face_captures_its_world_plane(viewport):
     assert abs(pt.x() - 8.0) < 1e-6                             # …in WORLD space (x = 8, not 0)
     viewport.scene.groups.remove(g)
     viewport.scene.version += 1
+
+
+def test_a_nested_components_face_plane_comes_through_its_placement(viewport):
+    """The pergola's post is a component inside the plaza's container:
+    pick_face_any hands back the OWNER (the container, identity matrix),
+    so the post's plane read as its prototype's — normal flipped, point in
+    local coordinates — and the rectangle drew off the face (Marco's
+    video, 2026-09-14). pick_face_placement returns the placement whose
+    composed matrix puts the face in the world."""
+    from PySide6.QtCore import QPointF, Qt
+    from PySide6.QtGui import QMatrix4x4
+    from core.group import Group
+    from core.mesh import Mesh
+    from core.snap import face_plane_world
+    from tools.rectangle import RectangleTool
+    mesh = Mesh()
+    mesh.add_face([QVector3D(0, 0, 0), QVector3D(0, 2, 0), QVector3D(0, 2, 3), QVector3D(0, 0, 3)])  # local normal ±X
+    child = Group(mesh, "poste")
+    m = QMatrix4x4()
+    m.translate(20, 10, 0)
+    m.rotate(90, 0, 0, 1)                            # local +X → world +Y
+    child.xform = m
+    container = Group(Mesh(), "plaza")
+    container.xform = QMatrix4x4()
+    container.children = [child]
+    viewport.scene.groups.append(container)
+    viewport.scene.version += 1
+    try:
+        viewport.camera.target = QVector3D(20, 11, 1.5)
+        viewport.camera.distance = 10
+        viewport.camera.yaw = math.radians(90)          # looking along -Y at the face
+        viewport.camera.pitch = math.radians(10)
+        tool = RectangleTool()
+        viewport.set_active_tool(tool)
+        px = viewport._world_to_pixel(QVector3D(20, 11, 1.5))
+        face, owner = viewport.pick_face_any(*px)
+        assert face is not None and owner is container
+        face2, place = viewport.pick_face_placement(*px)
+        assert face2 is face and place is not container
+        _pt, n = face_plane_world(face2, place.xform)
+        assert abs(abs(n.y()) - 1.0) < 1e-6 and abs(n.x()) < 1e-6      # rotated into the world
+
+        class _Ev:
+            def position(self):
+                return QPointF(*px)
+
+            def modifiers(self):
+                return Qt.NoModifier
+
+            def button(self):
+                return Qt.LeftButton
+        viewport._dispatch_tool_click(_Ev())
+        pt, n = tool.work_plane
+        assert abs(abs(n.y()) - 1.0) < 1e-6
+        assert abs(pt.y() - 10.0) < 1e-6                                 # on the post, in the world
+    finally:
+        viewport.scene.groups.remove(container)
+        viewport.scene.version += 1
+        viewport.set_active_tool(None)

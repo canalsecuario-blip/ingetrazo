@@ -6255,7 +6255,7 @@ class Viewport(QOpenGLWidget):
             # reference model) — use that face's plane so a new polygon
             # drawn "inside" it lands on the face instead of the ground.
             if cursor is not None and tool is not None:
-                face, grp = self.pick_face_any(cursor[0], cursor[1])
+                face, grp = self.pick_face_placement(cursor[0], cursor[1])
                 if face is not None:
                     from core.snap import face_plane_world
                     return face_plane_world(face, getattr(grp, "xform", None))
@@ -6302,11 +6302,12 @@ class Viewport(QOpenGLWidget):
 
     def _hover_face_plane(self, cursor):
         """World plane of an unselected face under the cursor, or None."""
-        face, grp = self.pick_face_any(cursor[0], cursor[1])
+        face, grp = self.pick_face_placement(cursor[0], cursor[1])
         if face is None:
             return None
         sel = self.scene.selection
-        if (grp is not None and grp in sel) or (grp is None and face in sel):
+        owner = self._owner_of(grp) if grp is not None else None
+        if (owner is not None and owner in sel) or (grp is None and face in sel):
             return None
         from core.snap import face_plane_world
         return face_plane_world(face, getattr(grp, "xform", None))
@@ -7300,6 +7301,9 @@ class Viewport(QOpenGLWidget):
         from types import SimpleNamespace
         scene = self.scene
         entities: list = []           # (face, group_or_None)
+        places: list = []             # per entity: the PLACEMENT (proxy) whose
+                                      # matrix puts the face in the world; the
+                                      # owner above is what a click selects
         ent_area: list = []
         ent_sel: list = []
         ent_vis: list = []
@@ -7316,6 +7320,7 @@ class Viewport(QOpenGLWidget):
         def add_face(f, grp, vis, sel):
             i = len(entities)
             entities.append((f, grp))
+            places.append(grp)
             ent_area.append(area_of(f))
             ent_vis.append(vis)
             ent_sel.append(sel)
@@ -7403,6 +7408,7 @@ class Viewport(QOpenGLWidget):
             frozen = getattr(self, "_frozen_cache_version", None) is not None
             if blk is None or (blk[0] != tuple(sig) and not frozen):
                 b_entities: list = []
+                b_places: list = []
                 b_v0, b_e1, b_e2, b_te = [], [], [], []
                 b_area, b_vis, b_sel = [], [], []
                 b_spans: list = []    # (bbox, tri start, count) per chunk
@@ -7418,6 +7424,7 @@ class Viewport(QOpenGLWidget):
                     off = len(b_entities)
                     owner = self._owner_of(g)
                     b_entities.extend((f, owner) for f in chunk["faces"])
+                    b_places.extend(g for _f in chunk["faces"])
                     b_area.append(chunk["areas"])
                     b_vis.append(np.full(n, gvis, dtype=bool))
                     b_sel.append(np.full(n, gsel, dtype=bool))
@@ -7440,6 +7447,7 @@ class Viewport(QOpenGLWidget):
                         b_ggroups.append(owner)
                 blk = (tuple(sig), {
                     "entities": b_entities,
+                    "places": b_places,
                     "areas": (np.concatenate(b_area) if b_area
                               else np.empty(0)),
                     "vis": (np.concatenate(b_vis) if b_vis
@@ -7462,6 +7470,7 @@ class Viewport(QOpenGLWidget):
             if block["entities"]:
                 offset = len(entities)
                 entities.extend(block["entities"])
+                places.extend(block.get("places", [None] * len(block["entities"])))
                 areas.append(block["areas"])
                 vis_parts.append(block["vis"])
                 sel_parts.append(block["sel"])
@@ -7498,6 +7507,7 @@ class Viewport(QOpenGLWidget):
 
         idx = SimpleNamespace(
             entities=entities,
+            ent_place=places,
             ent_area=np.concatenate(areas) if entities else np.empty(0),
             ent_sel=np.concatenate(sel_parts) if entities else np.empty(0, bool),
             ent_vis=np.concatenate(vis_parts) if entities else np.empty(0, bool),
@@ -8179,7 +8189,7 @@ class Viewport(QOpenGLWidget):
         elif getattr(edge, "in_group", False) and getattr(edge, "group", None) is not None:
             found = self._center_of_group_edge(edge)
         if found is None:
-            face, group = self.pick_face_any(x, y)
+            face, group = self.pick_face_placement(x, y)
             if face is not None:
                 mesh = group.mesh if group is not None else self.scene.mesh
                 found = self._center_of_face(face, group, mesh, x, y)
@@ -8625,13 +8635,34 @@ class Viewport(QOpenGLWidget):
                     eps = max(1e-4, best_t * 1e-4)
                     cand = np.where(face_t <= best_t + eps)[0]
                     if len(cand) == 1:
-                        result = idx.entities[int(cand[0])]
+                        chosen = int(cand[0])
                     else:
-                        result = idx.entities[
-                            int(cand[np.argmin(idx.ent_area[cand])])]
+                        chosen = int(cand[np.argmin(idx.ent_area[cand])])
+                    result = idx.entities[chosen]
+                    self._face_any_index = chosen
         if key is not None:
             self._face_any_memo = (key, result)
         return result
+
+    def pick_face_placement(self, screen_x: float, screen_y: float):
+        """Like :meth:`pick_face_any`, but the group half is the PLACEMENT
+        the face was hit through — the proxy whose composed matrix puts it
+        in the world — not the top-level owner a click would select. What
+        every face-PLANE reading needs: the owner of a nested component
+        carries the container's matrix, so a rectangle on the pergola's
+        post got the post's plane in the wrong place (Marco, 2026-09-14)."""
+        face, owner = self.pick_face_any(screen_x, screen_y)
+        if face is None:
+            return None, None
+        idx = self._pick_index()
+        i = getattr(self, "_face_any_index", None)
+        places = getattr(idx, "ent_place", None)
+        if (places is not None and i is not None and i < len(places)
+                and idx.entities[i][0] is face):
+            place = places[i]
+            if place is not None:
+                return face, place
+        return face, owner
 
     def pick_group(self, screen_x: float, screen_y: float):
         """The group whose geometry the cursor hits (front-most face, or nearest
@@ -9173,7 +9204,7 @@ class Viewport(QOpenGLWidget):
         face_at_click = None
         group_at_click = None
         if not had_start and not had_plane:
-            face_at_click, group_at_click = self.pick_face_any(
+            face_at_click, group_at_click = self.pick_face_placement(
                 ev.position().x(), ev.position().y())
         ctx = self._build_ctx(ev)
         if ctx is not None:
@@ -9385,7 +9416,7 @@ class Viewport(QOpenGLWidget):
         else:
             if self._hover_edge is not None:
                 self._acquired_edge = self._hover_edge
-            face, _g = self.pick_face_any(ev.position().x(), ev.position().y())
+            face, _g = self.pick_face_placement(ev.position().x(), ev.position().y())
             if face is not None:
                 from core.snap import face_plane_world
                 self._acquired_face_normal = face_plane_world(

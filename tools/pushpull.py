@@ -880,15 +880,19 @@ class PushPullTool(Tool):
         # Project the ray∩plane hit onto the push axis. The base face (and
         # anything coplanar with it) reads ~0 distance — guarded out so the
         # push doesn't pin to its own plane.
-        face, _grp = vp.pick_face_any(sx, sy)
+        pick = getattr(vp, "pick_face_placement", None) or vp.pick_face_any
+        face, _grp = pick(sx, sy)
         if face is not None and face is not self.base_face:
             origin, direction = vp._pixel_to_ray(sx, sy)
             if origin is not None and direction is not None:
-                fn = face.normal().normalized()
+                # In world space — a placed component's face lives in its
+                # prototype's frame.
+                from core.snap import face_plane_world
+                fpt, fn = face_plane_world(face, getattr(_grp, "xform", None))
+                fn = fn.normalized()
                 denom = QVector3D.dotProduct(fn, direction)
                 if abs(denom) >= 1e-6:
-                    t = QVector3D.dotProduct(
-                        fn, face.centroid() - origin) / denom
+                    t = QVector3D.dotProduct(fn, fpt - origin) / denom
                     if t > 0:
                         hit = origin + direction * t
                         dist = QVector3D.dotProduct(
