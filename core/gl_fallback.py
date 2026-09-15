@@ -46,6 +46,17 @@ import sys
 GUARD_ENV = "INGETRAZO_GL_FALLBACK"
 
 
+def _probe_message_handler(kind, _context, message) -> None:
+    """Qt message handler while probing: warnings are dropped, a fatal is
+    printed. A qFatal ends the process right after the handler returns,
+    and swallowing it left an NVIDIA user with a bare «Aborted (exit
+    134)» and no reason at all (issue #6, v0.3.19)."""
+    from PySide6.QtCore import QtMsgType
+    if kind == QtMsgType.QtFatalMsg:
+        print(f"IngeTrazo: Qt fatal while probing OpenGL: {message}",
+              file=sys.stderr, flush=True)
+
+
 @contextlib.contextmanager
 def _quiet():
     """Swallow Qt's warnings while we deliberately try to fail.
@@ -55,7 +66,7 @@ def _quiet():
     front of the user of a build that recovers fine.
     """
     from PySide6.QtCore import qInstallMessageHandler
-    previous = qInstallMessageHandler(lambda *_args: None)
+    previous = qInstallMessageHandler(_probe_message_handler)
     try:
         yield
     finally:

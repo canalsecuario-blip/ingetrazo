@@ -52,6 +52,12 @@ de mediciones sobre la plaza de Yanque.
   de arrastre.
 
 ### Arreglado
+- **Paquetes Linux en NVIDIA (issue #6, seguía en la 0.3.19)**: el tarball
+  y el AppImage llevaban la `libstdc++`/`libgcc_s` del runner de CI y GLib;
+  cargadas antes que el driver, un NVIDIA compilado contra un runtime más
+  nuevo no podía cargar y Qt abortaba en GLX sin decir por qué. Ya se usan
+  las del sistema (como hace la lista de exclusión de AppImage), y el
+  sondeo de OpenGL imprime el mensaje fatal en vez de tragárselo.
 - **Dibujar sobre la cara de un componente anidado** (el poste de la pérgola):
   el plano se leía en las coordenadas del prototipo — normal invertida y
   punto en otro sitio — y el rectángulo salía fuera de la cara. Ahora toda
