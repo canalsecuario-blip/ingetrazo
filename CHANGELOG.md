@@ -6,6 +6,68 @@ follow [SemVer](https://semver.org).
 
 ## [Sin publicar]
 
+**La inferencia a la altura de SketchUp y el visor más rápido.** Revisión 1
+de Rafael (parte B) y una tarde de mediciones sobre la plaza de Yanque.
+
+### Añadido
+- **Inferencia como en SketchUp**: rectángulo, círculo, polígono y arcos
+  dibujan en el plano más perpendicular a la vista (de pie junto al
+  horizonte, planos al orbitar arriba) y **enseñan el plano en el cursor**
+  (anillo o cuadradito, en el color del eje con las flechas); **«Desde el
+  punto» antes del primer clic** con puntos «animados» al pausar ¼ s sobre
+  una esquina o un centro, y **dos puntos a la vez** (el cursor se clava en
+  el cruce de sus punteadas); **Tangente en el vértice** para arcos que nacen
+  en el extremo de otro; **Punto medio del arco**, **Origen del componente**,
+  guías rotuladas «Sobre la línea»; todo alcanza a grupos y componentes
+  anidados desde fuera, con el rótulo «… en componente». Empujar/Tirar infiere
+  «En arista» además de esquinas y caras.
+- **Servidor gráfico automático**: en Wayland con un solo monitor a escala
+  fraccionaria (125 %) el visor arranca por X11 (XWayland), que en esa
+  combinación pinta sin tirones (p90 149 → 30 ms medido); con dos monitores
+  o escala entera se queda en Wayland. Preferencias ▸ General ▸ Servidor
+  gráfico: Automático / Wayland / X11.
+- Bancos de pruebas `scripts/bench_nested.py` (editar anidados) y mediciones
+  de arrastre.
+
+### Arreglado
+- **Dibujar sobre la cara de un componente anidado** (el poste de la pérgola):
+  el plano se leía en las coordenadas del prototipo — normal invertida y
+  punto en otro sitio — y el rectángulo salía fuera de la cara. Ahora toda
+  lectura de plano pasa por la colocación con su matriz compuesta.
+- **Doble clic dentro de un contenedor abierto** no entraba en el siguiente
+  nivel (el índice de picking seguía respondiendo «la plaza»).
+- **Esc no salía del grupo**: el atajo Esc del menú Herramientas se disparaba
+  antes que el visor con una cascada sin ese paso. Una sola cascada.
+- **Pegar/insertar mientras se edita un contenedor** iba a la raíz; ahora
+  entra en el contenedor (y Deshacer lo quita de ahí).
+- Un error interno al pasar el ratón con aristas sueltas junto a un
+  componente mataba el movimiento (los clics «no hacían nada»).
+- Rectángulo de lado cero: se rechaza con aviso en vez de fallar y revertir.
+- Pegar coloca en el plano de la referencia (antes solo sobre caras o al suelo).
+
+### Rendimiento (plaza de Yanque, mediana)
+- Mover el ratón con una herramienta: **1004 → 493 ms por 60 movimientos**
+  (los candidatos de snap se comprueban por oclusión en orden de distancia
+  hasta el primero visible).
+- Entrar en el contenedor de la plaza **473 → 126 ms**; mover un hijo dentro
+  **460 → 100 ms** (envolvente convexa con prefiltro de 16 direcciones y
+  arrays de puntos por prototipo).
+- Confirmar una edición **32 → 22 ms**; arrastre de Mover **67 → 42 ms** por
+  cuadro; Empujar/Tirar 9 ms (una «época de colocaciones» sustituye a la
+  versión de la escena como clave de las cachés del lado de los grupos, y los
+  chunks aceptan mallas intactas en O(1) por contador de mutación).
+- Barra de estado a ~12 actualizaciones/s (cada cambio de texto volcaba la
+  ventana entera); recolector de basura con umbral 50 000 (pausas de 80 ms
+  → 0; `gc.freeze` medido y descartado).
+- **Pendiente para modelos mayores**: la parte suelta del índice de picking
+  por cuadro (~11 ms) y la caja del grupo editado (~9 ms) en los arrastres.
+
+### Cambiado
+- Iconos de las barras: **Normal (24 px)** por defecto (Grande queda como
+  opción).
+- Los puntos de componentes ya no se pintan en magenta (el rótulo sigue
+  diciendo «en componente»).
+
 ## [0.3.20] — 2026-09-14
 
 **El ortomosaico, las etiquetas con varias flechas y la cara nueva de las
