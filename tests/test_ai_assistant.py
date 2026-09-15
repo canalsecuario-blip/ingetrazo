@@ -673,3 +673,71 @@ def test_a_busy_provider_is_retried_with_backoff(monkeypatch):
     with pytest.raises(RuntimeError, match="HTTP 401"):
         ai._urlopen("https://x/v1/chat", {}, b"{}", retries=4, sleep=lambda s: None)
     assert len(calls) == 1
+
+
+def test_house_wall_and_prism_helpers_build_closed_solids():
+    """Marco (2026-09-15): «se puede optimizar para que me dibuje algo
+    mejor?». One call builds a house with walls of real thickness, a door
+    leaf, glass panes and a roof — every solid watertight."""
+    from core.orient import is_closed
+    from views.main_window import MainWindow
+    win = MainWindow()
+    try:
+        vp = win.viewport
+        scope: dict = {"__name__": "__ai__"}
+        r = ai.run_transactional(vp, (
+            "gs = house(6, 4, doors=[('S', 2.5, 0.9, 2.1)],"
+            " windows=[('S', 0.6, 1.0, 1.2, 1.0), ('E', 1.5, 1.0, 1.2, 1.0),"
+            " ('N', 1.0, 1.0, 1.2, 1.0)])\n"
+            "w = wall((10, 0), (14, 0), 3, 0.2, openings=[(1, 0, 0.9, 2.1), (2.5, 1, 1, 1)],"
+            " peak=(2, 1), name='Muro')\n"
+            "p = prism([(20, 0, 0), (22, 0, 0), (22, 1, 0), (20, 1, 0)], (0, 0, 0.3),"
+            " holes=[[(20.5, 0.3, 0), (21.5, 0.3, 0), (21.5, 0.7, 0), (20.5, 0.7, 0)]],"
+            " name='Losa')\n"
+            "print(len(gs))"), scope)
+        assert r["error"] is None, r["error"]
+        assert r["stdout"].strip() == "4"
+        names = [g.name for g in vp.scene.groups[-6:]]
+        assert names == ["Casa · Paredes", "Casa · Piso", "Casa · Carpintería",
+                         "Casa · Techo", "Muro", "Losa"]
+        walls, floor, carp, roof, muro, losa = vp.scene.groups[-6:]
+        for g in (walls, floor, roof, muro, losa):
+            assert is_closed(g.mesh), g.name
+        # The front wall has a notch for the door and a hole for the window;
+        # the gable ends rise to the ridge.
+        zs = [v.position.z() for v in walls.mesh.vertices]
+        assert max(zs) > 3.0 + 1.0
+        assert any(len(f.hole_loops) == 1 for f in walls.mesh.faces)
+        # Carpentry: one door leaf (a solid) and three panes (faces with opacity).
+        panes = [f for f in carp.mesh.faces if f.attrs.get("opacity")]
+        assert len(panes) == 3
+        assert len(carp.mesh.faces) == 3 + 6
+        # The roof overhangs the walls on every side.
+        xs = [v.position.x() for v in roof.mesh.vertices]
+        assert min(xs) < 0 and max(xs) > 6
+        # The slab kept its hole.
+        assert sum(1 for f in losa.mesh.faces if f.hole_loops) == 2
+        # Hip and flat roofs close too.
+        r = ai.run_transactional(vp, (
+            "a = house(5, 8, roof='hip', origin=(30, 0), name='H')\n"
+            "b = house(5, 5, roof='flat', origin=(40, 0), name='F')"), scope)
+        assert r["error"] is None, r["error"]
+        for g in vp.scene.groups[-6:]:
+            assert is_closed(g.mesh), g.name
+    finally:
+        win._saved_version = win.viewport.scene.version
+        win.close()
+
+
+def test_code_less_claims_and_agentic_models_are_caught():
+    from plugins.ai_assistant import _asks_to_build
+    assert _asks_to_build("dibuja una casa de 2 aguas 6x4")
+    assert _asks_to_build("Crea un poste")
+    assert not _asks_to_build("¿qué medidas tiene el modelo?")
+    # Groq's compound systems are not offered as chat models.
+    assert any(tag in "groq/compound" for tag in ai._NON_CHAT)
+    # A JPEG screenshot is announced with its real mime.
+    _b64, mime = ai._message_image({"image_png_b64": "/9j/4AAQ"})
+    assert mime == "image/jpeg"
+    _b64, mime = ai._message_image({"image_png_b64": "iVBORw0KGgo"})
+    assert mime == "image/png"

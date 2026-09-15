@@ -11,6 +11,14 @@ herramientas que faltaban.** Revisión 1 de Rafael (partes B y C) y una tarde
 de mediciones sobre la plaza de Yanque.
 
 ### Añadido
+- **Asistente IA con recetas de arquitectura**: `house(...)` levanta una
+  casa completa en una sola llamada (muros con espesor, puertas con hoja,
+  ventanas con vidrio, piso, techo a dos aguas, a cuatro aguas o plano, con
+  alero), y `wall(...)` / `prism(...)` para muros con vanos y losas; el
+  modelo lo sabe y hace los pedidos sencillos en un solo turno. Un modelo
+  que «cuenta» lo que hizo sin mandar código recibe un toque y los sistemas
+  agénticos de Groq (compound) ya no se ofrecen. Las capturas viajan en JPEG
+  de 640 px (un cuarto de los tokens de antes).
 - **Redondear (fillet)** — la herramienta que SketchUp no tiene. Clic en una
   arista (o las aristas seleccionadas), mueve el cursor para fijar el radio o
   tecléalo, clic: la arista se convierte en una tira tangente a las dos caras;

@@ -72,6 +72,20 @@ es una sección cerrada (p.ej. la pared de una taza); scallop=(profundidad, \
 lóbulos) talla festones/gallones en el borde. Crea el grupo y lo agrega.
 - PRISMA: g = extrude([(x,y), ...], z0, z1, name="Base", color=...) — \
 contorno en planta extruido; crea el grupo y lo agrega.
+- LOSA / PLANCHA: g = prism([puntos 3D de un polígono plano], (dx,dy,dz), \
+holes=[[...]], name=..., color=...) — barre el polígono (con agujeros) \
+a lo largo del vector.
+- MURO: g = wall((x,y), (x,y), height=3, thickness=0.2, openings=[(offset, \
+alféizar, ancho, alto)], peak=None) — crece a la IZQUIERDA de a→b; \
+alféizar 0 = puerta (muesca), >0 = ventana (agujero).
+- CASA COMPLETA: gs = house(width=6, depth=4, wall_height=3, thickness=0.2, \
+roof="gable"|"hip"|"flat", ridge_height=None, overhang=0.4, ridge="x", \
+doors=[("S", offset, ancho, alto)], windows=[("S", offset, alféizar, ancho, \
+alto)], origin=(0,0), name="Casa") — muros con espesor, puertas con hoja, \
+ventanas con vidrio y techo, en grupos «Casa · Paredes/Techo/Carpintería». \
+Lados S (frente, y=y0), E, N, W; offset a lo largo del muro en sentido \
+antihorario desde su primera esquina. Medidas típicas: puerta 0.9×2.1, \
+ventana 1.2×1.0 con alféizar 1.0, pendiente 30°.
 - Cara suelta: f = mesh.add_face([QVector3D(x,y,z), ...])  (lazo \
 antihorario visto desde afuera); f.attrs["color"] = (r, g, b, 1.0)  (0..1)
 - Arista: mesh.add_edge(QVector3D(...), QVector3D(...))
@@ -80,7 +94,10 @@ groups.append(g)
 - Cámara: viewport.camera.target/distance/yaw/pitch; viewport.update()
 - print(...) para reportar datos (breve: el resultado viaja cada turno).
 Cada bloque es UN paso de undo y se revierte ENTERO si lanza una excepción. \
-Construye por pasos pequeños y verifica con las capturas.
+Un pedido sencillo (una casa, una mesa, un poste) va COMPLETO en un solo \
+bloque, con puertas, ventanas y detalles razonables aunque no te los \
+pidan; los grandes, por pasos. Verifica con las capturas. SIN bloque no se \
+ejecuta nada: nunca describas como hecho lo que no has ejecutado.
 El scope PERSISTE entre bloques: variables y funciones ya definidas siguen \
 disponibles — no las redefinas. El código de tus recetas viejas se resume \
 como "[receta ya ejecutada]"; su efecto sigue en el modelo.
@@ -93,6 +110,18 @@ piezas torneadas (platos, columnas, jarrones) usa revolve(). Compara tus \
 capturas contra la foto e itera hasta que la silueta calce."""
 
 
+_BUILD_WORDS = ("dibuj", "crea", "haz", "hac", "modela", "constru", "añad",
+                "agreg", "pon", "gener", "diseñ", "levant", "arma", "traza",
+                "draw", "build", "make", "create", "add")
+
+
+def _asks_to_build(prompt: str) -> bool:
+    """Whether the user's message asks for something to be modelled (so a
+    reply without code is a model that did not do its job)."""
+    low = (prompt or "").lower()
+    return any(w in low for w in _BUILD_WORDS)
+
+
 class AsistenteDialog(QDialog):
     _reply = Signal(object)     # object, not dict: queued dicts get COPIED
 
@@ -103,6 +132,8 @@ class AsistenteDialog(QDialog):
         self._convo: list[dict] = []
         self._busy = False
         self._round = 0
+        self._nudged = False
+        self._last_prompt = ""
         self._foto: tuple[str, str, str] | None = None  # (b64, mime, name)
         self._reply.connect(self._on_reply, Qt.QueuedConnection)
 
@@ -416,6 +447,8 @@ class AsistenteDialog(QDialog):
             self._clear_foto()
         self._convo.append(message)
         self._round = 0
+        self._nudged = False
+        self._last_prompt = prompt
         self._next_turn()
 
     def _next_turn(self) -> None:
@@ -521,6 +554,20 @@ class AsistenteDialog(QDialog):
             self._finish()
             return
         if code is None:
+            if self._round == 0 and not self._nudged and _asks_to_build(
+                    self._last_prompt) and "?" not in text[-80:]:
+                # A model that narrates a build it never sent (Groq's
+                # compound answered «se añadió una cumbrera…» with no
+                # block, Marco 2026-09-15): one push, then let it be.
+                self._nudged = True
+                self._append(tr("No code came back — asking for the recipe."),
+                             "muted")
+                self._convo.append({"role": "user", "text":
+                    "No incluiste ningún bloque ```python: NADA se ejecutó "
+                    "y el modelo no cambió. Escribe ahora la receta completa "
+                    "en UN bloque ```python (sin describirla antes)."})
+                self._next_turn()
+                return
             self._finish()
             return
         self._round += 1
@@ -556,10 +603,13 @@ class AsistenteDialog(QDialog):
 
     def _screenshot_b64(self) -> str | None:
         try:
-            image = self._viewport.render_image(768, 512)
+            # 640 px JPEG: the model reads a screenshot fine at that size
+            # and it costs a quarter of the 768 px PNG it used to be —
+            # the screenshot is the fattest thing in every turn.
+            image = self._viewport.render_image(640, 427)
             buf = QBuffer()
             buf.open(QIODevice.WriteOnly)
-            image.save(buf, "PNG")
+            image.save(buf, "JPEG", 72)
             return base64.b64encode(bytes(buf.data())).decode()
         except Exception:  # noqa: BLE001 — vision is best-effort
             return None
