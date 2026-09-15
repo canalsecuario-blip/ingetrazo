@@ -7,6 +7,8 @@ SketchUp behaviour, two modes decided by what the first click lands on:
 - **From an edge's body** → dragging pulls out an infinite **guide line**
   parallel to that edge, at the dragged (or VCB-typed) offset. This is the
   alignment workflow: pull a guide 2.5 m off a wall, then draw against it.
+  A **guide line's body** works the same way (SketchUp; issue #22): pull a
+  second guide 2 m off the first, and so on across a whole grid.
 - **From a point** (endpoint, corner, free space) → the second click just
   **measures**: the distance shows live at the cursor and in the status bar,
   and stays in the measurements box. No geometry is created.
@@ -53,9 +55,18 @@ class TapeMeasureTool(Tool):
             # Clicking an edge's BODY starts guide mode; an endpoint measures.
             kind = ctx.snap.kind if ctx.snap is not None else "none"
             edge = viewport.pick_edge(ctx.screen.x(), ctx.screen.y())
+            if edge is None:
+                # A guide LINE is a source too (a ``Guide`` exposes the same
+                # ``.a``/``.b`` span as an edge): guides pulled from guides
+                # are how a grid is laid out (issue #22, @pacaeiro).
+                pick = getattr(viewport, "pick_guide", None)
+                g = pick(ctx.screen.x(), ctx.screen.y()) if pick else None
+                if g is not None and getattr(g, "is_line", False):
+                    edge = g
             self._edge = edge if (edge is not None
                                   and kind not in ("endpoint", "midpoint",
-                                                   "close", "origin")) else None
+                                                   "close", "origin",
+                                                   "intersection")) else None
             return
         if self._edge is not None:
             offset = self._guide_offset(ctx.world)
