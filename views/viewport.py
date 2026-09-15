@@ -8003,19 +8003,35 @@ class Viewport(QOpenGLWidget):
         scene version, offered when near the cursor."""
         cache = getattr(self, "_arc_mid_cache", None)
         if cache is None or cache[0] != self.scene.version:
-            mids = list(self._mesh_arc_midpoints(self.scene.mesh))
-            # …and the arcs inside every placed group / component (shared
-            # prototypes are walked once), through each placement's matrix.
-            local: dict = {}
+            # Per MESH, keyed by its mutation serial: a scene version bump
+            # (every frame of a drag) used to walk every prototype's curves
+            # again — 31 ms a frame while moving a face (2026-09-14). Now a
+            # mesh's midpoints are recomputed only when that mesh changed;
+            # the version pass only maps them through the placements.
+            by_mesh = getattr(self, "_arc_mid_by_mesh", None)
+            if by_mesh is None:
+                by_mesh = self._arc_mid_by_mesh = {}
+
+            def local_mids(mesh):
+                serial = getattr(mesh, "_mut_serial", None)
+                hit = by_mesh.get(id(mesh))
+                if hit is None or hit[0] != serial:
+                    hit = by_mesh[id(mesh)] = (serial, self._mesh_arc_midpoints(mesh))
+                return hit[1]
+            mids = list(local_mids(self.scene.mesh))
+            # …and the arcs inside every placed group / component, through
+            # each placement's matrix.
             for g in self._placements():
                 mesh = getattr(g, "mesh", None)
                 if mesh is None or getattr(g, "billboard", False):
                     continue
-                if id(mesh) not in local:
-                    local[id(mesh)] = self._mesh_arc_midpoints(mesh)
+                lm = local_mids(mesh)
+                if not lm:
+                    continue
                 xf = getattr(g, "xform", None)
-                mids += [xf.map(m) if xf is not None else QVector3D(m)
-                         for m in local[id(mesh)]]
+                mids += [xf.map(m) if xf is not None else QVector3D(m) for m in lm]
+            if len(by_mesh) > 2048:
+                by_mesh.clear()
             cache = (self.scene.version, mids)
             self._arc_mid_cache = cache
         out: list = []
