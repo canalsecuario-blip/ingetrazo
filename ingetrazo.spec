@@ -122,6 +122,16 @@ hiddenimports += [
     'openskp.errors',
     'openskp.scene',
 ]
+# The rest of openskp (export/*, _face_groups, instanced_scene, codegen…)
+# plus its PACKAGE DATA: create.py loads ``_scaffold/blank_v17.skp`` via
+# importlib.resources and PyInstaller never bundles non-Python files on its
+# own. Without this every PyInstaller build (Windows exe, AppImage, tar)
+# died on Export ▸ SketchUp with "[Errno 2] No such file or directory:
+# …\\_internal\\openskp\\_scaffold\\blank_v17.skp" (reported from Windows,
+# 0.4.1). The Flatpak was fine because it ships the whole site-packages.
+from PyInstaller.utils.hooks import collect_data_files
+hiddenimports += collect_submodules('openskp')
+datas += collect_data_files('openskp')
 
 excludes = [
     'tkinter',

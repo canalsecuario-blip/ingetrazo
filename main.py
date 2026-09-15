@@ -162,6 +162,22 @@ def _self_check() -> int:
         if not ok:
             problems.append(label)
 
+    # The .skp writer builds every file on top of openskp's bundled blank
+    # (``_scaffold/blank_v17.skp``, package data PyInstaller doesn't collect
+    # by itself): a bundle without it starts fine and dies on Export ▸
+    # SketchUp with "[Errno 2]" — 0.4.1 on Windows shipped exactly that.
+    try:
+        from importlib import resources
+
+        scaffold = resources.files("openskp") / "_scaffold" / "blank_v17.skp"
+        ok = scaffold.is_file()
+        where = str(scaffold)
+    except Exception as exc:  # openskp itself missing or unimportable
+        ok, where = False, f"({exc})"
+    print(f"  skp scaffold   : {'found' if ok else 'MISSING'}  {where}")
+    if not ok:
+        problems.append("skp scaffold")
+
     # The .skp fallback converter is optional (user-installed, runs under
     # Wine); report presence without failing on absence.
     wine = shutil.which("wine")
