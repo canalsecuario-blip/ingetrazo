@@ -250,12 +250,14 @@ class PaintTool(Tool):
         opacity = SetFaceOpacityCommand(faces, PaintTool.current_opacity)
         if PaintTool.current_texture is not None:
             # A curved surface gets the image wrapped around it from the
-            # clicked face (SketchUp); anything else, face by face.
-            cmds = None
-            if face not in sel_faces:
-                cmds = _surface_commands(vp.scene.mesh, faces, face,
-                                         PaintTool.current_texture,
-                                         PaintTool.current_texture_plane)
+            # clicked face (SketchUp) — the surface under the click, or the
+            # part of the selection joined to it by soft edges (clicking a
+            # surface with Select selects it whole, and Marco painted it
+            # that way: every facet came out planar again, 2026-09-15);
+            # anything else, face by face.
+            cmds = _surface_commands(vp.scene.mesh, faces, face,
+                                     PaintTool.current_texture,
+                                     PaintTool.current_texture_plane)
             if cmds is None:
                 cmds = _texture_commands(faces, PaintTool.current_texture,
                                          PaintTool.current_texture_plane)

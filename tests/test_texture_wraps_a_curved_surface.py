@@ -101,3 +101,29 @@ def test_the_paint_tool_wraps_the_surface_from_the_clicked_facet():
         c.do(_Scene())
     gu, _cu, gv, _cv = face_uv_axes(faces[0].attrs["texture"], faces[0].normal())
     assert gu.length() == pytest.approx(1.0, abs=1e-6)       # 1 m tiles now
+
+
+def test_a_selected_surface_wraps_too_and_the_rest_of_the_selection_does_not():
+    """Select the surface (a click selects it whole), paint it: the soft-joined
+    facets wrap from the clicked one; a flat face in the same selection,
+    joined by nothing soft, takes the ordinary planar projection."""
+    m, faces = _quarter_cylinder()
+    flat = m.add_face([QVector3D(5, 5, 0), QVector3D(6, 5, 0),
+                       QVector3D(6, 6, 0), QVector3D(5, 6, 0)])
+
+    class _Scene:
+        mesh = m
+        version = 0
+        materials = {}
+        groups = []
+    cmds = _surface_commands(m, faces + [flat], faces[2], TEX, None)
+    assert cmds is not None
+    for c in cmds:
+        c.do(_Scene())
+    assert all(f.attrs["texture"].get("uvw") for f in faces)
+    assert "uvw" not in flat.attrs["texture"]
+    for a, b in zip(faces, faces[1:]):
+        shared = [p for p in a.vertices if any((p - q).length() < 1e-9 for q in b.vertices)]
+        for p in shared:
+            assert _uv(a.attrs["texture"], a, p) == pytest.approx(
+                _uv(b.attrs["texture"], b, p), abs=1e-6)
