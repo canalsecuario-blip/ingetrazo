@@ -360,3 +360,37 @@ def test_opening_a_container_lets_the_pick_resolve_to_its_children(viewport):
     finally:
         scene.groups.remove(container)
         scene.version += 1
+
+
+def test_escape_steps_out_of_the_open_group_from_the_window_action_too(viewport):
+    """Marco (2026-09-14): «he hecho Esc varias veces y no salgo». The
+    window's «Cancel current tool» action owns the Esc shortcut and fires
+    before the viewport's key event; its own cascade never stepped out of
+    a group. One cascade now: Viewport.escape()."""
+    from core.group import Group
+    from core.mesh import Mesh
+    from tools.select import SelectTool
+    mesh = Mesh()
+    mesh.add_face([QVector3D(0, 0, 0), QVector3D(2, 0, 0), QVector3D(2, 2, 0), QVector3D(0, 2, 0)])
+    child = Group(mesh, "letras")
+    container = Group(Mesh(), "arco")
+    container.children = [child]
+    scene = viewport.scene
+    scene.groups.append(container)
+    scene.version += 1
+    viewport.set_active_tool(SelectTool())
+    try:
+        scene.begin_group_edit(container)
+        scene.begin_group_edit(child)
+        assert scene.edit_group is child
+        viewport.escape()                                   # what the window action calls
+        assert scene.edit_group is container                # one level out…
+        viewport.escape()
+        assert scene.edit_group is None                     # …and out
+    finally:
+        while scene.edit_group is not None:
+            scene.end_one_group_edit()
+        if container in scene.groups:
+            scene.groups.remove(container)
+        scene.version += 1
+        viewport.set_active_tool(None)

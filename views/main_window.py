@@ -1948,24 +1948,10 @@ class MainWindow(QMainWindow):
         """Esc, escalating like the viewport: release a sticky constraint
         (axis lock / reference) first, then cancel an in-progress action;
         with nothing in progress, clear the selection."""
-        vp = self.viewport
-        if vp._value_buffer:
-            vp._set_value_buffer("")
-            return
-        if vp.release_constraints():
-            return
-        if isinstance(vp.active_tool, PasteTool):
-            self._activate_tool("select")
-            return
-        if vp.active_tool is not None and vp._tool_busy(vp.active_tool):
-            vp.active_tool.on_cancel(vp)
-            return
-        if vp.scene.selection:
-            vp.scene.clear_selection()
-            vp.update()
-            return
-        if vp.active_tool is not None:
-            vp.active_tool.on_cancel(vp)
+        # One cascade, the viewport's — this action's shortcut fires before
+        # the viewport ever sees the key, and its own copy lacked the
+        # «step out of the group» stop.
+        self.viewport.escape()
 
     # ---- View navigation ----------------------------------------------------
     def _on_zoom_extents(self) -> None:

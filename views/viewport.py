@@ -9663,24 +9663,8 @@ class Viewport(QOpenGLWidget):
         #    then cancel the tool's in-progress action (an unfinished chain, a
         #    drag), and finally — nothing in progress — clear the selection.
         if ev.key() == Qt.Key_Escape:
-            if self._value_buffer:
-                self._set_value_buffer("")
-                return
-            if self.release_constraints():
-                return
-            if self.active_tool is not None and self._tool_busy(self.active_tool):
-                self.active_tool.on_cancel(self)
-                return
-            if self.scene.selection:
-                self.scene.clear_selection()
-                self.update()
-                return
-            if self.scene.edit_group is not None:
-                self.end_one_group_edit()       # step out ONE level
-                return
-            if self.active_tool is not None:
-                self.active_tool.on_cancel(self)
-                return
+            self.escape()
+            return
 
         # 3. Projection toggle.
         if ev.key() == Qt.Key_P:
@@ -9727,6 +9711,41 @@ class Viewport(QOpenGLWidget):
         }[self.linear_inference_mode]
         self.measurementChanged.emit(label)
         self._refresh_snap()
+
+    def escape(self) -> None:
+        """The Esc cascade (standard CAD), ONE step per press: a typed value
+        buffer, then a sticky constraint (axis lock / reference), then the
+        tool's in-progress action, then the selection, then — nothing in
+        progress — step out ONE level of the open group (SketchUp), and
+        finally the tool's own cancel. The window's «Cancel current tool»
+        action (shortcut Esc, which fires BEFORE this widget's key event)
+        calls this too: it used to carry its own copy of the cascade,
+        without the group step, so Esc never left a group (Marco,
+        2026-09-14: «he hecho Esc varias veces y no salgo»)."""
+        if self._value_buffer:
+            self._set_value_buffer("")
+            return
+        if self.release_constraints():
+            return
+        tool = self.active_tool
+        if tool is not None and type(tool).__name__ == "PasteTool":
+            win = self.window()
+            activate = getattr(win, "_activate_tool", None)
+            if activate is not None:
+                activate("select")
+                return
+        if tool is not None and self._tool_busy(tool):
+            tool.on_cancel(self)
+            return
+        if self.scene.selection:
+            self.scene.clear_selection()
+            self.update()
+            return
+        if self.scene.edit_group is not None:
+            self.end_one_group_edit()       # step out ONE level
+            return
+        if tool is not None:
+            tool.on_cancel(self)
 
     def release_constraints(self) -> bool:
         """Drop the sticky drawing constraints — the arrow-key axis lock and
