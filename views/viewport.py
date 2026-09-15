@@ -7292,7 +7292,12 @@ class Viewport(QOpenGLWidget):
         is a couple of milliseconds."""
         oculto = getattr(self, "_rest_is_hidden", None)
         oculto = bool(oculto()) if callable(oculto) else False
-        key = (_cache_ver(self), id(self.scene.mesh), oculto)
+        # The open context decides what a hit RESOLVES to (inside the
+        # plaza its children are the objects, not the plaza): a stale index
+        # kept answering "the plaza" after a double-click opened it, so the
+        # arch inside never opened (Marco, 2026-09-14).
+        key = (_cache_ver(self), id(self.scene.mesh), oculto,
+               id(self.scene.edit_group))
         cached = getattr(self, "_pick_index_cache", None)
         if cached is not None and cached[0] == key:
             return cached[1]
@@ -7401,8 +7406,13 @@ class Viewport(QOpenGLWidget):
                 # index ENTIRELY — so inference found none of its edges and
                 # the edge fallback below, written for "a lines-only group",
                 # read an empty array and never found it either (GitHub #8).
+                # The OWNER a hit resolves to depends on the open context
+                # (inside the plaza its children are the objects): it keys
+                # the block too, or a double-click into the plaza kept
+                # answering "the plaza" for the arch inside (Marco,
+                # 2026-09-14).
                 sig.append((id(g), chunk["uid"], chunk["rev"], gvis, gsel,
-                            gsnap))
+                            gsnap, id(self._owner_of(g))))
                 chunks.append((g, chunk, gvis, gsel, gsnap))
             blk = getattr(self, "_pick_block", None)
             frozen = getattr(self, "_frozen_cache_version", None) is not None
@@ -7791,7 +7801,7 @@ class Viewport(QOpenGLWidget):
         # (hidden surroundings leave it), so it keys the projection too.
         key = (self.scene.version, id(self.scene.mesh), M.tobytes(),
                self.width(), self.height(),
-               getattr(self, "_edit_rest_mode", None))
+               getattr(self, "_edit_rest_mode", None), id(idx))
         cached = getattr(self, "_gedge_px_cache", None)
         if cached is not None and cached[0] == key:
             return cached[1]

@@ -323,3 +323,40 @@ def test_a_nested_components_face_plane_comes_through_its_placement(viewport):
         viewport.scene.groups.remove(container)
         viewport.scene.version += 1
         viewport.set_active_tool(None)
+
+
+def test_opening_a_container_lets_the_pick_resolve_to_its_children(viewport):
+    """Marco (2026-09-14): double-clicking into the plaza's container, then
+    on the arch inside, kept opening nothing — the pick still answered
+    "the plaza" (a stale index: the owner a hit resolves to depends on the
+    open context)."""
+    from PySide6.QtGui import QMatrix4x4
+    from core.group import Group
+    from core.mesh import Mesh
+    mesh = Mesh()
+    mesh.add_face([QVector3D(0, 0, 0), QVector3D(2, 0, 0), QVector3D(2, 2, 0), QVector3D(0, 2, 0)])
+    child = Group(mesh, "arco")
+    m = QMatrix4x4()
+    m.translate(30, 30, 0)
+    child.xform = m
+    container = Group(Mesh(), "plaza")
+    container.xform = QMatrix4x4()
+    container.children = [child]
+    scene = viewport.scene
+    scene.groups.append(container)
+    scene.version += 1
+    try:
+        viewport.camera.set_view("top")
+        viewport.camera.target = QVector3D(31, 31, 0)
+        viewport.camera.distance = 10
+        px = viewport._world_to_pixel(QVector3D(31, 31, 0))
+        assert viewport.pick_group(*px) is container
+        scene.begin_group_edit(container)                 # double-click: open it
+        try:
+            g = viewport.pick_group(*px)
+            assert g is not None and g.name == "arco", getattr(g, "name", g)
+        finally:
+            scene.end_group_edit()
+    finally:
+        scene.groups.remove(container)
+        scene.version += 1
