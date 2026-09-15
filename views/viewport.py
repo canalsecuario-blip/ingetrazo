@@ -9170,9 +9170,10 @@ class Viewport(QOpenGLWidget):
         had_start = getattr(self.active_tool, "start_point", None) is not None
         had_plane = getattr(self.active_tool, "work_plane", None) is not None
         face_at_click = None
+        group_at_click = None
         if not had_start and not had_plane:
-            face_at_click, _g = self.pick_face_any(ev.position().x(),
-                                                   ev.position().y())
+            face_at_click, group_at_click = self.pick_face_any(
+                ev.position().x(), ev.position().y())
         ctx = self._build_ctx(ev)
         if ctx is not None:
             if double:
@@ -9190,10 +9191,14 @@ class Viewport(QOpenGLWidget):
                 and hasattr(self.active_tool, "work_plane")
                 and self.active_tool.work_plane is None   # a plane lock wins
             ):
-                self.active_tool.work_plane = (
-                    face_at_click.centroid(),
-                    face_at_click.normal(),
-                )
+                # In WORLD space: a component's face keeps its own
+                # coordinates, and the plane it captured for a rectangle
+                # on the pergola's post was the untransformed one — the
+                # second corner landed on a plane nowhere near the post
+                # («la inferencia se atasca», Marco, 2026-09-14).
+                from core.snap import face_plane_world
+                self.active_tool.work_plane = face_plane_world(
+                    face_at_click, getattr(group_at_click, "xform", None))
             # Any pending typed value is invalidated once the user
             # commits a point with the mouse.
             self._set_value_buffer("")

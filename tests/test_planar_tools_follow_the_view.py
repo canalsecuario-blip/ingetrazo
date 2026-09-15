@@ -218,3 +218,49 @@ def test_a_zero_sided_rectangle_is_refused_instead_of_raising(viewport):
     assert len(viewport.scene.mesh.edges) == before
     assert said and "two sides" in said[-1]
     viewport.flash_status = lambda *a, **k: None
+
+
+def test_a_first_click_on_a_components_face_captures_its_world_plane(viewport):
+    """Marco (2026-09-14): a rectangle on the pergola post's face «se
+    atasca». The click captured the face's plane in the component's OWN
+    coordinates; the second corner then fell on a plane nowhere near the
+    post. The captured plane must be the world one."""
+    from PySide6.QtCore import QPointF, Qt
+    from PySide6.QtGui import QMatrix4x4
+    from core.group import Group
+    from core.mesh import Mesh
+    from tools.rectangle import RectangleTool
+    viewport.camera.set_view("iso")
+    mesh = Mesh()
+    mesh.add_face([QVector3D(0, 0, 0), QVector3D(0, 2, 0), QVector3D(0, 2, 3), QVector3D(0, 0, 3)])  # a post side, x = 0 locally
+    g = Group(mesh, "poste")
+    xf = QMatrix4x4()
+    xf.translate(8, 5, 0)
+    g.xform = xf
+    viewport.scene.groups.append(g)
+    viewport.scene.version += 1
+    viewport.camera.target = QVector3D(8, 6, 1.5)
+    viewport.camera.distance = 10
+    viewport.camera.yaw = math.radians(180)          # looking along -X at the face
+    viewport.camera.pitch = math.radians(10)
+    tool = RectangleTool()
+    viewport.set_active_tool(tool)
+    px = viewport._world_to_pixel(QVector3D(8, 6, 1.5))
+
+    class _Ev:
+        def position(self):
+            return QPointF(*px)
+
+        def modifiers(self):
+            return Qt.NoModifier
+
+        def button(self):
+            return Qt.LeftButton
+    viewport._dispatch_tool_click(_Ev())
+    assert tool.start_point is not None
+    assert tool.work_plane is not None
+    pt, n = tool.work_plane
+    assert abs(abs(n.x()) - 1.0) < 1e-6                         # the post's plane
+    assert abs(pt.x() - 8.0) < 1e-6                             # …in WORLD space (x = 8, not 0)
+    viewport.scene.groups.remove(g)
+    viewport.scene.version += 1
