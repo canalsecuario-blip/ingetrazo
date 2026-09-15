@@ -67,6 +67,15 @@ def test_crossing_beats_on_edge_just_beside_it():
     assert (r.point - V(2, 1, 0)).length() < 1e-3
 
 
+def test_crossing_beats_first_point_inference():
+    # An acquired point may also offer a first-click axis inference at the
+    # crossing. The actual crossing remains the more specific snap.
+    scene = _scene(_guide(V(0, 1, 0), (1, 0, 0)), _guide(V(2, 0, 0), (0, 1, 0)))
+    r = _snap(scene, V(2.0, 1.0, 0.0), acquired_point=V(0, 1, 0))
+    assert r.kind == "intersection"
+    assert (r.point - V(2, 1, 0)).length() < 1e-3
+
+
 def test_guide_crossing_a_model_edge_snaps():
     scene = Scene()
     scene.mesh.add_edge(V(0, 0, 0), V(3, 3, 0))          # a 45° model edge

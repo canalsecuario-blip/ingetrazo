@@ -1123,7 +1123,16 @@ def compute_snap(
         if fp is not None:
             return fp
 
-    # 5c. 'From point' for the FIRST click — SketchUp's encouraged point: with
+    # 5c. Edge / guide intersection (SketchUp's green X): where two edges or
+    #     guide lines actually cross. Only the directional locks above build an
+    #     intersection, so crossing guides never offered their meeting point —
+    #     the cursor slid along the nearest guide. Runs before midpoint/on-edge
+    #     so the exact crossing wins, but below every endpoint and lock.
+    inter = _intersection_snap(cx, cy, scene, world_to_pixel, et, is_occluded)
+    if inter is not None:
+        return inter
+
+    # 5d. 'From point' for the FIRST click — SketchUp's encouraged point: with
     #     no segment in progress, the cursor lines up along an axis with the
     #     corner it hovered last, on a dotted axis-coloured line from that
     #     corner. This is how a window's first corner lands level with the
@@ -1132,7 +1141,7 @@ def compute_snap(
     #     above only knew segments already under way.
     if allow_axis and start_point is None and acquired_points:
         # Two encouraged points at once (SketchUp's two-point method): a
-        # dotted line from each, the cursor pinned where they cross —
+        # dotted line from each point, the cursor pinned where they cross —
         # level with the door's top AND in line with the other jamb.
         tp = _two_point_snap(
             acquired_points, candidate_world, cx, cy, world_to_pixel,
@@ -1147,15 +1156,6 @@ def compute_snap(
         )
         if fp is not None:
             return fp
-
-    # 5d. Edge / guide intersection (SketchUp's green X): where two edges or
-    #     guide lines actually cross. Only the directional locks above build an
-    #     intersection, so crossing guides never offered their meeting point —
-    #     the cursor slid along the nearest guide. Runs before midpoint/on-edge
-    #     so the exact crossing wins, but below every endpoint and lock.
-    inter = _intersection_snap(cx, cy, scene, world_to_pixel, et, is_occluded)
-    if inter is not None:
-        return inter
 
     # 6. Midpoint + origin.
     best = None
