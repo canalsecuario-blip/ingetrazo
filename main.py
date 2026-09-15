@@ -218,8 +218,17 @@ def main() -> int:
         gpu_pref = ensure_high_performance_gpu()
     except Exception:
         gpu_pref = "failed"
+    # Wayland with a fractional display scale composes a GL window through a
+    # slow path (frames p90 149 ms vs 30 ms under XWayland on the same
+    # model): start under xcb there unless the user chose otherwise.
+    from core.platform_choice import apply_platform_preference
+    try:
+        platform_forced = apply_platform_preference()
+    except Exception:
+        platform_forced = None
     _configure_surface_format()
     app = QApplication(sys.argv)
+    app.setProperty("platform_forced", platform_forced)
     app.setApplicationName("IngeTrazo")
     app.setOrganizationName("IngeTrazo")
     app.setProperty("gpu_pref", gpu_pref)

@@ -131,6 +131,20 @@ class PreferencesDialog(QDialog):
             "Size of the icons on every toolbar — the model's and the "
             "sheet composer's. Applies at once."))
         form.addRow(tr("Toolbar icons:"), self._icon_px)
+
+        from core.platform_choice import AUTO, WAYLAND, XCB
+        self._platform = QComboBox()
+        for key, label in ((AUTO, tr("Automatic (X11 when the display scale is fractional)")),
+                           (WAYLAND, tr("Wayland")), (XCB, tr("X11 (XWayland)"))):
+            self._platform.addItem(label, key)
+        self._platform.setCurrentIndex(max(0, self._platform.findData(
+            str(st.value("general/platform", AUTO) or AUTO))))
+        self._platform.setToolTip(tr(
+            "Which display server Qt draws through. Under Wayland with a "
+            "125 % / 150 % display scale the viewport stutters; X11 "
+            "(XWayland) draws smoothly and stays crisp. Takes effect at the "
+            "next start."))
+        form.addRow(tr("Graphics server:"), self._platform)
         tabs.addTab(general, tr("General"))
 
         # ---- Import ---------------------------------------------------------
@@ -228,6 +242,7 @@ class PreferencesDialog(QDialog):
                     "1" if self._autosave.isChecked() else "0")
         st.setValue("general/autosave_min", self._autosave_min.value())
         st.setValue("general/backup", "1" if self._backup.isChecked() else "0")
+        st.setValue("general/platform", self._platform.currentData())
         setup = getattr(self._window, "_setup_autosave", None)
         if callable(setup):
             setup()                     # re-arm the timer with the new pace
