@@ -6819,6 +6819,20 @@ class Viewport(QOpenGLWidget):
         if entry is not None:
             if entry.get("vkey") == vkey:
                 return entry
+            # Untouched since it was built or last accepted: no mutation
+            # primitive bumped the mesh's serial and the counts agree — an
+            # O(1) yes. A scene-version bump (any edit anywhere) used to send
+            # EVERY placement's chunk through the probe and the samples on
+            # the next paint: ~3300 validations, 15 ms per edit on the plaza
+            # (2026-09-14).
+            if (entry.get("serial") is not None
+                    and entry["serial"] == getattr(mesh, "_mut_serial", None)
+                    and not getattr(mesh, "_attrs_dirty", False)
+                    and len(mesh.vertices) == entry["nv"]
+                    and len(mesh.edges) == entry["ne"]
+                    and len(mesh.faces) == entry["nf"]):
+                entry["vkey"] = vkey
+                return entry
             # The probe judges GEOMETRY only, and _shift_chunk reuses the
             # cached texture buckets as they are — so a repaint must not be
             # allowed to ride along inside a translation.
@@ -6828,6 +6842,7 @@ class Viewport(QOpenGLWidget):
                     self._shift_chunk(entry, d, mesh)
                     entry["vkey"] = vkey
                     entry["rev"] += 1
+                    entry["serial"] = getattr(mesh, "_mut_serial", None)
                     return entry
             # Clean fast path: no mutation primitive touched this mesh since
             # the last validation (O(1) dirty flag) and the samples agree —
@@ -6839,6 +6854,7 @@ class Viewport(QOpenGLWidget):
                     and len(mesh.faces) == entry["nf"]
                     and self._samples_match(entry, mesh)):
                 entry["vkey"] = vkey
+                entry["serial"] = getattr(mesh, "_mut_serial", None)
                 return entry
         fp = self._group_fp(group)
         if entry is not None:
@@ -6854,6 +6870,7 @@ class Viewport(QOpenGLWidget):
                 entry["fp"] = fp
                 entry["fp_approx"] = False
                 entry["vkey"] = vkey
+                entry["serial"] = getattr(mesh, "_mut_serial", None)
                 mesh._chunk_dirty = False
                 mesh._attrs_dirty = False
                 return entry
@@ -6867,6 +6884,7 @@ class Viewport(QOpenGLWidget):
         disk = _loader(group, fp, vkey) if callable(_loader) else None
         if disk is not None:
             cache[id(group)] = disk
+            disk["serial"] = getattr(mesh, "_mut_serial", None)
             mesh._chunk_dirty = False
             mesh._attrs_dirty = False
             if _PERF:
@@ -7052,6 +7070,7 @@ class Viewport(QOpenGLWidget):
         samples = [(i, (verts[i].position.x(), verts[i].position.y(),
                         verts[i].position.z())) for i in idxs]
         entry = {"fp": fp, "vkey": vkey, "rev": 0, "uid": next(_chunk_uid),
+                 "serial": getattr(mesh, "_mut_serial", None),
                  "nv": nv, "ne": len(mesh.edges), "nf": len(mesh.faces),
                  "samples": samples, "coordsum": coordsum, "bbox": bbox,
                  # Lazily filled by ``_group_obb``: the box in the group's own
