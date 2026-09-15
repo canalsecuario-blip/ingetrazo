@@ -10,6 +10,12 @@ UX (SketchUp-like):
   geometry deforms live as you drag (faces tilt, walls stretch).
 - Second click drops at the current offset. Typing a length + Enter moves
   exactly that far along the current direction; ``X;Y;Z`` + Enter is a 3D delta.
+- Tapping Ctrl toggles COPY mode (SketchUp, issue #20): the original stays
+  put and a translated copy is created (a component instance copies as a
+  sibling instance); the copy's wireframe previews at the cursor. Right after
+  a copy, typing ``3x`` (or ``3*``, ``*3``) makes an external array — three
+  copies at multiples of the distance — and ``/3`` (or ``3/``) an internal
+  one — three copies dividing the distance. Retyping re-lays the array.
 - Esc (or switching tools) cancels and snaps the geometry back.
 
 Move shifts *positions*: every point coincident with a grabbed vertex moves with
@@ -22,11 +28,14 @@ history stays clean while you still see the deformation as it happens.
 """
 from __future__ import annotations
 
-from PySide6.QtGui import QVector3D
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QMatrix4x4, QVector3D
 
-from core.group import Group
-from core.mesh import Edge, Face
-from core.history import (CompoundCommand, MoveGroupCommand,
+from core.group import Group, copy_group, transformed_attrs
+from core.i18n import tr
+from core.mesh import Edge, Face, Mesh
+from core.history import (AddEdgeCommand, AddFaceCommand, CompoundCommand,
+                          InsertGroupCommand, MoveGroupCommand,
                           MoveTextLabelsCommand, MoveVerticesCommand)
 from core.textlabel import TextLabel
 from core.topology import _key
@@ -120,6 +129,7 @@ class MoveTool(Tool):
     # onto the axis line. Keeps a move rigid and axis-aligned (a 3 m ridge stays
     # 3 m and level) without holding Shift; arrow-key locks still override it.
     magnetic_axis_deg = 15.0
+    accepts_array = True  # VCB "3x" / "/3" after a copy (SketchUp arrays)
 
     def __init__(self) -> None:
         # ``start_point`` drives the viewport's snap / axis-lock machinery, same
@@ -136,14 +146,45 @@ class MoveTool(Tool):
         self._images: list = []                # reference images being moved
         self._labels: list[TextLabel] = []     # leader texts whose label moves
         self._preview_delta = QVector3D(0.0, 0.0, 0.0)  # currently applied live
+        self._copy = False                     # Ctrl: move a COPY
+        self._sel_faces: list = []             # loose geometry copy mode duplicates
+        self._sel_edges: list = []
+        self._base_segments: list = []         # wireframe for the copy preview
+        self._last: dict | None = None         # the copy just made, for "3x" / "/3"
 
     # ---- Lifecycle ----------------------------------------------------------
     def on_activate(self, viewport) -> None:
         self._reset()
+        self._copy = False
+        self._last = None
 
     def on_deactivate(self, viewport) -> None:
+        self._end_freeze(viewport)
         self._revert_preview(viewport)
         self._reset()
+        self._copy = False
+        self._last = None
+
+    # ---- Keyboard -----------------------------------------------------------
+    def on_key(self, viewport, key: int, modifiers) -> bool:
+        # Ctrl toggles copy mode (SketchUp: move a copy, the original stays).
+        if key == Qt.Key_Control:
+            self._copy = not self._copy
+            if self._copy:
+                # The original stops following the cursor; the copy's
+                # wireframe takes over in rubber_band_lines.
+                self._revert_preview(viewport)
+                park = getattr(viewport, "set_groups_preview_offset", None)
+                if getattr(self, "_vp_preview", False) and park is not None:
+                    park(QVector3D(0.0, 0.0, 0.0))
+                viewport.flash_status(tr("Move a copy: on"))
+            else:
+                if self.grab is not None and self.hover_point is not None:
+                    self._apply_preview(viewport, self.hover_point - self.grab)
+                viewport.flash_status(tr("Move a copy: off"))
+            viewport.update()
+            return True
+        return False
 
     # ---- Spatial input ------------------------------------------------------
     def on_click(self, ctx: ToolContext) -> None:
@@ -170,6 +211,7 @@ class MoveTool(Tool):
             images = gather_images(ctx)
             if not (groups or positions or labels or splanes or images):
                 return  # nothing under the cursor / selected to move
+            self._last = None            # a new move ends the array window
             self.start_point = ctx.world
             self.grab = ctx.world
             self._groups = groups
@@ -193,12 +235,13 @@ class MoveTool(Tool):
                 if begin is not None:
                     begin(self._groups)
                     self._vp_preview = True
+            self._gather_copy_entities(ctx)
             return
         self._commit(viewport, ctx.world - self.grab)
 
     def on_hover(self, ctx: ToolContext) -> None:
         self.hover_point = ctx.world
-        if self.grab is not None:
+        if self.grab is not None and not self._copy:
             self._apply_preview(ctx.viewport, ctx.world - self.grab)
         ctx.viewport.update()
 
@@ -219,10 +262,39 @@ class MoveTool(Tool):
         self._commit(viewport, delta)
         return True
 
+    def on_array_value(self, viewport, count: int, mode: str) -> bool:
+        """SketchUp's arrays, typed right after a Move-copy: ``3x`` lays
+        three copies at multiples of the distance (external), ``/3`` three
+        copies dividing it (internal). Retyping re-lays the array; the
+        window closes at the next click or tool change."""
+        last = self._last
+        if last is None or self.start_point is not None or count < 1:
+            return False
+        stack = getattr(viewport.history, "undo_stack", None)
+        if not stack or stack[-1] is not last["cmd"]:
+            self._last = None
+            return False
+        delta = last["delta"]
+        if mode == "/":
+            deltas = [delta * (k / float(count)) for k in range(1, count + 1)]
+        else:
+            deltas = [delta * float(k) for k in range(1, count + 1)]
+        viewport.history.undo()
+        cmd = last["build"](deltas)
+        if cmd is None:
+            self._last = None
+            return False
+        viewport.history.execute(cmd)
+        last["cmd"] = cmd
+        viewport.flash_status(tr("{n} copies").format(n=count))
+        viewport.update()
+        return True
+
     def on_cancel(self, viewport) -> None:
         self._end_freeze(viewport)
         self._revert_preview(viewport)
         self._reset()
+        self._last = None
         viewport.update()
 
     # ---- Visual preview -----------------------------------------------------
@@ -231,7 +303,13 @@ class MoveTool(Tool):
         # from the grab point to the cursor (also carries the axis-lock colour).
         if self.grab is None or self.hover_point is None:
             return []
-        return [(self.grab, self.hover_point)]
+        segments = [(self.grab, self.hover_point)]
+        if self._copy and self._base_segments:
+            # Copy mode: the original stays put — preview the translated
+            # COPY as a wireframe at the cursor offset.
+            d = self.hover_point - self.grab
+            segments.extend((a + d, b + d) for a, b in self._base_segments)
+        return segments
 
     def value_label(self):
         if self.grab is None or self.hover_point is None:
@@ -243,6 +321,79 @@ class MoveTool(Tool):
     # ---- Internals ----------------------------------------------------------
     def _gather(self, ctx: ToolContext):
         return gather_targets(ctx)
+
+    def _gather_copy_entities(self, ctx: ToolContext) -> None:
+        """The faces/edges copy mode duplicates, and the wireframe segments
+        the copy preview carries (group wireframe, or the loose selection).
+        Mirrors RotateTool._gather_copy_entities."""
+        viewport = ctx.viewport
+        self._sel_faces, self._sel_edges, self._base_segments = [], [], []
+        from core.group import iter_placements
+        for group in self._groups:
+            for pg, xf in iter_placements(group):
+                for e in pg.mesh.edges:
+                    a, b = QVector3D(e.a), QVector3D(e.b)
+                    if xf is not None:
+                        a, b = xf.map(a), xf.map(b)
+                    self._base_segments.append((a, b))
+        sel = list(viewport.scene.selection)
+        if not sel and not self._groups:
+            # Nothing selected and no group hover-picked: the click grabbed
+            # the loose entity under the cursor (mirror of gather_targets).
+            edge = viewport.pick_edge(ctx.screen.x(), ctx.screen.y())
+            if edge is not None:
+                sel = [edge]
+            else:
+                face = viewport.pick_face(ctx.screen.x(), ctx.screen.y())
+                if face is not None:
+                    sel = [face]
+        self._sel_faces = [f for f in sel if isinstance(f, Face)]
+        self._sel_edges = [e for e in sel if isinstance(e, Edge)]
+        for f in self._sel_faces:
+            for lp in (list(f.vertices), *[list(h) for h in f.holes]):
+                n = len(lp)
+                for i in range(n):
+                    self._base_segments.append(
+                        (QVector3D(lp[i]), QVector3D(lp[(i + 1) % n])))
+        for e in self._sel_edges:
+            self._base_segments.append((QVector3D(e.a), QVector3D(e.b)))
+
+    def _make_copy_builder(self):
+        """A closure that builds the copy command for a list of offsets —
+        one copy per offset. Kept by the array window so ``3x`` / ``/3`` can
+        re-lay the copies after the tool has reset."""
+        groups = list(self._groups)
+        faces = list(self._sel_faces)
+        edges = list(self._sel_edges)
+
+        def build(deltas):
+            cmds: list = []
+            for d in deltas:
+                m = QMatrix4x4()
+                m.translate(d)
+                for group in groups:
+                    cmds.append(InsertGroupCommand(copy_group(group, d)))
+                for f in faces:
+                    cmds.append(AddFaceCommand(
+                        [v + d for v in f.vertices],
+                        holes=[[v + d for v in h] for h in f.holes] or None,
+                        auto=False,
+                        attrs=transformed_attrs(f.attrs, m),
+                    ))
+                id_map: dict[int, int] = {}
+                for e in edges:
+                    curve = getattr(e, "curve", None)
+                    if curve is not None and curve not in id_map:
+                        id_map[curve] = Mesh.next_curve_id()
+                    cmds.append(AddEdgeCommand(
+                        e.a + d, e.b + d,
+                        soft=getattr(e, "soft", False) or None,
+                        curve=id_map.get(curve)))
+            if not cmds:
+                return None
+            return cmds[0] if len(cmds) == 1 else CompoundCommand(cmds)
+
+        return build
 
     def _shift(self, viewport, step: QVector3D) -> None:
         """Translate the live geometry by ``step`` — every grabbed group's
@@ -321,6 +472,18 @@ class MoveTool(Tool):
         # the history holds a single clean entry (and the geometry doesn't shift
         # by double the delta).
         self._revert_preview(viewport)
+        if self._copy and delta.length() > 1e-9:
+            # Copy mode: the original never moved; stamp the copies.
+            build = self._make_copy_builder()
+            cmd = build([delta])
+            if cmd is not None:
+                viewport.history.execute(cmd)
+                # SketchUp: right after the copy, "3x" / "/3" make an array.
+                self._last = {"cmd": cmd, "build": build,
+                              "delta": QVector3D(delta)}
+            self._reset()
+            viewport.update()
+            return
         if delta.length() > 1e-9:
             commands = []
             commands.extend(MoveGroupCommand(g, delta) for g in self._groups)
@@ -354,3 +517,8 @@ class MoveTool(Tool):
         self._splanes = []
         self._images = []
         self._preview_delta = QVector3D(0.0, 0.0, 0.0)
+        self._sel_faces = []
+        self._sel_edges = []
+        self._base_segments = []
+        self._vp_preview = False
+        self._copy = False      # the Ctrl modifier arms ONE operation

@@ -9827,7 +9827,7 @@ class Viewport(QOpenGLWidget):
             t = ev.text().lower()
             if t and (t.isdigit() or t in (".", ",", ";", " ", "-", ":",
                                            "\"", "'", "/", "m", "c", "r",
-                                           "i", "n", "f", "t")):
+                                           "i", "n", "f", "t", "x", "*")):
                 ev.accept()
                 return True
         return super().event(ev)
@@ -10114,6 +10114,14 @@ class Viewport(QOpenGLWidget):
                     handler(self, value[1])
                 self._set_value_buffer("")
                 return True
+            if isinstance(value, tuple) and value and value[0] == "array":
+                # SketchUp's arrays: "3x" (external) / "/3" (internal) right
+                # after a Move-copy. Only tools that declare it understand.
+                handler = getattr(self.active_tool, "on_array_value", None)
+                if handler is not None:
+                    handler(self, value[1], value[2])
+                self._set_value_buffer("")
+                return True
             if isinstance(value, tuple) and value and value[0] == "radius":
                 # SketchUp's "2r": the 2-point arc takes a RADIUS instead
                 # of the bulge. Only tools that declare it understand.
@@ -10141,6 +10149,19 @@ class Viewport(QOpenGLWidget):
             self._set_value_buffer(self._value_buffer[:-1])
             return True
 
+        arrays = getattr(self.active_tool, "accepts_array", False)
+        if arrays and text == "*":
+            # "*3" / "3*": the array multiplier (SketchUp also takes "x").
+            self._set_value_buffer(self._value_buffer + text)
+            return True
+        if arrays and text.lower() == "x" and self._current_token_tail():
+            # "3x" — only after a digit: bare X stays the Text tool shortcut.
+            self._set_value_buffer(self._value_buffer + text)
+            return True
+        if arrays and text == "/" and not self._value_buffer:
+            # "/3": the internal-array divisor opens the buffer.
+            self._set_value_buffer(text)
+            return True
         if text and (text.isdigit()
                      or text in (".", ",", ";", " ", "-", ":", "\"", "'", "/")
                      or text.lower() in ("m", "c", "r", "i", "n", "f", "t")):
@@ -10189,6 +10210,14 @@ class Viewport(QOpenGLWidget):
         kept (direction tools flip on it)."""
         normalized = buffer.replace(",", ".").replace(";", " ")
         stripped = normalized.strip()
+        # SketchUp's arrays after a copy: "3x" / "3*" / "*3" (external) and
+        # "/3" / "3/" (internal). Only tools with ``accepts_array`` get them.
+        m = re.fullmatch(r"(?:(\d+)\s*[x*]|[x*]\s*(\d+))", stripped.lower())
+        if m is not None:
+            return ("array", int(m.group(1) or m.group(2)), "x")
+        m = re.fullmatch(r"(?:/\s*(\d+)|(\d+)\s*/)", stripped)
+        if m is not None:
+            return ("array", int(m.group(1) or m.group(2)), "/")
         if stripped.lower().endswith("r") and ":" not in stripped:
             import re as _re
             m = _re.fullmatch(r"(\d+\.?\d*|\.\d+)r", stripped.lower())

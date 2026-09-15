@@ -1738,5 +1738,9 @@
  "Drag to orbit. Shift = pan. Wheel = zoom. The middle button orbits from any tool.": "Arrastra para orbitar. Mayús = desplazar. Rueda = zoom. El botón central orbita desde cualquier herramienta.",
  "The provider is busy ({why}) — retry {n} of {total} in {wait} s…": "El proveedor está saturado ({why}): reintento {n} de {total} en {wait} s…",
  "The AI bridge is listening on 127.0.0.1:{port}. Connect ANY MCP client — MCP is an open standard: Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, Gemini CLI, Codex CLI…": "El puente IA está escuchando en 127.0.0.1:{port}. Conecta CUALQUIER cliente MCP (MCP es un estándar abierto): Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, Gemini CLI, Codex CLI…",
- "Other clients take the same block in their own file:": "Los demás clientes toman el mismo bloque en su propio archivo:"
+ "Other clients take the same block in their own file:": "Los demás clientes toman el mismo bloque en su propio archivo:",
+ "Move a copy: on": "Mover una copia: activado",
+ "Move a copy: off": "Mover una copia: desactivado",
+ "{n} copies": "{n} copias",
+ "Protractor axis set along the drag": "Eje del transportador fijado por el arrastre"
 }
