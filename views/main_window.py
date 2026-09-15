@@ -193,6 +193,11 @@ class MainWindow(QMainWindow):
         keep, and never under the user's hands (a 283k-face save takes real
         time; mid-drag it would read as a freeze)."""
         from PySide6.QtWidgets import QApplication
+        # Housekeeping that rides the same slow tick: re-settle the heap so
+        # what the session deleted since the last freeze is reclaimed —
+        # never mid-gesture (a collection over a big model is ~0.3 s).
+        if getattr(self.viewport, "_last_pos", None) is None:
+            self.settle_heap()
         if not self._is_dirty():
             return
         version = self.viewport.scene.version
@@ -2229,6 +2234,7 @@ class MainWindow(QMainWindow):
         self._sync_style_menu()
         self._sync_section_menu()
         self._update_title()
+        self.settle_heap()
 
     def _on_recover_discarded(self) -> None:
         """Open one of the retired auto-save copies as a NEW, unsaved
@@ -2344,7 +2350,23 @@ class MainWindow(QMainWindow):
         self.georef_tray.base_map.sync_photo_mesh()
         self.viewport.notify_scene_changed()
         self._update_title()
+        self.settle_heap()
         return True
+
+    def settle_heap(self) -> None:
+        """Move the document's objects out of the garbage collector's way.
+        The plaza is 1.3 million Python objects; a full collection over
+        them took 274 ms and the incremental passes (Python 3.14) hit
+        while drawing — 931 passes in one hover session, the worst 233 ms
+        (Marco, 2026-09-14). After a load the graph is static: one clean
+        collection, then ``gc.freeze`` parks it in the permanent
+        generation, so the collector only walks what the session creates.
+        Called again on the autosave tick (unfreeze → collect → freeze)
+        so what the session has since deleted does get reclaimed."""
+        import gc
+        gc.unfreeze()
+        gc.collect()
+        gc.freeze()
 
     def _on_save(self) -> None:
         self.viewport.end_group_edit()
