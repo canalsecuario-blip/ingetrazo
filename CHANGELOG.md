@@ -52,6 +52,11 @@ de mediciones sobre la plaza de Yanque.
   de arrastre.
 
 ### Arreglado
+- **Bloquear un eje con la flecha ya lee la referencia bajo el cursor** (B3
+  de Rafael, 04:20): Medir desde la arista inferior del muro, ↑, y el cursor
+  sobre la esquina o el alféizar de la ventana → la guía toma esa altura,
+  con la punteada «Desde el punto». Antes había que acertar con el pie sobre
+  la propia línea bloqueada.
 - **Paquetes Linux en NVIDIA (issue #6, seguía en la 0.3.19)**: el tarball
   y el AppImage llevaban la `libstdc++`/`libgcc_s` del runner de CI y GLib;
   cargadas antes que el driver, un NVIDIA compilado contra un runtime más

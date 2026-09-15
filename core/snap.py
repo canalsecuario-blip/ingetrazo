@@ -589,6 +589,7 @@ def _extension_snap(
 def _from_point_snap(
     scene, start_point, draw_dir, cx, cy, world_to_pixel, threshold_px,
     is_occluded, extra_point=None, axis_deg: float = 10.0,
+    hovered_refs: bool = False,
 ) -> Optional[SnapResult]:
     """'From point' inference ("Desde el punto"), the single clean version.
 
@@ -599,7 +600,14 @@ def _from_point_snap(
     the green point pins one spot (lined up with the corner) instead of sliding
     along the projection or scattering when the draw wanders off-axis.
 
-    Corners → green 'from point' with an axis-coloured guide; midpoints → cyan."""
+    Corners → green 'from point' with an axis-coloured guide; midpoints → cyan.
+
+    With ``hovered_refs`` (the arrow-key lock) the cursor may also sit on the
+    REFERENCE itself — a corner or midpoint, or any point of an edge — far
+    from the draw line, and the snap lands on that reference's foot. That is
+    how SketchUp's lock is used: Tape from the wall's bottom edge, ↑, hover
+    the window's corner, and the guide takes the window's height (Rafael,
+    04:20: «cuando pulso la flechita para subir no me hace el snap»)."""
     if start_point is None or draw_dir.length() < 1e-6:
         return None
     u = draw_dir.normalized()
@@ -622,8 +630,29 @@ def _from_point_snap(
         refs.append((edge.b, "from_point", COLOR_ENDPOINT))
         refs.append(((edge.a + edge.b) * 0.5, "midpoint", COLOR_MIDPOINT))
 
+    if hovered_refs:
+        # The point of an edge under the cursor is a reference too (the
+        # window's sill, not just its corners): the closest point of the
+        # nearest edge, as a plain 'from point'. Corners and midpoints come
+        # first — a sub-pixel miss on a corner must not hand the snap to
+        # the edge's body a few millimetres away — so the edge point only
+        # competes when no point reference is within reach.
+        best_edge = None
+        for edge in scene.edges:
+            pa, pb = world_to_pixel(edge.a), world_to_pixel(edge.b)
+            if pa is None or pb is None:
+                continue
+            d, t = _closest_on_segment_2d((cx, cy), pa, pb)
+            if d <= threshold_px and (best_edge is None or d < best_edge[0]):
+                best_edge = (d, edge.a + (edge.b - edge.a) * t)
+        if best_edge is not None:
+            refs.append((best_edge[1], "from_point", COLOR_ENDPOINT, True))
+
     best = None  # (dist, foot, ref, kind, color)
-    for ref, kind, color in refs:
+    for entry in refs:
+        ref, kind, color = entry[0], entry[1], entry[2]
+        if len(entry) > 3 and best is not None:
+            continue                      # the edge body yields to any point
         s = QVector3D.dotProduct(ref - start_point, adir)
         if s <= 1e-6:
             continue  # at or behind the start along the draw
@@ -634,6 +663,10 @@ def _from_point_snap(
         if qp is None:
             continue
         d = math.hypot(qp[0] - cx, qp[1] - cy)
+        if hovered_refs:
+            rp = world_to_pixel(ref)
+            if rp is not None:
+                d = min(d, math.hypot(rp[0] - cx, rp[1] - cy))
         if d > threshold_px:
             continue
         if is_occluded is not None and is_occluded(foot):
@@ -779,6 +812,7 @@ def compute_snap(
         fp = _from_point_snap(
             scene, start_point, axis_dir, cx, cy, world_to_pixel,
             threshold_px, is_occluded, extra_point=acquired_point,
+            hovered_refs=True,
         )
         if fp is not None:
             return fp
