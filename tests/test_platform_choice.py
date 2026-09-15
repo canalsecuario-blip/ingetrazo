@@ -29,11 +29,15 @@ def test_fractional_scale_is_read_from_gnome_and_kde(tmp_path):
 def test_auto_picks_xcb_only_on_wayland_with_fractional_scale_and_x11_available(tmp_path):
     home = _gnome_home(tmp_path, "1.25")
     wl = {"XDG_SESSION_TYPE": "wayland", "DISPLAY": ":0"}
-    assert choose_platform(AUTO, wl, home) == XCB
-    assert choose_platform(AUTO, {"XDG_SESSION_TYPE": "wayland"}, home) is None      # no XWayland
-    assert choose_platform(AUTO, {"XDG_SESSION_TYPE": "x11", "DISPLAY": ":0"}, home) is None
-    assert choose_platform(AUTO, wl, _gnome_home(tmp_path / "int", "2")) is None    # whole scale
-    assert choose_platform(AUTO, {**wl, "QT_QPA_PLATFORM": "wayland"}, home) is None  # the env wins
+    # A fake sysfs with ONE monitor: the rule reads the machine's outputs,
+    # and this test failed on Marco's laptop the day a second screen was
+    # plugged in (2026-09-15).
+    one = _sysfs(tmp_path / "s", ["card1-eDP-1"])
+    assert choose_platform(AUTO, wl, home, one) == XCB
+    assert choose_platform(AUTO, {"XDG_SESSION_TYPE": "wayland"}, home, one) is None      # no XWayland
+    assert choose_platform(AUTO, {"XDG_SESSION_TYPE": "x11", "DISPLAY": ":0"}, home, one) is None
+    assert choose_platform(AUTO, wl, _gnome_home(tmp_path / "int", "2"), one) is None    # whole scale
+    assert choose_platform(AUTO, {**wl, "QT_QPA_PLATFORM": "wayland"}, home, one) is None  # the env wins
 
 
 def test_the_explicit_choices(tmp_path):

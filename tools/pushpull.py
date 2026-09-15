@@ -1332,6 +1332,10 @@ class PushPullTool(Tool):
                 and self._cap_cmd.face in scene.mesh.faces):
             # The moved cap continues the (consumed) base: same attrs.
             self._cap_cmd.face.attrs = dict(base_attrs)
+        far = getattr(self, "_far_cmd", None)
+        self._far_cmd = None
+        if far is not None and far[1] and far[0].face in scene.mesh.faces:
+            far[0].face.attrs = dict(far[1])
         new_faces = set(scene.mesh.faces) - before
         if self._keep_base and attached_any and d < 0:
             # The Ctrl-stack grows *into* the solid: its cap is a deliberate
@@ -1549,19 +1553,24 @@ class PushPullTool(Tool):
             DeleteFaceCommand(far_face),   # re-add the far face with a new hole
         ]
         if remainder is None:
-            commands.append(AddFaceCommand(
+            far_cmd = AddFaceCommand(
                 list(far_face.vertices), auto=False,
                 holes=[list(h) for h in far_face.holes] + [list(back_loop)],
-            ))
+            )
+            commands.append(far_cmd)
             for i in range(count):         # back opening boundary
                 commands.append(AddEdgeCommand(back_loop[i], back_loop[(i + 1) % count]))
         else:
             # A notch on the rim: the far face becomes what is left of it;
             # the opening's outline that ran along the old rim is nobody's
             # edge any more and the prune below sweeps it.
-            commands.append(AddFaceCommand(
+            far_cmd = AddFaceCommand(
                 list(remainder), auto=False,
-                holes=[list(h) for h in far_face.holes]))
+                holes=[list(h) for h in far_face.holes])
+            commands.append(far_cmd)
+        # The rebuilt far face is the same face with a bite out of it: it
+        # keeps its paint (test_attrs_survive_corner_notch_through_floor).
+        self._far_cmd = (far_cmd, dict(far_face.attrs))
         for i in range(count):             # tunnel verticals
             commands.append(AddEdgeCommand(base[i], back_loop[i]))
         for i in range(count):             # tunnel walls
