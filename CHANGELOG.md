@@ -106,6 +106,9 @@ de mediciones sobre la plaza de Yanque.
   por cuadro (~11 ms) y la caja del grupo editado (~9 ms) en los arrastres.
 
 ### Cambiado
+- **La bandeja aprovecha el ancho**: las muestras de materiales y los
+  botones de componentes fluyen en tantas columnas como quepan al ensanchar
+  la barra lateral (antes, 5 y 3 fijas con la mitad derecha en blanco).
 - Iconos de las barras: **Normal (24 px)** por defecto (Grande queda como
   opción).
 - Los puntos de componentes ya no se pintan en magenta (el rótulo sigue

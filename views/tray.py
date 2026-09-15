@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QSettings, QSize, Qt
+from PySide6.QtCore import QPoint, QRect, QSettings, QSize, Qt
 from PySide6.QtGui import QColor, QIcon, QImage, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
     QGridLayout,
+    QLayout,
     QHBoxLayout,
     QInputDialog,
     QLabel,
@@ -151,6 +152,94 @@ def _swatch_button(pm: QPixmap, tip: str) -> QToolButton:
     b.setToolTip(tip)
     b.setAutoRaise(True)
     return b
+
+
+class FlowLayout(QLayout):
+    """A grid that REFLOWS with the width: swatches and component buttons
+    fill as many columns as fit and wrap, so a widened tray shows more per
+    row instead of a blank right half (Marco, 2026-09-15: «cuando
+    redimensiono la barra debería ocupar ese espacio con más columnas»).
+    Qt's classic flow layout; ``addWidget`` also accepts and ignores the
+    ``row, col`` the grid callers used to pass."""
+
+    def __init__(self, parent=None, spacing: int = 2) -> None:
+        super().__init__(parent)
+        self._items: list = []
+        self._spacing = spacing
+        self.setContentsMargins(0, 0, 0, 0)
+
+    # ---- QLayout interface ---------------------------------------------------
+    def addItem(self, item) -> None:            # noqa: N802 — Qt override
+        self._items.append(item)
+
+    def addWidget(self, w, *_grid_pos) -> None:  # noqa: N802 — Qt override
+        super().addWidget(w)
+
+    def setColumnStretch(self, *_a) -> None:     # noqa: N802 — grid compat
+        pass
+
+    def count(self) -> int:
+        return len(self._items)
+
+    def itemAt(self, index: int):               # noqa: N802
+        return self._items[index] if 0 <= index < len(self._items) else None
+
+    def takeAt(self, index: int):               # noqa: N802
+        return self._items.pop(index) if 0 <= index < len(self._items) else None
+
+    def expandingDirections(self):              # noqa: N802
+        return Qt.Orientations(Qt.Orientation(0))
+
+    def hasHeightForWidth(self) -> bool:        # noqa: N802
+        return True
+
+    def heightForWidth(self, width: int) -> int:  # noqa: N802
+        return self._do_layout(QRect(0, 0, width, 0), test_only=True)
+
+    def setGeometry(self, rect) -> None:        # noqa: N802
+        super().setGeometry(rect)
+        self._do_layout(rect, test_only=False)
+
+    def sizeHint(self):                         # noqa: N802
+        return self.minimumSize()
+
+    def minimumSize(self):                      # noqa: N802
+        size = QSize()
+        for item in self._items:
+            size = size.expandedTo(item.minimumSize())
+        m = self.contentsMargins()
+        return size + QSize(m.left() + m.right(), m.top() + m.bottom())
+
+    def columns_at(self, width: int) -> int:
+        """How many items the first row holds at ``width`` (for tests)."""
+        m = self.contentsMargins()
+        x = m.left()
+        cols = 0
+        for item in self._items:
+            w = item.sizeHint().width()
+            if cols and x + w > width - m.right():
+                break
+            x += w + self._spacing
+            cols += 1
+        return cols
+
+    def _do_layout(self, rect, test_only: bool) -> int:
+        m = self.contentsMargins()
+        x = rect.x() + m.left()
+        y = rect.y() + m.top()
+        right = rect.right() - m.right()
+        row_h = 0
+        for item in self._items:
+            hint = item.sizeHint()
+            if row_h and x + hint.width() - 1 > right:
+                x = rect.x() + m.left()
+                y += row_h + self._spacing
+                row_h = 0
+            if not test_only:
+                item.setGeometry(QRect(QPoint(x, y), hint))
+            x += hint.width() + self._spacing
+            row_h = max(row_h, hint.height())
+        return y + row_h + m.bottom() - rect.y()
 
 
 class BaseMapPanel(QWidget):
@@ -902,8 +991,7 @@ class ComponentsPanel(QWidget):
         self._window = window
         lay = QVBoxLayout(self)
         lay.setContentsMargins(8, 6, 8, 8)
-        grid = QGridLayout()
-        grid.setSpacing(4)
+        grid = FlowLayout(spacing=4)
         res = app_root() / "resources" / "components"
         import json as _json
         items = []
@@ -1127,9 +1215,7 @@ class MaterialsPanel(QWidget):
         self._load_texture_fields()
 
         root.addWidget(self._heading(tr("In model")))
-        self._in_model_grid = QGridLayout()
-        self._in_model_grid.setSpacing(2)
-        self._in_model_grid.setColumnStretch(self.COLS, 1)
+        self._in_model_grid = FlowLayout(spacing=2)
         root.addLayout(self._in_model_grid)
 
         root.addWidget(self._heading(tr("Library")))
@@ -1197,12 +1283,8 @@ class MaterialsPanel(QWidget):
                 " text-align: left; }"
                 "QToolButton:hover { background: palette(midlight); }")
             body = QWidget()
-            grid = QGridLayout(body)
+            grid = FlowLayout(body, spacing=2)
             grid.setContentsMargins(4, 2, 0, 4)
-            grid.setSpacing(2)
-            # Pack swatches left: the leftover width goes to a phantom last
-            # column instead of spreading the thumbnails apart.
-            grid.setColumnStretch(self.COLS, 1)
             body.setVisible(False)
 
             pending = [fill]
