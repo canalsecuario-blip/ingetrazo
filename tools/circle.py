@@ -99,6 +99,16 @@ class _RadialTool(PlaneLock, Tool):
         self.wireframe_color = self.lock_color()
         ctx.viewport.update()
 
+    def on_segments_value(self, viewport, n: int) -> bool:
+        """SketchUp's "24s": the side count, typed at any moment."""
+        n = int(n)
+        if n < 3:
+            return False
+        self.sides = n
+        viewport.flash_status(tr("{n} sides", n=n))
+        viewport.update()
+        return True
+
     def on_value(self, viewport, value) -> bool:
         """Before the centre is placed, a typed number sets the **side count**
         (SketchUp: type sides + Enter); after it, the number is the **radius**."""

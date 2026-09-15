@@ -10086,6 +10086,12 @@ class Viewport(QOpenGLWidget):
                     self.active_tool.on_value(self, value[1])
                 self._set_value_buffer("")
                 return True
+            if isinstance(value, tuple) and value and value[0] == "segments":
+                handler = getattr(self.active_tool, "on_segments_value", None)
+                if handler is not None:
+                    handler(self, value[1])
+                self._set_value_buffer("")
+                return True
             if isinstance(value, tuple) and value and value[0] == "radius":
                 # SketchUp's "2r": the 2-point arc takes a RADIUS instead
                 # of the bulge. Only tools that declare it understand.
@@ -10167,6 +10173,14 @@ class Viewport(QOpenGLWidget):
             if m is None:
                 return None
             return ("radius", float(m.group(1)))
+        if stripped.lower().endswith("s") and ":" not in stripped:
+            # SketchUp's "12s": the segment count of an arc / the sides of
+            # a circle. Only tools that declare it understand.
+            import re as _re
+            m = _re.fullmatch(r"(\d+)s", stripped.lower())
+            if m is None:
+                return None
+            return ("segments", int(m.group(1)))
         if ":" in normalized:
             # Slope as rise:run (SketchUp "3:12", "1:6") → ("ratio", degrees).
             m = re.fullmatch(
