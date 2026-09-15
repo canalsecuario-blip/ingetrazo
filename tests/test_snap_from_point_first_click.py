@@ -181,10 +181,12 @@ def test_the_viewport_keeps_the_last_two_encouraged_points():
     assert vp._acquired_point.x() == 3.0
 
 
-def test_guides_read_on_line_and_group_points_are_magenta():
+def test_guides_read_on_line_and_group_points_keep_their_colours():
+    """(Magenta group points, SketchUp's way, were tried and dropped:
+    a model made of components turned magenta everywhere — Marco.)"""
     from types import SimpleNamespace
     from views.viewport import _SnapEdge
-    from core.snap import COLOR_IN_GROUP, COLOR_ON_EDGE
+    from core.snap import COLOR_ENDPOINT, COLOR_MIDPOINT, COLOR_ON_EDGE
     scene = SimpleNamespace(edges=[                           # (an elevation: x, z)
         _SnapEdge(V(0, 0, 0), V(4, 0, 0), guide=True),          # a guide line
         _SnapEdge(V(0, 0, 2), V(4, 0, 2), in_group=True),       # a group's edge
@@ -193,9 +195,9 @@ def test_guides_read_on_line_and_group_points_are_magenta():
     assert r.kind == "on_line" and r.color == COLOR_ON_EDGE
     assert _snap(scene, V(4.0, 0, 0.01)).kind != "endpoint"     # a guide has no ends
     r = _snap(scene, V(4.01, 0, 2.01))
-    assert r.kind == "endpoint" and r.color == COLOR_IN_GROUP
+    assert r.kind == "endpoint" and r.color == COLOR_ENDPOINT and r.context is None
     r = _snap(scene, V(2.0, 0, 2.02))
-    assert r.kind == "midpoint" and r.color == COLOR_IN_GROUP
+    assert r.kind == "midpoint" and r.color == COLOR_MIDPOINT
 
 
 def test_component_origin_and_arc_midpoint_pseudo_edges_snap_by_name():
@@ -363,7 +365,6 @@ def test_the_hovered_edge_can_be_a_components_and_the_tip_says_so():
     from PySide6.QtCore import QPointF, Qt
     from core.mesh import Mesh
     from tools.line import LineTool
-    from core.snap import COLOR_IN_GROUP
     vp = _offscreen_vp()
     vp.camera.target = V(6, 5, 0)
     vp.camera.distance = 12
@@ -378,8 +379,7 @@ def test_the_hovered_edge_can_be_a_components_and_the_tip_says_so():
     assert edge.context == "component"
     assert (edge.a - edge.b).length() > 1.9                  # the world edge (5,4)-(7,4)
     snap = vp.last_snap
-    assert snap.kind == "midpoint" and snap.color == COLOR_IN_GROUP
-    assert snap.context == "component"
+    assert snap.kind == "midpoint" and snap.context == "component"
 
 
 def test_arc_midpoint_and_tangent_reach_arcs_inside_a_component():

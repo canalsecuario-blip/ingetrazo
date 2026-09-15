@@ -905,9 +905,11 @@ def compute_snap(
         for edge in plain:
             # SketchUp paints every point inference magenta when the
             # geometry is inside a group or component.
-            col = COLOR_IN_GROUP if getattr(edge, "in_group", False) else COLOR_ENDPOINT
-            _consider(edge.a, "endpoint", col, context=getattr(edge, "context", None))
-            _consider(edge.b, "endpoint", col, context=getattr(edge, "context", None))
+            # (SketchUp paints these magenta inside groups; Marco found the
+            # magenta everywhere on a model made of components tiring —
+            # 2026-09-14 — so the colours stay, the tip says "in component".)
+            _consider(edge.a, "endpoint", COLOR_ENDPOINT, context=getattr(edge, "context", None))
+            _consider(edge.b, "endpoint", COLOR_ENDPOINT, context=getattr(edge, "context", None))
         # A "close" already chosen stands; otherwise the nearest visible of
         # the named points and endpoints (named ones first on a tie — they
         # were appended first and the sort is stable).
@@ -1042,9 +1044,8 @@ def compute_snap(
     for edge in scene.edges:
         if getattr(edge, "guide", False) or (edge.a - edge.b).length() < 1e-9:
             continue
-        _consider((edge.a + edge.b) * 0.5, "midpoint",
-                  COLOR_IN_GROUP if getattr(edge, "in_group", False)
-                  else COLOR_MIDPOINT, context=getattr(edge, "context", None))
+        _consider((edge.a + edge.b) * 0.5, "midpoint", COLOR_MIDPOINT,
+                  context=getattr(edge, "context", None))
     _consider(QVector3D(0.0, 0.0, 0.0), "origin", COLOR_ORIGIN)
     _resolve()
     if best is not None:
@@ -1081,9 +1082,8 @@ def compute_snap(
         _d, on_pt, edge = best_edge
         if getattr(edge, "guide", False):
             return SnapResult(on_pt, "on_line", COLOR_ON_EDGE)   # a guide line
-        return SnapResult(on_pt, "on_edge",
-                          COLOR_IN_GROUP if getattr(edge, "in_group", False)
-                          else COLOR_ON_EDGE, context=getattr(edge, "context", None))
+        return SnapResult(on_pt, "on_edge", COLOR_ON_EDGE,
+                          context=getattr(edge, "context", None))
 
     # 8b. Acquired-edge parallel inference. An edge the cursor hovered while
     #     drawing is held as a reference; when the draw runs parallel to it the
