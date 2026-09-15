@@ -17,6 +17,10 @@ Rotate (Q) shows the same instrument, so both tools share it:
   farther out the angle is free at 0.1° precision.
 - The Measurements box accepts degrees (``34.1``) or a slope as rise:run
   (``3:12``, ``1:6``) — ``accepts_angle_ratio`` delivers it as degrees.
+- CLICK-DRAG from the vertex tilts the instrument: the drag sets the
+  protractor's axis (the normal of its plane) along the dragged direction,
+  off the orthogonal planes — SketchUp's gesture on both Protractor and
+  Rotate (issue #10, @pacaeiro). A plain click keeps the inferred plane.
 
 :class:`ProtractorTool` (this file) creates ANGLED guide lines with it
 (help.sketchup.com "Measuring Angles" / "Using Guides"): vertex → base arm →
@@ -61,9 +65,37 @@ class ProtractorBase(Tool):
         self.work_plane: tuple[QVector3D, QVector3D] | None = None
         self._axis_pick: str | None = None          # arrow-key plane lock
         self._shift_normal: QVector3D | None = None  # Shift-frozen plane
-        self._custom_axis: QVector3D | None = None  # drag-defined axis (Rotate)
+        self._custom_axis: QVector3D | None = None  # drag-defined axis
+        self._axis_drag_armed = False               # centre press → release watches
         self._disc_r = 1.0                          # world radius of the disc
         self._snap_ticks = False                    # cursor near the disc?
+
+    # ---- Click-drag axis ----------------------------------------------------
+    def _release_axis_drag(self, viewport) -> bool:
+        """A real DRAG from the centre fixes the instrument's axis along it
+        (SketchUp's fold gesture on Rotate, and the Protractor's way off the
+        orthogonal planes); a plain click keeps the inferred plane. Returns
+        True when an axis was set."""
+        if not self._axis_drag_armed:
+            return False
+        self._axis_drag_armed = False
+        if self.hover_point is None or self.start_point is None:
+            return False
+        w2p = getattr(viewport, "_world_to_pixel", None)
+        dragged = False
+        if w2p is not None:
+            p0 = w2p(self.start_point)
+            p1 = w2p(self.hover_point)
+            if p0 is not None and p1 is not None:
+                dragged = math.hypot(p1[0] - p0[0], p1[1] - p0[1]) > 8.0
+        if not dragged:
+            return False
+        d = self.hover_point - self.start_point
+        if d.length() < 1e-9:
+            return False
+        self._custom_axis = d.normalized()
+        viewport.update()
+        return True
 
     # ---- Keyboard -----------------------------------------------------------
     def on_key(self, viewport, key: int, modifiers) -> bool:
@@ -219,6 +251,7 @@ class ProtractorBase(Tool):
         self.work_plane = None
         self._shift_normal = None
         self._custom_axis = None
+        self._axis_drag_armed = False
         self._snap_ticks = False
 
 
@@ -248,6 +281,7 @@ class ProtractorTool(ProtractorBase):
         self._last = None            # a click ends the retype window
         if self.start_point is None:
             self.start_point = ctx.world
+            self._axis_drag_armed = True   # a DRAG from here tilts the disc
             return
         if self.ref_point is None:
             if (ctx.world - self.start_point).length() < 1e-6:
@@ -263,6 +297,13 @@ class ProtractorTool(ProtractorBase):
         self._infer_plane(ctx)
         self._update_screen_metrics(ctx)
         ctx.viewport.update()
+
+    def on_release(self, viewport) -> None:
+        # Click-drag from the vertex: the protractor's axis follows the drag
+        # (issue #10) — the guide then lies in the tilted plane.
+        if self._release_axis_drag(viewport):
+            from core.i18n import tr
+            viewport.flash_status(tr("Protractor axis set along the drag"))
 
     def on_value(self, viewport, value) -> bool:
         if isinstance(value, tuple):

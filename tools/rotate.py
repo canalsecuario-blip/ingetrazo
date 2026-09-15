@@ -69,7 +69,6 @@ class RotateTool(ProtractorBase):
         self._base_segments: list = []      # wireframe for the copy preview
         self._preview_deg = 0.0
         self._copy = False                  # Ctrl: rotate a COPY
-        self._axis_drag_armed = False       # centre press → release watches
         self._last: dict | None = None      # hot retype of the last rotation
 
     # ---- Lifecycle ----------------------------------------------------------
@@ -166,27 +165,11 @@ class RotateTool(ProtractorBase):
 
     def on_release(self, viewport) -> None:
         """A real DRAG from the centre fixes the rotation axis along it
-        (SketchUp's fold gesture); a plain click keeps the inferred plane."""
-        if not self._axis_drag_armed:
-            return
-        self._axis_drag_armed = False
-        if self.hover_point is None or self.start_point is None:
-            return
-        w2p = getattr(viewport, "_world_to_pixel", None)
-        dragged = False
-        if w2p is not None:
-            p0 = w2p(self.start_point)
-            p1 = w2p(self.hover_point)
-            if p0 is not None and p1 is not None:
-                dragged = math.hypot(p1[0] - p0[0], p1[1] - p0[1]) > 8.0
-        if not dragged:
-            return
-        d = self.hover_point - self.start_point
-        if d.length() < 1e-9:
-            return
-        self._custom_axis = d.normalized()
-        viewport.flash_status(tr("Rotation axis set along the drag"))
-        viewport.update()
+        (SketchUp's fold gesture); a plain click keeps the inferred plane.
+        The gesture lives in :class:`ProtractorBase`, shared with the
+        Protractor tool."""
+        if self._release_axis_drag(viewport):
+            viewport.flash_status(tr("Rotation axis set along the drag"))
 
     def on_value(self, viewport, value) -> bool:
         if isinstance(value, tuple):
@@ -456,5 +439,4 @@ class RotateTool(ProtractorBase):
         self._sel_edges = []
         self._base_segments = []
         self._preview_deg = 0.0
-        self._axis_drag_armed = False
         self._copy = False      # the Ctrl modifier arms ONE operation
