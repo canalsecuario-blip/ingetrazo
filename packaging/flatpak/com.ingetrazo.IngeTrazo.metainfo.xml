@@ -77,6 +77,48 @@
   <url type="vcs-browser">https://github.com/ingelibre/ingetrazo</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.4.0" date="2026-09-15">
+      <description>
+        <p>Inference the SketchUp way, three tools that were missing, and
+        the Linux packages fixed for NVIDIA. Rectangle, circle and arcs draw
+        on the plane facing the view and show it on the cursor; From Point
+        before the first click, two points at once, tangent at vertex, arc
+        midpoints, component origins — all reaching into nested groups. The
+        Arc rounds a corner like SketchUp's: tangent preview, magenta at the
+        same distance on the next edge, a double-click trims the corner. New
+        tools: Fillet rounds the edges of a solid (chains, box corners,
+        concave edges), Position Texture puts SketchUp's pins on a face
+        (move, scale, rotate, shear; back side too) and a sampled position
+        travels to other faces; painting a curved surface wraps the image
+        around it. A rim piece pushed flush onto the far face is cut through.
+        The status bar shows one hint for the tool and its step, the tray
+        reflows its swatches with the width, and the AI assistant builds a
+        whole house in one recipe, retries a busy provider and sends lighter
+        screenshots; the MCP bridge names every client that can use it. The
+        tarball and AppImage leave the C++ runtime and GLib to the host, which
+        is what aborted GLX on NVIDIA.</p>
+        <p xml:lang="es">Inferencia a la SketchUp, tres herramientas que
+        faltaban y los paquetes Linux arreglados para NVIDIA. Rectángulo,
+        círculo y arcos dibujan en el plano que mira a la vista y lo enseñan
+        en el cursor; «Desde el punto» antes del primer clic, dos puntos a
+        la vez, tangente en el vértice, puntos medios de arco, orígenes de
+        componente — todo alcanza grupos anidados. El Arco redondea esquinas
+        como SketchUp: vista previa tangente, magenta a la misma distancia en
+        la arista contigua, doble clic recorta la esquina. Herramientas
+        nuevas: Redondear redondea las aristas de un sólido (cadenas,
+        esquinas de caja, cóncavas), Posicionar textura pone los pines de
+        SketchUp sobre una cara (mover, escalar, rotar, cizallar; también el
+        reverso) y la muestra viaja a otras caras; pintar una superficie
+        curva envuelve la imagen. Una pieza del borde empujada a ras de la
+        cara opuesta se corta de lado a lado. La barra de estado da una sola
+        pista por herramienta y paso, la bandeja reparte las muestras según
+        el ancho, y el asistente IA levanta una casa entera en una receta,
+        reintenta cuando el proveedor está saturado y manda capturas más
+        ligeras; el puente MCP nombra todos los clientes que pueden usarlo.
+        El tarball y el AppImage dejan al sistema el runtime de C++ y GLib,
+        que era lo que abortaba GLX en NVIDIA.</p>
+      </description>
+    </release>
     <release version="0.3.20" date="2026-09-14">
       <description>
         <p>The orthomosaic, labels with several arrows, and the toolbars'

@@ -4,7 +4,7 @@ All notable changes to IngeTrazo are documented here.
 Format inspired by [Keep a Changelog](https://keepachangelog.com); versions
 follow [SemVer](https://semver.org).
 
-## [Sin publicar]
+## [0.4.0] — 2026-09-15
 
 **La inferencia a la altura de SketchUp, el visor más rápido, y las tres
 herramientas que faltaban.** Revisión 1 de Rafael (partes B y C) y una tarde
@@ -80,6 +80,9 @@ de mediciones sobre la plaza de Yanque.
   «high demand» de Gemini dejaba una casa en las paredes): hasta cuatro
   reintentos con espera creciente, avisando en el panel; los errores reales
   (clave inválida) siguen cortando al momento.
+- **El puente MCP dice que sirve con cualquier cliente MCP** (Claude Code,
+  Claude Desktop, Cursor, VS Code, Windsurf, Gemini CLI, Codex CLI…) y dónde
+  pega cada uno el bloque; el manual igual.
 - **Bloquear un eje con la flecha ya lee la referencia bajo el cursor** (B3
   de Rafael, 04:20): Medir desde la arista inferior del muro, ↑, y el cursor
   sobre la esquina o el alféizar de la ventana → la guía toma esa altura,
