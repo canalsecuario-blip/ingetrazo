@@ -394,3 +394,25 @@ def test_escape_steps_out_of_the_open_group_from_the_window_action_too(viewport)
             scene.groups.remove(container)
         scene.version += 1
         viewport.set_active_tool(None)
+
+
+def test_paste_places_on_the_plane_through_the_clipboard_reference(viewport):
+    """Marco (2026-09-14), inside a bench: a cut slat could only be dropped
+    on the bench's faces or fell to the ground elsewhere. The paste's
+    cursor point lives on the plane through the clipboard's reference."""
+    from tools.paste import PasteTool
+    viewport.camera.set_view("iso")
+    viewport.camera.target = QVector3D(0, 0, 1)
+    viewport.camera.distance = 12
+    tool = PasteTool()
+    viewport.set_active_tool(tool)
+    tool._clip = {"ref": QVector3D(0, 0, 1.0), "faces": [], "edges": [], "groups": []}
+    try:
+        assert tool.start_point == QVector3D(0, 0, 1.0)
+        px = viewport._world_to_pixel(QVector3D(1.0, 0.0, 1.0))
+        world = viewport._world_from_pixel(int(px[0]), int(px[1]))
+        assert world is not None
+        assert abs(world.z() - 1.0) < 1e-6                  # level with the slat, not z = 0
+        assert abs(world.x() - 1.0) < 0.05
+    finally:
+        viewport.set_active_tool(None)

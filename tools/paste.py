@@ -49,6 +49,17 @@ class PasteTool(Tool):
         self._offset = QVector3D(0.0, 0.0, 0.0)
         self._preview_on = False
 
+    @property
+    def start_point(self):
+        """The clipboard's reference point, as the viewport's "start": the
+        cursor then lands on the plane THROUGH that point (level with the
+        cut slat, or vertical near the horizon) instead of on the ground or
+        on whatever face happens to lie under it — which is what pinned a
+        cut slat to the bench and dropped it to the floor everywhere else
+        (Marco, 2026-09-14: «quiero colocarlo a un metro pero no me deja»).
+        The axis inferences from that point come along for free."""
+        return self._clip["ref"] if self._clip else None
+
     # ---- Lifecycle ----------------------------------------------------------
     def on_activate(self, viewport) -> None:
         self._clip = getattr(viewport, "clipboard", None)
