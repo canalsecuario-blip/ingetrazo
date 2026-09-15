@@ -3,7 +3,8 @@
 """Wayland + fractional display scale starts under xcb (measured: frames p90
 149 ms vs 30 ms on the same model, Marco's laptop, 2026-09-14) — unless the
 user or the environment says otherwise."""
-from core.platform_choice import AUTO, WAYLAND, XCB, choose_platform, fractional_scale_configured
+from core.platform_choice import (AUTO, WAYLAND, XCB, choose_platform, connected_outputs,
+                                  fractional_scale_configured)
 
 
 def _gnome_home(tmp_path, scale):
@@ -41,3 +42,48 @@ def test_the_explicit_choices(tmp_path):
     assert choose_platform(XCB, wl, home) == XCB
     assert choose_platform(XCB, {"XDG_SESSION_TYPE": "wayland"}, home) is None
     assert choose_platform(WAYLAND, wl, _gnome_home(tmp_path / "f", "1.25")) is None
+
+
+def _sysfs(tmp_path, connected, others=()):
+    root = tmp_path / "drm"
+    for name in connected:
+        (root / name).mkdir(parents=True)
+        (root / name / "status").write_text("connected\n")
+    for name in others:
+        (root / name).mkdir(parents=True)
+        (root / name / "status").write_text("disconnected\n")
+    return root
+
+
+MARCOS_XML = """<monitors version="2">
+  <configuration>
+    <logicalmonitor><scale>1</scale><monitor><monitorspec><connector>HDMI-1</connector></monitorspec></monitor></logicalmonitor>
+    <logicalmonitor><scale>1.25</scale><monitor><monitorspec><connector>eDP-1</connector></monitorspec></monitor></logicalmonitor>
+  </configuration>
+  <configuration>
+    <logicalmonitor><scale>1.25</scale><monitor><monitorspec><connector>eDP-1</connector></monitorspec></monitor></logicalmonitor>
+  </configuration>
+</monitors>"""
+
+
+def test_the_kernels_connector_names_match_gnomes(tmp_path):
+    root = _sysfs(tmp_path, ["card1-eDP-1", "card1-HDMI-A-1"], ["card1-DP-1", "card1-Writeback-1"])
+    assert connected_outputs(root) == {"eDP-1", "HDMI-1"}
+
+
+def test_two_monitors_stay_on_wayland_one_fractional_one_goes_xcb(tmp_path):
+    home = tmp_path / "home"
+    (home / ".config").mkdir(parents=True)
+    (home / ".config" / "monitors.xml").write_text(MARCOS_XML)
+    wl = {"XDG_SESSION_TYPE": "wayland", "DISPLAY": ":0"}
+    alone = _sysfs(tmp_path / "a", ["card1-eDP-1"], ["card1-HDMI-A-1"])
+    assert choose_platform(AUTO, wl, home, alone) == XCB              # the laptop alone, 125 %
+    both = _sysfs(tmp_path / "b", ["card1-eDP-1", "card1-HDMI-A-1"])
+    assert choose_platform(AUTO, wl, home, both) is None              # beside the monitor: Wayland
+    # A single monitor whose configuration in force is whole-scaled.
+    xml_int = MARCOS_XML.replace("<scale>1.25</scale><monitor><monitorspec><connector>eDP-1</connector></monitorspec></monitor></logicalmonitor>\n  </configuration>\n</monitors>",
+                                 "<scale>2</scale><monitor><monitorspec><connector>eDP-1</connector></monitorspec></monitor></logicalmonitor>\n  </configuration>\n</monitors>")
+    home2 = tmp_path / "home2"
+    (home2 / ".config").mkdir(parents=True)
+    (home2 / ".config" / "monitors.xml").write_text(xml_int)
+    assert choose_platform(AUTO, wl, home2, alone) is None
