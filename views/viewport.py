@@ -7306,9 +7306,8 @@ class Viewport(QOpenGLWidget):
         from types import SimpleNamespace
         scene = self.scene
         entities: list = []           # (face, group_or_None)
-        places: list = []             # per entity: the PLACEMENT (proxy) whose
-                                      # matrix puts the face in the world; the
-                                      # owner above is what a click selects
+        place_idx = None              # per entity: index into placements, -1 = loose
+        placements: list = []
         ent_area: list = []
         ent_sel: list = []
         ent_vis: list = []
@@ -7325,7 +7324,6 @@ class Viewport(QOpenGLWidget):
         def add_face(f, grp, vis, sel):
             i = len(entities)
             entities.append((f, grp))
-            places.append(grp)
             ent_area.append(area_of(f))
             ent_vis.append(vis)
             ent_sel.append(sel)
@@ -7418,7 +7416,12 @@ class Viewport(QOpenGLWidget):
             frozen = getattr(self, "_frozen_cache_version", None) is not None
             if blk is None or (blk[0] != tuple(sig) and not frozen):
                 b_entities: list = []
-                b_places: list = []
+                # Per entity, the PLACEMENT (proxy) whose matrix puts the
+                # face in the world — the owner above is what a click
+                # selects. Run-length, one int per face: a Python object
+                # per face doubled the cold build (30 → 65 ms).
+                b_pidx: list = []
+                b_plist: list = []
                 b_v0, b_e1, b_e2, b_te = [], [], [], []
                 b_area, b_vis, b_sel = [], [], []
                 b_spans: list = []    # (bbox, tri start, count) per chunk
@@ -7434,7 +7437,8 @@ class Viewport(QOpenGLWidget):
                     off = len(b_entities)
                     owner = self._owner_of(g)
                     b_entities.extend((f, owner) for f in chunk["faces"])
-                    b_places.extend(g for _f in chunk["faces"])
+                    b_pidx.append(np.full(n, len(b_plist), dtype=np.int32))
+                    b_plist.append(g)
                     b_area.append(chunk["areas"])
                     b_vis.append(np.full(n, gvis, dtype=bool))
                     b_sel.append(np.full(n, gsel, dtype=bool))
@@ -7457,7 +7461,9 @@ class Viewport(QOpenGLWidget):
                         b_ggroups.append(owner)
                 blk = (tuple(sig), {
                     "entities": b_entities,
-                    "places": b_places,
+                    "place_idx": (np.concatenate(b_pidx) if b_pidx
+                                  else np.empty(0, np.int32)),
+                    "placements": b_plist,
                     "areas": (np.concatenate(b_area) if b_area
                               else np.empty(0)),
                     "vis": (np.concatenate(b_vis) if b_vis
@@ -7479,8 +7485,12 @@ class Viewport(QOpenGLWidget):
             block = blk[1]
             if block["entities"]:
                 offset = len(entities)
+                loose_count = len(entities)
                 entities.extend(block["entities"])
-                places.extend(block.get("places", [None] * len(block["entities"])))
+                place_idx = np.concatenate([
+                    np.full(loose_count, -1, dtype=np.int32),
+                    block.get("place_idx", np.full(len(block["entities"]), -1, np.int32))])
+                placements = block.get("placements", [])
                 areas.append(block["areas"])
                 vis_parts.append(block["vis"])
                 sel_parts.append(block["sel"])
@@ -7517,7 +7527,9 @@ class Viewport(QOpenGLWidget):
 
         idx = SimpleNamespace(
             entities=entities,
-            ent_place=places,
+            ent_place_idx=(place_idx if place_idx is not None
+                           else np.full(len(entities), -1, np.int32)),
+            ent_placements=placements,
             ent_area=np.concatenate(areas) if entities else np.empty(0),
             ent_sel=np.concatenate(sel_parts) if entities else np.empty(0, bool),
             ent_vis=np.concatenate(vis_parts) if entities else np.empty(0, bool),
@@ -8667,12 +8679,10 @@ class Viewport(QOpenGLWidget):
             return None, None
         idx = self._pick_index()
         i = getattr(self, "_face_any_index", None)
-        places = getattr(idx, "ent_place", None)
-        if (places is not None and i is not None and i < len(places)
-                and idx.entities[i][0] is face):
-            place = places[i]
-            if place is not None:
-                return face, place
+        pidx = getattr(idx, "ent_place_idx", None)
+        if (pidx is not None and i is not None and i < len(pidx)
+                and idx.entities[i][0] is face and pidx[i] >= 0):
+            return face, idx.ent_placements[int(pidx[i])]
         return face, owner
 
     def pick_group(self, screen_x: float, screen_y: float):

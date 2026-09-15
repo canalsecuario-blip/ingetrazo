@@ -1,8 +1,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""After a document loads, its objects are frozen out of the garbage
-collector's incremental passes (1.3 M objects on the plaza; passes of up to
-233 ms hit while drawing — Marco, 2026-09-14); the autosave tick re-settles."""
+"""After a document loads, the garbage collector is kept out of the way of
+drawing: a raised young-generation threshold (Python 3.14's incremental
+collector walked slices of the plaza's 1.3 M objects on almost every hover —
+Marco, 2026-09-14). gc.freeze was measured and rejected: fewer pauses but
+every allocation-heavy path slower."""
 import gc
 import os
 
@@ -12,26 +14,19 @@ from PySide6.QtWidgets import QApplication
 _app = QApplication.instance() or QApplication([])
 
 
-def test_open_path_freezes_the_heap_and_the_tick_resettles(tmp_path):
+def test_a_new_document_raises_the_gc_threshold_and_does_not_freeze():
     from views.main_window import MainWindow
     win = MainWindow()
+    old = gc.get_threshold()
     try:
-        gc.unfreeze()
-        assert gc.get_freeze_count() == 0
+        gc.set_threshold(2000, 10, 0)
         win._on_new()
-        assert gc.get_freeze_count() > 0                    # a fresh document settles too
-        junk = [[i] for i in range(1000)]                   # session objects, collectable
-        del junk
-        win.viewport._last_pos = None
-        win._on_autosave_tick()                             # re-settles: unfreeze → collect → freeze
-        assert gc.get_freeze_count() > 0                    # (a few fewer: the collected junk)
-        win.viewport._last_pos = (1, 1)                     # mid-gesture: leaves the heap alone
-        before = gc.get_freeze_count()
-        gc.unfreeze()
-        win._on_autosave_tick()
+        assert gc.get_threshold()[0] == MainWindow.GC_THRESHOLD0
         assert gc.get_freeze_count() == 0
-        gc.freeze()
+        win.viewport._last_pos = None
+        win._on_autosave_tick()                             # a collection, no freeze
+        assert gc.get_freeze_count() == 0
     finally:
-        gc.unfreeze()
+        gc.set_threshold(*old)
         win._saved_version = win.viewport.scene.version
         win.close()

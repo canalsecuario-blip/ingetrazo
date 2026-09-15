@@ -193,11 +193,11 @@ class MainWindow(QMainWindow):
         keep, and never under the user's hands (a 283k-face save takes real
         time; mid-drag it would read as a freeze)."""
         from PySide6.QtWidgets import QApplication
-        # Housekeeping that rides the same slow tick: re-settle the heap so
-        # what the session deleted since the last freeze is reclaimed —
-        # never mid-gesture (a collection over a big model is ~0.3 s).
+        # Housekeeping that rides the same slow tick: a clean collection
+        # now and then — never mid-gesture (over a big model it is ~0.3 s).
         if getattr(self.viewport, "_last_pos", None) is None:
-            self.settle_heap()
+            import gc
+            gc.collect()
         if not self._is_dirty():
             return
         version = self.viewport.scene.version
@@ -2339,20 +2339,23 @@ class MainWindow(QMainWindow):
         self.settle_heap()
         return True
 
+    #: Young-generation threshold: how many net allocations between
+    #: collector passes. Python's default (2000) made the incremental
+    #: collector (3.14) walk slices of the plaza's 1.3 M objects on almost
+    #: every hover — 203 passes and an 80 ms pause per 120 mouse moves;
+    #: at 50 000 the same run did 6 passes of ~0 ms. Measured 2026-09-14
+    #: against ``gc.freeze`` too, which cut the pauses but made every
+    #: allocation-heavy path slower (the cold pick index 23 → 41 ms).
+    GC_THRESHOLD0 = 50_000
+
     def settle_heap(self) -> None:
-        """Move the document's objects out of the garbage collector's way.
-        The plaza is 1.3 million Python objects; a full collection over
-        them took 274 ms and the incremental passes (Python 3.14) hit
-        while drawing — 931 passes in one hover session, the worst 233 ms
-        (Marco, 2026-09-14). After a load the graph is static: one clean
-        collection, then ``gc.freeze`` parks it in the permanent
-        generation, so the collector only walks what the session creates.
-        Called again on the autosave tick (unfreeze → collect → freeze)
-        so what the session has since deleted does get reclaimed."""
+        """After a document loads: one clean collection over its static
+        object graph, and the young-generation threshold that keeps the
+        collector out of the way while drawing (see ``GC_THRESHOLD0``)."""
         import gc
-        gc.unfreeze()
+        gc.unfreeze()                 # (in case an older session froze it)
+        gc.set_threshold(self.GC_THRESHOLD0, 10, 0)
         gc.collect()
-        gc.freeze()
 
     def _on_save(self) -> None:
         self.viewport.end_group_edit()
