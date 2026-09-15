@@ -650,9 +650,10 @@ class PushPullTool(Tool):
             viewport.scene.version += 1
 
     def inference_marker(self):
-        """Return ``(world_point, kind)`` for the green marker the viewport draws
-        when the distance inference is locked onto a model corner/face, or
-        ``None``. ``kind`` is ``"vertex"`` or ``"face"``."""
+        """Return ``(world_point, kind)`` for the marker the viewport draws
+        when the distance inference is locked onto model geometry, or
+        ``None``. ``kind`` is ``"vertex"``, ``"edge"`` or ``"face"`` — drawn
+        and labelled like the endpoint / on-edge / on-face snaps."""
         if not self.dragging or self._inference_point is None:
             return None
         return self._inference_point, self._inference_kind
@@ -854,7 +855,27 @@ class PushPullTool(Tool):
             self._inference_kind = best[3]
             return best[1]
 
-        # No corner nearby: align to the face under the cursor (its plane).
+        # No corner nearby: the EDGE under the cursor — SketchUp's "On edge"
+        # while pushing (Marco's capture, 2026-09-14: the half cylinder
+        # pushed until level with the slab's far edge). The point on the
+        # edge nearest the cursor ray sets the distance; the base's own
+        # edges are not references.
+        edge = getattr(vp, "_hover_edge", None)
+        project = getattr(vp, "_project_to_lock_line", None)
+        if edge is not None and project is not None:
+            a, b = QVector3D(edge.a), QVector3D(edge.b)
+            ab = b - a
+            if (_key(a) not in exclude or _key(b) not in exclude) and ab.length() > 1e-9:
+                on = project(a, ab, sx, sy)
+                t = QVector3D.dotProduct(on - a, ab) / QVector3D.dotProduct(ab, ab)
+                on = a + ab * max(0.0, min(1.0, t))
+                dist = QVector3D.dotProduct(on - self._anchor, self._normal)
+                if abs(dist) >= _MIN_EXTRUDE:
+                    self._inference_point = on
+                    self._inference_kind = "edge"
+                    return dist
+
+        # No edge either: align to the face under the cursor (its plane).
         # Project the ray∩plane hit onto the push axis. The base face (and
         # anything coplanar with it) reads ~0 distance — guarded out so the
         # push doesn't pin to its own plane.

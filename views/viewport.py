@@ -5949,15 +5949,35 @@ class Viewport(QOpenGLWidget):
         result = provider()
         if result is None:
             return
-        world, _kind = result
+        world, kind = result
         pixel = self._world_to_pixel(world)
         if pixel is None:
             return
         px, py = pixel
-        color = QColor.fromRgbF(0.16, 0.62, 0.36, 1.0)  # SketchUp endpoint green
-        painter.setPen(QPen(color, 2.0))
-        painter.setBrush(QColor.fromRgbF(0.16, 0.62, 0.36, 0.25))
-        painter.drawRect(QRectF(px - 5, py - 5, 10, 10))
+        # The same colours and words as the snap markers: a corner is the
+        # endpoint green, an edge the on-edge red, a face the on-face blue
+        # — SketchUp says "On edge" while you push level with one.
+        from core.snap import COLOR_ENDPOINT, COLOR_ON_EDGE, COLOR_ON_FACE
+        rgb, label = {
+            "edge": (COLOR_ON_EDGE, "on_edge"),
+            "face": (COLOR_ON_FACE, "on_face"),
+        }.get(kind, (COLOR_ENDPOINT, "endpoint"))
+        color = QColor.fromRgbF(*rgb, 1.0)
+        painter.setPen(QPen(QColor(255, 255, 255, 230), 4.0))
+        painter.setBrush(Qt.NoBrush)
+        painter.drawRect(QRectF(px - 6, py - 6, 12, 12))
+        painter.setPen(QPen(color, 2.4))
+        painter.setBrush(QColor.fromRgbF(*rgb, 0.30))
+        painter.drawRect(QRectF(px - 6, py - 6, 12, 12))
+        text = tr(self._SNAP_LABELS.get(label, ""))
+        if text:
+            font = QFont()
+            font.setPointSize(9)
+            painter.setFont(font)
+            painter.setPen(QPen(QColor(255, 255, 255, 220)))
+            painter.drawText(QPointF(px + 11, py + 17), text)
+            painter.setPen(QPen(color))
+            painter.drawText(QPointF(px + 10, py + 16), text)
 
     def _draw_length_label(self, painter: QPainter) -> None:
         tool = self.active_tool
