@@ -318,6 +318,25 @@ class MoveTool(Tool):
         mid = (self.grab + self.hover_point) * 0.5
         return (f"{delta.length():.2f} m", mid)
 
+    # ---- Snap exclusion -----------------------------------------------------
+    def snap_excluded(self):
+        """What is in motion, for the snap engine to leave out of its
+        candidates: ``(edge ids, group ids)`` or ``None``. SketchUp excludes
+        the entities being moved from inference — otherwise the tool snaps
+        to the very geometry it is dragging (issue #19, @pacaeiro). In copy
+        mode nothing moves (the ghost is a wireframe), so nothing is left
+        out."""
+        if self.grab is None or self._copy:
+            return None
+        edges: set[int] = set()
+        for v in self._verts:
+            for e in getattr(v, "edges", ()):
+                edges.add(id(e))
+        groups = {id(g) for g in self._groups}
+        if not edges and not groups:
+            return None
+        return edges, groups
+
     # ---- Internals ----------------------------------------------------------
     def _gather(self, ctx: ToolContext):
         return gather_targets(ctx)

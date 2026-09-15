@@ -210,6 +210,22 @@ class RotateTool(ProtractorBase):
         self._last = None
         viewport.update()
 
+    # ---- Snap exclusion -----------------------------------------------------
+    def snap_excluded(self):
+        """The geometry swinging live, left out of the snap candidates so
+        the tool never infers against itself (SketchUp; issue #19). Mirrors
+        MoveTool.snap_excluded; in copy mode the original stays put."""
+        if self.ref_point is None or self._copy:
+            return None
+        edges: set[int] = set()
+        for v in self._verts:
+            for e in getattr(v, "edges", ()):
+                edges.add(id(e))
+        groups = {id(g) for g in self._groups}
+        if not edges and not groups:
+            return None
+        return edges, groups
+
     # ---- Visual preview -----------------------------------------------------
     def rubber_band_lines(self):
         centre = (self.start_point if self.start_point is not None

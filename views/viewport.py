@@ -8201,6 +8201,14 @@ class Viewport(QOpenGLWidget):
                 if seg is not None:
                     lines.append(_SnapEdge(*seg))
         near = self._nearby_group_edges(px, py) if px is not None else []
+        # What a transform tool is dragging must not attract snaps (SketchUp
+        # leaves the entities in motion out of inference; issue #19): the
+        # tool names the edges/groups in motion and they are dropped here.
+        excl = getattr(self.active_tool, "snap_excluded", None)
+        excl = excl() if callable(excl) else None
+        if excl is not None and excl[1]:
+            near = [e for e in near
+                    if id(getattr(e, "group", None)) not in excl[1]]
         if px is not None:
             near += self._billboard_snap_edges()
             origins = getattr(self, "_component_origin_points", None)   # stub VPs in tests
@@ -8234,13 +8242,15 @@ class Viewport(QOpenGLWidget):
                                   QVector3D(gp.position)))
         big = (px is not None
                and len(self.scene.edges) > _LOOSE_SNAP_CAP)
-        if not lines and not near and sp is None and not big:
+        if not lines and not near and sp is None and not big and excl is None:
             return self.scene
         if big:
             loose = self._nearby_loose_edges(px, py)
         else:
             loose = list(self.scene.edges)
         loose = [e for e in loose if not getattr(e, "hidden", False)]
+        if excl is not None and excl[0]:
+            loose = [e for e in loose if id(e) not in excl[0]]
         if sp is not None:
             loose = [e for e in loose if _kept(e)]
         from types import SimpleNamespace
