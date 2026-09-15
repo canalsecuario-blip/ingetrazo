@@ -14,6 +14,8 @@ position, keyboard modifiers and the snap metadata.
 """
 from __future__ import annotations
 
+import math
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
@@ -45,6 +47,89 @@ class PlaneLock:
     like SketchUp's."""
 
     plane_lock: str | None = None
+    #: The plane the viewport used for the last cursor hit (`_last_work_plane`).
+    #: A shape started on a free point (no face, no lock) has no captured
+    #: ``work_plane``; its geometry is laid out on THIS plane instead, which
+    #: the viewport picks from the camera — horizontal at working tilts,
+    #: vertical facing the camera near the horizon — so the shape follows
+    #: the view like SketchUp's (Rafael's review, 2026-09-10: a rectangle
+    #: at eye level read «5.74 × 0.00 m», its second point on a vertical
+    #: plane while the sides were measured along X/Y).
+    hover_plane: tuple | None = None
+
+    def note_plane(self, viewport) -> None:
+        """Remember the plane the viewport just hit — call on every hover
+        and click before using the point."""
+        plane = getattr(viewport, "_last_work_plane", None)
+        if plane is not None:
+            self.hover_plane = plane
+
+    def drawing_plane(self):
+        """``(point, normal)`` the shape is laid out on: the captured or
+        locked plane, else the plane of the last hit, else the ground."""
+        if self.work_plane is not None:
+            return self.work_plane
+        if self.hover_plane is not None:
+            return self.hover_plane
+        return QVector3D(0.0, 0.0, 0.0), QVector3D(0.0, 0.0, 1.0)
+
+    #: Radius (circle) / half-side (rectangle) of the cursor preview, px.
+    PREVIEW_PX = 22
+
+    def preview_plane(self, viewport, point: QVector3D):
+        """The plane the shape WOULD take at ``point`` before the first
+        click: the arrow-key lock, else the face under the cursor, else
+        the view's — vertical facing the camera near the horizon, flat
+        otherwise. SketchUp shows this plane on the cursor (a coloured
+        square / ring) so a lock is visible before you commit to it."""
+        locked = self.locked_work_plane(point)
+        if locked is not None:
+            return locked
+        plane = getattr(viewport, "_last_work_plane", None)
+        if plane is not None and abs(plane[1].normalized().z()) > 0.99:
+            near = getattr(viewport, "_near_horizon_vertical", None)
+            vertical = near(point) if near is not None else None
+            if vertical is not None:
+                return vertical
+        if plane is not None:
+            return QVector3D(point), plane[1]
+        return QVector3D(point), QVector3D(0.0, 0.0, 1.0)
+
+    @staticmethod
+    def plane_color(normal: QVector3D):
+        """RGBA of the axis the plane is normal to (red = YZ, green = XZ,
+        blue = XY), or ``None`` for a plane off the axes."""
+        from core.snap import AXIS_COLORS
+        n = normal.normalized()
+        for axis, comp in (("x", n.x()), ("y", n.y()), ("z", n.z())):
+            if abs(comp) > 0.99:
+                r, g, b = AXIS_COLORS[axis][:3]
+                return (r, g, b, 1.0)
+        return None
+
+    def lock_color(self):
+        """The rubber band's colour while an arrow-key lock is on."""
+        if self.plane_lock is None:
+            return None
+        from tools.base import PLANE_LOCK_AXES
+        return self.plane_color(PLANE_LOCK_AXES[self.plane_lock])
+
+    @staticmethod
+    def world_per_pixel(viewport, point: QVector3D, along: QVector3D):
+        """Metres per screen pixel at ``point`` along ``along``, or ``None``
+        when the viewport cannot project (headless stand-ins)."""
+        project = getattr(viewport, "_world_to_pixel", None)
+        if project is None:
+            return None
+        try:
+            a = project(point)
+            b = project(point + along.normalized() * 0.25)
+        except Exception:  # noqa: BLE001 — no projection, no preview
+            return None
+        if a is None or b is None:
+            return None
+        d = math.hypot(b[0] - a[0], b[1] - a[1])
+        return 0.25 / d if d > 1e-6 else None
 
     def plane_lock_key(self, viewport, key: int) -> bool:
         if getattr(self, "start_point", None) is not None:

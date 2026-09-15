@@ -40,11 +40,157 @@
     </p>
   </description>
   <launchable type="desktop-id">com.ingetrazo.IngeTrazo.desktop</launchable>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://ingetrazo.com/images/screenshots/principal.jpeg</image>
+      <caption>Modelling a plaza: push/pull, groups, materials and shadows</caption>
+      <caption xml:lang="es">Modelando una plaza: empujar/tirar, grupos, materiales y sombras</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://ingetrazo.com/images/screenshots/laminas.jpeg</image>
+      <caption>The sheet composer: to-scale plans with dimensions, labels and a title block</caption>
+      <caption xml:lang="es">El compositor de láminas: planos a escala con cotas, etiquetas y cajetín</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://ingetrazo.com/images/screenshots/terreno.jpeg</image>
+      <caption>Real terrain: base-map tiles, 3D elevation and survey data under the model</caption>
+      <caption xml:lang="es">Terreno real: mapa base, elevación 3D y levantamientos bajo el modelo</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://ingetrazo.com/images/screenshots/import-sketchup.jpeg</image>
+      <caption>SketchUp .skp files open natively, textures and all</caption>
+      <caption xml:lang="es">Los archivos .skp de SketchUp abren de forma nativa, con sus texturas</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://ingetrazo.com/images/screenshots/componentes.jpeg</image>
+      <caption>A component library of 1510 models and 427 textures, browsed from the tray</caption>
+      <caption xml:lang="es">Biblioteca de 1510 componentes y 427 texturas, desde la bandeja</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://ingetrazo.com/images/screenshots/bim.jpeg</image>
+      <caption>BIM tags on the geometry you drew, exported to IFC4 for quantity take-off</caption>
+      <caption xml:lang="es">Etiquetas BIM sobre lo trazado, exportadas a IFC4 para el metrado</caption>
+    </screenshot>
+  </screenshots>
   <url type="homepage">https://ingetrazo.com</url>
   <url type="bugtracker">https://github.com/ingelibre/ingetrazo/issues</url>
   <url type="vcs-browser">https://github.com/ingelibre/ingetrazo</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.4.1" date="2026-09-15">
+      <description>
+        <p>The world origin wins: coming to the origin aligned with an
+        encouraged point or with the red axis used to click millimetres
+        beside it (the projection onto the axis) and leave tiny stubs; the
+        origin is a named point like a corner and now beats the linear
+        inferences.</p>
+        <p xml:lang="es">El origen gana: al acercarte al origen alineado con
+        un punto animado o con el eje rojo, el clic caía a milímetros
+        (la proyección sobre el eje) y quedaban tramos diminutos; el origen
+        es un punto con nombre, como una esquina, y ahora manda sobre las
+        inferencias lineales.</p>
+      </description>
+    </release>
+    <release version="0.4.0" date="2026-09-15">
+      <description>
+        <p>Inference the SketchUp way, three tools that were missing, and
+        the Linux packages fixed for NVIDIA. Rectangle, circle and arcs draw
+        on the plane facing the view and show it on the cursor; From Point
+        before the first click, two points at once, tangent at vertex, arc
+        midpoints, component origins — all reaching into nested groups. The
+        Arc rounds a corner like SketchUp's: tangent preview, magenta at the
+        same distance on the next edge, a double-click trims the corner. New
+        tools: Fillet rounds the edges of a solid (chains, box corners,
+        concave edges), Position Texture puts SketchUp's pins on a face
+        (move, scale, rotate, shear; back side too) and a sampled position
+        travels to other faces; painting a curved surface wraps the image
+        around it. A rim piece pushed flush onto the far face is cut through.
+        The status bar shows one hint for the tool and its step, the tray
+        reflows its swatches with the width, and the AI assistant builds a
+        whole house in one recipe, retries a busy provider and sends lighter
+        screenshots; the MCP bridge names every client that can use it. The
+        tarball and AppImage leave the C++ runtime and GLib to the host, which
+        is what aborted GLX on NVIDIA.</p>
+        <p xml:lang="es">Inferencia a la SketchUp, tres herramientas que
+        faltaban y los paquetes Linux arreglados para NVIDIA. Rectángulo,
+        círculo y arcos dibujan en el plano que mira a la vista y lo enseñan
+        en el cursor; «Desde el punto» antes del primer clic, dos puntos a
+        la vez, tangente en el vértice, puntos medios de arco, orígenes de
+        componente — todo alcanza grupos anidados. El Arco redondea esquinas
+        como SketchUp: vista previa tangente, magenta a la misma distancia en
+        la arista contigua, doble clic recorta la esquina. Herramientas
+        nuevas: Redondear redondea las aristas de un sólido (cadenas,
+        esquinas de caja, cóncavas), Posicionar textura pone los pines de
+        SketchUp sobre una cara (mover, escalar, rotar, cizallar; también el
+        reverso) y la muestra viaja a otras caras; pintar una superficie
+        curva envuelve la imagen. Una pieza del borde empujada a ras de la
+        cara opuesta se corta de lado a lado. La barra de estado da una sola
+        pista por herramienta y paso, la bandeja reparte las muestras según
+        el ancho, y el asistente IA levanta una casa entera en una receta,
+        reintenta cuando el proveedor está saturado y manda capturas más
+        ligeras; el puente MCP nombra todos los clientes que pueden usarlo.
+        El tarball y el AppImage dejan al sistema el runtime de C++ y GLib,
+        que era lo que abortaba GLX en NVIDIA.</p>
+      </description>
+    </release>
+    <release version="0.3.20" date="2026-09-14">
+      <description>
+        <p>The orthomosaic, labels with several arrows, and the toolbars'
+        new face. A drone orthomosaic comes in as a GeoTIFF with nothing to
+        install — a built-in reader handles Deflate, LZW, PackBits and JPEG
+        tiles and lands the picture on the map at its true size and place;
+        images and the base map take an opacity; scenes remember the base
+        map, the terrain and the sun, and sheet views render with exactly
+        that. In the sheet composer a label can point at two or three things
+        with one text, its background hugs the letters, and raster views
+        honour the edge and profile pens. The toolbars get icons drawn one by
+        one, a size setting (Preferences), a sidebar that folds away like
+        LibreOffice's and a clean screen (Ctrl+0) with a way out — in the
+        model window and the composer alike. Plus store screenshots, the
+        Flatpak window tied to its launcher, and an AppImage that offers to
+        add itself to the applications menu.</p>
+        <p xml:lang="es">El ortomosaico, las etiquetas con varias flechas y
+        la cara nueva de las barras. El ortomosaico del dron entra como
+        GeoTIFF sin instalar nada —un lector propio maneja Deflate, LZW,
+        PackBits y teselas JPEG y deja la imagen sobre el mapa a su tamaño y
+        en su sitio—; las imágenes y el mapa base tienen opacidad; las
+        escenas recuerdan el mapa base, el terreno y el sol, y las vistas de
+        las láminas se renderizan con eso mismo. En el compositor una
+        etiqueta señala dos o tres cosas con un solo texto, su fondo se pega
+        a las letras y las vistas ráster respetan las plumas de aristas y
+        perfiles. Las barras estrenan iconos dibujados uno a uno, tamaño
+        configurable (Preferencias), una barra lateral que se pliega como en
+        LibreOffice y una pantalla limpia (Ctrl+0) con salida — en la ventana
+        del modelo y en el compositor. Además capturas en la tienda, la
+        ventana del Flatpak ligada a su lanzador y un AppImage que se ofrece
+        a añadirse al menú de aplicaciones.</p>
+      </description>
+    </release>
+    <release version="0.3.19" date="2026-09-14">
+      <description>
+        <p>The project north. A model drawn square to the axes no longer has
+        to be turned to fit its site: the Terrain panel gets a North angle
+        (degrees clockwise from the green axis, as in SketchUp) that turns the
+        base map, the 3D terrain, imported paths and points and the sun under
+        the model, while the model — and its front/right/top views and axis
+        locks — stays put. "Straighten model on the map" converts a model
+        that was already turned and dragged into place, without moving a
+        single point on the ground. Plus the first three contributions from
+        an outside tester: Shift locks the exact axis, construction guides
+        are dashed again, and toolbar icons can be made larger.</p>
+        <p xml:lang="es">El norte del proyecto. Un modelo dibujado a escuadra
+        con los ejes ya no tiene que girarse para encajar en su sitio: el
+        panel Terreno tiene un ángulo del Norte (grados en sentido horario
+        desde el eje verde, como en SketchUp) que gira el mapa base, el
+        terreno 3D, las rutas y puntos importados y el sol bajo el modelo,
+        mientras el modelo —y sus vistas frontal/derecha/planta y bloqueos de
+        eje— se queda quieto. «Enderezar modelo sobre el mapa» convierte un
+        modelo que ya se giró y arrastró, sin mover un solo punto sobre el
+        terreno. Y las tres primeras contribuciones de un probador externo:
+        Shift bloquea el eje exacto, las guías vuelven a ser punteadas y los
+        iconos de las barras pueden agrandarse.</p>
+      </description>
+    </release>
     <release version="0.3.18" date="2026-09-12">
       <description>
         <p>Nested groups, the way SketchUp does them: a group can hold groups,

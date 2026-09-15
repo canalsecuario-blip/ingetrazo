@@ -4,7 +4,323 @@ All notable changes to IngeTrazo are documented here.
 Format inspired by [Keep a Changelog](https://keepachangelog.com); versions
 follow [SemVer](https://semver.org).
 
-## [Sin publicar]
+## [0.4.1] — 2026-09-15
+
+### Arreglado
+- **El origen gana a las inferencias lineales**: al acercarte al origen del
+  dibujo alineado con un punto «animado» o con el eje rojo, el clic caía a
+  milímetros del origen (proyección sobre el eje) y quedaban tramos
+  diminutos; el origen es un punto con nombre, como una esquina, y ahora
+  manda sobre «Desde el punto» y el eje.
+
+## [0.4.0] — 2026-09-15
+
+**La inferencia a la altura de SketchUp, el visor más rápido, y las tres
+herramientas que faltaban.** Revisión 1 de Rafael (partes B y C) y una tarde
+de mediciones sobre la plaza de Yanque.
+
+### Añadido
+- **Asistente IA con recetas de arquitectura**: `house(...)` levanta una
+  casa completa en una sola llamada (muros con espesor, puertas con hoja,
+  ventanas con vidrio, piso, techo a dos aguas, a cuatro aguas o plano, con
+  alero), y `wall(...)` / `prism(...)` para muros con vanos y losas; el
+  modelo lo sabe y hace los pedidos sencillos en un solo turno. Un modelo
+  que «cuenta» lo que hizo sin mandar código recibe un toque y los sistemas
+  agénticos de Groq (compound) ya no se ofrecen. Las capturas viajan en JPEG
+  de 640 px (un cuarto de los tokens de antes).
+- **Redondear (fillet)** — la herramienta que SketchUp no tiene. Clic en una
+  arista (o las aristas seleccionadas), mueve el cursor para fijar el radio o
+  tecléalo, clic: la arista se convierte en una tira tangente a las dos caras;
+  las tapas reciben el arco, las aristas encadenadas (el borde de una losa) se
+  unen a inglete y en las esquinas de tres aristas (una caja) aparece el
+  parche esférico. Cóncavas también. Lo que no se puede redondear lo dice y no
+  toca el modelo. «Ns» fija los segmentos.
+- **Posicionar textura** (clic derecho en una cara con imagen ▸ Textura ▸
+  Posicionar): los cuatro pines de SketchUp — rojo mueve, verde escala y
+  rota, azul escala y cizalla —, la textura semitransparente con su retícula
+  de baldosas, levantar un pin con un clic para clavarlo en una esquina, menú
+  interno Listo / Restablecer / Voltear / Girar / Deshacer, Enter termina y
+  Esc restaura. Textura ▸ Restablecer posición vuelve a la proyección por
+  defecto. (El pin amarillo de perspectiva se muestra pero aún no se arrastra.)
+- **La textura envuelve las superficies curvas**: al pintar un cilindro o
+  una esquina redondeada, la imagen se apoya en la faceta clicada y va
+  girando de faceta en faceta alrededor de cada arista suave, así que los
+  ladrillos continúan sin cortes ni saltos (antes cada faceta proyectaba por
+  su cuenta).
+- **La muestra de una textura posicionada viaja a otras caras**: el
+  cuentagotas sobre una cara con la textura escalada o girada con los pines
+  y el cubo sobre otra cara de distinto plano aplican el mismo tamaño de
+  baldosa y el mismo giro (las caras coplanarias siguen recibiendo la
+  posición exacta).
+- **Arco que redondea esquinas como SketchUp**: al empezar sobre una arista la
+  vista previa es el arco tangente (cian, «Tangente a la arista»); en la arista
+  contigua, a la misma distancia del vértice, se clava y se vuelve magenta;
+  doble clic ahí dibuja el arco y **recorta la esquina sola**; doble clic
+  cerca de otra esquina repite el mismo radio; Alt deja los tramos.
+  «Semicírculo» en la fase de curvatura y «Ns» segmentos (también rehace el
+  arco recién dibujado).
+- **Inferencia como en SketchUp**: rectángulo, círculo, polígono y arcos
+  dibujan en el plano más perpendicular a la vista (de pie junto al
+  horizonte, planos al orbitar arriba) y **enseñan el plano en el cursor**
+  (anillo o cuadradito, en el color del eje con las flechas); **«Desde el
+  punto» antes del primer clic** con puntos «animados» al pausar ¼ s sobre
+  una esquina o un centro, y **dos puntos a la vez** (el cursor se clava en
+  el cruce de sus punteadas); **Tangente en el vértice** para arcos que nacen
+  en el extremo de otro; **Punto medio del arco**, **Origen del componente**,
+  guías rotuladas «Sobre la línea»; todo alcanza a grupos y componentes
+  anidados desde fuera, con el rótulo «… en componente». Empujar/Tirar infiere
+  «En arista» además de esquinas y caras.
+- **Servidor gráfico automático**: en Wayland con un solo monitor a escala
+  fraccionaria (125 %) el visor arranca por X11 (XWayland), que en esa
+  combinación pinta sin tirones (p90 149 → 30 ms medido); con dos monitores
+  o escala entera se queda en Wayland. Preferencias ▸ General ▸ Servidor
+  gráfico: Automático / Wayland / X11.
+- Bancos de pruebas `scripts/bench_nested.py` (editar anidados) y mediciones
+  de arrastre.
+
+### Arreglado
+- **Empujar una pieza del borde hasta la cara opuesta la elimina** (la
+  esquina que deja un arco de redondeo, empujada hasta el fondo): la cara
+  trasera se recorta con el arco y no queda la tapa; antes solo se
+  perforaban aberturas interiores y el trozo del borde quedaba como una
+  lámina pegada al fondo. Si te pasas, el empuje se detiene justo en la cara
+  opuesta y recorta igual.
+- **El asistente IA reintenta cuando el proveedor está saturado** (el 503
+  «high demand» de Gemini dejaba una casa en las paredes): hasta cuatro
+  reintentos con espera creciente, avisando en el panel; los errores reales
+  (clave inválida) siguen cortando al momento.
+- **El puente MCP dice que sirve con cualquier cliente MCP** (Claude Code,
+  Claude Desktop, Cursor, VS Code, Windsurf, Gemini CLI, Codex CLI…) y dónde
+  pega cada uno el bloque; el manual igual.
+- **Bloquear un eje con la flecha ya lee la referencia bajo el cursor** (B3
+  de Rafael, 04:20): Medir desde la arista inferior del muro, ↑, y el cursor
+  sobre la esquina o el alféizar de la ventana → la guía toma esa altura,
+  con la punteada «Desde el punto». Antes había que acertar con el pie sobre
+  la propia línea bloqueada.
+- **Paquetes Linux en NVIDIA (issue #6, seguía en la 0.3.19)**: el tarball
+  y el AppImage llevaban la `libstdc++`/`libgcc_s` del runner de CI y GLib;
+  cargadas antes que el driver, un NVIDIA compilado contra un runtime más
+  nuevo no podía cargar y Qt abortaba en GLX sin decir por qué. Ya se usan
+  las del sistema (como hace la lista de exclusión de AppImage), y el
+  sondeo de OpenGL imprime el mensaje fatal en vez de tragárselo.
+- **Dibujar sobre la cara de un componente anidado** (el poste de la pérgola):
+  el plano se leía en las coordenadas del prototipo — normal invertida y
+  punto en otro sitio — y el rectángulo salía fuera de la cara. Ahora toda
+  lectura de plano pasa por la colocación con su matriz compuesta.
+- **Doble clic dentro de un contenedor abierto** no entraba en el siguiente
+  nivel (el índice de picking seguía respondiendo «la plaza»).
+- **Esc no salía del grupo**: el atajo Esc del menú Herramientas se disparaba
+  antes que el visor con una cascada sin ese paso. Una sola cascada.
+- **Pegar/insertar mientras se edita un contenedor** iba a la raíz; ahora
+  entra en el contenedor (y Deshacer lo quita de ahí).
+- Un error interno al pasar el ratón con aristas sueltas junto a un
+  componente mataba el movimiento (los clics «no hacían nada»).
+- Rectángulo de lado cero: se rechaza con aviso en vez de fallar y revertir.
+- Pegar coloca en el plano de la referencia (antes solo sobre caras o al suelo).
+
+### Rendimiento (plaza de Yanque, mediana)
+- Mover el ratón con una herramienta: **1004 → 493 ms por 60 movimientos**
+  (los candidatos de snap se comprueban por oclusión en orden de distancia
+  hasta el primero visible).
+- Entrar en el contenedor de la plaza **473 → 126 ms**; mover un hijo dentro
+  **460 → 100 ms** (envolvente convexa con prefiltro de 16 direcciones y
+  arrays de puntos por prototipo).
+- Confirmar una edición **32 → 22 ms**; arrastre de Mover **67 → 42 ms** por
+  cuadro; Empujar/Tirar 9 ms (una «época de colocaciones» sustituye a la
+  versión de la escena como clave de las cachés del lado de los grupos, y los
+  chunks aceptan mallas intactas en O(1) por contador de mutación).
+- Barra de estado a ~12 actualizaciones/s (cada cambio de texto volcaba la
+  ventana entera); recolector de basura con umbral 50 000 (pausas de 80 ms
+  → 0; `gc.freeze` medido y descartado).
+- **Pendiente para modelos mayores**: la parte suelta del índice de picking
+  por cuadro (~11 ms) y la caja del grupo editado (~9 ms) en los arrastres.
+
+### Cambiado
+- **Barra de estado a la SketchUp**: una sola pista para la herramienta y el
+  paso en que está («Clic en el punto final, o teclea la longitud y Enter…»),
+  en vez de la tira con todos los atajos a la vez.
+- **La bandeja aprovecha el ancho**: las muestras de materiales y los
+  botones de componentes fluyen en tantas columnas como quepan al ensanchar
+  la barra lateral (antes, 5 y 3 fijas con la mitad derecha en blanco).
+- Iconos de las barras: **Normal (24 px)** por defecto (Grande queda como
+  opción).
+- Los puntos de componentes ya no se pintan en magenta (el rótulo sigue
+  diciendo «en componente»).
+
+## [0.3.20] — 2026-09-14
+
+**El ortomosaico, las etiquetas con varias flechas y la cara nueva de las
+barras.** Una sesión entera sobre las láminas de la plaza de Yanque: el
+ortomosaico del dron entra como GeoTIFF sin instalar nada, las escenas
+recuerdan el mapa y el sol, las etiquetas del compositor señalan dos o tres
+cosas con un mismo texto, y las barras de herramientas estrenan iconos
+dibujados uno a uno con Marco, tamaño configurable y una barra lateral
+que se pliega como en LibreOffice. También la primera tanda de la revisión
+de Rafael: capturas en la tienda, icono del AppImage y el «Abrir» de GNOME
+Software.
+
+### Añadido
+- **Importar ▸ Ortomosaico (GeoTIFF).** El lector propio (`georef/geotiff.py`)
+  lee la cabecera —escala de píxel y punto de amarre o matriz, zona UTM por
+  las GeoKeys o por la cita, PixelIsPoint— y descodifica los píxeles sin
+  GDAL ni Pillow: sin comprimir, Deflate, PackBits, LZW (filas de teselas
+  repartidas en procesos) y JPEG dentro del TIFF, reduciendo al vuelo hasta
+  el techo de textura. La imagen aterriza sobre el datum a su tamaño y en su
+  sitio, como imagen de referencia bloqueada. Medido: 3 MB JPEG 0,1 s;
+  170 Mpx Deflate 6,8 s; 665 Mpx LZW 33 s.
+- **Opacidad de imágenes y del mapa base.** Clic derecho sobre una imagen
+  para darle transparencia (deshacible); el mapa base tiene su deslizador
+  en Terreno y se guarda en el `.igz`. El clic derecho alcanza a una imagen
+  BLOQUEADA (Desbloquear / Eliminar) aunque haya geometría dibujada encima:
+  antes un escaneo bloqueado no volvía a seleccionarse nunca.
+- **Las escenas recuerdan el mapa base, el terreno, el levantamiento y las
+  sombras** tal como se capturaron, y los marcos de las láminas se renderizan
+  con eso mismo: una escena sin mapa sale sin mapa en la lámina, una con
+  sombras sale con sombras. Las escenas anteriores a estos campos no tocan
+  nada.
+- **Etiquetas con varias flechas en el compositor.** El segundo clic de la
+  herramienta Etiqueta sobre una etiqueta existente le añade otra flecha
+  (anclada al modelo si el punto se pegó a un marco); Ctrl+arrastrar una
+  punta saca una nueva; soltar una punta sobre las letras la quita. Un punto
+  donde cada guía sale del texto (casilla en el panel). La esquina de la
+  etiqueta redimensiona el ancho de ajuste, que estaba dibujado pero inerte.
+- **Fondo de las etiquetas y textos pegado a las letras**: ancho por la línea
+  más ancha, alto por los glifos (0,25 × tamaño sobre las mayúsculas para las
+  tildes, 0,05 × bajo el último descendente), líneas apiladas al paso real del
+  pintor; margen lateral 1,0 → 0,5 mm.
+- **Plumas ráster en las láminas**: los marcos ráster toman los grosores de
+  Aristas y Perfiles del estilo (el render redibuja las líneas GL con
+  desplazamientos subpíxel hasta el grosor de la pluma); un píxel a 300 ppp
+  era un pelo de 0,085 mm que casi no se veía.
+- **Iconos nuevos** en las barras, elegidos entre propuestas dibujadas:
+  cuentagotas al estilo Inkscape, Empujar/Tirar como losa con flecha maciza,
+  las vistas estándar como una misma casita a dos aguas con la pared que se
+  mira en naranja, la mano de desplazar como gesto de arrastre, las
+  herramientas de dibujo con sus puntos y guías de construcción, rectángulo
+  girado con sus tres clics, Cota con puntos, líneas de extensión y un «3»,
+  Estilo de cota con brocha, secciones mínimas (caja, plano punteado, borde
+  de corte, relleno), cinta métrica espejada, y las órdenes de Organizar del
+  compositor en el mismo estilo.
+- **Tamaño de los iconos como Preferencia** (Ventana ▸ Preferencias ▸
+  General ▸ Iconos de las barras: 20/24/32/40 px), aplicado en vivo a todas
+  las barras de la ventana del modelo Y del compositor. Por defecto 32 px, y
+  la distribución de barras de fábrica es la de Marco (Dibujar y Anotar a la
+  izquierda, el resto arriba); un perfil que ya guardó la suya la conserva.
+- **Barra lateral plegable como en LibreOffice**: una manija sobre la línea
+  donde se redimensiona la barra de la derecha, a media altura; clic pliega
+  las tres bandejas (Propiedades, BIM, Terreno) y otro clic las devuelve;
+  Ctrl+F5 o Ventana ▸ Barra lateral hacen lo mismo. Igual en el compositor
+  con su panel derecho.
+- **Pantalla limpia (Ctrl+0) con botón de salida** arriba a la derecha, para
+  quien no conoce el atajo; también en el compositor (oculta barras, panel,
+  reglas y barra de estado).
+- **Las barras del compositor se pueden mover** y su distribución se guarda
+  al cerrar; una instalación nueva ve la de fábrica: las 14 herramientas de
+  elementos de lámina a la izquierda y, arriba, Lámina → **Dibujo** (barra
+  nueva con línea, flecha, terreno, rectángulo, elipse, polígono y las tres
+  cotas: 23 iconos en una sola columna no cabían en una laptop) →
+  Organizar, que ahora se muestra por defecto.
+- **Tamaño de icono según la pantalla** en una instalación nueva: 32 px con
+  900 px o más de alto disponible, 24 px en pantallas menores (medido:
+  a 32 px la distribución de fábrica desborda una laptop de 1366×768).
+  Lo que el usuario elija en Preferencias manda siempre.
+- **Botón de desbordamiento de las barras** con doble flecha naranja y
+  tooltip «Más herramientas de esta barra»: cuando una barra no cabe, Qt
+  esconde el resto tras un botón que en tema oscuro era un bloque gris sin
+  flecha visible.
+- **Tienda y escritorio (revisión de Rafael, parte A):** el metainfo lleva
+  seis capturas con pie en los dos idiomas (GNOME Software mostraba «Sin
+  capturas»); dentro del Flatpak la ventana declara el id de la app como
+  archivo `.desktop`, para que el shell la asocie a su lanzador; el AppImage
+  se ofrece a instalar su lanzador e icono en el menú de aplicaciones la
+  primera vez (`core/appimage.py`; Ayuda ▸ Añadir/Quitar del menú).
+
+### Arreglado
+- **Sombras con una imagen translúcida activa**: al orbitar aparecía un
+  agujero blanco bajo el modelo. El pase de imágenes apagaba el blending
+  tras una imagen desvanecida y no lo reencendía, y el receptor de sombras
+  escribía alfa 0 sobre el suelo en cada cuadro que reutilizaba el mapa de
+  sombras. El blending es ahora estado del cuadro (test con GL real).
+- **La pestaña Diseño del compositor saltaba a propiedades del elemento**
+  con cada clic en las flechas de un cuadro numérico; solo salta cuando se
+  selecciona un elemento DISTINTO.
+- **El editor en sitio de las etiquetas** tenía un margen de documento de
+  1,5 mm que descolocaba y reajustaba el texto de otra manera; sin margen y
+  con tarjeta opaca.
+- **Enderezar modelo** avisa cuando el grupo seleccionado no está girado ni
+  movido en lugar de no hacer nada en silencio.
+- **Listas de las bandejas sin scroll dentro del scroll**: Capas, Escenas,
+  Componentes en el modelo y la tabla BIM crecen a sus filas; el único
+  scroll es el de la bandeja.
+- **Guardar** es el primer botón de la barra Principal del modelo, como en
+  el compositor.
+
+### Cambiado
+- Orden de la barra Modificar: Empujar/Tirar, Mover, Rotar, Escalar,
+  Simetría, Sígueme, Equidistancia. Orden de las vistas estándar: iso,
+  superior, frontal, derecha, izquierda, posterior, inferior.
+- El manual de trampas del AI Bridge: nunca reemplazar en caliente un
+  método virtual de Qt (`paintGL`, `boundingRect`, `eventFilter`…) en una
+  clase viva; solo métodos normales, y relanzar para el resto.
+
+## [0.3.19] — 2026-09-14
+
+**El norte del proyecto.** La plaza de Yanque, dibujada a escuadra con los
+ejes, se había girado 33,5° como grupo para encajar en el satélite — y las
+vistas Frontal, Derecha e Izquierda dejaron de significar nada. Esta
+versión hace lo que SketchUp: el modelo se queda en sus ejes y el que gira
+es el mapa. Y llegan los tres primeros arreglos de un colaborador externo,
+@pacaeiro, con sus issues: el bloqueo de eje con Shift, las guías
+punteadas y los iconos grandes.
+
+### Añadido
+- **Norte del proyecto: el mapa gira bajo el modelo, no el modelo bajo el
+  mapa.** En el panel Terreno/Mapa base, el campo **Norte** dice hacia dónde
+  queda el norte verdadero, en grados en sentido horario desde el eje verde
+  (0° = el verde apunta al norte; la misma convención que Solar North de
+  SketchUp). Al cambiarlo giran por debajo el mapa base, el terreno 3D, las
+  rutas y puntos importados, la lectura UTM de la barra de estado y el sol
+  de las sombras; el modelo no se toca, así que las vistas estándar, los
+  bloqueos de eje y el rectángulo siguen a escuadra. Se guarda en el `.igz`
+  (clave `north`, solo si no es 0: los documentos y lectores anteriores no
+  ven nada nuevo).
+- **Enderezar modelo sobre el mapa.** Para un modelo que ya se giró y
+  arrastró como grupo para encajar en el sitio: se selecciona ese componente
+  y con un botón vuelve a sus propios ejes, el origen pasa a su esquina y el
+  ángulo del norte queda calculado, de modo que ningún punto cambia de
+  latitud/longitud. Viajan con él los demás grupos, la geometría suelta, las
+  cotas, textos, guías, planos de sección, imágenes, rutas y puntos, las
+  escenas guardadas y los marcos y cotas ancladas de las láminas. Un paso de
+  deshacer. Un modelo inclinado o escalado se rechaza (no hay norte para
+  eso); la parte vertical de la colocación se descarta, porque el mapa solo
+  puede estar en z = 0.
+- **Iconos grandes en las barras** (@pacaeiro, #15): clic derecho sobre una
+  barra ▸ «Iconos grandes en las barras» pasa de 24 a 32 px; se recuerda
+  entre sesiones y viene apagado.
+
+### Arreglado
+- **Shift bloqueaba una dirección torcida** (@pacaeiro, #13): con la
+  inferencia de eje activa, Shift capturaba la dirección del cursor —unos
+  grados fuera del eje— en vez del eje X, Y o Z exacto. Ahora bloquea el
+  eje inferido, conservando el sentido.
+- **Las guías de construcción salían a línea llena en vez de punteadas.** La
+  Cinta de medir trazaba sus guías continuas, sin el punteado fino de
+  SketchUp. El lápiz siempre fue `Qt.DashLine`: lo que fallaba era la ESCALA.
+  Una guía se recorta en `_clip_segment_front` justo delante del plano de la
+  cámara (con `w = 1e-3`), de modo que su extremo se proyecta a MILLONES de
+  píxeles del origen, y el trazador de trazos de Qt —que trabaja en punto
+  fijo— colapsa el patrón a una línea sólida a esa distancia. Medido con una
+  sonda sobre un `QOpenGLWidget` real: un segmento de 400 000 px todavía
+  puntea (8 huecos), uno de 4 000 000 px sale lleno (0 huecos), y da igual el
+  color o el grosor del lápiz. Arreglo: `_clip_pixel_line` recorta el
+  segmento —en espacio de píxel, por Liang-Barsky— a la ventana ANTES de
+  dibujarlo, de forma que el `drawLine` nunca recibe más que la diagonal de la
+  vista y el punteado se conserva; de paso el rasterizador deja de generar
+  cientos de miles de trazos que iba a descartar. Vale para las guías
+  (`_draw_guides`) y para la línea punteada de inferencia del snap
+  (`_draw_snap_indicator`), los dos únicos trazos punteados de extensión
+  ilimitada del visor: la caja de selección, los contornos de imagen y los
+  planos de sección viven dentro de la pantalla y no sufrían esto.
 
 ### Arreglado
 - **Dos guías que se cruzan vuelven a dar su intersección.** El motor de

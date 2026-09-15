@@ -664,3 +664,80 @@ def test_frame_render_restores_section_and_style_of_the_viewport():
     assert scene.active_section() is None                          # after
     assert scene.show_section_planes is True
     assert scene.display_style is live_style
+
+
+def test_frame_render_restores_the_base_map_of_the_viewport():
+    """A frame bound to a scene taken WITHOUT the base map hides the map
+    while it renders and hands it back after — the sheet shows each scene
+    as it was made, the live viewport keeps its own map (Marco, 2026-09-14)."""
+    import os
+    from types import SimpleNamespace
+    from PySide6.QtWidgets import QApplication
+    from core.camera import OrbitCamera
+    from core.saved_views import SavedView
+    from core.scene import Scene
+    from georef.tiles import PRESETS, TileLayer
+    import views.composer as composer_mod
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    if QApplication.instance() is None:
+        QApplication([])
+    scene = Scene()
+    scene.georef = SimpleNamespace(lat=-16.4, lon=-71.5, alt=0.0)
+    scene.tile_layer = TileLayer(next(iter(PRESETS.values())))
+    cam = OrbitCamera()
+    scene.tile_layer.visible = False
+    scene.saved_views.append(SavedView.capture("Detalle", scene, cam))
+    scene.tile_layer.visible = True                     # live: map shown
+
+    owner = next(c for c in vars(composer_mod).values()
+                 if isinstance(c, type) and hasattr(c, "_with_frame_camera"))
+    fake = SimpleNamespace(_window=SimpleNamespace(viewport=SimpleNamespace(
+        camera=cam, scene=scene, update=lambda: None)))
+    frame = MarcoVista(view_key="scene:Detalle", scale_n=100.0)
+    seen = {}
+
+    def fn():
+        seen["map"] = scene.tile_layer.visible
+        return "ok"
+
+    assert owner._with_frame_camera(fake, frame, fn) == "ok"
+    assert seen == {"map": False}                       # during
+    assert scene.tile_layer.visible is True             # after
+
+
+def test_frame_render_applies_and_restores_the_scene_shadows():
+    """A frame bound to a scene captured WITH shadows renders with the
+    sun on, and the live viewport gets its own shadow settings back."""
+    import os
+    from types import SimpleNamespace
+    from PySide6.QtWidgets import QApplication
+    from core.camera import OrbitCamera
+    from core.saved_views import SavedView
+    from core.scene import Scene
+    import views.composer as composer_mod
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    if QApplication.instance() is None:
+        QApplication([])
+    scene = Scene()
+    cam = OrbitCamera()
+    scene.shadows.enabled, scene.shadows.hour = True, 16
+    scene.saved_views.append(SavedView.capture("Asoleamiento", scene, cam))
+    scene.shadows.enabled, scene.shadows.hour = False, 10     # live: off
+
+    owner = next(c for c in vars(composer_mod).values()
+                 if isinstance(c, type) and hasattr(c, "_with_frame_camera"))
+    fake = SimpleNamespace(_window=SimpleNamespace(viewport=SimpleNamespace(
+        camera=cam, scene=scene, update=lambda: None)))
+    frame = MarcoVista(view_key="scene:Asoleamiento", scale_n=100.0)
+    seen = {}
+
+    def fn():
+        seen["on"] = scene.shadows.enabled
+        seen["hour"] = scene.shadows.hour
+        return "ok"
+
+    assert owner._with_frame_camera(fake, frame, fn) == "ok"
+    assert seen == {"on": True, "hour": 16}                    # during
+    assert scene.shadows.enabled is False and scene.shadows.hour == 10   # after

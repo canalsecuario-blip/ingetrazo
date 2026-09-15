@@ -190,7 +190,8 @@ class RotatedRectangleTool(PlaneLock, Tool):
         locked = self.locked_work_plane(ctx.world)
         if locked is not None:
             return locked
-        pick = getattr(ctx.viewport, "pick_face_any", None)
+        pick = (getattr(ctx.viewport, "pick_face_placement", None)
+                or getattr(ctx.viewport, "pick_face_any", None))
         if pick is None:
             return None
         face, group = pick(ctx.screen.x(), ctx.screen.y())

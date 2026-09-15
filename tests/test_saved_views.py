@@ -106,3 +106,114 @@ def test_scene_clear_drops_saved_views():
     scene.saved_views.append(SavedView("V"))
     scene.clear()
     assert scene.saved_views == []
+
+
+def test_scene_remembers_whether_the_base_map_is_shown(tmp_path):
+    """A plan scene taken WITH the base map and a detail scene taken WITHOUT
+    it must each come back as they were made — and a sheet frame bound to
+    either renders that way (Marco, 2026-09-14). Views from documents older
+    than the field (no "georef" entry) leave the map alone."""
+    from types import SimpleNamespace
+    from formats import igz
+    from georef.datum import SceneDatum
+    from georef.tiles import PRESETS, TileLayer
+
+    scene = Scene()
+    scene.georef = SceneDatum(lat=-16.4, lon=-71.5)
+    scene.tile_layer = TileLayer(next(iter(PRESETS.values())))
+    scene.terrain = SimpleNamespace(visible=True)
+    cam = OrbitCamera()
+
+    scene.tile_layer.visible = True
+    planta = SavedView.capture("Planta", scene, cam)
+    assert planta.georef == {"map": True, "terrain": True, "survey": False}
+
+    scene.tile_layer.visible = False
+    scene.terrain.visible = False
+    detalle = SavedView.capture("Detalle", scene, cam)
+    assert detalle.georef == {"map": False, "terrain": False, "survey": False}
+
+    planta.apply(scene, cam)
+    assert scene.tile_layer.visible is True and scene.terrain.visible is True
+    detalle.apply(scene, cam)
+    assert scene.tile_layer.visible is False and scene.terrain.visible is False
+
+    # A view without the field (older document) is hands-off.
+    scene.tile_layer.visible = True
+    SavedView.from_dict({"name": "Vieja"}).apply(scene, cam)
+    assert scene.tile_layer.visible is True
+
+    # A scene captured before any map existed recalls with the map OFF.
+    bare = Scene()
+    sin_mapa = SavedView.capture("Sin mapa", bare, cam)
+    assert sin_mapa.georef == {"map": False, "terrain": False, "survey": False}
+    sin_mapa.apply(scene, cam)
+    assert scene.tile_layer.visible is False
+
+    # The flag survives the document round trip.
+    scene.terrain = None                       # a stub the writer can't save
+    scene.saved_views += [planta, detalle]
+    p = tmp_path / "escenas.igz"
+    igz.save_scene(scene, p)
+    out = Scene()
+    igz.load_into(out, p)
+    assert [v.georef["map"] for v in out.saved_views] == [True, False]
+
+
+def test_base_map_opacity_travels_in_the_document(tmp_path):
+    """The map's opacity (a faded satellite under a plan sheet) is document
+    state on the tile layer and survives the .igz round trip; older files
+    without it open fully opaque."""
+    from formats import igz
+    from georef.datum import SceneDatum
+    from georef.tiles import PRESETS, TileLayer
+
+    scene = Scene()
+    scene.georef = SceneDatum(lat=-16.4, lon=-71.5)
+    scene.tile_layer = TileLayer(next(iter(PRESETS.values())))
+    assert scene.tile_layer.opacity == 1.0
+    scene.tile_layer.opacity = 0.4
+    p = tmp_path / "mapa.igz"
+    igz.save_scene(scene, p)
+    out = Scene()
+    igz.load_into(out, p)
+    assert out.tile_layer.opacity == 0.4
+    raw = scene.tile_layer.to_dict()
+    del raw["opacity"]
+    assert TileLayer.from_dict(raw).opacity == 1.0
+
+
+def test_scene_remembers_its_shadow_settings(tmp_path):
+    """A 3D captured with the sun on comes back (and renders its sheet
+    frame) with shadows; one captured without, without (Marco,
+    2026-09-14). Applied IN PLACE: the panel, the menu and the viewport
+    hold the one ``scene.shadows`` object."""
+    from formats import igz
+    from core.sun import ShadowSettings
+
+    scene = Scene()
+    sh = scene.shadows
+    cam = OrbitCamera()
+    sh.enabled, sh.hour, sh.minute, sh.darkness = True, 15, 30, 0.7
+    con = SavedView.capture("Con sol", scene, cam)
+    assert con.shadows["enabled"] is True and con.shadows["hour"] == 15
+    sh.enabled = False
+    sin = SavedView.capture("Sin sol", scene, cam)
+    assert sin.shadows["enabled"] is False
+
+    sh.hour = 9
+    con.apply(scene, cam)
+    assert scene.shadows is sh                          # same object
+    assert sh.enabled and (sh.hour, sh.minute) == (15, 30) and sh.darkness == 0.7
+    sin.apply(scene, cam)
+    assert not sh.enabled
+    SavedView.from_dict({"name": "Vieja"}).apply(scene, cam)   # hands-off
+    assert not sh.enabled
+
+    scene.saved_views += [con, sin]
+    p = tmp_path / "sol.igz"
+    igz.save_scene(scene, p)
+    out = Scene()
+    igz.load_into(out, p)
+    assert [v.shadows["enabled"] for v in out.saved_views] == [True, False]
+    assert ShadowSettings.from_dict(out.saved_views[0].shadows).hour == 15

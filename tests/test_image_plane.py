@@ -394,3 +394,79 @@ def test_a_selection_of_geometry_does_not_drag_images_along():
     # must stay off, or moving a face would carry the scan with it.
     ctx = _StubCtx(_StubViewport(scene, under_cursor=im))
     assert gather_images(ctx) == []
+
+
+def test_right_click_reaches_a_locked_image_for_unlock_and_delete():
+    """A locked image refuses clicks by design, but the context menu must
+    still find it — otherwise a scan locked after aligning (or an
+    orthomosaic, which arrives locked) can never be unlocked or deleted
+    again (Marco, 2026-09-14)."""
+    from types import SimpleNamespace
+    from core.scene import Scene
+    from views.viewport import Viewport
+
+    scene = Scene()
+    im = ImagePlane("x.png", V(0, 0, 0), V(10, 0, 0), V(0, 10, 0), locked=True)
+    scene.image_planes.append(im)
+    # A stand-in viewport: a straight-down ray at the pixel asked for.
+    fake = SimpleNamespace(
+        scene=scene,
+        _pixel_to_ray=lambda x, y: (V(x, y, 5.0), V(0, 0, -1)))
+    assert Viewport.pick_locked_image_plane(fake, 5.0, 5.0) is im
+    assert Viewport.pick_locked_image_plane(fake, 15.0, 5.0) is None   # off it
+    im.locked = False
+    assert Viewport.pick_locked_image_plane(fake, 5.0, 5.0) is None   # plain pick
+    im.locked = True
+    from core.layers import Layer
+    scene.layers.append(Layer(im.layer, locked=True))                  # layer lock wins
+    assert Viewport.pick_locked_image_plane(fake, 5.0, 5.0) is None
+
+
+def test_context_menu_offers_unlock_and_delete_for_a_locked_image_underneath(monkeypatch):
+    """Right-click on the plaza drawn over its orthomosaic: the click
+    selects the plaza, but the locked image beneath still gets Unlock /
+    Delete entries — Marco's second attempt to delete the picture hit the
+    group on top and found no way (2026-09-14)."""
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtCore import QPoint
+    from PySide6.QtWidgets import QApplication, QMenu
+    import views.main_window as mw
+    from views.main_window import MainWindow
+
+    if QApplication.instance() is None:
+        QApplication([])
+
+    class _Menu(QMenu):
+        opened: list = []
+
+        def exec(self, *a, **k):            # noqa: A003
+            _Menu.opened.append(self)
+
+    monkeypatch.setattr(mw, "QMenu", _Menu)
+    win = MainWindow()
+    try:
+        scene = win.viewport.scene
+        im = ImagePlane("x.png", V(0, 0, 0), V(10, 0, 0), V(0, 10, 0),
+                        name="orto", locked=True)
+        scene.image_planes.append(im)
+        face = scene.mesh.add_face([V(1, 1), V(3, 1), V(3, 3), V(1, 3)])
+        scene.select([face])
+        win.show_viewport_context_menu(QPoint(0, 0), locked_image=im)
+        texts = [a.text() for a in _Menu.opened[-1].actions()]
+        assert "Unlock image “orto”" in texts and "Delete image “orto”" in texts
+        # Delete takes it out in one undoable step; unlock frees and selects it.
+        win._delete_image(im)
+        assert scene.image_planes == []
+        assert win.viewport.history.undo()
+        assert scene.image_planes == [im]
+        win._unlock_image(im)
+        assert not im.locked and im in scene.selection
+        # Once selected (or unlocked) the entries are not duplicated.
+        _Menu.opened.clear()
+        win.show_viewport_context_menu(QPoint(0, 0), locked_image=im)
+        texts = [a.text() for a in _Menu.opened[-1].actions()]
+        assert "Unlock image “orto”" not in texts
+    finally:
+        win._saved_version = win.viewport.scene.version
+        win.close()

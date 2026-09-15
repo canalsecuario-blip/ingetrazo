@@ -35,7 +35,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QFontMetrics
-from PySide6.QtWidgets import QLabel, QSizePolicy, QStatusBar, QTabBar
+from PySide6.QtWidgets import QLabel, QSizePolicy, QStatusBar, QTabBar, QWidget
 
 from core.i18n import tr
 
@@ -198,7 +198,22 @@ class SheetStatusBar(QStatusBar):
         # strip stays glued to the left and whatever the windows add later
         # (tool, coordinates, the VCB, the zoom combo) lines up on the right.
         self.addPermanentWidget(self.tabs)
-        self.addPermanentWidget(self._msg, 1)
+        self.addPermanentWidget(self._msg, 10)
+        # An empty filler takes what the capped message leaves, so the
+        # strip and the message stay glued to the LEFT (without it the
+        # bar's own leading spacer pushed them toward the middle — Marco,
+        # 2026-09-15: «debería estar alineado a la izquierda»).
+        self._filler = QWidget(self)
+        self.addPermanentWidget(self._filler, 1)
+
+    #: The message never takes more than this share of the bar: the right
+    #: half stays clear before the tool name, the coordinates and the VCB
+    #: (Marco, 2026-09-15: «que no llegue hasta el otro extremo derecho»).
+    MESSAGE_SHARE = 0.5
+
+    def resizeEvent(self, event) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        self._msg.setMaximumWidth(max(120, int(self.width() * self.MESSAGE_SHARE)))
 
     # ---- messages, routed to our label ---------------------------------------
     def showMessage(self, text: str, timeout: int = 0) -> None:  # noqa: N802

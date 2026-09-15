@@ -116,3 +116,39 @@ def test_dialog_reloads_saved_values(settings_file):
     dlg = PreferencesDialog(_Win())
     assert dlg._dxf_unit.currentData() == "in"
     assert dlg._provider.currentData() == "auto"
+
+
+def test_toolbar_icon_size_lives_in_preferences_and_reaches_every_toolbar(settings_file):
+    """Marco, 2026-09-14: the icon size belongs in Preferences, and it must
+    size the sheet composer's toolbars too. One setting (ui/toolbar_icon_px),
+    the old «large icons» toggle migrated, applied live through the window."""
+    import views.icons as icons_mod
+    from views.icons import save_toolbar_icon_px, toolbar_icon_px
+
+    # the dialog and the helper read the same throwaway settings file
+    st_factory = prefs_mod.QSettings
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(icons_mod, "QSettings", st_factory, raising=False)
+    try:
+        # migration: the retired toggle reads as 32 px until a size is saved
+        st = _fresh(settings_file)
+        st.setValue("ui/large_toolbar_icons", "1")
+        st.sync()
+        import PySide6.QtCore as qc
+        monkeypatch.setattr(qc, "QSettings", st_factory)
+        assert toolbar_icon_px() == 32
+
+        win = _Win()
+        seen = []
+        win.set_toolbar_icon_size = lambda px: (seen.append(px), save_toolbar_icon_px(px))
+        dlg = PreferencesDialog(win)
+        assert dlg._icon_px.currentData() == 32
+        dlg._icon_px.setCurrentIndex(dlg._icon_px.findData(40))
+        dlg.accept()
+        assert seen == [40]
+        st = _fresh(settings_file)
+        assert int(st.value("ui/toolbar_icon_px")) == 40
+        assert st.value("ui/large_toolbar_icons") is None     # migrated away
+        assert toolbar_icon_px() == 40
+    finally:
+        monkeypatch.undo()

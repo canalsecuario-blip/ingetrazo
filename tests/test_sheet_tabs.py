@@ -140,14 +140,18 @@ def test_the_standing_hint_never_widens_the_window(monkeypatch):
     try:
         win.show()
         bar = win.statusBar()
-        assert len(bar.currentMessage()) > 100          # the long hint is set
+        # The standing hint is one line per tool now; a long one (a wordy
+        # translation, a long flash) must still never widen the window.
+        long_hint = "Select objects. " * 12
+        bar.showMessage(long_hint)
+        assert len(bar.currentMessage()) > 100
         # a plain QLabel with this hint asked for ~2200 px; the app's own
         # floor (toolbars, docks) is under 1000 on the offscreen platform
         assert win.minimumSizeHint().width() < 1000
         win.resize(700, 500)
         _app.processEvents()
         assert win.width() < 1000                       # it shrank
-        assert bar.currentMessage().startswith("Orbit") # full text kept
+        assert bar.currentMessage() == long_hint        # full text kept
     finally:
         _close(win)
 

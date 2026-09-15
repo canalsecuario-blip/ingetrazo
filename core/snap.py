@@ -41,6 +41,8 @@ COLOR_AXIS_Y = (0.16, 0.62, 0.36)
 COLOR_AXIS_Z = (0.20, 0.40, 0.78)
 COLOR_REFERENCE = (0.85, 0.30, 0.80)  # magenta — parallel / perpendicular
 COLOR_EXTENSION = (0.55, 0.55, 0.58)  # grey — collinear extension of an edge
+COLOR_IN_GROUP = (0.85, 0.30, 0.80)   # magenta — a point inside a group / component (SketchUp)
+COLOR_TANGENT = (0.20, 0.66, 0.74)    # cyan — an arc tangent to the arc it starts from
 COLOR_NONE = (0.0, 0.0, 0.0)
 
 AXIS_COLORS = {
@@ -64,6 +66,12 @@ class SnapResult:
     # Colour for the dashed guide line when it should differ from the marker
     # colour (e.g. 'from point' draws an axis-coloured guide but a green point).
     guide_color: Optional[tuple[float, float, float]] = None
+    # Extra dashed guides, ``[(a, b, rgb), ...]`` — the two-point 'from point'
+    # draws one from each encouraged point.
+    guides: Optional[list] = None
+    # ``"group"`` / ``"component"`` when the point belongs to one — the
+    # ScreenTip adds "in group" / "in component" (SketchUp).
+    context: Optional[str] = None
 
 
 # ---- Helpers ---------------------------------------------------------------
@@ -428,6 +436,92 @@ def _vertex_on_line(
     return (rel - proj).length() < tol
 
 
+def _two_point_snap(
+    refs, candidate, cx, cy, world_to_pixel, threshold_px, is_occluded=None,
+) -> Optional[SnapResult]:
+    """Where the axis lines through two encouraged points cross: for every
+    pair of points and pair of DIFFERENT axes, the crossing (if the two
+    lines meet — coplanar within a millimetre) within the snap radius of
+    the cursor. Green point, one dotted guide from each point in its axis
+    colour."""
+    pts = [p for p in refs if p is not None]
+    if len(pts) < 2:
+        return None
+    best = None
+    axes = list(_AXIS_VECTORS.items())
+    for i in range(len(pts)):
+        for j in range(i + 1, len(pts)):
+            p, q = pts[i], pts[j]
+            for ka, a in axes:
+                for kb, b in axes:
+                    if ka == kb:
+                        continue
+                    # Closest points of the two lines p + a·s and q + b·t.
+                    w = p - q
+                    ab = QVector3D.dotProduct(a, b)
+                    denom = 1.0 - ab * ab
+                    if denom < 1e-9:
+                        continue
+                    wa = QVector3D.dotProduct(w, a)
+                    wb = QVector3D.dotProduct(w, b)
+                    s_ = (ab * wb - wa) / denom
+                    t_ = (wb - ab * wa) / denom
+                    pa = p + a * s_
+                    pb = q + b * t_
+                    if (pa - pb).length() > 1e-3:
+                        continue                    # skew: no crossing
+                    if abs(s_) < 1e-3 or abs(t_) < 1e-3:
+                        continue                    # on a point itself
+                    px = world_to_pixel(pa)
+                    if px is None:
+                        continue
+                    d = math.hypot(px[0] - cx, px[1] - cy)
+                    if d > threshold_px:
+                        continue
+                    if is_occluded is not None and is_occluded(pa):
+                        continue
+                    if best is None or d < best[0]:
+                        best = (d, pa, p, ka, q, kb)
+    if best is None:
+        return None
+    _, cross, p, ka, q, kb = best
+    return SnapResult(cross, "from_point", COLOR_ENDPOINT,
+                      guide=(QVector3D(p), cross), guide_color=AXIS_COLORS[ka],
+                      guides=[(QVector3D(q), cross, AXIS_COLORS[kb])])
+
+
+def _first_point_from_point(
+    ref, candidate, cx, cy, world_to_pixel, threshold_px, is_occluded=None,
+) -> Optional[SnapResult]:
+    """The foot of the cursor on the axis line through ``ref`` (the last
+    hovered corner), when the cursor sits within the snap radius of one of
+    the three axis lines — a green 'from point' with the axis-coloured
+    dotted guide back to the corner. Sitting ON the corner is the endpoint
+    snap's job, not this one's."""
+    best = None
+    for axis, a in _AXIS_VECTORS.items():
+        s = QVector3D.dotProduct(candidate - ref, a)
+        if abs(s) < 1e-3:
+            continue
+        foot = ref + a * s
+        fp = world_to_pixel(foot)
+        if fp is None:
+            continue
+        d = math.hypot(fp[0] - cx, fp[1] - cy)
+        if d > threshold_px:
+            continue
+        if is_occluded is not None and is_occluded(foot):
+            continue
+        if best is None or d < best[0]:
+            best = (d, foot, axis)
+    if best is None:
+        return None
+    _, foot, axis = best
+    return SnapResult(foot, "from_point", COLOR_ENDPOINT,
+                      guide=(QVector3D(ref), foot),
+                      guide_color=AXIS_COLORS[axis])
+
+
 def _extension_snap(
     candidate_world, cx, cy, scene, world_to_pixel, et, start_point, is_occluded
 ) -> Optional[SnapResult]:
@@ -496,6 +590,7 @@ def _extension_snap(
 def _from_point_snap(
     scene, start_point, draw_dir, cx, cy, world_to_pixel, threshold_px,
     is_occluded, extra_point=None, axis_deg: float = 10.0,
+    hovered_refs: bool = False,
 ) -> Optional[SnapResult]:
     """'From point' inference ("Desde el punto"), the single clean version.
 
@@ -506,7 +601,14 @@ def _from_point_snap(
     the green point pins one spot (lined up with the corner) instead of sliding
     along the projection or scattering when the draw wanders off-axis.
 
-    Corners → green 'from point' with an axis-coloured guide; midpoints → cyan."""
+    Corners → green 'from point' with an axis-coloured guide; midpoints → cyan.
+
+    With ``hovered_refs`` (the arrow-key lock) the cursor may also sit on the
+    REFERENCE itself — a corner or midpoint, or any point of an edge — far
+    from the draw line, and the snap lands on that reference's foot. That is
+    how SketchUp's lock is used: Tape from the wall's bottom edge, ↑, hover
+    the window's corner, and the guide takes the window's height (Rafael,
+    04:20: «cuando pulso la flechita para subir no me hace el snap»)."""
     if start_point is None or draw_dir.length() < 1e-6:
         return None
     u = draw_dir.normalized()
@@ -529,8 +631,29 @@ def _from_point_snap(
         refs.append((edge.b, "from_point", COLOR_ENDPOINT))
         refs.append(((edge.a + edge.b) * 0.5, "midpoint", COLOR_MIDPOINT))
 
+    if hovered_refs:
+        # The point of an edge under the cursor is a reference too (the
+        # window's sill, not just its corners): the closest point of the
+        # nearest edge, as a plain 'from point'. Corners and midpoints come
+        # first — a sub-pixel miss on a corner must not hand the snap to
+        # the edge's body a few millimetres away — so the edge point only
+        # competes when no point reference is within reach.
+        best_edge = None
+        for edge in scene.edges:
+            pa, pb = world_to_pixel(edge.a), world_to_pixel(edge.b)
+            if pa is None or pb is None:
+                continue
+            d, t = _closest_on_segment_2d((cx, cy), pa, pb)
+            if d <= threshold_px and (best_edge is None or d < best_edge[0]):
+                best_edge = (d, edge.a + (edge.b - edge.a) * t)
+        if best_edge is not None:
+            refs.append((best_edge[1], "from_point", COLOR_ENDPOINT, True))
+
     best = None  # (dist, foot, ref, kind, color)
-    for ref, kind, color in refs:
+    for entry in refs:
+        ref, kind, color = entry[0], entry[1], entry[2]
+        if len(entry) > 3 and best is not None:
+            continue                      # the edge body yields to any point
         s = QVector3D.dotProduct(ref - start_point, adir)
         if s <= 1e-6:
             continue  # at or behind the start along the draw
@@ -541,6 +664,10 @@ def _from_point_snap(
         if qp is None:
             continue
         d = math.hypot(qp[0] - cx, qp[1] - cy)
+        if hovered_refs:
+            rp = world_to_pixel(ref)
+            if rp is not None:
+                d = min(d, math.hypot(rp[0] - cx, rp[1] - cy))
         if d > threshold_px:
             continue
         if is_occluded is not None and is_occluded(foot):
@@ -694,6 +821,7 @@ def compute_snap(
     acquired_edge=None,
     acquired_point=None,
     acquired_face_normal=None,
+    acquired_points=None,
     shift_lock_dir=None,
     shift_lock_color=None,
     linear_mode: str = "all",
@@ -752,6 +880,7 @@ def compute_snap(
         fp = _from_point_snap(
             scene, start_point, axis_dir, cx, cy, world_to_pixel,
             threshold_px, is_occluded, extra_point=acquired_point,
+            hovered_refs=True,
         )
         if fp is not None:
             return fp
@@ -804,26 +933,43 @@ def compute_snap(
     et = edge_threshold_px if edge_threshold_px is not None else threshold_px
     best: Optional[tuple[float, QVector3D, str, tuple[float, float, float]]] = None
 
+    # Candidates within the snap radius, resolved LAZILY: sorted by screen
+    # distance and occlusion-tested in that order until the first visible
+    # one. Testing every candidate up front cast a ray per point — dozens
+    # per hover next to dense geometry (the plaza's pergola: 70 ms a move,
+    # measured 2026-09-14) for the same answer the nearest visible gives.
+    pending: list = []
+
     def _consider(
         world: QVector3D,
         kind: str,
         color: tuple[float, float, float],
         occludable: bool = True,
+        context: Optional[str] = None,
     ) -> None:
-        nonlocal best
         px = world_to_pixel(world)
         if px is None:
             return
         d = math.hypot(px[0] - cx, px[1] - cy)
         if d > threshold_px:
             return
-        # Only snap to geometry the user can actually see — a vertex hidden
-        # behind a face shouldn't light up. The occlusion test is run after
-        # the cheap pixel filter so it only fires for points near the cursor.
-        if occludable and is_occluded is not None and is_occluded(world):
-            return
-        if best is None or d < best[0]:
-            best = (d, world, kind, color)
+        pending.append((d, world, kind, color, context, occludable))
+
+    def _resolve():
+        """The nearest visible candidate, or ``None``; clears the list."""
+        nonlocal best
+        pending.sort(key=lambda c: c[0])
+        chosen = None
+        for d, world, kind, color, context, occludable in pending:
+            # Only snap to geometry the user can actually see — a vertex
+            # hidden behind a face shouldn't light up.
+            if occludable and is_occluded is not None and is_occluded(world):
+                continue
+            chosen = (d, world, kind, color, context)
+            break
+        pending.clear()
+        best = chosen
+        return chosen
 
     # 4. Vertex snaps (close, endpoint) — the highest-priority discrete points.
     if (
@@ -834,17 +980,52 @@ def compute_snap(
         # The point being chained to is part of the live drawing, not hidden
         # scene geometry — never occlusion-cull it.
         _consider(chain_first_point, "close", COLOR_CLOSE, occludable=False)
+        _resolve()
     if best is None or best[2] != "close":
+        # The named points first (a tie goes to the first considered): an
+        # arc's midpoint that happens to fall on one of its facet vertices
+        # reads "Arc midpoint", as SketchUp says, not "Endpoint".
+        plain = []
         for edge in scene.edges:
             if getattr(edge, "center", False):
                 # The centre of a circle or arc the cursor visited (the
                 # viewport hands it in as a degenerate pseudo-edge).
                 _consider(edge.a, "center", COLOR_ENDPOINT)
+            elif getattr(edge, "component_origin", False):
+                # A group's / component's own origin (SketchUp's "Component
+                # Origin Point") — its insertion point, worth grabbing.
+                _consider(edge.a, "component_origin", COLOR_ORIGIN)
+            elif getattr(edge, "arc_midpoint", False):
+                # The middle of an arc's sweep, not of any one of its facets.
+                _consider(edge.a, "arc_midpoint", COLOR_MIDPOINT)
+            elif getattr(edge, "guide", False):
+                # A construction guide's ends are not endpoints (they are
+                # clipped to the view) — it offers 'on line' below.
                 continue
-            _consider(edge.a, "endpoint", COLOR_ENDPOINT)
-            _consider(edge.b, "endpoint", COLOR_ENDPOINT)
+            else:
+                plain.append(edge)
+        # The world origin is a point inference like a corner (SketchUp's
+        # "Origin"), so it must beat the LINEAR inferences of rule 5 — it
+        # sat in rule 6, behind 'from point' and the axis line, and a
+        # cursor aligned with an encouraged point or the red axis clicked
+        # millimetres beside it, leaving stubs along the axis (Marco,
+        # 2026-09-15: «me quiero poner en el origen y no se pone»).
+        _consider(QVector3D(0.0, 0.0, 0.0), "origin", COLOR_ORIGIN)
+        for edge in plain:
+            # SketchUp paints every point inference magenta when the
+            # geometry is inside a group or component.
+            # (SketchUp paints these magenta inside groups; Marco found the
+            # magenta everywhere on a model made of components tiring —
+            # 2026-09-14 — so the colours stay, the tip says "in component".)
+            _consider(edge.a, "endpoint", COLOR_ENDPOINT, context=getattr(edge, "context", None))
+            _consider(edge.b, "endpoint", COLOR_ENDPOINT, context=getattr(edge, "context", None))
+        # A "close" already chosen stands; otherwise the nearest visible of
+        # the named points and endpoints (named ones first on a tie — they
+        # were appended first and the sort is stable).
+        if best is None:
+            _resolve()
     if best is not None:
-        return SnapResult(best[1], best[2], best[3])
+        return SnapResult(best[1], best[2], best[3], context=best[4])
 
     # 4b. Perpendicular to a wall you started on: drawing square to it locks the
     #     exact perpendicular (magenta) and predicts the connection — where that
@@ -942,7 +1123,32 @@ def compute_snap(
         if fp is not None:
             return fp
 
-    # 5c. Edge / guide intersection (SketchUp's green X): where two edges or
+    # 5c. 'From point' for the FIRST click — SketchUp's encouraged point: with
+    #     no segment in progress, the cursor lines up along an axis with the
+    #     corner it hovered last, on a dotted axis-coloured line from that
+    #     corner. This is how a window's first corner lands level with the
+    #     door's top (Rafael's review, 2026-09-10: «te salía una línea de
+    #     extensión para poder dibujar aquí la ventana»); the 'from point'
+    #     above only knew segments already under way.
+    if allow_axis and start_point is None and acquired_points:
+        # Two encouraged points at once (SketchUp's two-point method): a
+        # dotted line from each, the cursor pinned where they cross —
+        # level with the door's top AND in line with the other jamb.
+        tp = _two_point_snap(
+            acquired_points, candidate_world, cx, cy, world_to_pixel,
+            threshold_px, is_occluded,
+        )
+        if tp is not None:
+            return tp
+    if allow_axis and start_point is None and acquired_point is not None:
+        fp = _first_point_from_point(
+            acquired_point, candidate_world, cx, cy, world_to_pixel,
+            threshold_px, is_occluded,
+        )
+        if fp is not None:
+            return fp
+
+    # 5d. Edge / guide intersection (SketchUp's green X): where two edges or
     #     guide lines actually cross. Only the directional locks above build an
     #     intersection, so crossing guides never offered their meeting point —
     #     the cursor slid along the nearest guide. Runs before midpoint/on-edge
@@ -954,10 +1160,14 @@ def compute_snap(
     # 6. Midpoint + origin.
     best = None
     for edge in scene.edges:
-        _consider((edge.a + edge.b) * 0.5, "midpoint", COLOR_MIDPOINT)
+        if getattr(edge, "guide", False) or (edge.a - edge.b).length() < 1e-9:
+            continue
+        _consider((edge.a + edge.b) * 0.5, "midpoint", COLOR_MIDPOINT,
+                  context=getattr(edge, "context", None))
     _consider(QVector3D(0.0, 0.0, 0.0), "origin", COLOR_ORIGIN)
+    _resolve()
     if best is not None:
-        return SnapResult(best[1], best[2], best[3])
+        return SnapResult(best[1], best[2], best[3], context=best[4])
 
     # 7. On-edge: an arbitrary point along an edge. An edge is a big linear
     #    target, so it gets a more generous radius than the point snaps —
@@ -985,9 +1195,13 @@ def compute_snap(
         if is_occluded is not None and is_occluded(on_pt):
             continue
         if best_edge is None or d < best_edge[0]:
-            best_edge = (d, on_pt)
+            best_edge = (d, on_pt, edge)
     if best_edge is not None:
-        return SnapResult(best_edge[1], "on_edge", COLOR_ON_EDGE)
+        _d, on_pt, edge = best_edge
+        if getattr(edge, "guide", False):
+            return SnapResult(on_pt, "on_line", COLOR_ON_EDGE)   # a guide line
+        return SnapResult(on_pt, "on_edge", COLOR_ON_EDGE,
+                          context=getattr(edge, "context", None))
 
     # 8b. Acquired-edge parallel inference. An edge the cursor hovered while
     #     drawing is held as a reference; when the draw runs parallel to it the

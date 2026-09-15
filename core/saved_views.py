@@ -21,7 +21,8 @@ class SavedView:
     def __init__(self, name: str, target=(0.0, 0.0, 0.0), distance: float = 20.0,
                  yaw: float = -0.7853981633974483, pitch: float = 0.5235987755982988,
                  fov_deg: float = 45.0, perspective: bool = True,
-                 hidden_layers=None, style=None, section=None) -> None:
+                 hidden_layers=None, style=None, section=None,
+                 georef=None, shadows=None) -> None:
         self.name = name
         self.target = tuple(target)
         self.distance = float(distance)
@@ -44,6 +45,22 @@ class SavedView:
         #: elevation scene made BEFORE any cut switches the cut OFF when
         #: recalled — every scene stands on its own (Marco, 2026-09-02).
         self.section = dict(section) if section else None
+        #: Geographic reference layers shown in this view: the flat base
+        #: map, the 3D terrain and the photogrammetric survey. In SketchUp
+        #: those are groups on their own layers, so a scene hides or shows
+        #: them like anything else; here they hang off the scene as display
+        #: objects, so the view records their visibility explicitly — a
+        #: plan scene taken WITH the map and a detail scene taken WITHOUT it
+        #: must each come back (and render on a sheet) as they were made
+        #: (Marco, 2026-09-14). ``None`` = a view from a document older than
+        #: this field, left alone on recall.
+        self.georef = dict(georef) if georef else None
+        #: Shadow settings snapshot (core.sun.ShadowSettings.to_dict()):
+        #: on/off, date, time, darkness. SketchUp scenes save "Shadow
+        #: Settings" too — a 3D captured with shadows renders its sheet
+        #: frame with shadows, one captured without renders without (Marco,
+        #: 2026-09-14). ``None`` = a view from before this field, hands-off.
+        self.shadows = dict(shadows) if shadows else None
 
     # ---- Snapshot / recall ---------------------------------------------------
     @classmethod
@@ -65,7 +82,11 @@ class SavedView:
                                                True),
                        "cuts_shown": getattr(scene, "show_section_cuts",
                                              True),
-                   })
+                   },
+                   georef=georef_state(scene),
+                   shadows=(scene.shadows.to_dict()
+                            if getattr(scene, "shadows", None) is not None
+                            else None))
 
     def recapture(self, scene, camera) -> None:
         """Update this view in place from the live state (keeps the name)."""
@@ -100,6 +121,12 @@ class SavedView:
                 self.section.get("planes_shown", True))
             scene.show_section_cuts = bool(
                 self.section.get("cuts_shown", True))
+        if self.georef is not None:
+            for key, obj in georef_objects(scene):
+                if obj is not None and key in self.georef:
+                    obj.visible = bool(self.georef[key])
+        if self.shadows is not None and getattr(scene, "shadows", None) is not None:
+            apply_shadow_state(scene, self.shadows)
 
     # ---- Serialisation (.igz) ------------------------------------------------
     def to_dict(self) -> dict:
@@ -120,6 +147,10 @@ class SavedView:
             entry["style"] = dict(self.style)
         if self.section is not None:
             entry["section"] = dict(self.section)
+        if self.georef is not None:
+            entry["georef"] = dict(self.georef)
+        if self.shadows is not None:
+            entry["shadows"] = dict(self.shadows)
         return entry
 
     @classmethod
@@ -134,7 +165,33 @@ class SavedView:
                    perspective=not raw.get("parallel", False),
                    hidden_layers=raw.get("hidden_layers"),
                    style=raw.get("style"),
-                   section=raw.get("section"))
+                   section=raw.get("section"),
+                   georef=raw.get("georef"),
+                   shadows=raw.get("shadows"))
+
+
+def apply_shadow_state(scene, raw: dict) -> None:
+    """Put a shadow snapshot back onto ``scene.shadows`` IN PLACE — the
+    panel, the menu and the viewport all hold that one object."""
+    from core.sun import ShadowSettings
+    fresh = ShadowSettings.from_dict(raw)
+    scene.shadows.__dict__.update(fresh.__dict__)
+
+
+def georef_objects(scene) -> list[tuple[str, object]]:
+    """The scene's geographic display objects as ``(key, obj_or_None)``:
+    the flat base map (``"map"``), the 3D terrain and the survey mesh."""
+    return [("map", getattr(scene, "tile_layer", None)),
+            ("terrain", getattr(scene, "terrain", None)),
+            ("survey", getattr(scene, "photo_mesh", None))]
+
+
+def georef_state(scene) -> dict:
+    """Visibility of the geographic layers right now — a missing object
+    counts as hidden, so a scene made before any base map existed recalls
+    with the map OFF (every scene stands on its own, like sections)."""
+    return {key: bool(obj is not None and getattr(obj, "visible", False))
+            for key, obj in georef_objects(scene)}
 
 
 def from_lookat(name: str, eye, target, up, fov_deg: float = 45.0,

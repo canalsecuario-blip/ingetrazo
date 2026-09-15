@@ -1326,6 +1326,24 @@ class TransformImagePlaneCommand(Command):
         scene.version += 1
 
 
+class SetImagePlaneOpacityCommand(Command):
+    """Fade a reference image (a scan you trace over, an orthomosaic under
+    the model) — one undoable step."""
+
+    def __init__(self, image, opacity: float) -> None:
+        self.image = image
+        self.opacity = max(0.0, min(1.0, float(opacity)))
+        self._old = float(getattr(image, "opacity", 1.0))
+
+    def do(self, scene) -> None:
+        self.image.opacity = self.opacity
+        scene.version += 1
+
+    def undo(self, scene) -> None:
+        self.image.opacity = self._old
+        scene.version += 1
+
+
 class MoveImagePlanesCommand(Command):
     """Translate reference images (the Move tool). Only the origin corner
     moves — the edge vectors carry size and orientation, so a move can never
@@ -2674,21 +2692,53 @@ class GroupToComponentCommand(Command):
 
 
 class InsertGroupCommand(Command):
-    """Insert a ready-made Group (a bundled component, a future collection
-    item) into the scene, selected so the user can Move it into place."""
+    """Insert a ready-made Group (a bundled component, a paste, a future
+    collection item) into the scene, selected so the user can Move it into
+    place.
+
+    INSIDE an open container it goes into the container — SketchUp's rule
+    that whatever you create while editing a group belongs to it. A roof
+    pasted while editing the pergola used to land at the top level, beside
+    the plaza («se supone que todo lo que edite debería estar dentro del
+    grupo», Marco, 2026-09-14). The group arrives in WORLD coordinates and
+    is expressed in the container's own space when that one carries a
+    matrix (entering usually pushes it down into the children already)."""
 
     def __init__(self, group) -> None:
         self.group = group
+        self._owner: Optional[list] = None
+
+    @staticmethod
+    def _target(scene):
+        ctx = getattr(scene, "edit_group", None)
+        if ctx is not None and getattr(ctx, "children", None) is not None:
+            return ctx
+        return None
 
     def do(self, scene) -> None:
-        scene.groups.append(self.group)
+        ctx = self._target(scene)
+        if ctx is not None:
+            owner = ctx.children
+            if ctx.xform is not None:
+                inv, ok = ctx.xform.inverted()
+                if ok:
+                    from core.group import transformed_mesh
+                    if self.group.xform is not None:
+                        self.group.xform = inv * self.group.xform
+                    else:
+                        self.group.mesh = transformed_mesh(self.group.mesh, inv)
+        else:
+            owner = scene.groups
+        owner.append(self.group)
+        self._owner = owner
         scene.selection.clear()
         scene.selection.add(self.group)
         scene.version += 1
 
     def undo(self, scene) -> None:
-        if self.group in scene.groups:
-            scene.groups.remove(self.group)
+        owner = self._owner if self._owner is not None else scene.groups
+        if self.group in owner:
+            owner.remove(self.group)
         scene.selection.discard(self.group)
         scene.version += 1
 
@@ -2925,6 +2975,170 @@ class MoveGroupCommand(Command):
 
     def undo(self, scene) -> None:
         self._shift(scene, -self.delta)
+
+
+def placement_is_identity(xform, tol: float = 1e-6) -> bool:
+    """True when a placement neither turns nor moves anything (within
+    ``tol``) — straightening it would be a silent no-op."""
+    if xform is None:
+        return True
+    from PySide6.QtGui import QMatrix4x4
+    ident = QMatrix4x4()
+    return all(abs(xform(r, c) - ident(r, c)) <= tol
+               for r in range(4) for c in range(4))
+
+
+def placement_rotation_deg(xform) -> float:
+    """Turn about Z (degrees, counter-clockwise seen from above) of a rigid
+    placement; raises ``ValueError`` when the placement tilts or scales —
+    there is no north angle for those."""
+    import math
+    c0, c1, c2 = xform.column(0), xform.column(1), xform.column(2)
+    if (abs(c2.x()) > 1e-6 or abs(c2.y()) > 1e-6 or abs(c2.z() - 1.0) > 1e-6
+            or abs(c0.z()) > 1e-6 or abs(c1.z()) > 1e-6):
+        raise ValueError("the model is tilted (its Z axis is not vertical)")
+    sx = math.hypot(c0.x(), c0.y())
+    sy = math.hypot(c1.x(), c1.y())
+    if abs(sx - 1.0) > 1e-4 or abs(sy - 1.0) > 1e-4:
+        raise ValueError("the model is scaled")
+    return math.degrees(math.atan2(c0.y(), c0.x()))
+
+
+class StraightenModelCommand(Command):
+    """Put a model that was turned and dragged onto its site back on its
+    own axes, and turn the MAP under it instead (SketchUp's north angle).
+
+    ``group`` is the placed model: a top-level instance whose ``xform`` is a
+    turn about Z plus a translation. The command applies the inverse of that
+    placement to EVERYTHING in the scene — every group, loose geometry,
+    annotations, guides, section planes, geo data, saved views, sheet
+    frames and anchored cotas — so the group's placement becomes identity
+    and nothing moves relative to anything else; then it re-anchors the
+    datum so the base map, terrain and imports stay where they were under
+    the model: the anchor becomes the group's origin and the north angle
+    grows by the group's turn. Front/right/top views, axis locks and the
+    rectangle tool are square to the model again.
+
+    The vertical part of the placement is dropped: the model returns to
+    the heights it was drawn at and the map keeps z = 0 (the reference
+    plane) — the only place a flat map can be.
+    """
+
+    def __init__(self, group: Group) -> None:
+        self.group = group
+        self.degrees: float = 0.0
+        self._placement = None          # the group's xform before do()
+        self._old_datum = None
+        self._new_datum = None
+        self._snaps: dict = {}          # id(mesh) → (before, after)
+        self._terrain = None
+
+    def do(self, scene) -> None:
+        if self.group not in scene.groups or self.group.xform is None:
+            raise ValueError("pick a placed component at the top level")
+        datum = getattr(scene, "georef", None)
+        if datum is None:
+            raise ValueError("the scene has no location yet")
+        if self._placement is None:
+            from PySide6.QtGui import QMatrix4x4
+            from georef.datum import SceneDatum
+            self.degrees = placement_rotation_deg(self.group.xform)
+            self._placement = QMatrix4x4(self.group.xform)
+            self._old_datum = datum
+            t = self._placement.column(3)
+            lat, lon, _ = datum.local_to_geodetic(QVector3D(t.x(), t.y(), 0.0))
+            self._new_datum = SceneDatum(lat, lon, alt=datum.alt,
+                                         north=datum.north + self.degrees)
+        w, ok = self._placement.inverted()
+        if not ok:
+            raise ValueError("the placement is not invertible")
+        self._apply(scene, w, -self.degrees, redo=True)
+        from PySide6.QtGui import QMatrix4x4
+        self.group.xform = QMatrix4x4()     # exactly on its axes, no float dust
+        scene.georef = self._new_datum
+        self._terrain = getattr(scene, "terrain", None)
+        scene.terrain = None            # display-only; rebuilt from the datum
+
+    def undo(self, scene) -> None:
+        self._apply(scene, self._placement, self.degrees, redo=False)
+        from PySide6.QtGui import QMatrix4x4
+        self.group.xform = QMatrix4x4(self._placement)
+        scene.georef = self._old_datum
+        scene.terrain = self._terrain
+
+    # ---- The rigid transform -----------------------------------------------
+    def _apply(self, scene, m, turn_deg: float, redo: bool) -> None:
+        """Move everything by the rigid ``m`` (``turn_deg`` is its turn about
+        Z, for the cameras)."""
+        import math
+
+        def pt(v):
+            return m.map(QVector3D(*v) if isinstance(v, (list, tuple))
+                         else QVector3D(v))
+
+        def vec(v):
+            return m.mapVector(QVector3D(v))
+
+        for g in scene.groups:
+            if g.xform is not None:          # instances compose — O(1)
+                g.xform = m * g.xform
+            else:
+                self._transform_mesh(g.mesh, m, redo)
+        self._transform_mesh(scene.mesh, m, redo)
+        for d in scene.dimensions:
+            d.a, d.b, d.offset = pt(d.a), pt(d.b), vec(d.offset)
+        for t in scene.text_labels:
+            t.anchor, t.offset = pt(t.anchor), vec(t.offset)
+        for gd in scene.guides:
+            gd.point = pt(gd.point)
+            if getattr(gd, "direction", None) is not None:
+                gd.direction = vec(gd.direction)
+        for sp in scene.section_planes:
+            sp.point, sp.normal = pt(sp.point), vec(sp.normal)
+        for im in scene.image_planes:
+            im.origin, im.u, im.v = pt(im.origin), vec(im.u), vec(im.v)
+        for gp in scene.geo_paths:
+            gp.points = [pt(q) for q in gp.points]
+            if getattr(gp, "_surface_tris", None) is not None:
+                gp._surface_tris = None
+        for gpt in scene.geo_points:
+            gpt.position = pt(gpt.position)
+        turn = math.radians(turn_deg)
+        for sv in scene.saved_views:
+            q = pt(sv.target)
+            sv.target = (q.x(), q.y(), q.z())
+            sv.yaw = sv.yaw + turn
+        for comp in scene.compositions:
+            for it in comp.all_items():
+                for attr in ("a_world", "b_world"):
+                    w = getattr(it, attr, None)
+                    if w:
+                        q = pt(w)
+                        setattr(it, attr, [q.x(), q.y(), q.z()])
+                ct = getattr(it, "cam_target", None)
+                if ct:
+                    q = pt(ct)
+                    it.cam_target = [q.x(), q.y(), q.z()]
+                    if getattr(it, "cam_yaw", None) is not None:
+                        it.cam_yaw = it.cam_yaw + turn
+        scene.version += 1
+
+    def _transform_mesh(self, mesh, m, redo: bool) -> None:
+        """Classic (world-coordinate) meshes: move the vertices the first
+        time, snapshot both states, and replay the snapshots after that so
+        undo/redo are exact."""
+        from core.group import _remap_uvws
+        if not mesh.vertices:
+            return
+        snap = self._snaps.get(id(mesh))
+        if snap is not None:
+            mesh.restore_state(snap[1] if redo else snap[0])
+            return
+        before = mesh.capture_state()
+        for v in list(mesh.vertices):
+            mesh.move_vertex(v, m.map(v.position) - v.position)
+        _remap_uvws(mesh, m)
+        self._snaps[id(mesh)] = (before, mesh.capture_state())
 
 
 def group_owner_list(scene, group):

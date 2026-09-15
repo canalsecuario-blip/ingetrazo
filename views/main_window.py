@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
-from PySide6.QtCore import Qt, QSettings, QEvent, QCoreApplication
+from PySide6.QtCore import Qt, QSettings, QEvent, QCoreApplication, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QKeySequence, QVector3D
 from PySide6.QtWidgets import (
     QFileDialog,
@@ -55,9 +55,11 @@ from tools.text import TextTool
 from tools.move import MoveTool
 from tools.rotate import RotateTool
 from tools.scale import ScaleTool
+from tools.fillet import FilletTool
 from tools.followme import FollowMeTool
 from tools.rotated_rectangle import RotatedRectangleTool
 from tools.offset import OffsetTool
+from tools.texture_position import TexturePositionTool
 from tools.paint import PaintTool
 from tools.paste import PasteTool
 from tools.arc import PieTool
@@ -101,6 +103,10 @@ class MainWindow(QMainWindow):
             "scale": ScaleTool(),
             "flip": FlipTool(),
             "followme": FollowMeTool(),
+            "fillet": FilletTool(),
+            # Entered from a textured face's right-click menu, never from
+            # the toolbar (SketchUp's Texture ▸ Position).
+            "texture_position": TexturePositionTool(),
             "paint": PaintTool(),
             "dimension": DimensionTool(),
             "eraser": EraserTool(),
@@ -193,6 +199,11 @@ class MainWindow(QMainWindow):
         keep, and never under the user's hands (a 283k-face save takes real
         time; mid-drag it would read as a freeze)."""
         from PySide6.QtWidgets import QApplication
+        # Housekeeping that rides the same slow tick: a clean collection
+        # now and then — never mid-gesture (over a big model it is ~0.3 s).
+        if getattr(self.viewport, "_last_pos", None) is None:
+            import gc
+            gc.collect()
         if not self._is_dirty():
             return
         version = self.viewport.scene.version
@@ -254,6 +265,7 @@ class MainWindow(QMainWindow):
         for dock in (self.tray, self.bim_tray, self.georef_tray):
             dock.setTitleBarWidget(QWidget(dock))
         self.tray.raise_()
+        self._build_sidebar_handle()
         self.viewport.sceneVersionChanged.connect(
             lambda _v: self.tray.on_scene_changed())
         self.viewport.sceneVersionChanged.connect(
@@ -275,7 +287,7 @@ class MainWindow(QMainWindow):
         for panel, key, title in (
                 (self.styles_panel, "styles", tr("Styles")),
                 (self.shadows_panel, "shadows", tr("Shadows")),
-                (self.dimstyle_panel, "dimension", tr("Dimension style"))):
+                (self.dimstyle_panel, "dimension_style", tr("Dimension style"))):
             btn = QToolButton(panels_tb)
             btn.setIcon(tool_icon(key))
             btn.setToolTip(title)
@@ -310,10 +322,28 @@ class MainWindow(QMainWindow):
         tb.setMovable(True)
         tb.setFloatable(True)
         tb.setAllowedAreas(Qt.AllToolBarAreas)
-        tb.setIconSize(QSize(24, 24))
+        from views.icons import toolbar_icon_px
+        px = toolbar_icon_px()
+        tb.setIconSize(QSize(px, px))
         tb.setToolButtonStyle(Qt.ToolButtonIconOnly)
         self.addToolBar(Qt.TopToolBarArea, tb)
+        from views.icons import style_overflow_button
+        style_overflow_button(tb)
         return tb
+
+    def set_toolbar_icon_size(self, px: int) -> None:
+        """Icon size for every toolbar — this window's and the composer's
+        (open now or later: it reads the setting when it builds). From
+        Preferences ▸ General; persisted."""
+        from PySide6.QtCore import QSize
+        from views.icons import save_toolbar_icon_px
+        px = int(px)
+        save_toolbar_icon_px(px)
+        for tb in self.findChildren(QToolBar):
+            tb.setIconSize(QSize(px, px))
+        comp = getattr(self, "_composer", None)
+        if comp is not None and hasattr(comp, "set_toolbar_icon_size"):
+            comp.set_toolbar_icon_size(px)
 
     def _add_tool_button(self, tb: QToolBar, key: str) -> QAction:
         tool = self._tools[key]
@@ -340,6 +370,7 @@ class MainWindow(QMainWindow):
         self._tool_group = QActionGroup(self)
         self._tool_group.setExclusive(True)
         self.toolbars: dict[str, QToolBar] = {}
+        # Icon size: Preferences ▸ General (views.icons.toolbar_icon_px).
         # (action, icon_key) pairs so programmatic icons can be re-drawn when
         # the palette flips (dark ↔ light) at runtime — see changeEvent below.
         self._icon_actions: list[tuple[QAction, str]] = []
@@ -350,7 +381,8 @@ class MainWindow(QMainWindow):
             ("draw", tr("Draw"),
              ["line", "freehand", "rectangle", "rotated_rect", "circle",
               "polygon", "arc", "arc3", "center_arc", "pie"]),
-            ("modify", tr("Modify"), ["move", "rotate", "scale", "flip", "pushpull", "followme", "offset"]),
+            # Push/Pull first (Marco, 2026-09-14), then move, rotate, scale, flip…
+            ("modify", tr("Modify"), ["pushpull", "move", "rotate", "scale", "flip", "followme", "offset", "fillet"]),
             ("annotate", tr("Annotate"), ["tape", "protractor", "dimension", "text", "geopath"]),
             ("sections", tr("Sections"), ["section"]),
         ]
@@ -360,11 +392,24 @@ class MainWindow(QMainWindow):
             for key in keys:
                 self._add_tool_button(tb, key)
 
+        # Save, first on the Main bar (the composer's Sheet bar has had it
+        # since the start; Marco, 2026-09-14: «el icono de guardar también en
+        # modelo, antes de la flechita»). The shortcut stays on the menu
+        # action, so Ctrl+S never becomes ambiguous.
+        main_tb = self.toolbars["main"]
+        act_save = QAction(tool_icon("save"), tr("Save"), self)
+        act_save.setToolTip(tr("Save the document (Ctrl+S)"))
+        act_save.triggered.connect(self._on_save)
+        first = main_tb.actions()[0] if main_tb.actions() else None
+        main_tb.insertAction(first, act_save)
+        main_tb.insertSeparator(first)
+        self._icon_actions.append((act_save, "save"))
+        self._act_save_tb = act_save
+
         # SketchUp keeps a pipette beside the material you paint with: it is
         # how you FIND the eyedropper. Alt+click does the same for people who
         # know the modifier — Marco asked for the button because that is what
         # he reaches for ("hay un icono al costado de pintura").
-        main_tb = self.toolbars["main"]
         self._act_eyedropper = QAction(
             tool_icon("eyedropper"), tr("Sample material"), self)
         self._act_eyedropper.setCheckable(True)
@@ -456,14 +501,16 @@ class MainWindow(QMainWindow):
         # Standard-views toolbar: one-shot camera orientations, icon-only.
         views_tb = self._new_toolbar(tr("Standard Views"), "views")
         self.toolbars["views"] = views_tb
+        # Order as Marco reads them (2026-09-14): iso, top, front, right,
+        # left, back, bottom — the two you use most right after the iso.
         for key, label, icon in [
             ("iso", "Isometric", "view_iso"),
             ("top", "Top", "view_top"),
-            ("bottom", "Bottom", "view_bottom"),
             ("front", "Front", "view_front"),
-            ("back", "Back", "view_back"),
-            ("left", "Left", "view_left"),
             ("right", "Right", "view_right"),
+            ("left", "Left", "view_left"),
+            ("back", "Back", "view_back"),
+            ("bottom", "Bottom", "view_bottom"),
         ]:
             act = QAction(tool_icon(icon), tr(label), self)
             act.setToolTip(tr(label))
@@ -697,7 +744,7 @@ class MainWindow(QMainWindow):
         tools_menu = menubar.addMenu(tr("Tools"))
         for keys in (("select", "eraser", "paint"),
                      ("move", "rotate", "scale", "flip"),
-                     ("pushpull", "followme", "offset"),
+                     ("pushpull", "followme", "offset", "fillet"),
                      ("tape", "protractor"),
                      ("dimension", "text"),
                      ("section",)):
@@ -745,6 +792,9 @@ class MainWindow(QMainWindow):
         self.addAction(clean_action)
         window_menu.addAction(clean_action)
         self._act_clean_screen = clean_action
+        # LibreOffice's Ctrl+F5: the whole sidebar (the three trays) folds
+        # away and comes back; the strip at the right edge stays.
+        window_menu.addAction(self._act_sidebar)
 
         window_menu.addSeparator()
         prefs_action = QAction(tr("Preferences…"), self)
@@ -759,6 +809,16 @@ class MainWindow(QMainWindow):
         get_models_action = QAction(tr("Get more models and textures…"), self)
         get_models_action.triggered.connect(self._on_get_models)
         help_menu.addAction(get_models_action)
+        # Only as an AppImage: put a launcher in the menu, or take it away.
+        from core.appimage import appimage_path
+        if appimage_path() is not None:
+            add_act = QAction(tr("Add to the applications menu"), self)
+            add_act.triggered.connect(self.add_appimage_to_menu)
+            help_menu.addAction(add_act)
+            rm_act = QAction(tr("Remove from the applications menu"), self)
+            rm_act.triggered.connect(self.remove_appimage_from_menu)
+            help_menu.addAction(rm_act)
+            help_menu.addSeparator()
         about_action = QAction(tr("About IngeTrazo"), self)
         about_action.triggered.connect(self._on_about)
         help_menu.addAction(about_action)
@@ -778,6 +838,106 @@ class MainWindow(QMainWindow):
             group.addAction(action)
             lang_menu.addAction(action)
 
+    # ---- Sidebar strip (LibreOffice-style) ---------------------------------
+    def _sidebar_docks(self) -> list:
+        return [d for d in (getattr(self, "tray", None),
+                            getattr(self, "bim_tray", None),
+                            getattr(self, "georef_tray", None)) if d is not None]
+
+    def _build_sidebar_handle(self) -> None:
+        """LibreOffice's sidebar handle: a slim button sitting ON the line
+        where the sidebar is resized, half-way down, with a chevron — click
+        folds the three trays away; the handle then rests at the window's
+        right edge, chevron pointing back in, and click brings them back.
+        Window ▸ Sidebar (Ctrl+F5) is the same toggle (Marco, 2026-09-14:
+        «ponerlo justo en esa línea donde redimensiono la barra vertical,
+        como lo hace LibreOffice»)."""
+        from PySide6.QtCore import QSize
+        from PySide6.QtWidgets import QToolButton
+        act = QAction(tr("Sidebar"), self)
+        act.setCheckable(True)
+        act.setChecked(True)
+        act.setShortcut(QKeySequence("Ctrl+F5"))
+        act.setToolTip(tr("Show or hide the sidebar (Ctrl+F5)"))
+        act.toggled.connect(self._set_sidebar_visible)
+        self.addAction(act)
+        self._act_sidebar = act
+
+        btn = QToolButton(self)
+        btn.setObjectName("sidebar_handle")
+        btn.setFixedSize(14, 56)
+        btn.setIconSize(QSize(12, 12))
+        btn.setIcon(tool_icon("side_collapse"))
+        btn.setToolTip(act.toolTip())
+        btn.setCursor(Qt.PointingHandCursor)
+        btn.setAutoRaise(True)
+        btn.setStyleSheet(
+            "QToolButton { background: palette(mid); border: none;"
+            " border-radius: 4px; }"
+            "QToolButton:hover { background: rgb(243, 115, 41); }")
+        btn.clicked.connect(lambda: act.setChecked(not act.isChecked()))
+        self._sidebar_handle = btn
+        self._icon_actions.append((btn, "side_collapse"))
+        self.viewport.installEventFilter(self)
+        self._follow_sidebar_docks()
+        self._place_sidebar_handle()
+
+    def _follow_sidebar_docks(self) -> None:
+        """Raising a tabbed tray (Terrain ↔ BIM) restacks the window's
+        children above the handle, which then vanishes behind the dock
+        (Marco, 2026-09-14) — every dock change re-places (and re-raises) it."""
+        from PySide6.QtCore import QTimer
+        bump = lambda *_: QTimer.singleShot(0, self._place_sidebar_handle)
+        for d in self._sidebar_docks():
+            d.visibilityChanged.connect(bump)
+            d.dockLocationChanged.connect(bump)
+            d.topLevelChanged.connect(bump)
+
+    def _place_sidebar_handle(self) -> None:
+        """On the resize line between the viewport and the trays, centred
+        vertically; at the window's edge when the trays are folded."""
+        btn = getattr(self, "_sidebar_handle", None)
+        if btn is None:
+            return
+        from PySide6.QtCore import QPoint
+        edge = self.viewport.mapTo(self, QPoint(self.viewport.width(), 0))
+        x = edge.x() - btn.width() // 2
+        x = max(0, min(x, self.width() - btn.width()))
+        y = edge.y() + (self.viewport.height() - btn.height()) // 2
+        btn.move(x, max(0, y))
+        btn.raise_()
+        btn.setVisible(not self._act_clean_screen.isChecked()
+                       if hasattr(self, "_act_clean_screen") else True)
+
+    def _sidebar_visible(self) -> bool:
+        return any(d.isVisible() for d in self._sidebar_docks())
+
+    def _set_sidebar_visible(self, on: bool) -> None:
+        """Fold the trays away (remembering which were open) or bring
+        them back; the chevron turns to point the way."""
+        docks = self._sidebar_docks()
+        if on:
+            shown = getattr(self, "_sidebar_was", None) or docks[:1]
+            for d in docks:
+                d.setVisible(d in shown)
+            top = getattr(self, "_sidebar_top", None)
+            if top is not None and top in shown:
+                top.raise_()
+        else:
+            self._sidebar_was = [d for d in docks if d.isVisible()]
+            self._sidebar_top = next((d for d in docks if d.isVisible()
+                                      and not d.visibleRegion().isEmpty()), None)
+            for d in docks:
+                d.hide()
+        btn = getattr(self, "_sidebar_handle", None)
+        if btn is not None:
+            key = "side_collapse" if on else "side_expand"
+            btn.setIcon(tool_icon(key))
+            self._icon_actions = [(a, (key if a is btn else k))
+                                  for a, k in self._icon_actions]
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(0, self._place_sidebar_handle)   # after the relayout
+
     def _toggle_clean_screen(self, on: bool) -> None:
         """AutoCAD's Ctrl+0: fold away every toolbar, dock and bar so only
         the model remains (presentations); Ctrl+0 again restores the
@@ -791,12 +951,62 @@ class MainWindow(QMainWindow):
                 dock.hide()
             self.menuBar().hide()
             self.statusBar().hide()
+            self._clean_screen_exit_button().show()
+            self._place_clean_screen_exit()
+            if getattr(self, "_sidebar_handle", None) is not None:
+                self._sidebar_handle.hide()
         else:
+            btn = getattr(self, "_clean_exit_btn", None)
+            if btn is not None:
+                btn.hide()
             state = getattr(self, "_clean_screen_state", None)
             if state is not None:
                 self.restoreState(state)
             self.menuBar().show()
             self.statusBar().show()
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(0, self._place_sidebar_handle)
+
+    def _clean_screen_exit_button(self):
+        """A small «Exit clean screen» button floating at the viewport's
+        top-right corner while everything else is hidden — the way out for
+        whoever does not know Ctrl+0 (Marco, 2026-09-14)."""
+        btn = getattr(self, "_clean_exit_btn", None)
+        if btn is not None:
+            return btn
+        from PySide6.QtWidgets import QToolButton
+        btn = QToolButton(self.viewport)
+        btn.setObjectName("clean_screen_exit")
+        btn.setText("✕  " + tr("Exit clean screen"))
+        btn.setToolTip(tr("Back to the workspace (Ctrl+0)"))
+        btn.setCursor(Qt.PointingHandCursor)
+        btn.setAutoRaise(True)
+        btn.setStyleSheet(
+            "QToolButton { background: rgba(30, 36, 44, 170); color: white;"
+            " border: 1px solid rgba(255, 255, 255, 90); border-radius: 6px;"
+            " padding: 4px 10px; font-weight: bold; }"
+            "QToolButton:hover { background: rgba(243, 115, 41, 220); }")
+        btn.clicked.connect(lambda: self._act_clean_screen.setChecked(False))
+        btn.hide()
+        self._clean_exit_btn = btn
+        self.viewport.installEventFilter(self)
+        return btn
+
+    def _place_clean_screen_exit(self) -> None:
+        btn = getattr(self, "_clean_exit_btn", None)
+        if btn is None or not btn.isVisible():
+            return
+        btn.adjustSize()
+        btn.move(self.viewport.width() - btn.width() - 12, 12)
+        btn.raise_()
+
+    def eventFilter(self, obj, event):  # noqa: N802 — Qt override
+        from PySide6.QtCore import QEvent
+        if obj is getattr(self, "viewport", None) and event.type() in (
+                QEvent.Resize, QEvent.Move, QEvent.Show):
+            self._place_clean_screen_exit()
+            self._place_sidebar_handle()
+        return super().eventFilter(obj, event)
 
     def _on_preferences(self) -> None:
         """Window ▸ Preferences: the scattered QSettings in one dialog."""
@@ -974,6 +1184,7 @@ class MainWindow(QMainWindow):
             (tr("glTF/GLB (.glb)…"), self._on_import_glb),
             (tr("Wavefront OBJ (.obj)…"), self._on_import_obj),
             (tr("Image (PNG / JPG)…"), self._on_import_image),
+            (tr("Orthomosaic (GeoTIFF)…"), self._on_import_orthophoto),
             (tr("AutoCAD DWG (.dwg)…"), self._on_import_dwg),
             (tr("AutoCAD DXF (.dxf)…"), self._on_import_dxf),
             (tr("Georeference (KML / GeoJSON)…"), self._on_import_georef),
@@ -1042,13 +1253,13 @@ class MainWindow(QMainWindow):
                              on_menu=self._sheet_tab_menu)
         self.setStatusBar(bar)
         self._sheet_tabs = bar.tabs
-        bar.showMessage(tr(
-            "Orbit (O) / Pan (H) buttons: left-drag to move the view  ·  "
-            "MMB-drag: orbit  ·  Shift+MMB-drag: pan  ·  Wheel / 2-finger: zoom  ·  "
-            "Shift+P: persp/parallel  ·  →←↑: lock X/Y/Z  ·  ↓: par/perp to ref  ·  "
-            "Shift: lock inference  ·  Type N + Enter: exact length  ·  "
-            "Rectangle: type W;H + Enter  ·  Type X;Y;Z + Enter: 3D delta"
-        ))
+        # ONE hint for the tool and its step (SketchUp's status bar) goes in
+        # as the bar's BASE message — SheetStatusBar keeps the Model | Sheet
+        # strip glued to the left and restores the base after a timed
+        # message (flash_status). A widget of our own here landed LEFT of
+        # the strip (Marco, 2026-09-15: «la ubicación de modelo y
+        # composiciones siempre debe ser primero»). It replaced a strip of
+        # every shortcut at once.
         self._tool_label = QLabel(tr("Tool: none"))
         bar.addPermanentWidget(self._tool_label)
         self._refresh_sheet_tabs()
@@ -1076,8 +1287,21 @@ class MainWindow(QMainWindow):
         bar.addPermanentWidget(self._vcb_value)
 
         self.viewport.valueBufferChanged.connect(self._on_value_buffer)
-        self.viewport.measurementChanged.connect(self._on_measurement)
-        self.viewport.coordinateChanged.connect(self._coord_label.setText)
+        # The coordinate and measurement texts change on EVERY mouse move;
+        # each setText dirties the status bar and Qt flushes the top-level
+        # window's backing store (3072×1920 px at scale 2 on Marco's
+        # laptop) — measured 2026-09-14 on the plaza: frames p90 190 ms with
+        # the labels live, 57 ms with them frozen. They now settle at most
+        # ~12 times a second, and only when the text actually changed.
+        self._status_pending: dict = {}
+        self._status_timer = QTimer(self)
+        self._status_timer.setSingleShot(True)
+        self._status_timer.setInterval(self.STATUS_TEXT_MS)
+        self._status_timer.timeout.connect(self._flush_status_texts)
+        self.viewport.measurementChanged.connect(
+            lambda text: self._queue_status_text("measurement", text))
+        self.viewport.coordinateChanged.connect(
+            lambda text: self._queue_status_text("coordinate", text))
 
     _VCB_IDLE_STYLE = (
         "color:#0F141B; background:#FFFFFF; border:1px solid #9aa3ad;"
@@ -1091,6 +1315,54 @@ class MainWindow(QMainWindow):
     def _on_value_buffer(self, text: str) -> None:
         self._vcb_buffer = text
         self._refresh_vcb()
+
+    #: How often the per-hover status texts may repaint (ms).
+    STATUS_TEXT_MS = 80
+
+    def _queue_status_text(self, which: str, text: str) -> None:
+        self._status_pending[which] = text
+        if not self._status_timer.isActive():
+            self._status_timer.start()
+
+    def _tool_key(self, tool) -> str | None:
+        for key, t in self._tools.items():
+            if t is tool:
+                return key
+        return None
+
+    def _update_status_hint(self) -> None:
+        """Refresh the one-line hint for the active tool and its step: the
+        status bar's base message, under any timed one."""
+        bar = self.statusBar()
+        if bar is None:
+            return
+        from views.status_hints import hint_for
+        vp = self.viewport
+        tool = vp.active_tool
+        text = hint_for(self._tool_key(tool), tool, getattr(vp, "nav_mode", None))
+        if text != getattr(bar, "_base", None):
+            if hasattr(bar, "_base"):
+                # Keep a running timed message; only the base changes.
+                bar._base = text
+                if not bar._timer.isActive():
+                    bar._msg.setText(text)
+            else:
+                bar.showMessage(text)
+
+    @property
+    def status_hint(self) -> str:
+        bar = self.statusBar()
+        return getattr(bar, "_base", None) or (bar.currentMessage() if bar else "")
+
+    def _flush_status_texts(self) -> None:
+        self._update_status_hint()
+        pending, self._status_pending = self._status_pending, {}
+        coord = pending.get("coordinate")
+        if coord is not None and coord != self._coord_label.text():
+            self._coord_label.setText(coord)
+        meas = pending.get("measurement")
+        if meas is not None and meas != getattr(self, "_vcb_live", None):
+            self._on_measurement(meas)
 
     def _on_measurement(self, text: str) -> None:
         self._vcb_live = text
@@ -1125,6 +1397,7 @@ class MainWindow(QMainWindow):
             action.setChecked(True)
         self._tool_label.setText(tr("Tool: {name}", name=tr(tool.name)))
         self._refresh_vcb()
+        self._update_status_hint()
 
     def _activate_nav(self, key: str) -> None:
         self.viewport.set_nav_mode(key)
@@ -1134,6 +1407,7 @@ class MainWindow(QMainWindow):
         self._tool_label.setText(
             tr("Nav: {name}", name=tr(key.capitalize())))
         self._refresh_vcb()
+        self._update_status_hint()
 
     def _on_make_group(self) -> None:
         """SketchUp's Make Group (G) over the selection.
@@ -1510,8 +1784,11 @@ class MainWindow(QMainWindow):
             act.blockSignals(False)
         self.viewport._apply_tool_cursor()
 
-    def show_viewport_context_menu(self, global_pos) -> None:
-        """SketchUp-style right-click menu, tailored to what's selected."""
+    def show_viewport_context_menu(self, global_pos, locked_image=None) -> None:
+        """SketchUp-style right-click menu, tailored to what's selected.
+        ``locked_image``: a locked reference image under the cursor that the
+        click did not select (geometry sat on top of it) — it gets its own
+        Unlock / Delete entries, or it could never be reached again."""
         from core.mesh import Edge, Face
         from core.dimension import Dimension
         from georef.geopath import GeoPath
@@ -1523,6 +1800,14 @@ class MainWindow(QMainWindow):
         has_mesh = any(isinstance(e, (Edge, Face)) for e in sel)
         sec_planes = [e for e in sel if isinstance(e, SectionPlane)]
         menu = QMenu(self)
+
+        if locked_image is not None and locked_image not in sel:
+            name = getattr(locked_image, "name", "") or tr("image")
+            menu.addAction(tr("Unlock image “{name}”", name=name),
+                           lambda im=locked_image: self._unlock_image(im))
+            menu.addAction(tr("Delete image “{name}”", name=name),
+                           lambda im=locked_image: self._delete_image(im))
+            menu.addSeparator()
 
         if sec_planes:
             # SketchUp's section-plane context menu.
@@ -1538,6 +1823,7 @@ class MainWindow(QMainWindow):
         images = [e for e in sel if isinstance(e, ImagePlane)]
         if images:
             menu.addAction(tr("Image size…"), self._on_image_size)
+            menu.addAction(tr("Image opacity…"), self._on_image_opacity)
             act_lock = menu.addAction(tr("Lock"), self._on_toggle_image_lock)
             act_lock.setCheckable(True)
             act_lock.setChecked(bool(images[0].locked))
@@ -1571,6 +1857,12 @@ class MainWindow(QMainWindow):
             # which is where anyone looks for it. It lived only in the Edit
             # menu and Marco could not find it (2026-09-10).
             menu.addAction(tr("Reverse Faces"), self._on_reverse_faces)
+            face = self._single_textured_face()
+            if face is not None:
+                # SketchUp's Texture submenu, on a face with an image.
+                texm = menu.addMenu(tr("Texture"))
+                texm.addAction(tr("Position"), self._on_texture_position)
+                texm.addAction(tr("Reset Position"), self._on_texture_reset)
         if any(isinstance(e, Edge) for e in sel):
             menu.addAction(tr("Hide Edges"), self._on_hide_edges)
         if has_group:
@@ -1608,6 +1900,64 @@ class MainWindow(QMainWindow):
         redo.setEnabled(bool(self.viewport.history.redo_stack))
 
         menu.exec(global_pos)
+
+    def _single_textured_face(self):
+        """``(face, side)``: the one selected face with an image texture on
+        the side the right-click saw — SketchUp's Texture menu acts on the
+        side you click; when only the other side carries an image, that
+        one (Marco painted the underside of a slab from above, 2026-09-15).
+        ``None`` otherwise."""
+        from core.mesh import Face
+        from tools.paint import clicked_back_side
+        from tools.texture_position import TexturePositionTool
+        faces = [e for e in self.viewport.scene.selection if isinstance(e, Face)]
+        if len(faces) != 1:
+            return None
+        face = faces[0]
+        px = getattr(self.viewport, "_context_pixel", None)
+        clicked = "front"
+        if px is not None and clicked_back_side(self.viewport, face, None, px[0], px[1]):
+            clicked = "back"
+        other = "back" if clicked == "front" else "front"
+        for side in (clicked, other):
+            if TexturePositionTool.side_texture(face, side) is not None:
+                return face, side
+        return None
+
+    def _on_texture_position(self) -> None:
+        """Texture ▸ Position: the pins on the tile under the right-click."""
+        hit = self._single_textured_face()
+        if hit is None:
+            return
+        face, side = hit
+        tool = self._tools["texture_position"]
+        at = None
+        px = getattr(self.viewport, "_context_pixel", None)
+        if px is not None:
+            from core.snap import face_plane_world
+            origin, direction = self.viewport._pixel_to_ray(px[0], px[1])
+            if origin is not None:
+                p0, n = face_plane_world(face, None)
+                at = self.viewport._ray_plane(origin, direction, p0, n)
+        self._activate_tool("texture_position")
+        if not tool.begin(self.viewport, face, at, side=side):
+            self._activate_tool("select")
+
+    def _on_texture_reset(self) -> None:
+        """Texture ▸ Reset Position: back to the default planar projection
+        (no per-face map, no rotation) on the clicked side."""
+        hit = self._single_textured_face()
+        if hit is None:
+            return
+        face, side = hit
+        from tools.texture_position import TexturePositionTool
+        tex = TexturePositionTool.side_texture(face, side) or {}
+        if "uvw" not in tex and "rot" not in tex:
+            return
+        flat = {k: v for k, v in tex.items() if k not in ("uvw", "rot")}
+        self.viewport.history.execute(
+            TexturePositionTool.side_command(face, side, flat))
+        self.viewport.update()
 
     def _on_hide_edges(self) -> None:
         """SketchUp's Edit ▸ Hide, scoped to edges: the selected edges stop
@@ -1701,24 +2051,10 @@ class MainWindow(QMainWindow):
         """Esc, escalating like the viewport: release a sticky constraint
         (axis lock / reference) first, then cancel an in-progress action;
         with nothing in progress, clear the selection."""
-        vp = self.viewport
-        if vp._value_buffer:
-            vp._set_value_buffer("")
-            return
-        if vp.release_constraints():
-            return
-        if isinstance(vp.active_tool, PasteTool):
-            self._activate_tool("select")
-            return
-        if vp.active_tool is not None and vp._tool_busy(vp.active_tool):
-            vp.active_tool.on_cancel(vp)
-            return
-        if vp.scene.selection:
-            vp.scene.clear_selection()
-            vp.update()
-            return
-        if vp.active_tool is not None:
-            vp.active_tool.on_cancel(vp)
+        # One cascade, the viewport's — this action's shortcut fires before
+        # the viewport ever sees the key, and its own copy lacked the
+        # «step out of the group» stop.
+        self.viewport.escape()
 
     # ---- View navigation ----------------------------------------------------
     def _on_zoom_extents(self) -> None:
@@ -1866,6 +2202,11 @@ class MainWindow(QMainWindow):
     def set_terrain_enabled(self, on: bool) -> None:
         self._terrain_on = on
         if on:
+            terrain = getattr(self.viewport.scene, "terrain", None)
+            if terrain is not None and not getattr(terrain, "visible", True):
+                terrain.visible = True      # hidden by a scene: just show it
+                self.viewport.update()
+                return
             self._build_terrain()
         else:
             self.viewport.scene.terrain = None
@@ -1919,7 +2260,9 @@ class MainWindow(QMainWindow):
             return                         # DEM grid not fully loaded yet
         first = scene.terrain is None
         terrain.texture_image = build_mosaic(terrain, layer.images)
-        terrain.visible = True
+        # An async rebuild keeps the visibility a scene may have set.
+        terrain.visible = True if first else bool(
+            getattr(scene.terrain, "visible", True))
         scene.terrain = terrain
         self.viewport.upload_terrain(terrain)
         # Frame the terrain only the first time it appears (not on async rebuilds).
@@ -1980,6 +2323,7 @@ class MainWindow(QMainWindow):
         self._sync_style_menu()
         self._sync_section_menu()
         self._update_title()
+        self.settle_heap()
 
     def _on_recover_discarded(self) -> None:
         """Open one of the retired auto-save copies as a NEW, unsaved
@@ -2095,7 +2439,26 @@ class MainWindow(QMainWindow):
         self.georef_tray.base_map.sync_photo_mesh()
         self.viewport.notify_scene_changed()
         self._update_title()
+        self.settle_heap()
         return True
+
+    #: Young-generation threshold: how many net allocations between
+    #: collector passes. Python's default (2000) made the incremental
+    #: collector (3.14) walk slices of the plaza's 1.3 M objects on almost
+    #: every hover — 203 passes and an 80 ms pause per 120 mouse moves;
+    #: at 50 000 the same run did 6 passes of ~0 ms. Measured 2026-09-14
+    #: against ``gc.freeze`` too, which cut the pauses but made every
+    #: allocation-heavy path slower (the cold pick index 23 → 41 ms).
+    GC_THRESHOLD0 = 50_000
+
+    def settle_heap(self) -> None:
+        """After a document loads: one clean collection over its static
+        object graph, and the young-generation threshold that keeps the
+        collector out of the way while drawing (see ``GC_THRESHOLD0``)."""
+        import gc
+        gc.unfreeze()                 # (in case an older session froze it)
+        gc.set_threshold(self.GC_THRESHOLD0, 10, 0)
+        gc.collect()
 
     def _on_save(self) -> None:
         self.viewport.end_group_edit()
@@ -3028,6 +3391,186 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(
             tr("Image resized to {w:.2f} × {h:.2f} m",
                w=u.length(), h=v.length()), 4000)
+
+    def _on_image_opacity(self) -> None:
+        """Fade a reference image so the model and its lines read over it
+        (the same control the base map has)."""
+        from PySide6.QtWidgets import QInputDialog
+        from core.image_plane import ImagePlane
+        from core.history import SetImagePlaneOpacityCommand
+        sel = [e for e in self.viewport.scene.selection
+               if isinstance(e, ImagePlane)]
+        if not sel:
+            return
+        image = sel[0]
+        pct, ok = QInputDialog.getInt(
+            self, tr("Image opacity"), tr("Opacity (%):"),
+            int(round(100 * float(getattr(image, "opacity", 1.0)))), 5, 100, 5)
+        if not ok:
+            return
+        self.viewport.history.execute(
+            SetImagePlaneOpacityCommand(image, pct / 100.0))
+        self.viewport.update()
+
+    def _on_import_orthophoto(self) -> None:
+        """Import a GeoTIFF orthomosaic (a WebODM ``odm_orthophoto.tif``, a
+        QGIS export) as a georeferenced reference image: the file's own
+        pixel → UTM transform places it on the scene's datum at its true
+        size and orientation, so the model is traced over the real ground.
+        Display-only, like every reference image (invariant #4); locked on
+        arrival so a stray drag never moves the survey."""
+        from georef.datum import SceneDatum
+        from georef.geotiff import (GeoTiffError, describe, read_info,
+                                    read_rgba, rgba_to_qimage,
+                                    unsupported_reason)
+
+        path_str, _ = file_dialogs.getOpenFileName(
+            self, tr("Import orthomosaic"), "",
+            tr("GeoTIFF (*.tif *.tiff);;All files (*)"))
+        if not path_str:
+            return
+        path = Path(path_str)
+        try:
+            info = read_info(path)
+        except (GeoTiffError, OSError) as exc:
+            QMessageBox.critical(self, tr("Import orthomosaic"), str(exc))
+            return
+        if not info.georeferenced:
+            QMessageBox.warning(
+                self, tr("Import orthomosaic"),
+                tr("{name} carries no georeference (no map transform or an "
+                   "unknown coordinate system). Import it with "
+                   "File ▸ Import ▸ Image and size it by hand.",
+                   name=path.name))
+            return
+        reason = unsupported_reason(info)
+        if reason:
+            QMessageBox.critical(
+                self, tr("Import orthomosaic"),
+                tr("{name}: {reason} is not supported by this reader.",
+                   name=path.name, reason=reason))
+            return
+
+        scene = self.viewport.scene
+        corners = info.corners_geodetic()
+        datum = getattr(scene, "georef", None)
+        datum_existed = datum is not None
+        if datum is None:
+            # The picture knows where it is — anchor the scene on its centre
+            # rather than asking for coordinates the user would look up.
+            lat = sum(c[0] for c in corners) / 4.0
+            lon = sum(c[1] for c in corners) / 4.0
+            datum = SceneDatum(lat, lon)
+            scene.georef = datum
+
+        dlg, cb = self._import_progress(tr("Importing {name}…", name=path.name))
+        max_px = 8192
+        try:
+            max_px = max(1024, min(8192, int(self.viewport.max_texture_size())))
+        except Exception:  # noqa: BLE001 — no GL context yet: keep the default
+            pass
+        try:
+            rgba, factor = read_rgba(
+                info, max_px=max_px,
+                progress=lambda fr: (cb(fr * 0.9, "Decoding the orthomosaic…")
+                                     or True))
+        except (GeoTiffError, OSError, MemoryError) as exc:
+            dlg.close()
+            QMessageBox.critical(self, tr("Import orthomosaic"), str(exc))
+            return
+        cb(0.92, "Storing the picture…")
+        image = rgba_to_qimage(rgba)
+        del rgba
+        from PySide6.QtCore import QBuffer, QByteArray
+        from core.texture import cache_image
+        data = QByteArray()
+        buf = QBuffer(data)
+        buf.open(QBuffer.WriteOnly)
+        ext = "webp"
+        if not image.save(buf, "WEBP", 92):        # no WebP plugin: PNG
+            buf.close()
+            data = QByteArray()
+            buf = QBuffer(data)
+            buf.open(QBuffer.WriteOnly)
+            image.save(buf, "PNG")
+            ext = "png"
+        buf.close()
+        try:
+            cached = cache_image(bytes(data), f"{path.stem}.{ext}", "imported")
+        except OSError as exc:
+            dlg.close()
+            QMessageBox.critical(self, tr("Import orthomosaic"), str(exc))
+            return
+        dlg.close()
+
+        # Place it: the plane's origin is the picture's bottom-left, u its
+        # width, v its height — the corners come in that order, already
+        # turned by the datum's north angle. On the datum plane (Z = 0),
+        # like the base map.
+        from core.image_plane import ImagePlane
+        from core.history import AddImagePlaneCommand
+        bl, br, _tr, tl = [datum.geodetic_to_local(lat, lon)
+                           for lat, lon in corners]
+        u, v = br - bl, tl - bl
+        aspect = v.length() / u.length() if u.length() > 1e-9 else 1.0
+        plane = ImagePlane(str(cached), bl, u, v, aspect=aspect,
+                           name=path.stem, locked=True)
+        self.viewport.history.execute(AddImagePlaneCommand(plane))
+        if not datum_existed:
+            lo, hi = QVector3D(bl), QVector3D(bl)
+            for c in plane.corners():
+                lo = QVector3D(min(lo.x(), c.x()), min(lo.y(), c.y()), 0.0)
+                hi = QVector3D(max(hi.x(), c.x()), max(hi.y(), c.y()), 0.0)
+            self.georef_tray.base_map.setup_for_bounds(datum, lo, hi)
+            self.viewport.camera.set_view("top")
+            self.viewport.camera.fit_to(lo, hi)
+        self.georef_tray.on_scene_changed()
+        self.viewport.update()
+        w_m, h_m = u.length(), v.length()
+        self.statusBar().showMessage(
+            tr("Imported {name} — {w:.0f} × {h:.0f} m, {info}{reduced}",
+               name=path.name, w=w_m, h=h_m, info=describe(info),
+               reduced=(tr(", reduced {k}×", k=factor) if factor > 1 else "")),
+            8000)
+
+    def _unlock_image(self, image) -> None:
+        """Unlock one reference image (from the right-click over it) and
+        select it, so the next click can move, resize or delete it."""
+        image.locked = False
+        scene = self.viewport.scene
+        scene.select([image])
+        scene.version += 1
+        self.viewport.update()
+        self.statusBar().showMessage(
+            tr("Image unlocked: {name}", name=image.name), 3000)
+
+    def _delete_image(self, image) -> None:
+        """Delete one reference image (from the right-click over it)."""
+        from core.history import DeleteImagePlanesCommand
+        self.viewport.history.execute(DeleteImagePlanesCommand([image]))
+        self.viewport.scene.selection.discard(image)
+        self.viewport.update()
+
+    def add_appimage_to_menu(self) -> None:
+        """Write the launcher + icon for the running AppImage."""
+        from core.appimage import appimage_path, integrate
+        img = appimage_path()
+        if img is None:
+            return
+        try:
+            f = integrate(img)
+        except OSError as exc:
+            QMessageBox.warning(self, tr("Add to the applications menu"),
+                                str(exc))
+            return
+        self.statusBar().showMessage(
+            tr("Launcher added: {path}", path=str(f)), 6000)
+
+    def remove_appimage_from_menu(self) -> None:
+        from core.appimage import remove
+        remove()
+        self.statusBar().showMessage(
+            tr("Launcher removed from the applications menu"), 5000)
 
     def _on_toggle_image_lock(self) -> None:
         """Lock an image so clicks fall through to what you are drawing on top

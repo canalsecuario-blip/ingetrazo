@@ -24,6 +24,7 @@ import math
 import sys
 import traceback
 import urllib.error
+import time
 import urllib.request
 
 from core.history import SnapshotImport
@@ -133,7 +134,216 @@ def _recipe_helpers(scene) -> dict:
         mesh.add_face(hi)
         return _finish(mesh, color, name)
 
-    return {"revolve": revolve, "extrude": extrude}
+    def _pt(p, z=None):
+        if hasattr(p, "x"):
+            return QVector3D(p)
+        if len(p) == 2:
+            return QVector3D(p[0], p[1], 0.0 if z is None else z)
+        return QVector3D(p[0], p[1], p[2])
+
+    def _prism_mesh(mesh, loop, vec, holes=()):
+        """Add a closed solid to ``mesh``: the planar polygon ``loop`` (3D
+        points, optional hole loops) swept along ``vec``."""
+        v = _pt(vec)
+        lo = [_pt(p) for p in loop]
+        hole_lo = [[_pt(p) for p in h] for h in holes or ()]
+        mesh.add_face(lo, hole_lo)
+        mesh.add_face([p + v for p in reversed(lo)],
+                      [[p + v for p in reversed(h)] for h in hole_lo])
+        for ring in (lo, *hole_lo):
+            n = len(ring)
+            for i in range(n):
+                a, b = ring[i], ring[(i + 1) % n]
+                mesh.add_face([a, b, b + v, a + v])
+
+    def prism(loop, vec, holes=None, name=None, color=None):
+        """Solid from a flat polygon (3D points, optional hole loops) swept
+        along ``vec``: a slab, a wall with a window, a roof plank."""
+        mesh = Mesh()
+        _prism_mesh(mesh, loop, vec, holes or ())
+        return _finish(mesh, color, name)
+
+    def _wall_mesh(mesh, a, b, height, thickness, openings=(), z0=0.0,
+                   peak=None):
+        """One wall into ``mesh``: base line a→b (x, y), the solid grows to
+        the LEFT of a→b by ``thickness`` (walk the footprint counter-
+        clockwise and the inside is the left). ``openings`` are
+        ``(offset, sill, width, height)`` along the wall from ``a``; a sill
+        at 0 is a door (a notch in the outline), above 0 a window (a hole).
+        ``peak=(offset, rise)`` raises the top to a gable point."""
+        ax, ay = a[0], a[1]
+        bx, by = b[0], b[1]
+        length = math.hypot(bx - ax, by - ay)
+        if length < 1e-9:
+            return
+        ux, uy = (bx - ax) / length, (by - ay) / length
+        nx, ny = -uy, ux                      # left of a→b
+        top = z0 + height
+
+        def P(s, z):
+            return QVector3D(ax + ux * s, ay + uy * s, z)
+        doors = sorted((o for o in openings if o[1] <= 1e-6), key=lambda o: o[0])
+        windows = [o for o in openings if o[1] > 1e-6]
+        outline = [P(0.0, z0)]
+        for off, _sill, w, h in doors:
+            s0, s1 = max(off, 0.0), min(off + w, length)
+            if s1 - s0 < 1e-6:
+                continue
+            outline += [P(s0, z0), P(s0, z0 + h), P(s1, z0 + h), P(s1, z0)]
+        outline.append(P(length, z0))
+        outline.append(P(length, top))
+        if peak is not None:
+            outline.append(P(peak[0], top + peak[1]))
+        outline.append(P(0.0, top))
+        # Drop the doubled corner when a door starts at 0.
+        clean = []
+        for q in outline:
+            if not clean or (q - clean[-1]).length() > 1e-9:
+                clean.append(q)
+        if (clean[0] - clean[-1]).length() < 1e-9:
+            clean.pop()
+        holes = []
+        for off, sill, w, h in windows:
+            s0, s1 = max(off, 0.0), min(off + w, length)
+            zt = min(z0 + sill + h, top - 0.05)
+            if s1 - s0 < 1e-6 or zt - (z0 + sill) < 1e-6:
+                continue
+            holes.append([P(s0, z0 + sill), P(s0, zt), P(s1, zt), P(s1, z0 + sill)])
+        _prism_mesh(mesh, clean, (nx * thickness, ny * thickness, 0.0), holes)
+
+    def wall(a, b, height=3.0, thickness=0.2, openings=(), z0=0.0,
+             peak=None, name=None, color=None):
+        """A wall with thickness and openings — see ``house`` for the
+        conventions. ``openings=[(offset, sill, width, height), ...]``."""
+        mesh = Mesh()
+        _wall_mesh(mesh, a, b, height, thickness, openings, z0, peak)
+        return _finish(mesh, color, name)
+
+    def house(width=6.0, depth=4.0, wall_height=3.0, thickness=0.2,
+              roof="gable", ridge_height=None, overhang=0.4, ridge="x",
+              doors=(), windows=(), origin=(0.0, 0.0), name="Casa",
+              wall_color=(0.90, 0.87, 0.80, 1.0),
+              roof_color=(0.55, 0.27, 0.20, 1.0),
+              door_color=(0.45, 0.28, 0.15, 1.0),
+              glass_color=(0.60, 0.80, 0.95, 1.0)):
+        """A whole house in one call: four walls with thickness, doors and
+        windows cut through them (with a door leaf and a glass pane), and
+        a roof — ``"gable"`` (two slopes, ridge along ``"x"`` or ``"y"``),
+        ``"hip"`` (four slopes) or ``"flat"``. Sides are ``"S"`` (y = y0,
+        the front), ``"E"``, ``"N"``, ``"W"``; an opening's ``offset`` runs
+        along the wall counter-clockwise from its first corner (S from
+        x0, E from y0, N from x1 back, W from y1 back). ``doors=[(side,
+        offset, width, height)]``, ``windows=[(side, offset, sill, width,
+        height)]``. Returns the groups: walls, floor, carpentry, roof."""
+        x0, y0 = float(origin[0]), float(origin[1])
+        x1, y1 = x0 + float(width), y0 + float(depth)
+        H, t = float(wall_height), float(thickness)
+        if ridge_height is None:
+            half = (depth if ridge == "x" else width) / 2.0
+            ridge_height = half * math.tan(math.radians(30.0))
+        rh = float(ridge_height)
+        lines = {"S": ((x0, y0), (x1, y0)), "E": ((x1, y0), (x1, y1)),
+                 "N": ((x1, y1), (x0, y1)), "W": ((x0, y1), (x0, y0))}
+        # E and W sit between S and N, so the corners are not doubled.
+        lines["E"] = ((x1, y0 + t), (x1, y1 - t))
+        lines["W"] = ((x0, y1 - t), (x0, y0 + t))
+        shift = {"S": 0.0, "N": 0.0, "E": -t, "W": -t}
+        ops: dict = {k: [] for k in lines}
+        leaves: list = []          # (side, offset, sill, w, h, kind)
+        for side, off, w, h in doors:
+            ops[side.upper()].append((off + shift[side.upper()], 0.0, w, h))
+            leaves.append((side.upper(), off + shift[side.upper()], 0.0, w, h, "door"))
+        for side, off, sill, w, h in windows:
+            ops[side.upper()].append((off + shift[side.upper()], sill, w, h))
+            leaves.append((side.upper(), off + shift[side.upper()], sill, w, h, "glass"))
+        gable_sides = ()
+        if roof == "gable":
+            gable_sides = ("E", "W") if ridge == "x" else ("S", "N")
+        walls_mesh = Mesh()
+        for side, (a, b) in lines.items():
+            peak = None
+            if side in gable_sides:
+                seg = math.hypot(b[0] - a[0], b[1] - a[1])
+                peak = (seg / 2.0, rh)
+            _wall_mesh(walls_mesh, a, b, H, t, ops[side], 0.0, peak)
+        out = [_finish(walls_mesh, wall_color, f"{name} · Paredes")]
+        # A floor slab just inside the walls (a hair short of them, so no
+        # two faces share a plane), or the house reads hollow from below.
+        floor = Mesh()
+        e = t + 0.01
+        _prism_mesh(floor, [QVector3D(x0 + e, y0 + e, 0.0), QVector3D(x1 - e, y0 + e, 0.0),
+                            QVector3D(x1 - e, y1 - e, 0.0), QVector3D(x0 + e, y1 - e, 0.0)],
+                    (0.0, 0.0, 0.1))
+        out.append(_finish(floor, (0.75, 0.72, 0.66, 1.0), f"{name} · Piso"))
+        # Carpentry: a door leaf and a glass pane in every opening.
+        carp = Mesh()
+        for side, off, sill, w, h, kind in leaves:
+            a, b = lines[side]
+            length = math.hypot(b[0] - a[0], b[1] - a[1])
+            ux, uy = (b[0] - a[0]) / length, (b[1] - a[1]) / length
+            nx, ny = -uy, ux
+            d = t * 0.5
+            s0, s1 = off, off + w
+            base = [QVector3D(a[0] + ux * s0 + nx * d, a[1] + uy * s0 + ny * d, sill),
+                    QVector3D(a[0] + ux * s1 + nx * d, a[1] + uy * s1 + ny * d, sill),
+                    QVector3D(a[0] + ux * s1 + nx * d, a[1] + uy * s1 + ny * d, sill + h),
+                    QVector3D(a[0] + ux * s0 + nx * d, a[1] + uy * s0 + ny * d, sill + h)]
+            if kind == "door":
+                _prism_mesh(carp, base, (nx * 0.04, ny * 0.04, 0.0))
+                for f in carp.faces:
+                    f.attrs.setdefault("color", tuple(door_color))
+            else:
+                f = carp.add_face(base)
+                f.attrs["color"] = tuple(glass_color)
+                f.attrs["opacity"] = 0.4
+        if carp.faces:
+            out.append(_finish(carp, None, f"{name} · Carpintería"))
+        # Roof.
+        roof_mesh = Mesh()
+        ov = float(overhang)
+        if roof == "flat":
+            _prism_mesh(roof_mesh, [QVector3D(x0 - ov, y0 - ov, H), QVector3D(x1 + ov, y0 - ov, H),
+                                    QVector3D(x1 + ov, y1 + ov, H), QVector3D(x0 - ov, y1 + ov, H)],
+                        (0.0, 0.0, 0.2))
+        elif roof == "hip":
+            L, W = x1 - x0, y1 - y0
+            cx, cy = (x0 + x1) / 2.0, (y0 + y1) / 2.0
+            s = rh / (min(L, W) / 2.0)
+            ze = H - s * ov
+            b0, b1, b2, b3 = (QVector3D(x0 - ov, y0 - ov, ze), QVector3D(x1 + ov, y0 - ov, ze),
+                              QVector3D(x1 + ov, y1 + ov, ze), QVector3D(x0 - ov, y1 + ov, ze))
+            if L >= W:
+                r0, r1 = QVector3D(cx - (L - W) / 2.0, cy, H + rh), QVector3D(cx + (L - W) / 2.0, cy, H + rh)
+                faces = [[b0, b1, r1, r0], [b2, b3, r0, r1], [b1, b2, r1], [b3, b0, r0]]
+            else:
+                r0, r1 = QVector3D(cx, cy - (W - L) / 2.0, H + rh), QVector3D(cx, cy + (W - L) / 2.0, H + rh)
+                faces = [[b1, b2, r1, r0], [b3, b0, r0, r1], [b0, b1, r0], [b2, b3, r1]]
+            for f in faces:
+                roof_mesh.add_face(f)
+            roof_mesh.add_face([b3, b2, b1, b0])
+        else:                                   # gable: a bent slab
+            th = 0.15
+            if ridge == "x":
+                s = rh / ((y1 - y0) / 2.0)
+                ze, yc = H - s * ov, (y0 + y1) / 2.0
+                dz = th / math.cos(math.atan(s))
+                sec = [QVector3D(x0 - ov, y0 - ov, ze), QVector3D(x0 - ov, yc, H + rh),
+                       QVector3D(x0 - ov, y1 + ov, ze), QVector3D(x0 - ov, y1 + ov, ze - dz),
+                       QVector3D(x0 - ov, yc, H + rh - dz), QVector3D(x0 - ov, y0 - ov, ze - dz)]
+                _prism_mesh(roof_mesh, sec, (x1 - x0 + 2 * ov, 0.0, 0.0))
+            else:
+                s = rh / ((x1 - x0) / 2.0)
+                ze, xc = H - s * ov, (x0 + x1) / 2.0
+                dz = th / math.cos(math.atan(s))
+                sec = [QVector3D(x0 - ov, y0 - ov, ze), QVector3D(xc, y0 - ov, H + rh),
+                       QVector3D(x1 + ov, y0 - ov, ze), QVector3D(x1 + ov, y0 - ov, ze - dz),
+                       QVector3D(xc, y0 - ov, H + rh - dz), QVector3D(x0 - ov, y0 - ov, ze - dz)]
+                _prism_mesh(roof_mesh, sec, (0.0, y1 - y0 + 2 * ov, 0.0))
+        out.append(_finish(roof_mesh, roof_color, f"{name} · Techo"))
+        return out
+
+    return {"revolve": revolve, "extrude": extrude, "prism": prism,
+            "wall": wall, "house": house}
 
 
 def run_transactional(viewport, code: str, scope: dict) -> dict:
@@ -285,7 +495,11 @@ def _message_image(m: dict) -> tuple[str | None, str]:
     ``image_png_b64`` stays as the screenshot shorthand."""
     if m.get("image_b64"):
         return m["image_b64"], m.get("image_mime", "image/png")
-    return m.get("image_png_b64"), "image/png"
+    shot = m.get("image_png_b64")
+    # The screenshot shorthand carries JPEG now (a quarter of the bytes
+    # of the PNG it used to be); the base64 header tells which.
+    mime = "image/jpeg" if shot and shot.startswith("/9j/") else "image/png"
+    return shot, mime
 
 
 def build_request(provider: str, model: str, api_key: str,
@@ -351,40 +565,74 @@ def parse_reply(provider: str, raw: bytes) -> str:
     return choices[0].get("message", {}).get("content", "") or ""
 
 
+#: HTTP statuses worth another try: the provider is busy or rate-limited
+#: (Gemini's 503 «high demand», 429, the 5xx family, Anthropic's 529).
+RETRY_STATUSES = frozenset({429, 500, 502, 503, 504, 529})
+#: Seconds before retry n (1-based): 2, 4, 8, 16 — capped.
+RETRY_BACKOFF = (2.0, 4.0, 8.0, 16.0)
+
+
 def _urlopen(url: str, headers: dict, payload: bytes | None = None,
-             timeout: float = 180.0) -> bytes:
+             timeout: float = 180.0, retries: int = 0, on_retry=None,
+             sleep=time.sleep) -> bytes:
     """One HTTP round trip with the readable error shaping every caller
-    wants (the raw body is the useful part of a provider error)."""
-    req = urllib.request.Request(url, data=payload, headers=headers,
-                                 method="POST" if payload else "GET")
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return resp.read()
-    except urllib.error.HTTPError as exc:
-        detail = ""
+    wants (the raw body is the useful part of a provider error).
+
+    With ``retries``, a busy provider (:data:`RETRY_STATUSES`, or no
+    answer at all) is tried again after a growing pause; ``on_retry(n,
+    total, wait, reason)`` is told each time so a chat panel can say so.
+    Marco asked for a house and Gemini's 503 «high demand» cut it short
+    at the walls (2026-09-15): one spike must not end the recipe."""
+    attempt = 0
+    while True:
+        req = urllib.request.Request(url, data=payload, headers=headers,
+                                     method="POST" if payload else "GET")
         try:
-            detail = exc.read().decode()[:400]
-        except OSError:
-            pass
-        raise RuntimeError(f"HTTP {exc.code}: {detail or exc.reason}")
-    except urllib.error.URLError as exc:
-        raise RuntimeError(f"sin conexión: {exc.reason}")
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return resp.read()
+        except urllib.error.HTTPError as exc:
+            detail = ""
+            try:
+                detail = exc.read().decode()[:400]
+            except OSError:
+                pass
+            reason = f"HTTP {exc.code}: {detail or exc.reason}"
+            if exc.code not in RETRY_STATUSES or attempt >= retries:
+                if attempt:
+                    reason += f" (tras {attempt + 1} intentos)"
+                raise RuntimeError(reason)
+        except urllib.error.URLError as exc:
+            reason = f"sin conexión: {exc.reason}"
+            if attempt >= retries:
+                raise RuntimeError(reason)
+        wait = RETRY_BACKOFF[min(attempt, len(RETRY_BACKOFF) - 1)]
+        attempt += 1
+        if on_retry is not None:
+            on_retry(attempt, retries, wait, reason)
+        sleep(wait)
 
 
 def chat(provider: str, model: str, api_key: str, system: str,
          messages: list, ollama_url: str = "http://localhost:11434",
-         timeout: float = 180.0, max_tokens: int = 4096) -> str:
+         timeout: float = 180.0, max_tokens: int = 4096,
+         retries: int = 4, on_retry=None) -> str:
     """One blocking chat turn. Raises with a readable message on failure —
-    callers run this in a worker thread, never on the UI thread."""
+    callers run this in a worker thread, never on the UI thread. A busy
+    provider is retried ``retries`` times (see :func:`_urlopen`)."""
     url, headers, payload = build_request(
         provider, model, api_key, system, messages, ollama_url, max_tokens)
-    return parse_reply(provider, _urlopen(url, headers, payload, timeout))
+    return parse_reply(provider, _urlopen(url, headers, payload, timeout,
+                                          retries=retries, on_retry=on_retry))
 
 
 #: Substrings of model ids that are not chat models (speech, safety,
 #: embeddings, image/video generation) — hidden from the model picker.
 _NON_CHAT = ("whisper", "tts", "embed", "guard", "moderation", "imagen",
-             "veo", "aqa", "audio", "transcribe", "image", "dall-e")
+             "veo", "aqa", "audio", "transcribe", "image", "dall-e",
+             # Groq's agentic "compound" systems run their own tools and
+             # answer with prose about what they "did" — no recipe ever
+             # reaches IngeTrazo (Marco, 2026-09-15).
+             "compound")
 
 
 def list_models(provider: str, api_key: str,

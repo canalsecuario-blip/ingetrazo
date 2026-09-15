@@ -164,3 +164,16 @@ def test_the_viewport_does_not_ask_the_dropped_stencil_back(monkeypatch):
     assert fmt.depthBufferSize() == 24, "hidden-line removal needs depth"
     assert fmt.samples() == 0, "MSAA belongs to the scene FBO, not the widget"
     assert (fmt.majorVersion(), fmt.minorVersion()) == (3, 3)
+
+
+def test_the_probe_drops_warnings_but_lets_a_fatal_through(capsys):
+    """Issue #6 (v0.3.19): the abort inside Qt's GLX integration reached
+    the user as a bare «Aborted» because the probe's handler ate the
+    qFatal text along with the warnings it exists to hide."""
+    from PySide6.QtCore import QtMsgType
+    from core.gl_fallback import _probe_message_handler
+    _probe_message_handler(QtMsgType.QtWarningMsg, None, "qt.glx: noise")
+    _probe_message_handler(QtMsgType.QtFatalMsg, None, "Could not initialize GLX")
+    err = capsys.readouterr().err
+    assert "noise" not in err
+    assert "Could not initialize GLX" in err

@@ -9,6 +9,13 @@ SketchUp's 2-point arc:
 
 The arc is committed as a polyline of short edges (it auto-faces if it closes a
 region with existing geometry). The bulge can be typed in the VCB.
+
+Rounding a corner (SketchUp 2015+, Rafael's review of 2026-09-10, C2): a
+start point ON an edge makes the preview an arc **tangent to that edge**
+(cyan, «Tangent to edge»); on the adjacent edge, at the same distance from
+the shared corner, the arc turns **magenta** — tangent to both edges, the
+fillet. A double-click there draws it and trims the corner; a double-click
+near another two-edge corner repeats the last distance.
 """
 from __future__ import annotations
 
@@ -18,12 +25,24 @@ from core.i18n import tr
 
 from PySide6.QtGui import QVector3D
 
+from collections import namedtuple
+
+from PySide6.QtCore import Qt
+
 from core.edits import build_add_edges
-from core.history import RebuildPlanarFacesCommand, TagCurveCommand
+from core.history import (DeleteEdgesCommand, RebuildPlanarFacesCommand,
+                          TagCurveCommand)
 from core.triangulate import plane_axes
 from tools.base import PlaneLock, Tool, ToolContext
 
 _SEGMENTS = 16  # polyline segments approximating the arc
+
+#: Magenta of the arc that is tangent to BOTH edges of a corner (SketchUp
+#: turns its turquoise tangent inference magenta «at the point where it
+#: fillets a corner»).
+COLOR_FILLET = (0.85, 0.30, 0.80)
+
+_Seg = namedtuple("_Seg", "a b")
 
 
 def _circumcenter2(a, b, c):
@@ -72,32 +91,42 @@ def _arc_3pts_2d(s, m, e, segments):
 
 
 
-def commit_arc(viewport, pts: list[QVector3D], close_to=None) -> None:
+def commit_arc(viewport, pts: list[QVector3D], close_to=None, trim=None):
     """Commit an arc polyline with the shared curve pipeline: planar
     arrangement on flat drawings, scoped per-plane arrangement when the
     drawing plane already carries content in a 3D scene, naive otherwise.
     Used by every arc variant. With ``close_to`` (a centre point) the two
-    radius edges close the wedge — SketchUp's Pie."""
+    radius edges close the wedge — SketchUp's Pie. ``trim`` is a list of
+    ``(a, b)`` position pairs: edges to erase once the arc is in — the two
+    corner stubs a fillet leaves behind, which SketchUp «cleans out» after
+    the face has been split, so the rounded face survives and the corner
+    sliver goes with its edges. Returns the executed command."""
     segments = [(pts[i], pts[i + 1]) for i in range(len(pts) - 1)]
     if close_to is not None:
         segments = ([(close_to, pts[0])] + segments
                     + [(pts[-1], close_to)])
+    after = []
+    if trim:
+        after.append(DeleteEdgesCommand([_Seg(QVector3D(a), QVector3D(b))
+                                         for a, b in trim]))
     from tools.circle import busy_plane, flat_drawing
     if flat_drawing(viewport.scene, pts):
         cmd = build_add_edges(
             viewport.scene, segments, detect_faces=False,
             extra=[TagCurveCommand(list(pts), closed=False),
-                   RebuildPlanarFacesCommand()])
+                   RebuildPlanarFacesCommand()] + after)
     elif (plane := busy_plane(viewport.scene, pts)) is not None:
         from core.history import RebuildPlaneFacesCommand
         cmd = build_add_edges(
             viewport.scene, segments, detect_faces=True,
             extra=[TagCurveCommand(list(pts), closed=False),
-                   RebuildPlaneFacesCommand(*plane)])
+                   RebuildPlaneFacesCommand(*plane)] + after)
     else:
         cmd = build_add_edges(viewport.scene, segments, detect_faces=True,
-                              extra=[TagCurveCommand(list(pts), closed=False)])
+                              extra=[TagCurveCommand(list(pts), closed=False)]
+                              + after)
     viewport.history.execute(cmd)
+    return cmd
 
 
 class ArcTool(PlaneLock, Tool):
@@ -105,39 +134,431 @@ class ArcTool(PlaneLock, Tool):
     shortcut = "A"
     vcb_label = "Bulge"
 
+    #: Within this many screen pixels of the tangent bulge, the arc snaps
+    #: to it (SketchUp's "Tangent at Vertex", cyan).
+    TANGENT_PX = 8.0
+    #: Within this many screen pixels of the point on the adjacent edge at
+    #: the same distance from the corner, the end point snaps to it and the
+    #: arc turns magenta (a fillet).
+    FILLET_PX = 10.0
+    #: A double-click this close (px) to a two-edge corner repeats the last
+    #: rounding on it.
+    CORNER_PX = 20.0
+    #: Polyline segments of the next arc; SketchUp's "Ns" in the VCB.
+    segments: int = _SEGMENTS
+    #: Distance corner→tangent points of the last fillet (shared by every
+    #: arc tool instance): a double-click near another corner repeats it.
+    last_fillet_d: float | None = None
+
     def __init__(self) -> None:
         self.start_point: QVector3D | None = None
         self.end_point: QVector3D | None = None
         self.hover_point: QVector3D | None = None
         self.work_plane: tuple[QVector3D, QVector3D] | None = None
+        # Tangent direction of the arc this one starts from (at its end
+        # vertex), and the bulge that keeps the new arc tangent to it.
+        self._tangent_dir: QVector3D | None = None
+        self._snap_bulge: float | None = None
+        # What the bulge snapped to: "tangent" (cyan), "fillet" (magenta),
+        # "half" (a half circle) or None.
+        self._bulge_kind: str | None = None
+        # The edge the start point sits on (interior), as ``(edge, P1)``.
+        self._start_edge = None
+        # End-point phase: the equidistant point on an adjacent edge the
+        # cursor is snapped to, as ``(V, P2, edge B)``.
+        self._equidistant = None
+        # After the end click: ``(V, P1, P2)`` when the end point was the
+        # equidistant one — the corner this arc rounds.
+        self._fillet = None
+        # The last committed arc and its parameters, so "Ns" typed right
+        # after can rebuild it with another segment count (SketchUp).
+        self._last_cmd = None
+        self._last_params = None
+        self._viewport = None
 
     # ---- Lifecycle ----------------------------------------------------------
     def on_activate(self, viewport) -> None:
         self._reset()
+        self._last_cmd = None
+        self._last_params = None
 
     def on_deactivate(self, viewport) -> None:
         self._reset()
         self.hover_point = None
+        self._last_cmd = None
+        self._last_params = None
 
     # ---- Spatial input ------------------------------------------------------
     def on_click(self, ctx: ToolContext) -> None:
+        self.note_plane(ctx.viewport)
+        self._viewport = ctx.viewport
         if self.start_point is None:
+            self._last_cmd = None
+            self._last_params = None
             self.start_point = ctx.world
             if self.work_plane is None:
                 self.work_plane = self.locked_work_plane(ctx.world)
+            self._start_edge = self._edge_under(ctx.viewport, ctx.world)
             return
         if self.end_point is None:
-            if (ctx.world - self.start_point).length() < 1e-6:
+            end = self._equidistant[1] if self._equidistant else ctx.world
+            if (end - self.start_point).length() < 1e-6:
                 return
-            self.end_point = ctx.world
+            self.end_point = end
+            self._fillet = None
+            if self._equidistant is not None:
+                V, P2, _B = self._equidistant
+                self._fillet = (QVector3D(V), QVector3D(self.start_point),
+                                QVector3D(P2))
+            self._equidistant = None
+            self._tangent_dir = self._tangent_at_start(ctx.viewport)
+            if self._tangent_dir is None:
+                self._tangent_dir = self._edge_tangent(end)
             return
         pts = self._points(ctx.world)
         if len(pts) >= 2:
-            self._commit(ctx.viewport, pts)
+            self._commit(ctx.viewport, pts, trim=self._corner_trim(ctx.modifiers))
+
+    def on_double_click(self, ctx: ToolContext) -> None:
+        """SketchUp: a double-click on the magenta point draws the fillet
+        with its tangent bulge and trims the corner in one gesture; a
+        double-click near another two-edge corner repeats the last
+        distance. Anything else is a plain click."""
+        self._viewport = ctx.viewport
+        if (self.start_point is not None and self.end_point is not None
+                and self._fillet is not None):
+            h = self._tangent_bulge()
+            if h is not None:
+                self._snap_bulge = h
+                self._bulge_kind = "fillet"
+                pts = self._points(None, bulge=h)
+                if len(pts) >= 2:
+                    self._commit(ctx.viewport, pts,
+                                 trim=self._corner_trim(ctx.modifiers))
+                    return
+        if (self.start_point is not None and self.end_point is None
+                and ArcTool.last_fillet_d):
+            corner = self._corner_near(ctx.viewport, ctx.screen, ctx.world)
+            if corner is not None:
+                self._reset()
+                self._round_corner(ctx.viewport, corner, ArcTool.last_fillet_d,
+                                   ctx.modifiers)
+                return
+        self.on_click(ctx)
 
     def on_hover(self, ctx: ToolContext) -> None:
+        self.note_plane(ctx.viewport)
+        self._viewport = ctx.viewport
         self.hover_point = ctx.world
+        self._snap_bulge = None
+        self._bulge_kind = None
+        self._equidistant = None
+        self.wireframe_color = self.lock_color()
+        if self.start_point is not None and self.end_point is None:
+            # End-point phase: from an edge, the preview is the arc tangent
+            # to it (cyan); at the equidistant point of the adjacent edge
+            # it turns magenta.
+            if self._start_edge is not None:
+                from core.snap import COLOR_TANGENT
+                self.wireframe_color = (*COLOR_TANGENT, 1.0)
+                self._equidistant = self._equidistant_near(
+                    ctx.viewport, ctx.screen, ctx.world)
+                if self._equidistant is not None:
+                    self.hover_point = QVector3D(self._equidistant[1])
+                    self.wireframe_color = (*COLOR_FILLET, 1.0)
+        elif self.end_point is not None:
+            self._snap_bulge_for(ctx)
         ctx.viewport.update()
+
+    def _snap_bulge_for(self, ctx: ToolContext) -> None:
+        """Bulge-phase inferences: tangent to the edge/arc the start sits on
+        (cyan, magenta when that also makes it tangent to the corner's
+        other edge), and the half circle."""
+        u, v = self._axes()
+        e2 = self._to2(self.end_point, u, v)
+        length = math.hypot(*e2)
+        if length < 1e-9:
+            return
+        perp = u * (-e2[1] / length) + v * (e2[0] / length)
+        mid = (self.start_point + self.end_point) * 0.5
+        scale = self.world_per_pixel(ctx.viewport, mid, perp)
+        if scale is None:
+            return
+        tol = scale * self.TANGENT_PX
+        b = self._bulge_for(ctx.world)
+        if self._tangent_dir is not None:
+            h_t = self._tangent_bulge()
+            if h_t is not None and abs(b - h_t) <= tol:
+                self._snap_bulge = h_t
+                self._bulge_kind = "fillet" if self._fillet is not None else "tangent"
+                from core.snap import COLOR_TANGENT
+                self.wireframe_color = (*(COLOR_FILLET if self._fillet is not None
+                                          else COLOR_TANGENT), 1.0)
+                return
+        half = length / 2.0
+        if abs(abs(b) - half) <= tol:
+            self._snap_bulge = math.copysign(half, b if b else 1.0)
+            self._bulge_kind = "half"
+            from core.snap import COLOR_MIDPOINT
+            self.wireframe_color = (*COLOR_MIDPOINT, 1.0)
+
+    # ---- Corner rounding (SketchUp's fillet inference) ------------------------
+    @staticmethod
+    def _edge_under(viewport, P: QVector3D):
+        """``(edge, P)`` when ``P`` lies on the interior of an edge of the
+        mesh being drawn on — the hovered edge first, then a search."""
+        scene = getattr(viewport, "scene", None)
+        mesh = getattr(scene, "mesh", None)
+        if mesh is None:
+            return None
+        from core.topology import _point_on_seg_incl
+
+        def interior(e) -> bool:
+            if not _point_on_seg_incl(P, e.a, e.b, 1e-4):
+                return False
+            return ((P - e.a).length() > 1e-4 and (P - e.b).length() > 1e-4
+                    and e.length() > 1e-6)
+        hovered = getattr(viewport, "_hover_edge", None)
+        v0 = getattr(hovered, "v0", None)
+        if v0 is not None and hovered in getattr(v0, "edges", ()) and interior(hovered):
+            return hovered, QVector3D(P)
+        for e in mesh.edges:
+            if interior(e):
+                return e, QVector3D(P)
+        return None
+
+    def _edge_tangent(self, toward: QVector3D) -> QVector3D | None:
+        """Direction the arc leaves the start point along its edge, on the
+        side of ``toward`` (the cursor / the end point)."""
+        if self._start_edge is None:
+            return None
+        edge, P1 = self._start_edge
+        d = (edge.b - edge.a)
+        if d.length() < 1e-9:
+            return None
+        d = d.normalized()
+        if QVector3D.dotProduct(d, toward - P1) < 0.0:
+            d = -d
+        return d
+
+    def _equidistant_near(self, viewport, screen, cursor):
+        """``(V, P2, B)``: the point on an edge ``B`` adjacent to the start
+        edge at the start point's distance from their shared corner ``V``,
+        when the cursor is within ``FILLET_PX`` of it."""
+        if self._start_edge is None:
+            return None
+        edge, P1 = self._start_edge
+        best = None
+        for V in (edge.v0, edge.v1):
+            d = (P1 - V.position).length()
+            if d < 1e-6:
+                continue
+            for B in V.edges:
+                if B is edge:
+                    continue
+                W = B.other(V).position
+                span = (W - V.position).length()
+                if span < 1e-9 or d > span + 1e-6:
+                    continue
+                P2 = V.position + (W - V.position) * (d / span)
+                dist = self._pixel_distance(viewport, screen, cursor, P2)
+                if dist is None or dist > self.FILLET_PX:
+                    continue
+                if best is None or dist < best[0]:
+                    best = (dist, V.position, P2, B)
+        if best is None:
+            return None
+        return QVector3D(best[1]), QVector3D(best[2]), best[3]
+
+    def _pixel_distance(self, viewport, screen, cursor, P):
+        """Cursor→``P`` distance in screen pixels (a world fallback, scaled
+        to pixels, for viewports without a projection)."""
+        to_px = getattr(viewport, "_world_to_pixel", None)
+        if callable(to_px) and screen is not None:
+            q = to_px(P)
+            if q is None:
+                return None
+            return math.hypot(q[0] - screen.x(), q[1] - screen.y())
+        along = cursor - P
+        if along.length() < 1e-12:
+            return 0.0
+        scale = self.world_per_pixel(viewport, P, along.normalized())
+        if not scale:
+            return None
+        return along.length() / scale
+
+    def _corner_near(self, viewport, screen, cursor):
+        """``(V, A, B)``: the two-edge corner within ``CORNER_PX`` of the
+        cursor whose edges are both long enough for the last fillet."""
+        scene = getattr(viewport, "scene", None)
+        mesh = getattr(scene, "mesh", None)
+        d = ArcTool.last_fillet_d
+        if mesh is None or not d:
+            return None
+        best = None
+        for V in mesh.vertices:
+            edges = list(V.edges)
+            if len(edges) != 2:
+                continue
+            A, B = edges
+            if not (A.faces or B.faces):
+                continue
+            if A.length() < d - 1e-6 or B.length() < d - 1e-6:
+                continue
+            dist = self._pixel_distance(viewport, screen, cursor, V.position)
+            if dist is None or dist > self.CORNER_PX:
+                continue
+            if best is None or dist < best[0]:
+                best = (dist, V, A, B)
+        if best is None:
+            return None
+        return best[1], best[2], best[3]
+
+    def _round_corner(self, viewport, corner, d: float, modifiers) -> None:
+        """Draw the fillet of distance ``d`` on ``corner`` and trim it."""
+        V, A, B = corner
+        P1 = V.position + (A.other(V).position - V.position).normalized() * d
+        P2 = V.position + (B.other(V).position - V.position).normalized() * d
+        self.start_point = QVector3D(P1)
+        self.end_point = QVector3D(P2)
+        self._start_edge = (A, QVector3D(P1))
+        self._fillet = (QVector3D(V.position), QVector3D(P1), QVector3D(P2))
+        self.hover_plane = self._corner_plane(V, A, B)
+        self._tangent_dir = (V.position - P1).normalized()
+        h = self._tangent_bulge()
+        if h is None:
+            self._reset()
+            return
+        self._snap_bulge = h
+        self._bulge_kind = "fillet"
+        pts = self._points(None, bulge=h)
+        if len(pts) >= 2:
+            self._commit(viewport, pts, trim=self._corner_trim(modifiers))
+        else:
+            self._reset()
+
+    @staticmethod
+    def _corner_plane(V, A, B):
+        a = (A.other(V).position - V.position)
+        b = (B.other(V).position - V.position)
+        n = QVector3D.crossProduct(a, b)
+        if n.length() < 1e-9:
+            return None
+        return QVector3D(V.position), n.normalized()
+
+    def _corner_trim(self, modifiers):
+        """The two corner stubs to erase once a fillet is committed: only
+        for an arc that IS the fillet (magenta), on a face, at a corner
+        where exactly the two edges meet — «if three edges come together it
+        won't cut» — and never with Alt held (SketchUp's way out)."""
+        if self._fillet is None or self._bulge_kind != "fillet":
+            return None
+        if modifiers is not None and (modifiers & Qt.AltModifier):
+            return None
+        V, P1, P2 = self._fillet
+        edge = self._start_edge[0] if self._start_edge else None
+        if edge is None or not edge.faces:
+            return None
+        mesh = getattr(getattr(self._viewport, "scene", None), "mesh", None)
+        vert = mesh.vertex_at(V) if mesh is not None else None
+        if vert is None or len(vert.edges) != 2:
+            return None
+        return [(V, P1), (V, P2)]
+
+    # ---- Tangent at vertex (SketchUp) ----------------------------------------
+    def _tangent_at_start(self, viewport) -> QVector3D | None:
+        """The direction an existing arc leaves its END vertex when that
+        vertex is our start point — the tangent this arc can continue."""
+        scene = getattr(viewport, "scene", None)
+        mesh = getattr(scene, "mesh", None)
+        if mesh is None or self.start_point is None:
+            return None
+        # The loose mesh first, then every placed group / component in its
+        # own space (SketchUp infers to geometry inside them from outside).
+        spaces = [(mesh, None)]
+        placements = getattr(viewport, "_placements", None)
+        if callable(placements):
+            for g in placements():
+                gm = getattr(g, "mesh", None)
+                if gm is not None and gm.edges and not getattr(g, "billboard", False):
+                    spaces.append((gm, getattr(g, "xform", None)))
+        for gm, xf in spaces:
+            inv = None
+            if xf is not None:
+                inv, ok = xf.inverted()
+                if not ok:
+                    continue
+            P = inv.map(self.start_point) if inv is not None else self.start_point
+            t = self._tangent_in_mesh(gm, P)
+            if t is None:
+                continue
+            if xf is not None:
+                t = xf.mapVector(t)
+                if t.length() < 1e-9:
+                    continue
+                t = t.normalized()
+            return t
+        return None
+
+    @staticmethod
+    def _tangent_in_mesh(mesh, P: QVector3D) -> QVector3D | None:
+        from core.snap import fit_circle
+        for edge in mesh.edges:
+            if getattr(edge, "curve", None) is None:
+                continue
+            if (edge.a - P).length() > 1e-6 and (edge.b - P).length() > 1e-6:
+                continue
+            chain = mesh.curve_edges(edge)
+            incident = [e for e in chain
+                        if (e.a - P).length() <= 1e-6 or (e.b - P).length() <= 1e-6]
+            if len(incident) != 1:
+                continue                       # not the arc's end
+            e = incident[0]
+            Q = e.b if (e.a - P).length() <= 1e-6 else e.a
+            pts: dict = {}
+            for c in chain:
+                for vv in (c.v0, c.v1):
+                    pts[id(vv)] = vv.position
+            fit = fit_circle(list(pts.values())) if len(pts) >= 3 else None
+            if fit is None:
+                continue
+            radial = (P - fit[0])
+            if radial.length() < 1e-9:
+                continue
+            r_hat = radial.normalized()
+            leaving = P - Q
+            t = leaving - r_hat * QVector3D.dotProduct(leaving, r_hat)
+            if t.length() < 1e-9:
+                continue
+            return t.normalized()
+        return None
+
+    def _tangent_bulge(self, end: QVector3D | None = None,
+                       tangent: QVector3D | None = None) -> float | None:
+        """The signed bulge that makes this arc leave the start along
+        ``tangent`` (default: ``_tangent_dir``) toward ``end`` (default:
+        the end point): for a chord of length L meeting the tangent at
+        angle a, the sagitta is (L/2)·tan(a/2), on the tangent's side."""
+        tangent = self._tangent_dir if tangent is None else tangent
+        end = self.end_point if end is None else end
+        if tangent is None or end is None:
+            return None
+        u, v = self._axes()
+        e2 = self._to2(end, u, v)
+        length = math.hypot(*e2)
+        if length < 1e-9:
+            return None
+        cx, cy = e2[0] / length, e2[1] / length
+        tx = QVector3D.dotProduct(tangent, u)
+        ty = QVector3D.dotProduct(tangent, v)
+        tl = math.hypot(tx, ty)
+        if tl < 1e-6:
+            return None                        # tangent leaves the plane
+        tx, ty = tx / tl, ty / tl
+        angle = math.atan2(cx * ty - cy * tx, cx * tx + cy * ty)
+        if abs(abs(angle) - math.pi) < 1e-3:
+            return None                        # doubling back: no arc
+        return (length / 2.0) * math.tan(angle / 2.0)
 
     def on_value(self, viewport, value) -> bool:
         if self.end_point is None or self.hover_point is None:
@@ -145,6 +566,7 @@ class ArcTool(PlaneLock, Tool):
         if isinstance(value, tuple):
             return False
         sign = -1.0 if self._bulge_for(self.hover_point) < 0 else 1.0
+        self._bulge_kind = None
         pts = self._points(None, bulge=sign * value)
         if len(pts) >= 2:
             self._commit(viewport, pts)
@@ -169,9 +591,41 @@ class ArcTool(PlaneLock, Tool):
         sign = 1.0
         if self.hover_point is not None and self._bulge_for(self.hover_point) < 0:
             sign = -1.0
+        # A typed radius while the arc is magenta keeps the fillet's trim
+        # only when it IS the fillet radius (SketchUp: «enter the radius
+        # while the radius is still magenta»).
+        trim = None
+        if self._fillet is not None:
+            h_t = self._tangent_bulge()
+            if h_t is not None and abs(abs(h_t) - h) <= 1e-6 * max(1.0, radius):
+                sign = math.copysign(1.0, h_t)
+                self._bulge_kind = "fillet"
+                trim = self._corner_trim(None)
         pts = self._points(None, bulge=sign * h)
         if len(pts) >= 2:
-            self._commit(viewport, pts)
+            self._commit(viewport, pts, trim=trim)
+        return True
+
+    def on_segments_value(self, viewport, n: int) -> bool:
+        """SketchUp's "Ns": the segment count of the arc — the one being
+        drawn, or the one just drawn, which is rebuilt in place."""
+        n = int(n)
+        if n < 2:
+            return False
+        self.segments = n
+        cmd, params = self._last_cmd, self._last_params
+        stack = getattr(getattr(viewport, "history", None), "undo_stack", None)
+        if cmd is not None and params is not None and stack and stack[-1] is cmd:
+            viewport.history.undo()
+            pts, trim = params
+            start, end, apex = pts
+            pts2 = _arc_3pts_2d((0.0, 0.0), apex[0], apex[1], self.segments)
+            u, v, origin = apex[2]
+            points = [origin + u * x + v * y for x, y in pts2]
+            self._last_cmd = commit_arc(viewport, points, trim=trim)
+            self._last_params = params
+            viewport.update()
+        viewport.flash_status(tr("{n} segments", n=n))
         return True
 
     def on_cancel(self, viewport) -> None:
@@ -183,21 +637,40 @@ class ArcTool(PlaneLock, Tool):
         if self.start_point is None or self.hover_point is None:
             return []
         if self.end_point is None:
+            if self._start_edge is not None:
+                # Tangent to the start edge, through the cursor (SketchUp
+                # 2015+: «a tangent arc vs a dotted line»).
+                tangent = self._edge_tangent(self.hover_point)
+                h = self._tangent_bulge(end=self.hover_point, tangent=tangent)
+                if h is not None:
+                    pts = self._points(None, bulge=h, end=self.hover_point)
+                    if len(pts) >= 2:
+                        return [(pts[i], pts[i + 1]) for i in range(len(pts) - 1)]
             return [(self.start_point, self.hover_point)]   # the chord
         pts = self._points(self.hover_point)
         return [(pts[i], pts[i + 1]) for i in range(len(pts) - 1)]
 
     def value_label(self):
-        if self.end_point is None or self.hover_point is None:
+        if self.start_point is None or self.hover_point is None:
             return None
-        b = self._bulge_for(self.hover_point)
+        if self.end_point is None:
+            if self._start_edge is not None:
+                return (tr("Tangent to edge"),
+                        (self.start_point + self.hover_point) * 0.5)
+            return None
         mid = (self.start_point + self.end_point) * 0.5
+        if self._snap_bulge is not None:
+            if self._bulge_kind == "half":
+                return (tr("Half circle") + f"  {abs(self._snap_bulge):.2f} m", mid)
+            if self._bulge_kind == "fillet":
+                return (tr("Tangent to edge") + f"  {abs(self._snap_bulge):.2f} m", mid)
+            return (tr("Tangent at vertex") + f"  {abs(self._snap_bulge):.2f} m", mid)
+        b = self._bulge_for(self.hover_point)
         return (f"Bulge {abs(b):.2f} m", mid)
 
     # ---- Internals ----------------------------------------------------------
     def _axes(self) -> tuple[QVector3D, QVector3D]:
-        normal = (self.work_plane[1] if self.work_plane is not None
-                  else QVector3D(0.0, 0.0, 1.0))
+        normal = self.drawing_plane()[1]
         return plane_axes(normal)
 
     def _to2(self, p, u, v):
@@ -216,27 +689,41 @@ class ArcTool(PlaneLock, Tool):
         c2 = self._to2(cursor, u, v)
         return (c2[0] - mid[0]) * px + (c2[1] - mid[1]) * py
 
-    def _points(self, cursor, bulge: float | None = None) -> list[QVector3D]:
+    def _points(self, cursor, bulge: float | None = None,
+                end: QVector3D | None = None) -> list[QVector3D]:
+        end = self.end_point if end is None else end
         u, v = self._axes()
         s2 = (0.0, 0.0)
-        e2 = self._to2(self.end_point, u, v)
+        e2 = self._to2(end, u, v)
         length = math.hypot(*e2)
         if length < 1e-9:
             return []
-        h = bulge if bulge is not None else self._bulge_for(cursor)
+        if bulge is not None:
+            h = bulge
+        elif self._snap_bulge is not None:
+            h = self._snap_bulge                        # tangent to the arc before
+        else:
+            h = self._bulge_for(cursor)
         if abs(h) < 1e-4:
-            return [self.start_point, self.end_point]   # flat → straight chord
+            return [self.start_point, end]              # flat → straight chord
         px, py = -e2[1] / length, e2[0] / length
         mid = (e2[0] / 2.0, e2[1] / 2.0)
         apex = (mid[0] + px * h, mid[1] + py * h)
-        pts2 = _arc_3pts_2d(s2, apex, e2, _SEGMENTS)
+        self._last_apex = (apex, e2, (u, v, QVector3D(self.start_point)))
+        pts2 = _arc_3pts_2d(s2, apex, e2, self.segments)
         return [self.start_point + u * x + v * y for x, y in pts2]
 
-    def _commit(self, viewport, pts: list[QVector3D]) -> None:
-        commit_arc(viewport, pts)
+    def _commit(self, viewport, pts: list[QVector3D], trim=None) -> None:
+        apex = getattr(self, "_last_apex", None)
+        if trim and self._fillet is not None:
+            V, P1, _P2 = self._fillet
+            ArcTool.last_fillet_d = (P1 - V).length()
+        self._last_cmd = commit_arc(viewport, pts, trim=trim)
+        self._last_params = None
+        if apex is not None and len(pts) >= 3:
+            self._last_params = ((None, None, apex), trim)
         self._reset()
         viewport.update()
-
 
     def on_key(self, viewport, key: int, modifiers) -> bool:
         return self.plane_lock_key(viewport, key)
@@ -245,7 +732,16 @@ class ArcTool(PlaneLock, Tool):
         self.start_point = None
         self.end_point = None
         self.work_plane = None
+        self.hover_plane = None
         self.plane_lock = None
+        self._tangent_dir = None
+        self._snap_bulge = None
+        self._bulge_kind = None
+        self._start_edge = None
+        self._equidistant = None
+        self._fillet = None
+        self._last_apex = None
+        self.wireframe_color = None
 
 
 class ThreePointArcTool(PlaneLock, Tool):
@@ -271,6 +767,7 @@ class ThreePointArcTool(PlaneLock, Tool):
         self.hover_point = None
 
     def on_click(self, ctx: ToolContext) -> None:
+        self.note_plane(ctx.viewport)
         if self.start_point is None:
             self.start_point = ctx.world
             if self.work_plane is None:
@@ -286,6 +783,7 @@ class ThreePointArcTool(PlaneLock, Tool):
             self._commit(ctx.viewport, pts)
 
     def on_hover(self, ctx: ToolContext) -> None:
+        self.note_plane(ctx.viewport)
         self.hover_point = ctx.world
         ctx.viewport.update()
 
@@ -302,8 +800,7 @@ class ThreePointArcTool(PlaneLock, Tool):
         return [(pts[i], pts[i + 1]) for i in range(len(pts) - 1)]
 
     def _axes(self):
-        normal = (self.work_plane[1] if self.work_plane is not None
-                  else QVector3D(0.0, 0.0, 1.0))
+        normal = self.drawing_plane()[1]
         return plane_axes(normal)
 
     def _points(self, end: QVector3D) -> list[QVector3D]:
@@ -332,6 +829,7 @@ class ThreePointArcTool(PlaneLock, Tool):
         self.start_point = None
         self.mid_point = None
         self.work_plane = None
+        self.hover_plane = None
         self.plane_lock = None
 
 
@@ -366,6 +864,7 @@ class CenterArcTool(PlaneLock, Tool):
 
     # ---- Spatial input ------------------------------------------------------
     def on_click(self, ctx: ToolContext) -> None:
+        self.note_plane(ctx.viewport)
         if self.start_point is None:
             self.start_point = ctx.world
             if self.work_plane is None:
@@ -381,6 +880,7 @@ class CenterArcTool(PlaneLock, Tool):
             self._commit(ctx.viewport, pts)
 
     def on_hover(self, ctx: ToolContext) -> None:
+        self.note_plane(ctx.viewport)
         self.hover_point = ctx.world
         ctx.viewport.update()
 
@@ -425,8 +925,7 @@ class CenterArcTool(PlaneLock, Tool):
 
     # ---- Internals ----------------------------------------------------------
     def _axes(self):
-        normal = (self.work_plane[1] if self.work_plane is not None
-                  else QVector3D(0.0, 0.0, 1.0))
+        normal = self.drawing_plane()[1]
         return plane_axes(normal)
 
     def _sweep_to(self, cursor: QVector3D) -> float:
@@ -473,6 +972,7 @@ class CenterArcTool(PlaneLock, Tool):
         self.start_point = None
         self.arm_point = None
         self.work_plane = None
+        self.hover_plane = None
         self.plane_lock = None
 
 

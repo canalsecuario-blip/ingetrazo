@@ -1137,3 +1137,64 @@ def test_pushing_a_block_back_flush_does_not_drag_the_wall_with_it():
     assert _fingerprint(scene) == before, "the drag warped the model"
     assert sorted(round(v.y(), 6)
                   for f in scene.faces for v in f.vertices) == far
+
+
+class _EdgeInferViewport(_StubViewport):
+    """Stub with the top-view projection and an edge under the cursor: the
+    pick is a plain vertical drop, so the point on the edge nearest the
+    cursor is the cursor's (x, z) itself."""
+
+    snap_threshold_px = 9.0
+
+    def __init__(self, scene, edge):
+        super().__init__(scene)
+        self._hover_edge = edge
+
+    def _world_to_pixel(self, world):
+        return (world.x() * 10.0, -world.z() * 10.0)
+
+    def _project_to_lock_line(self, start, direction, px, py):
+        cursor = QVector3D(px / 10.0, start.y(), -py / 10.0)
+        d = direction.normalized()
+        return start + d * QVector3D.dotProduct(cursor - start, d)
+
+
+def test_hovering_an_edge_infers_distance_and_says_on_edge():
+    """SketchUp's "On edge" while pushing (Marco's capture, 2026-09-14):
+    the cursor on another block's top edge — away from its corners — sets
+    the push level with that edge, red marker and «On edge» label."""
+    from PySide6.QtCore import QPointF
+    from tools.base import ToolContext
+
+    scene = Scene()
+    hist = History(scene)
+    _cube(scene, hist, height=3.0)                      # cube A, top z=3
+    other = [V(6, 0, 0), V(8, 0, 0), V(8, 2, 0), V(6, 2, 0)]
+    hist.execute(build_add_edges(
+        scene, [(other[i], other[(i + 1) % 4]) for i in range(4)],
+        detect_faces=False, extra=[AddFaceCommand(list(other))]))
+    ref = next(f for f in scene.faces
+               if all(abs(v.z()) < 1e-9 for v in f.vertices)
+               and min(v.x() for v in f.vertices) >= 5.999)
+    _push(scene, ref, 5.0 if ref.normal().z() > 0 else -5.0)   # block top z=5
+    top_edge = next(e for e in scene.mesh.edges
+                    if abs(e.a.z() - 5) < 1e-9 and abs(e.b.z() - 5) < 1e-9
+                    and abs(e.a.y()) < 1e-9 and abs(e.b.y()) < 1e-9)   # (6..8, 0, 5)
+
+    tool = PushPullTool()
+    top = _top(scene, 3.0)
+    tool.base_face = top
+    tool.dragging = True
+    tool._anchor = top.centroid()
+    tool._normal = top.normal()
+    tool._attached, tool._prism_cap = tool._classify_base(scene)
+    tool._cap_positions = tool._cap_loop_positions(top)
+
+    vp = _EdgeInferViewport(scene, top_edge)
+    # Cursor at (7, ·, 5): the middle of the edge, 10 px from either corner.
+    ctx = ToolContext(viewport=vp, world=QVector3D(), screen=QPointF(70.0, -50.0),
+                      modifiers=Qt.NoModifier, snap=None)
+    d = tool._infer_reference_distance(ctx)
+    assert d is not None and abs(d - 2.0) < 1e-6
+    pt, kind = tool.inference_marker()
+    assert kind == "edge" and abs(pt.z() - 5.0) < 1e-6 and abs(pt.x() - 7.0) < 1e-6

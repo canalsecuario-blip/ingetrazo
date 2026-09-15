@@ -50,6 +50,7 @@ from core.history import (
     PruneOrphanEdgesCommand,
     SnapshotMutation,
     run_stitch,
+    subtract_loop_from_face,
     translate_points,
 )
 from core.arrangement import _interior_point, _point_in_polygon, plane_basis
@@ -210,6 +211,7 @@ class PushPullTool(Tool):
     shortcut = "P"
     shortcut_alt = "U"
     uses_snap = False  # picks a face to extrude; no snap markers
+    hover_group_edges = True  # …but its distance infers to a group's edge too
     vcb_label = "Distance"
     # Preview lines in the normal edge colour, not the loose orange rubber band,
     # and depth-tested so the forming box hides its own back edges.
@@ -650,9 +652,10 @@ class PushPullTool(Tool):
             viewport.scene.version += 1
 
     def inference_marker(self):
-        """Return ``(world_point, kind)`` for the green marker the viewport draws
-        when the distance inference is locked onto a model corner/face, or
-        ``None``. ``kind`` is ``"vertex"`` or ``"face"``."""
+        """Return ``(world_point, kind)`` for the marker the viewport draws
+        when the distance inference is locked onto model geometry, or
+        ``None``. ``kind`` is ``"vertex"``, ``"edge"`` or ``"face"`` — drawn
+        and labelled like the endpoint / on-edge / on-face snaps."""
         if not self.dragging or self._inference_point is None:
             return None
         return self._inference_point, self._inference_kind
@@ -854,19 +857,43 @@ class PushPullTool(Tool):
             self._inference_kind = best[3]
             return best[1]
 
-        # No corner nearby: align to the face under the cursor (its plane).
+        # No corner nearby: the EDGE under the cursor — SketchUp's "On edge"
+        # while pushing (Marco's capture, 2026-09-14: the half cylinder
+        # pushed until level with the slab's far edge). The point on the
+        # edge nearest the cursor ray sets the distance; the base's own
+        # edges are not references.
+        edge = getattr(vp, "_hover_edge", None)
+        project = getattr(vp, "_project_to_lock_line", None)
+        if edge is not None and project is not None:
+            a, b = QVector3D(edge.a), QVector3D(edge.b)
+            ab = b - a
+            if (_key(a) not in exclude or _key(b) not in exclude) and ab.length() > 1e-9:
+                on = project(a, ab, sx, sy)
+                t = QVector3D.dotProduct(on - a, ab) / QVector3D.dotProduct(ab, ab)
+                on = a + ab * max(0.0, min(1.0, t))
+                dist = QVector3D.dotProduct(on - self._anchor, self._normal)
+                if abs(dist) >= _MIN_EXTRUDE:
+                    self._inference_point = on
+                    self._inference_kind = "edge"
+                    return dist
+
+        # No edge either: align to the face under the cursor (its plane).
         # Project the ray∩plane hit onto the push axis. The base face (and
         # anything coplanar with it) reads ~0 distance — guarded out so the
         # push doesn't pin to its own plane.
-        face, _grp = vp.pick_face_any(sx, sy)
+        pick = getattr(vp, "pick_face_placement", None) or vp.pick_face_any
+        face, _grp = pick(sx, sy)
         if face is not None and face is not self.base_face:
             origin, direction = vp._pixel_to_ray(sx, sy)
             if origin is not None and direction is not None:
-                fn = face.normal().normalized()
+                # In world space — a placed component's face lives in its
+                # prototype's frame.
+                from core.snap import face_plane_world
+                fpt, fn = face_plane_world(face, getattr(_grp, "xform", None))
+                fn = fn.normalized()
                 denom = QVector3D.dotProduct(fn, direction)
                 if abs(denom) >= 1e-6:
-                    t = QVector3D.dotProduct(
-                        fn, face.centroid() - origin) / denom
+                    t = QVector3D.dotProduct(fn, fpt - origin) / denom
                     if t > 0:
                         hit = origin + direction * t
                         dist = QVector3D.dotProduct(
@@ -1305,6 +1332,10 @@ class PushPullTool(Tool):
                 and self._cap_cmd.face in scene.mesh.faces):
             # The moved cap continues the (consumed) base: same attrs.
             self._cap_cmd.face.attrs = dict(base_attrs)
+        far = getattr(self, "_far_cmd", None)
+        self._far_cmd = None
+        if far is not None and far[1] and far[0].face in scene.mesh.faces:
+            far[0].face.attrs = dict(far[1])
         new_faces = set(scene.mesh.faces) - before
         if self._keep_base and attached_any and d < 0:
             # The Ctrl-stack grows *into* the solid: its cap is a deliberate
@@ -1497,33 +1528,56 @@ class PushPullTool(Tool):
             back_loop = [v + push * dist for v in face.vertices]
             if loop_inside_face(g, back_loop):
                 if best is None or dist < best[0]:
-                    best = (dist, g, back_loop)
+                    best = (dist, g, back_loop, None)
+                continue
+            # Landing FLUSH on the far face with the opening on its rim — the
+            # corner piece left by a rounding arc pushed right through
+            # (Marco, 2026-09-15: «debería eliminarme ese triángulo como lo
+            # hace SketchUp»). Not a hole: the far face is trimmed to what
+            # is left of it (the arc becomes its outline) and the cap goes.
+            if abs(dist - abs(d)) <= 1e-4:
+                remainder = subtract_loop_from_face(g, back_loop)
+                if remainder is not None and (best is None or dist < best[0]):
+                    best = (dist, g, back_loop, remainder)
         if best is None:
             return None
-        return best[1], best[2]
+        return best[1], best[2], best[3]
 
     def _through_commands(self, face, base, through) -> list:
         """Build the commands for a through-hole: punch the far face, join it to
         the front opening with a tunnel, and sweep the dangling base edges."""
-        far_face, back_loop = through
+        far_face, back_loop, remainder = through
         count = len(base)
         commands: list = [
             DeleteFaceCommand(face),       # remove the pushed cap (window pane)
             DeleteFaceCommand(far_face),   # re-add the far face with a new hole
-            AddFaceCommand(
+        ]
+        if remainder is None:
+            far_cmd = AddFaceCommand(
                 list(far_face.vertices), auto=False,
                 holes=[list(h) for h in far_face.holes] + [list(back_loop)],
-            ),
-        ]
-        for i in range(count):             # back opening boundary
-            commands.append(AddEdgeCommand(back_loop[i], back_loop[(i + 1) % count]))
+            )
+            commands.append(far_cmd)
+            for i in range(count):         # back opening boundary
+                commands.append(AddEdgeCommand(back_loop[i], back_loop[(i + 1) % count]))
+        else:
+            # A notch on the rim: the far face becomes what is left of it;
+            # the opening's outline that ran along the old rim is nobody's
+            # edge any more and the prune below sweeps it.
+            far_cmd = AddFaceCommand(
+                list(remainder), auto=False,
+                holes=[list(h) for h in far_face.holes])
+            commands.append(far_cmd)
+        # The rebuilt far face is the same face with a bite out of it: it
+        # keeps its paint (test_attrs_survive_corner_notch_through_floor).
+        self._far_cmd = (far_cmd, dict(far_face.attrs))
         for i in range(count):             # tunnel verticals
             commands.append(AddEdgeCommand(base[i], back_loop[i]))
         for i in range(count):             # tunnel walls
             j = (i + 1) % count
             commands.append(AddFaceCommand(
                 [base[i], base[j], back_loop[j], back_loop[i]], auto=False))
-        commands.append(PruneOrphanEdgesCommand(list(base)))
+        commands.append(PruneOrphanEdgesCommand(list(base) + list(back_loop)))
         return commands
 
     def _reset(self) -> None:

@@ -179,6 +179,9 @@ class TileLayer:
         self.zoom = int(zoom)
         self.radius_m = float(radius_m)
         self.visible = True
+        #: 0..1 — a faded map lets the model and its lines read over the
+        #: imagery (a plan sheet over the satellite: Marco, 2026-09-14).
+        self.opacity = 1.0
         # (x, y, z) -> QImage, populated asynchronously by the fetcher.
         self.images: dict[tuple[int, int, int], object] = {}
         # Capture patches: local-metre rectangles ``(cx, cy, hw, hh)`` that the
@@ -201,6 +204,7 @@ class TileLayer:
         """
         return {"source": self.source.id, "zoom": self.zoom,
                 "radius_m": self.radius_m, "visible": bool(self.visible),
+                "opacity": float(self.opacity),
                 "patches": [list(p) for p in self.patches],
                 # Kept so a custom XYZ source survives too: presets are looked
                 # up by id, anything else is rebuilt from these.
@@ -223,6 +227,7 @@ class TileLayer:
         if patches:
             layer.patches = [tuple(float(v) for v in p) for p in patches]
         layer.visible = bool(raw.get("visible", True))
+        layer.opacity = max(0.0, min(1.0, float(raw.get("opacity", 1.0))))
         return layer
 
     def set_rectangle(self, width_m: float, length_m: float,

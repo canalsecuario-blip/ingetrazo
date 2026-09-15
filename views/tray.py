@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QSettings, QSize, Qt
+from PySide6.QtCore import QPoint, QRect, QSettings, QSize, Qt
 from PySide6.QtGui import QColor, QIcon, QImage, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
     QGridLayout,
+    QLayout,
     QHBoxLayout,
     QInputDialog,
     QLabel,
@@ -39,6 +40,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QSlider,
     QSpinBox,
     QToolButton,
@@ -107,6 +109,28 @@ class _Section(QWidget):
         self._btn.setArrowType(Qt.DownArrow if on else Qt.RightArrow)
 
 
+def fit_rows(view, min_rows: int = 3) -> None:
+    """Grow a list / tree to show ALL its rows — no scroll bar of its own,
+    so the only scrolling in a tray is the tray's (Marco, 2026-09-14: «no
+    me gusta hacer scroll dentro del scroll»). Call after every refill;
+    ``min_rows`` keeps an empty list from collapsing to a sliver."""
+    from PySide6.QtWidgets import QAbstractItemView, QTreeView
+    view.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+    view.setSizePolicy(view.sizePolicy().horizontalPolicy(), QSizePolicy.Fixed)
+    model = view.model()
+    rows = model.rowCount() if model is not None else 0
+    if isinstance(view, QTreeView):
+        row_h = view.sizeHintForRow(0) if rows else 0
+        header = view.header().height() if not view.header().isHidden() else 0
+    else:
+        row_h = view.sizeHintForRow(0) if rows else 0
+        header = 0
+    if row_h <= 0:
+        row_h = view.fontMetrics().height() + 8
+    h = header + max(rows, min_rows) * row_h + 2 * view.frameWidth() + 2
+    view.setFixedHeight(h)
+
+
 def _color_pixmap(rgb, size=_SWATCH) -> QPixmap:
     pm = QPixmap(size, size)
     pm.fill(QColor.fromRgbF(*rgb))
@@ -128,6 +152,94 @@ def _swatch_button(pm: QPixmap, tip: str) -> QToolButton:
     b.setToolTip(tip)
     b.setAutoRaise(True)
     return b
+
+
+class FlowLayout(QLayout):
+    """A grid that REFLOWS with the width: swatches and component buttons
+    fill as many columns as fit and wrap, so a widened tray shows more per
+    row instead of a blank right half (Marco, 2026-09-15: «cuando
+    redimensiono la barra debería ocupar ese espacio con más columnas»).
+    Qt's classic flow layout; ``addWidget`` also accepts and ignores the
+    ``row, col`` the grid callers used to pass."""
+
+    def __init__(self, parent=None, spacing: int = 2) -> None:
+        super().__init__(parent)
+        self._items: list = []
+        self._spacing = spacing
+        self.setContentsMargins(0, 0, 0, 0)
+
+    # ---- QLayout interface ---------------------------------------------------
+    def addItem(self, item) -> None:            # noqa: N802 — Qt override
+        self._items.append(item)
+
+    def addWidget(self, w, *_grid_pos) -> None:  # noqa: N802 — Qt override
+        super().addWidget(w)
+
+    def setColumnStretch(self, *_a) -> None:     # noqa: N802 — grid compat
+        pass
+
+    def count(self) -> int:
+        return len(self._items)
+
+    def itemAt(self, index: int):               # noqa: N802
+        return self._items[index] if 0 <= index < len(self._items) else None
+
+    def takeAt(self, index: int):               # noqa: N802
+        return self._items.pop(index) if 0 <= index < len(self._items) else None
+
+    def expandingDirections(self):              # noqa: N802
+        return Qt.Orientations(Qt.Orientation(0))
+
+    def hasHeightForWidth(self) -> bool:        # noqa: N802
+        return True
+
+    def heightForWidth(self, width: int) -> int:  # noqa: N802
+        return self._do_layout(QRect(0, 0, width, 0), test_only=True)
+
+    def setGeometry(self, rect) -> None:        # noqa: N802
+        super().setGeometry(rect)
+        self._do_layout(rect, test_only=False)
+
+    def sizeHint(self):                         # noqa: N802
+        return self.minimumSize()
+
+    def minimumSize(self):                      # noqa: N802
+        size = QSize()
+        for item in self._items:
+            size = size.expandedTo(item.minimumSize())
+        m = self.contentsMargins()
+        return size + QSize(m.left() + m.right(), m.top() + m.bottom())
+
+    def columns_at(self, width: int) -> int:
+        """How many items the first row holds at ``width`` (for tests)."""
+        m = self.contentsMargins()
+        x = m.left()
+        cols = 0
+        for item in self._items:
+            w = item.sizeHint().width()
+            if cols and x + w > width - m.right():
+                break
+            x += w + self._spacing
+            cols += 1
+        return cols
+
+    def _do_layout(self, rect, test_only: bool) -> int:
+        m = self.contentsMargins()
+        x = rect.x() + m.left()
+        y = rect.y() + m.top()
+        right = rect.right() - m.right()
+        row_h = 0
+        for item in self._items:
+            hint = item.sizeHint()
+            if row_h and x + hint.width() - 1 > right:
+                x = rect.x() + m.left()
+                y += row_h + self._spacing
+                row_h = 0
+            if not test_only:
+                item.setGeometry(QRect(QPoint(x, y), hint))
+            x += hint.width() + self._spacing
+            row_h = max(row_h, hint.height())
+        return y + row_h + m.bottom() - rect.y()
 
 
 class BaseMapPanel(QWidget):
@@ -233,12 +345,40 @@ class BaseMapPanel(QWidget):
         self._coord_mode.setCurrentIndex(max(idx, 0))
         self._apply_coord_mode()
 
-        grid.addWidget(QLabel(tr("Zoom:")), 8, 0)
+        # North angle (SketchUp's north angle): turns the map, terrain and
+        # every geographic import UNDER the model — the model, its standard
+        # views and axis locks stay square. 0 = the green axis points north.
+        self._north_label = QLabel(tr("North:"))
+        grid.addWidget(self._north_label, 8, 0)
+        self._north = QDoubleSpinBox()
+        self._north.setRange(-180.0, 180.0)
+        self._north.setDecimals(2)
+        self._north.setSingleStep(1.0)
+        self._north.setWrapping(True)
+        self._north.setSuffix("°")
+        self._north.setToolTip(tr(
+            "Where true north lies, in degrees clockwise from the green (Y) "
+            "axis. Turns the base map, the terrain and every geographic "
+            "import under the model; the model itself does not move, so its "
+            "front/right/top views and axis locks stay square."))
+        self._north.editingFinished.connect(self._on_north_edited)
+        grid.addWidget(self._north, 8, 1)
+
+        self._straighten = QPushButton(tr("Straighten model on the map"))
+        self._straighten.setToolTip(tr(
+            "Select the model you turned and dragged onto the site (one "
+            "top-level component): it goes back to its own axes and the map "
+            "turns under it instead — the north angle and the origin are "
+            "set for you, nothing moves on the map."))
+        self._straighten.clicked.connect(self._on_straighten)
+        grid.addWidget(self._straighten, 9, 0, 1, 2)
+
+        grid.addWidget(QLabel(tr("Zoom:")), 10, 0)
         self._zoom = QSpinBox()
         self._zoom.setRange(1, 21)
         self._zoom.setValue(16)
         self._zoom.valueChanged.connect(self._on_zoom_changed)
-        grid.addWidget(self._zoom, 8, 1)
+        grid.addWidget(self._zoom, 10, 1)
 
         # Capture area (metres): set by drawing a rectangle in the locator
         # dialog. A square for a site, a long strip for a road. Kept as state,
@@ -248,27 +388,41 @@ class BaseMapPanel(QWidget):
 
         self._find = QPushButton(tr("Search location…"))
         self._find.clicked.connect(self._open_locator)
-        grid.addWidget(self._find, 9, 0, 1, 2)
+        grid.addWidget(self._find, 11, 0, 1, 2)
 
         self._go = QPushButton(tr("Go to location"))
         self._go.clicked.connect(self._go_to)
-        grid.addWidget(self._go, 10, 0, 1, 2)
+        grid.addWidget(self._go, 12, 0, 1, 2)
 
         self._show = QCheckBox(tr("Show base map"))
         self._show.setChecked(True)
         self._show.toggled.connect(self._on_toggle_visible)
-        grid.addWidget(self._show, 11, 0, 1, 2)
+        grid.addWidget(self._show, 13, 0, 1, 2)
+
+        # Map opacity: fade the imagery so the model and its lines read on
+        # top of it (a plan sheet over the satellite). Document state, lives
+        # on the tile layer and travels in the .igz.
+        self._opacity = QSlider(Qt.Horizontal)
+        self._opacity.setRange(10, 100)
+        self._opacity.setValue(100)
+        self._opacity.setToolTip(tr(
+            "Map opacity: fade the imagery so the model and its lines read "
+            "on top of it"))
+        self._opacity.valueChanged.connect(self._on_opacity_changed)
+        self._opacity_label = QLabel(tr("Opacity") + " 100 %")
+        grid.addWidget(self._opacity_label, 14, 0)
+        grid.addWidget(self._opacity, 14, 1)
 
         self._terrain3d = QCheckBox(tr("3D terrain"))
         self._terrain3d.toggled.connect(self._on_toggle_terrain)
-        grid.addWidget(self._terrain3d, 12, 0, 1, 2)
+        grid.addWidget(self._terrain3d, 15, 0, 1, 2)
 
         # The drone survey (Track G, G6). Disabled until one is imported —
         # a checkbox you can tick with nothing behind it just looks broken.
         self._photo_mesh = QCheckBox(tr("Photogrammetric survey"))
         self._photo_mesh.setEnabled(False)
         self._photo_mesh.toggled.connect(self._on_toggle_photo_mesh)
-        grid.addWidget(self._photo_mesh, 13, 0, 1, 2)
+        grid.addWidget(self._photo_mesh, 16, 0, 1, 2)
 
         # Which layer the survey carries. The import puts it on its own so it
         # can be switched off without taking the model with it; this is for
@@ -278,13 +432,13 @@ class BaseMapPanel(QWidget):
         self._photo_layer.setToolTip(tr(
             "Layer the survey is on. Hiding that layer hides the survey."))
         self._photo_layer.currentTextChanged.connect(self._on_photo_layer_changed)
-        grid.addWidget(QLabel(tr("Layer")), 14, 0)
-        grid.addWidget(self._photo_layer, 14, 1)
+        grid.addWidget(QLabel(tr("Layer")), 17, 0)
+        grid.addWidget(self._photo_layer, 17, 1)
 
         self._attribution = QLabel("")
         self._attribution.setWordWrap(True)
         self._attribution.setStyleSheet("color:#9aa3b2; font-size:10px; margin-top:4px;")
-        grid.addWidget(self._attribution, 15, 0, 1, 2)
+        grid.addWidget(self._attribution, 18, 0, 1, 2)
 
         self._restore_saved_source()
         self._sync_from_scene()
@@ -631,10 +785,93 @@ class BaseMapPanel(QWidget):
                          QVector3D(radius, radius, 0.0))
         vp.update()
 
+    # ---- North angle ----------------------------------------------------------
+    def _on_north_edited(self) -> None:
+        """Retarget the datum's north angle: a NEW datum object (the tile
+        geometry is cached by datum identity), tiles and terrain rebuilt."""
+        vp = self._window.viewport
+        scene = vp.scene
+        datum = getattr(scene, "georef", None)
+        if datum is None:
+            return
+        value = self._north.value()
+        if abs(value - getattr(datum, "north", 0.0)) < 1e-9:
+            return
+        scene.georef = SceneDatum(datum.lat, datum.lon, alt=datum.alt,
+                                  north=value)
+        scene.version += 1
+        self._refresh_map()
+
+    def _refresh_map(self) -> None:
+        """The datum changed under the map: drop tile geometry, redo the
+        terrain if it is on, repaint."""
+        vp = self._window.viewport
+        vp.reset_tiles()
+        if getattr(self._window, "_terrain_on", False):
+            self._window._build_terrain()
+        vp.notify_scene_changed()
+
+    def _on_straighten(self) -> None:
+        """Undo the turn+drag placement of the selected model by turning the
+        map instead (StraightenModelCommand); one undo step."""
+        from core.history import StraightenModelCommand, placement_is_identity
+        vp = self._window.viewport
+        scene = vp.scene
+        groups = [g for g in scene.selection
+                  if isinstance(g, Group) and g in scene.groups]
+        if not groups and len(scene.groups) == 1 and not scene.mesh.faces:
+            groups = list(scene.groups)      # the whole model is one component
+        if len(groups) != 1 or groups[0].xform is None:
+            QMessageBox.information(
+                self, tr("Straighten model on the map"),
+                tr("Select the placed model: one top-level component (the "
+                   "group you turned and dragged onto the site)."))
+            return
+        if getattr(scene, "georef", None) is None:
+            QMessageBox.information(
+                self, tr("Straighten model on the map"),
+                tr("Set a location first (Go to location)."))
+            return
+        if placement_is_identity(groups[0].xform):
+            # Nothing to take out of this placement — the user picked the
+            # wrong group (the DWG instead of the plaza he turned: eleven
+            # silent no-ops, Marco 2026-09-14).
+            QMessageBox.information(
+                self, tr("Straighten model on the map"),
+                tr("“{name}” is not turned or moved. Select the model you "
+                   "turned and dragged onto the site.",
+                   name=groups[0].name))
+            return
+        cmd = StraightenModelCommand(groups[0])
+        vp.history.execute(cmd)
+        if vp.history.last_error:
+            QMessageBox.warning(self, tr("Straighten model on the map"),
+                                tr("Could not straighten: {error}",
+                                   error=vp.history.last_error))
+            return
+        # Keep looking at the same thing: the camera rides the same transform.
+        import math
+        w, ok = cmd._placement.inverted()
+        if ok:
+            cam = vp.camera
+            cam.target = w.map(cam.target)
+            cam.yaw = cam.yaw - math.radians(cmd.degrees)
+        self._sync_from_scene()
+        self._refresh_map()
+        vp.flash_status(tr("Model straightened: north angle {deg}°",
+                           deg=f"{scene.georef.north:.2f}"))
+
     def _on_toggle_visible(self, on: bool) -> None:
         layer = getattr(self._window.viewport.scene, "tile_layer", None)
         if layer is not None:
             layer.visible = on
+            self._window.viewport.update()
+
+    def _on_opacity_changed(self, value: int) -> None:
+        self._opacity_label.setText(tr("Opacity") + f" {value} %")
+        layer = getattr(self._window.viewport.scene, "tile_layer", None)
+        if layer is not None:
+            layer.opacity = value / 100.0
             self._window.viewport.update()
 
     def _on_toggle_terrain(self, on: bool) -> None:
@@ -701,10 +938,22 @@ class BaseMapPanel(QWidget):
         datum = getattr(scene, "georef", None)
         layer = getattr(scene, "tile_layer", None)
         blockers = [QSignalBlocker(w) for w in
-                    (self._source, self._lat, self._lon, self._zoom, self._show)]
+                    (self._source, self._lat, self._lon, self._zoom, self._show,
+                     self._north, self._terrain3d, self._photo_mesh,
+                     self._opacity)]
+        # A scene recalls the terrain / survey visibility too: keep the
+        # boxes honest (an unchecked box over a hidden terrain re-shows it).
+        terrain = getattr(scene, "terrain", None)
+        hidden = terrain is not None and not getattr(terrain, "visible", True)
+        self._terrain3d.setChecked(
+            bool(getattr(self._window, "_terrain_on", False)) and not hidden)
+        mesh = getattr(scene, "photo_mesh", None)
+        if mesh is not None:
+            self._photo_mesh.setChecked(getattr(mesh, "visible", False))
         if datum is not None:
             self._lat.setValue(datum.lat)
             self._lon.setValue(datum.lon)
+            self._north.setValue(getattr(datum, "north", 0.0))
             self._sync_utm_from_ll()
         if layer is not None:
             idx = self._source.findData(layer.source.id)
@@ -712,6 +961,9 @@ class BaseMapPanel(QWidget):
                 self._source.setCurrentIndex(idx)
             self._zoom.setValue(layer.zoom)
             self._show.setChecked(layer.visible)
+            pct = int(round(100 * float(getattr(layer, "opacity", 1.0))))
+            self._opacity.setValue(pct)
+            self._opacity_label.setText(tr("Opacity") + f" {pct} %")
             self._attribution.setText(layer.source.attribution)
         else:
             self._attribution.setText(self._current_source().attribution
@@ -739,8 +991,7 @@ class ComponentsPanel(QWidget):
         self._window = window
         lay = QVBoxLayout(self)
         lay.setContentsMargins(8, 6, 8, 8)
-        grid = QGridLayout()
-        grid.setSpacing(4)
+        grid = FlowLayout(spacing=4)
         res = app_root() / "resources" / "components"
         import json as _json
         items = []
@@ -804,7 +1055,7 @@ class ComponentsPanel(QWidget):
             "Components placed in this drawing — click one to select its "
             "copies"))
         self._in_model.itemClicked.connect(self._select_component)
-        lay.addWidget(self._in_model, 1)
+        lay.addWidget(self._in_model)
         self.refresh_in_model()
 
     def _components_in_model(self) -> list:
@@ -831,6 +1082,7 @@ class ComponentsPanel(QWidget):
             self._in_model.addItem(item)
         if self._in_model.count() == 0:
             self._in_model.addItem(QListWidgetItem(tr("No components yet")))
+        fit_rows(self._in_model)
 
     def _select_component(self, item) -> None:
         groups = item.data(Qt.UserRole)
@@ -963,9 +1215,7 @@ class MaterialsPanel(QWidget):
         self._load_texture_fields()
 
         root.addWidget(self._heading(tr("In model")))
-        self._in_model_grid = QGridLayout()
-        self._in_model_grid.setSpacing(2)
-        self._in_model_grid.setColumnStretch(self.COLS, 1)
+        self._in_model_grid = FlowLayout(spacing=2)
         root.addLayout(self._in_model_grid)
 
         root.addWidget(self._heading(tr("Library")))
@@ -1033,12 +1283,8 @@ class MaterialsPanel(QWidget):
                 " text-align: left; }"
                 "QToolButton:hover { background: palette(midlight); }")
             body = QWidget()
-            grid = QGridLayout(body)
+            grid = FlowLayout(body, spacing=2)
             grid.setContentsMargins(4, 2, 0, 4)
-            grid.setSpacing(2)
-            # Pack swatches left: the leftover width goes to a phantom last
-            # column instead of spreading the thumbnails apart.
-            grid.setColumnStretch(self.COLS, 1)
             body.setVisible(False)
 
             pending = [fill]
@@ -2114,6 +2360,7 @@ class LayersPanel(QWidget):
             item.setCheckState(1, Qt.Checked if ly.visible else Qt.Unchecked)
             item.setCheckState(2, Qt.Checked if ly.locked else Qt.Unchecked)
             self.tree.addTopLevelItem(item)
+        fit_rows(self.tree)
         self._updating = False
 
     # ---- View → model --------------------------------------------------------
@@ -2308,6 +2555,7 @@ class ScenesPanel(QWidget):
             item.setData(Qt.UserRole, view)
             item.setFlags(item.flags() | Qt.ItemIsEditable)
             self.list.addItem(item)
+        fit_rows(self.list)
         self._updating = False
 
     # ---- View → model --------------------------------------------------------
@@ -2570,6 +2818,7 @@ class BimPanel(QWidget):
                 item.setToolTip(3, tr(
                     "Not watertight on its own — no volume"))
             self.tree.addTopLevelItem(item)
+        fit_rows(self.tree)
 
 
 class Tray(QDockWidget):

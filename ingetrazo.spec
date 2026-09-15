@@ -162,7 +162,24 @@ a = Analysis(
 # all, and every one of them is also loaded by the host's GL driver. The
 # other libxcb-* helpers stay — Qt's xcb plugin needs them and a minimal
 # host may not have them.
-_HOST_ONLY = {'libX11.so.6', 'libX11-xcb.so.1', 'libxcb-glx.so.0'}
+#
+# 2026-09-15, issue #6 again (v0.3.19, NVIDIA + Ubuntu 24.04): with the X
+# libraries gone the bundle still aborts inside Qt's GLX integration while
+# the same tag from pip PySide6 runs — so the culprit is something else the
+# bundle carries and pip does not. The C++ runtime: PyInstaller ships the
+# build runner's ``libstdc++.so.6`` / ``libgcc_s.so.1`` (Ubuntu 22.04,
+# GLIBCXX ≤ 3.4.30) and they are loaded FIRST, so a driver library that
+# was built against a newer runtime fails to load and GLX has no vendor
+# to talk to. The AppImage exclude list has carried both for years for
+# exactly that reason («Workaround for: libstdc++.so.6: version
+# GLIBCXX_3.4.21 not found»); every desktop has a runtime at least as
+# new as the runner's, which is all the bundled Qt needs — the pip wheels
+# never bring their own either. ``libglib-2.0.so.0`` goes for the same
+# reason: the host's GIO modules (gvfs, loaded through the platform theme)
+# expect the host's GLib, and the bundled older one produced the
+# ``g_task_set_static_name`` noise in every report.
+_HOST_ONLY = {'libX11.so.6', 'libX11-xcb.so.1', 'libxcb-glx.so.0',
+              'libstdc++.so.6', 'libgcc_s.so.1', 'libglib-2.0.so.0'}
 if sys.platform.startswith('linux'):
     _before = len(a.binaries)
     a.binaries = [b for b in a.binaries

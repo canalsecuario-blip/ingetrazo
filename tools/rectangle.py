@@ -18,6 +18,7 @@ import math
 from PySide6.QtGui import QVector3D
 
 from core.edits import build_add_edges
+from core.i18n import tr
 from core.history import AddFaceCommand
 from tools.base import PlaneLock, Tool, ToolContext
 
@@ -60,6 +61,7 @@ class RectangleTool(PlaneLock, Tool):
         # (point, normal) of the face the rectangle was started on, if any.
         # The viewport reads this to keep the opposite corner coplanar.
         self.work_plane: tuple[QVector3D, QVector3D] | None = None
+        self._viewport = None
 
     # ---- Lifecycle ----------------------------------------------------------
     def on_activate(self, viewport) -> None:
@@ -71,16 +73,30 @@ class RectangleTool(PlaneLock, Tool):
 
     # ---- Spatial input ------------------------------------------------------
     def on_click(self, ctx: ToolContext) -> None:
+        self.note_plane(ctx.viewport)
         if self.start_point is None:
             self.start_point = ctx.world
             if self.work_plane is None:
                 self.work_plane = self.locked_work_plane(ctx.world)
             return
         far, _ = self._square_corner(self.start_point, ctx.world)
+        du, dv = self._dimensions(self.start_point, far)
+        if abs(du) < 1e-6 or abs(dv) < 1e-6:
+            # A side of zero (the second corner on the first's row or
+            # column, an edge snap along one axis): SketchUp draws nothing.
+            # Committing it raised a degenerate-edge error deep in the
+            # history (Marco's log, 2026-09-14) and rolled back noisily.
+            flash = getattr(ctx.viewport, "flash_status", None)
+            if flash is not None:
+                flash(tr("Rectangle needs two sides — pick the opposite corner"))
+            return
         self._commit_rect(ctx.viewport, self._corners(self.start_point, far))
 
     def on_hover(self, ctx: ToolContext) -> None:
+        self.note_plane(ctx.viewport)
+        self._viewport = ctx.viewport
         self.hover_point = ctx.world
+        self.wireframe_color = self.lock_color()
         ctx.viewport.update()
 
     def on_value(self, viewport, value) -> bool:
@@ -109,8 +125,10 @@ class RectangleTool(PlaneLock, Tool):
 
     # ---- Visual preview -----------------------------------------------------
     def rubber_band_lines(self):
-        if self.start_point is None or self.hover_point is None:
+        if self.hover_point is None:
             return []
+        if self.start_point is None:
+            return self._cursor_preview()
         far, is_square = self._square_corner(self.start_point, self.hover_point)
         c = self._corners(self.start_point, far)
         lines = [
@@ -139,12 +157,28 @@ class RectangleTool(PlaneLock, Tool):
         return (text, mid)
 
     # ---- Internals ----------------------------------------------------------
+    def _cursor_preview(self):
+        """SketchUp's little square on the cursor before the first corner,
+        lying on the plane the rectangle would take (an arrow-key lock in
+        its axis colour, a face under the cursor, or the view's plane)."""
+        vp = self._viewport
+        if vp is None:
+            return []
+        point, normal = self.preview_plane(vp, self.hover_point)
+        u, v = _plane_axes(normal)
+        scale = self.world_per_pixel(vp, self.hover_point, u)
+        if scale is None:
+            return []
+        h = 0.5 * self.PREVIEW_PX * scale
+        c = self.hover_point
+        pts = [c + u * h + v * h, c - u * h + v * h, c - u * h - v * h, c + u * h - v * h]
+        return [(pts[i], pts[(i + 1) % 4]) for i in range(4)]
+
     def _axes(self) -> tuple[QVector3D, QVector3D]:
-        """In-plane horizontal/vertical axes for the current work plane. Without
-        a captured plane this is world +X / +Y (the legacy Z=0 layout)."""
-        if self.work_plane is None:
-            return QVector3D(1.0, 0.0, 0.0), QVector3D(0.0, 1.0, 0.0)
-        _, normal = self.work_plane
+        """In-plane horizontal/vertical axes for the drawing plane: the
+        captured / locked one, else the plane of the last hit (which follows
+        the camera), else world +X / +Y."""
+        _, normal = self.drawing_plane()
         return _plane_axes(normal)
 
     def _dimensions(self, a: QVector3D, b: QVector3D) -> tuple[float, float]:
@@ -205,4 +239,6 @@ class RectangleTool(PlaneLock, Tool):
         self.start_point = None
         self.chain_first_point = None
         self.work_plane = None
+        self.hover_plane = None
+        self.wireframe_color = None
         self.plane_lock = None
