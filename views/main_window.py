@@ -55,6 +55,7 @@ from tools.text import TextTool
 from tools.move import MoveTool
 from tools.rotate import RotateTool
 from tools.scale import ScaleTool
+from tools.fillet import FilletTool
 from tools.followme import FollowMeTool
 from tools.rotated_rectangle import RotatedRectangleTool
 from tools.offset import OffsetTool
@@ -102,6 +103,7 @@ class MainWindow(QMainWindow):
             "scale": ScaleTool(),
             "flip": FlipTool(),
             "followme": FollowMeTool(),
+            "fillet": FilletTool(),
             # Entered from a textured face's right-click menu, never from
             # the toolbar (SketchUp's Texture ▸ Position).
             "texture_position": TexturePositionTool(),
@@ -380,7 +382,7 @@ class MainWindow(QMainWindow):
              ["line", "freehand", "rectangle", "rotated_rect", "circle",
               "polygon", "arc", "arc3", "center_arc", "pie"]),
             # Push/Pull first (Marco, 2026-09-14), then move, rotate, scale, flip…
-            ("modify", tr("Modify"), ["pushpull", "move", "rotate", "scale", "flip", "followme", "offset"]),
+            ("modify", tr("Modify"), ["pushpull", "move", "rotate", "scale", "flip", "followme", "offset", "fillet"]),
             ("annotate", tr("Annotate"), ["tape", "protractor", "dimension", "text", "geopath"]),
             ("sections", tr("Sections"), ["section"]),
         ]
@@ -742,7 +744,7 @@ class MainWindow(QMainWindow):
         tools_menu = menubar.addMenu(tr("Tools"))
         for keys in (("select", "eraser", "paint"),
                      ("move", "rotate", "scale", "flip"),
-                     ("pushpull", "followme", "offset"),
+                     ("pushpull", "followme", "offset", "fillet"),
                      ("tape", "protractor"),
                      ("dimension", "text"),
                      ("section",)):

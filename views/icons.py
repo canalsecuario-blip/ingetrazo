@@ -445,6 +445,31 @@ def _offset(p, ink):
     p.drawRect(QRectF(16, 18, 16, 12))
 
 
+def _fillet(p, ink):
+    """Fillet: a square corner and the rounded one that replaces it — the
+    sharp corner ghosted, the arc in the accent."""
+    p.setBrush(Qt.NoBrush)
+    ghost = QPen(ink, 1.6, Qt.DashLine)
+    p.save()
+    p.setPen(ghost)
+    p.drawLine(QPointF(12, 24), QPointF(12, 12))
+    p.drawLine(QPointF(12, 12), QPointF(24, 12))
+    p.restore()
+    path = QPainterPath()
+    path.moveTo(12, 38)
+    path.lineTo(12, 24)
+    path.quadTo(12, 12, 24, 12)
+    path.lineTo(38, 12)
+    p.drawPath(path)
+    p.save()
+    p.setPen(QPen(_accent(), 3.0))
+    arc = QPainterPath()
+    arc.moveTo(12, 24)
+    arc.quadTo(12, 12, 24, 12)
+    p.drawPath(arc)
+    p.restore()
+
+
 def _move(p, ink):
     p.drawLine(QPointF(24, 10), QPointF(24, 38))
     p.drawLine(QPointF(10, 24), QPointF(38, 24))
@@ -1322,7 +1347,7 @@ _DRAW = {
     "comp_nivel": _comp_nivel, "comp_llamada": _comp_llamada,
     "rotated_rect": _rotated_rect, "circle": _circle, "polygon": _polygon,
     "arc": _arc, "arc3": _arc3, "center_arc": _center_arc, "pie": _pie,
-    "rotate": _rotate, "scale": _scale, "flip": _flip, "followme": _followme, "pushpull": _pushpull, "offset": _offset,
+    "rotate": _rotate, "scale": _scale, "flip": _flip, "followme": _followme, "pushpull": _pushpull, "offset": _offset, "fillet": _fillet,
     "move": _move, "paint": _paint, "eyedropper": _eyedropper,
     "dimension": _dimension, "dimension_chain": _dimension_chain,
     "dimension_style": _dimension_style,
@@ -1383,6 +1408,7 @@ _CURSOR_HOTSPOTS = {
     "move": (24, 24), "rotate": (24, 24), "scale": (24, 24),
     "flip": (24, 24),
     "pushpull": (24, 24), "offset": (24, 24), "followme": (24, 24),
+    "fillet": (24, 24),
     "dimension": (12, 30),          # left end of the dimension line
     "text": (24, 24), "text3d": (24, 24),
     "paint": (13, 35),              # the spout / falling drop
