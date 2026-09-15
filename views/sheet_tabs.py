@@ -200,6 +200,15 @@ class SheetStatusBar(QStatusBar):
         self.addPermanentWidget(self.tabs)
         self.addPermanentWidget(self._msg, 1)
 
+    #: The message never takes more than this share of the bar: the right
+    #: half stays clear before the tool name, the coordinates and the VCB
+    #: (Marco, 2026-09-15: «que no llegue hasta el otro extremo derecho»).
+    MESSAGE_SHARE = 0.5
+
+    def resizeEvent(self, event) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        self._msg.setMaximumWidth(max(120, int(self.width() * self.MESSAGE_SHARE)))
+
     # ---- messages, routed to our label ---------------------------------------
     def showMessage(self, text: str, timeout: int = 0) -> None:  # noqa: N802
         text = str(text or "")

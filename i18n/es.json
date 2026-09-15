@@ -1725,5 +1725,15 @@
  "Drag to pan. Wheel = zoom.": "Arrastra para desplazar. Rueda = zoom.",
  "Drag up to zoom in, down to zoom out. Wheel zooms at the cursor.": "Arrastra hacia arriba para acercar, hacia abajo para alejar. La rueda hace zoom en el cursor.",
  "Drag a box to zoom into it.": "Arrastra un recuadro para hacer zoom a él.",
- "{name}: Esc cancels.": "{name}: Esc cancela."
+ "{name}: Esc cancels.": "{name}: Esc cancela.",
+ "Select objects. Shift = add/remove, Ctrl = add. Double-click a group to edit it.": "Selecciona objetos. Mayús = añadir/quitar, Ctrl = añadir. Doble clic en un grupo para editarlo.",
+ "Click a face to paint it. Alt = sample the material under the cursor.": "Clic en una cara para pintarla. Alt = tomar el material bajo el cursor.",
+ "Click the end point. Magenta on the next edge = same distance: double-click to round.": "Clic en el punto final. Magenta en la arista contigua = misma distancia: doble clic para redondear.",
+ "Move, or type the distance and Enter. Double-click repeats the last.": "Mueve, o teclea la distancia y Enter. Doble clic repite la última.",
+ "Select something, then drag a grip: corners uniform, edges along an axis.": "Selecciona algo y arrastra un asa: esquinas uniforme, lados según un eje.",
+ "Drag, or type a factor (2) or a size (2m). Ctrl = about centre, Shift = uniform.": "Arrastra, o teclea un factor (2) o un tamaño (2m). Ctrl = desde el centro, Mayús = uniforme.",
+ "Click an edge to round it (or select edges first); type the radius and Enter.": "Clic en una arista para redondearla (o selecciona aristas antes); teclea el radio y Enter.",
+ "Click a point to measure, or an edge to pull a guide. Arrows lock an axis.": "Clic en un punto para medir, o en una arista para sacar una guía. Las flechas fijan un eje.",
+ "Drag the texture or a pin: red moves, green scales/rotates, blue shears. Enter finishes.": "Arrastra la textura o un pin: rojo mueve, verde escala/rota, azul cizalla. Enter termina.",
+ "Drag to orbit. Shift = pan. Wheel = zoom. The middle button orbits from any tool.": "Arrastra para orbitar. Mayús = desplazar. Rueda = zoom. El botón central orbita desde cualquier herramienta."
 }

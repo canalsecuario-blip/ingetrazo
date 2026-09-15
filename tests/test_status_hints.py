@@ -69,3 +69,23 @@ def test_every_registered_tool_has_a_hint():
     bar._restore()
     assert bar.currentMessage().startswith("Drag to orbit")
     win.close()
+
+
+def test_the_message_keeps_to_the_left_half_of_the_bar():
+    from PySide6.QtWidgets import QApplication
+    import pytest
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication([])
+    elif not isinstance(app, QApplication):
+        pytest.skip("another Qt application flavour is already running")
+    from views.sheet_tabs import SheetStatusBar
+    bar = SheetStatusBar(None, on_model=lambda: None, on_sheet=lambda i: None)
+    bar.show()
+    bar.resize(1600, 28)
+    app.processEvents()
+    assert bar._msg.maximumWidth() == 800
+    bar.resize(200, 28)
+    app.processEvents()
+    assert bar._msg.maximumWidth() == 120       # never squeezed to nothing
+    bar.close()

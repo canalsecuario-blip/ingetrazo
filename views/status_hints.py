@@ -15,12 +15,9 @@ from core.i18n import tr
 
 #: Tool key → hint per phase. A plain string is the same hint always.
 HINTS: dict = {
-    "select": (
-        "Select objects. Shift = add or remove, Ctrl = add, Shift+Ctrl = remove. "
-        "Double-click a group to edit it; drag a box (right to left crosses)."),
+    "select": "Select objects. Shift = add/remove, Ctrl = add. Double-click a group to edit it.",
     "eraser": "Drag over edges to erase them. Shift = hide instead.",
-    "paint": ("Click a face to paint it (a curved surface paints whole). "
-              "Alt = sample the material under the cursor."),
+    "paint": "Click a face to paint it. Alt = sample the material under the cursor.",
     "line": ("Click the start point. Arrows lock an axis, Shift locks the inference.",
              "Click the end point, or type the length and Enter. Arrows lock an axis."),
     "freehand": "Press and drag to draw a freehand line.",
@@ -34,32 +31,30 @@ HINTS: dict = {
                 "Click the radius, or type it and Enter."),
     "arc": {
         "idle": "Click the start point — on an edge to draw a tangent arc.",
-        "end": ("Click the end point. On the adjacent edge the arc turns magenta "
-                "at the same distance from the corner: double-click there to round it."),
-        "bulge": ("Click the bulge, or type it. 'Nr' = radius, 'Ns' = segments. "
-                  "Alt keeps the corner."),
+        "end": "Click the end point. Magenta on the next edge = same distance: double-click to round.",
+        "bulge": "Click the bulge, or type it. 'Nr' = radius, 'Ns' = segments. Alt keeps the corner.",
     },
     "arc3": ("Click the start point.", "Click a point the arc passes through, then the end."),
     "center_arc": ("Click the centre.", "Click the start of the arc, then its end; or type the angle."),
     "pie": ("Click the centre.", "Click the start of the wedge, then its end; or type the angle."),
     "pushpull": ("Click a face and move. Ctrl keeps the starting face.",
-                 "Move to set the distance, or type it and Enter. Double-click repeats the last."),
+                 "Move, or type the distance and Enter. Double-click repeats the last."),
     "move": ("Click what to move (or select it first). Arrows lock an axis.",
              "Click the destination, or type the distance and Enter. Arrows lock an axis."),
     "rotate": ("Click the centre of rotation — on a face, the protractor takes its plane.",
                "Click the start of the angle, then the end; or type the degrees."),
-    "scale": ("Select something, then drag a grip. Corners scale uniformly, edges along an axis.",
-              "Drag, or type a factor (2) or a size (2m). Ctrl = about the centre, Shift = uniform."),
+    "scale": ("Select something, then drag a grip: corners uniform, edges along an axis.",
+              "Drag, or type a factor (2) or a size (2m). Ctrl = about centre, Shift = uniform."),
     "flip": "Click the plane to mirror the selection across.",
     "followme": ("Select the path, then click the profile face. Alt = sweep along the selection.",
                  "Move along the path; click to finish."),
     "offset": ("Click a face, or connected edges, to offset.",
                "Move to set the offset, or type it and Enter."),
     "fillet": {
-        "idle": "Click an edge to round it (or select edges first). Type the radius and Enter.",
+        "idle": "Click an edge to round it (or select edges first); type the radius and Enter.",
         "sizing": "Move to set the radius, or type it and Enter; click to round. 'Ns' = segments.",
     },
-    "tape": ("Click a point to measure, or an edge to pull a guide from it. Arrows lock an axis.",
+    "tape": ("Click a point to measure, or an edge to pull a guide. Arrows lock an axis.",
              "Click the second point, or type the distance and Enter for an exact guide."),
     "protractor": ("Click the vertex of the angle.",
                    "Click the start of the angle, then the end; or type the degrees for a guide."),
@@ -68,15 +63,14 @@ HINTS: dict = {
     "text": "Click a point to attach a label; click empty space for a screen note.",
     "geopath": "Click the points of the path; Enter or double-click finishes.",
     "section": "Click a face to place the section plane on it. Shift keeps the orientation.",
-    "texture_position": ("Drag the texture or a pin — red moves, green scales and rotates, "
-                         "blue shears. A click lifts a pin. Enter finishes, Esc restores."),
+    "texture_position": "Drag the texture or a pin: red moves, green scales/rotates, blue shears. Enter finishes.",
     "image": "Click the first corner of the image, then the opposite one. Shift frees the aspect.",
     "paste": "Click where the copy goes. Arrows lock an axis.",
     "place_group": "Click where the component goes.",
 }
 
 NAV_HINTS: dict = {
-    "orbit": "Drag to orbit. Shift = pan. Wheel = zoom. Middle button orbits from any tool.",
+    "orbit": "Drag to orbit. Shift = pan. Wheel = zoom. The middle button orbits from any tool.",
     "pan": "Drag to pan. Wheel = zoom.",
     "zoom": "Drag up to zoom in, down to zoom out. Wheel zooms at the cursor.",
     "zoom_window": "Drag a box to zoom into it.",
