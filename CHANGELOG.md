@@ -4,7 +4,7 @@ All notable changes to IngeTrazo are documented here.
 Format inspired by [Keep a Changelog](https://keepachangelog.com); versions
 follow [SemVer](https://semver.org).
 
-## [Sin publicar]
+## [0.4.1] — 2026-09-15
 
 ### Arreglado
 - **El origen gana a las inferencias lineales**: al acercarte al origen del

@@ -77,6 +77,20 @@
   <url type="vcs-browser">https://github.com/ingelibre/ingetrazo</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.4.1" date="2026-09-15">
+      <description>
+        <p>The world origin wins: coming to the origin aligned with an
+        encouraged point or with the red axis used to click millimetres
+        beside it (the projection onto the axis) and leave tiny stubs; the
+        origin is a named point like a corner and now beats the linear
+        inferences.</p>
+        <p xml:lang="es">El origen gana: al acercarte al origen alineado con
+        un punto animado o con el eje rojo, el clic caía a milímetros
+        (la proyección sobre el eje) y quedaban tramos diminutos; el origen
+        es un punto con nombre, como una esquina, y ahora manda sobre las
+        inferencias lineales.</p>
+      </description>
+    </release>
     <release version="0.4.0" date="2026-09-15">
       <description>
         <p>Inference the SketchUp way, three tools that were missing, and
