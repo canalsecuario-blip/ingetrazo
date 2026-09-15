@@ -1007,6 +1007,7 @@ class Viewport(QOpenGLWidget):
         return image
 
     def paintGL(self) -> None:
+        self._tick = getattr(self, "_tick", 0) + 1     # a new epoch memo
         if self._gl is None or self._program is None:
             return
         _pt0 = _time_mod.perf_counter() if _PERF else 0.0
@@ -1895,6 +1896,48 @@ class Viewport(QOpenGLWidget):
             w = wrappers[id(mesh)] = SimpleNamespace(mesh=mesh, xform=None)
         return self._group_chunk(w)
 
+    def _placements_epoch(self):
+        """A signature of everything the per-frame placement passes read:
+        the group tree (ids, matrices, mesh mutation serials, tags), the
+        layer states, the open context and the preview. Passes that used
+        to key on the scene version — which every frame of a loose-mesh
+        drag bumps — key on this instead, so moving a face beside 1 300
+        placements no longer re-gathers, re-signs and re-syncs them all
+        (~30 ms a frame on the plaza, 2026-09-14). One walk (~2 ms),
+        memoised per tick (a paint or a hover) and scene version."""
+        sc = self.scene
+        tick = getattr(self, "_tick", 0)
+        memo = getattr(self, "_epoch_memo", None)
+        if memo is not None and memo[0] == (tick, _cache_ver(self)):
+            return memo[1]
+        parts: list = [id(sc.edit_group), id(sc.mesh),
+                       getattr(self, "_preview_epoch", 0),
+                       bool(getattr(self, "_preview_groups", None)),
+                       getattr(self, "_edit_rest_mode", None),
+                       tuple((ly.name, ly.visible, ly.locked) for ly in sc.layers)]
+
+        loose = sc.mesh
+
+        def walk(g):
+            m = g.mesh
+            xf = g.xform
+            # The mesh open for editing IS the loose mesh: its content is
+            # the version-keyed half (rebuilt per frame of a drag), not the
+            # placements half — counting its serial here re-keyed every
+            # cache on every drag frame (81 ms a frame instead of 56).
+            serial = (getattr(m, "_mut_serial", None)
+                      if m is not None and m is not loose else None)
+            parts.append((id(g), id(m), serial,
+                          tuple(xf.data()) if xf is not None else None,
+                          g.layer, bool(g.billboard)))
+            for c in (g.children or ()):
+                walk(c)
+        for g in sc.groups:
+            walk(g)
+        epoch = hash(tuple(parts))
+        self._epoch_memo = ((tick, _cache_ver(self)), epoch)
+        return epoch
+
     def _placements(self):
         """``scene.groups`` with every nested placement expanded into a proxy
         group carrying its composed world matrix.
@@ -2017,7 +2060,7 @@ class Viewport(QOpenGLWidget):
         import numpy as np
         pv = getattr(self, "_preview_groups", None) or ()
         planes = getattr(self, "_frame_planes", None)
-        key = (self.scene.version, id(self.scene.mesh),
+        key = (self._placements_epoch(), id(self.scene.mesh),
                getattr(self, "_preview_epoch", 0),
                getattr(self, "_frozen_cache_version", None))
         pool = getattr(self, "_inst_pool", None)
@@ -3774,36 +3817,56 @@ class Viewport(QOpenGLWidget):
         # Per-chunk draw spans (vertices) for frustum culling: the loose
         # block always draws (bbox None); each group's block carries its
         # chunk's world AABB.
-        edge_spans = [(None, 0, len(all_loose) // 3)]
-        estart = len(all_loose) // 3
+        loose_n = len(all_loose) // 3
+        edge_spans = [(None, 0, loose_n)]
         pv = getattr(self, "_preview_groups", None) or ()
+        # The group half (every placement's hard edges, in draw order) is
+        # keyed on the placements epoch: a loose edit — every frame of a
+        # Move drag — re-uses it whole instead of walking 1 300 chunks.
+        epoch_of = getattr(self, "_placements_epoch", None)     # stub VPs in tests
+        gkey = (epoch_of() if epoch_of is not None else _cache_ver(self),
+                hide_rest, tuple(sorted(pv)))
         # The group being edited goes LAST, so the surroundings occupy a
         # contiguous head the fade pass can draw in one go (and, since
         # nothing outside the group can change while you are in it, a head
-        # that stays put in the buffer).
+        # that stays put in the buffer). The order is also what the passes
+        # below walk.
         placements = self._placements()
         draw_groups = [g for g in placements
                        if not self._draws_in_edit_context(g)]
         if not hide_rest:
             draw_groups = [g for g in placements
                            if self._draws_in_edit_context(g)] + draw_groups
-        for g in draw_groups:
-            if (self._edit_split_e is None
-                    and self.scene.edit_group is not None
-                    and not self._draws_in_edit_context(g)):
-                # Where the surroundings end and the subject begins. This
-                # used to key on `g is scene.edit_group`, which never matched
-                # when the group being edited was a nested placement (the
-                # list holds its proxy) — and with no split, NOTHING faded.
-                self._edit_split_e = estart
-            if (self.scene.entity_visible(g) and id(g) not in pv
-                    and not getattr(g, "billboard", False)
-                    and not self._instanced_eligible(g)):
-                ch = self._group_chunk(g)
-                edge_parts.append(ch["edges"])
-                n = len(ch["edges"]) // 12
-                edge_spans.append((ch.get("bbox"), estart, n))
-                estart += n
+        gcache = getattr(self, "_edge_groups_cache", None)
+        if gcache is None or gcache[0] != gkey:
+            group_parts: list = []
+            group_spans: list = []            # (bbox, start RELATIVE, n)
+            split_rel = None
+            rel = 0
+            for g in draw_groups:
+                if (split_rel is None
+                        and self.scene.edit_group is not None
+                        and not self._draws_in_edit_context(g)):
+                    # Where the surroundings end and the subject begins.
+                    # This used to key on `g is scene.edit_group`, which
+                    # never matched when the group being edited was a nested
+                    # placement (the list holds its proxy) — and with no
+                    # split, NOTHING faded.
+                    split_rel = rel
+                if (self.scene.entity_visible(g) and id(g) not in pv
+                        and not getattr(g, "billboard", False)
+                        and not self._instanced_eligible(g)):
+                    ch = self._group_chunk(g)
+                    group_parts.append(ch["edges"])
+                    n = len(ch["edges"]) // 12
+                    group_spans.append((ch.get("bbox"), rel, n))
+                    rel += n
+            gcache = self._edge_groups_cache = (gkey, group_parts, group_spans, split_rel)
+        _gk, group_parts, group_spans, split_rel = gcache
+        edge_parts += group_parts
+        edge_spans += [(bb, loose_n + start, n) for bb, start, n in group_spans]
+        if self._edit_split_e is None and split_rel is not None:
+            self._edit_split_e = loose_n + split_rel
         self._edge_spans = edge_spans
         self._edges_count = self._upload_vbo(
             self._edges_vbo, "edges", edge_parts) // 12
@@ -7403,37 +7466,41 @@ class Viewport(QOpenGLWidget):
             # chunk's identity + rev + flags): re-deriving per-face masks and
             # re-offsetting 300k triangle rows per scene change cost ~130 ms
             # per stroke/drag frame beside a big import.
-            sig = []
-            chunks = []
-            for g in candidatos:
-                if getattr(g, "billboard", False):
-                    continue          # per-frame quad; picked separately
-                gvis = scene.entity_visible(g)
-                # The layer says whether it can be snapped to; the context
-                # says whether it can be picked.
-                gsnap = scene.entity_selectable(g)
-                gsel = gsnap and id(g) in tocables
-                if not (gvis or gsnap):
-                    continue
-                chunk = self._group_chunk(g)
-                if not (chunk["faces"] or chunk["edges"]):
-                    continue          # nothing in it to pick or snap to
-                # Note the `or edges`: a group of nothing but lines and arcs
-                # has no faces, and skipping it here dropped it out of the
-                # index ENTIRELY — so inference found none of its edges and
-                # the edge fallback below, written for "a lines-only group",
-                # read an empty array and never found it either (GitHub #8).
-                # The OWNER a hit resolves to depends on the open context
-                # (inside the plaza its children are the objects): it keys
-                # the block too, or a double-click into the plaza kept
-                # answering "the plaza" for the arch inside (Marco,
-                # 2026-09-14).
-                sig.append((id(g), chunk["uid"], chunk["rev"], gvis, gsel,
-                            gsnap, id(self._owner_of(g))))
-                chunks.append((g, chunk, gvis, gsel, gsnap))
+            # The block (every placement's faces, owners and hard edges) is
+            # keyed on the placements epoch: a loose edit — every frame of a
+            # Move drag — no longer walks 1 300 chunks to learn that none of
+            # them changed (2026-09-14).
+            epoch_of = getattr(self, "_placements_epoch", None)   # stub VPs in tests
+            sig = (epoch_of() if epoch_of is not None else _cache_ver(self),
+                   oculto, len(candidatos))
             blk = getattr(self, "_pick_block", None)
             frozen = getattr(self, "_frozen_cache_version", None) is not None
-            if blk is None or (blk[0] != tuple(sig) and not frozen):
+            chunks = []
+            if blk is None or (blk[0] != sig and not frozen):
+                for g in candidatos:
+                    if getattr(g, "billboard", False):
+                        continue          # per-frame quad; picked separately
+                    gvis = scene.entity_visible(g)
+                    # The layer says whether it can be snapped to; the context
+                    # says whether it can be picked.
+                    gsnap = scene.entity_selectable(g)
+                    gsel = gsnap and id(g) in tocables
+                    if not (gvis or gsnap):
+                        continue
+                    chunk = self._group_chunk(g)
+                    if not (chunk["faces"] or chunk["edges"]):
+                        continue          # nothing in it to pick or snap to
+                    # Note the `or edges`: a group of nothing but lines and arcs
+                    # has no faces, and skipping it here dropped it out of the
+                    # index ENTIRELY — so inference found none of its edges and
+                    # the edge fallback below, written for "a lines-only group",
+                    # read an empty array and never found it either (GitHub #8).
+                    # The OWNER a hit resolves to depends on the open context
+                    # (inside the plaza its children are the objects): it keys
+                    # the block too, or a double-click into the plaza kept
+                    # answering "the plaza" for the arch inside (Marco,
+                    # 2026-09-14).
+                    chunks.append((g, chunk, gvis, gsel, gsnap))
                 b_entities: list = []
                 # Per entity, the PLACEMENT (proxy) whose matrix puts the
                 # face in the world — the owner above is what a click
@@ -7478,7 +7545,7 @@ class Viewport(QOpenGLWidget):
                                              dtype=np.int64))
                         b_gsel.append(np.full(len(ge), gsel, dtype=bool))
                         b_ggroups.append(owner)
-                blk = (tuple(sig), {
+                blk = (sig, {
                     "entities": b_entities,
                     "place_idx": (np.concatenate(b_pidx) if b_pidx
                                   else np.empty(0, np.int32)),
@@ -7830,9 +7897,9 @@ class Viewport(QOpenGLWidget):
         M = self._np_mvp()
         # The rest-of-model mode changes WHICH edges the index holds
         # (hidden surroundings leave it), so it keys the projection too.
-        key = (self.scene.version, id(self.scene.mesh), M.tobytes(),
+        key = (id(idx.gedge_a), id(self.scene.mesh), M.tobytes(),
                self.width(), self.height(),
-               getattr(self, "_edit_rest_mode", None), id(idx))
+               getattr(self, "_edit_rest_mode", None))
         cached = getattr(self, "_gedge_px_cache", None)
         if cached is not None and cached[0] == key:
             return cached[1]
@@ -9474,6 +9541,7 @@ class Viewport(QOpenGLWidget):
     def _process_hover(self, pos, modifiers) -> None:
         if self._last_pos is not None or self._box_active:
             return          # a camera drag / box select started meanwhile
+        self._tick = getattr(self, "_tick", 0) + 1     # a new epoch memo
         ev = _HoverEvent(pos, modifiers)
         _hp0 = _time_mod.perf_counter() if _PERF else 0.0
 
