@@ -105,11 +105,20 @@ class ArcTool(PlaneLock, Tool):
     shortcut = "A"
     vcb_label = "Bulge"
 
+    #: Within this many screen pixels of the tangent bulge, the arc snaps
+    #: to it (SketchUp's "Tangent at Vertex", cyan).
+    TANGENT_PX = 8.0
+
     def __init__(self) -> None:
         self.start_point: QVector3D | None = None
         self.end_point: QVector3D | None = None
         self.hover_point: QVector3D | None = None
         self.work_plane: tuple[QVector3D, QVector3D] | None = None
+        # Tangent direction of the arc this one starts from (at its end
+        # vertex), and the bulge that keeps the new arc tangent to it.
+        self._tangent_dir: QVector3D | None = None
+        self._snap_bulge: float | None = None
+        self._viewport = None
 
     # ---- Lifecycle ----------------------------------------------------------
     def on_activate(self, viewport) -> None:
@@ -122,6 +131,7 @@ class ArcTool(PlaneLock, Tool):
     # ---- Spatial input ------------------------------------------------------
     def on_click(self, ctx: ToolContext) -> None:
         self.note_plane(ctx.viewport)
+        self._viewport = ctx.viewport
         if self.start_point is None:
             self.start_point = ctx.world
             if self.work_plane is None:
@@ -131,6 +141,7 @@ class ArcTool(PlaneLock, Tool):
             if (ctx.world - self.start_point).length() < 1e-6:
                 return
             self.end_point = ctx.world
+            self._tangent_dir = self._tangent_at_start(ctx.viewport)
             return
         pts = self._points(ctx.world)
         if len(pts) >= 2:
@@ -138,8 +149,88 @@ class ArcTool(PlaneLock, Tool):
 
     def on_hover(self, ctx: ToolContext) -> None:
         self.note_plane(ctx.viewport)
+        self._viewport = ctx.viewport
         self.hover_point = ctx.world
+        self._snap_bulge = None
+        self.wireframe_color = self.lock_color()
+        if self.end_point is not None and self._tangent_dir is not None:
+            h_t = self._tangent_bulge()
+            if h_t is not None:
+                u, v = self._axes()
+                e2 = self._to2(self.end_point, u, v)
+                length = math.hypot(*e2)
+                perp = u * (-e2[1] / length) + v * (e2[0] / length)
+                mid = (self.start_point + self.end_point) * 0.5
+                scale = self.world_per_pixel(ctx.viewport, mid, perp)
+                tol = (scale or 0.0) * self.TANGENT_PX
+                if scale is not None and abs(self._bulge_for(ctx.world) - h_t) <= tol:
+                    self._snap_bulge = h_t
+                    from core.snap import COLOR_TANGENT
+                    self.wireframe_color = (*COLOR_TANGENT, 1.0)
         ctx.viewport.update()
+
+    # ---- Tangent at vertex (SketchUp) ----------------------------------------
+    def _tangent_at_start(self, viewport) -> QVector3D | None:
+        """The direction an existing arc leaves its END vertex when that
+        vertex is our start point — the tangent this arc can continue."""
+        scene = getattr(viewport, "scene", None)
+        mesh = getattr(scene, "mesh", None)
+        if mesh is None or self.start_point is None:
+            return None
+        from core.snap import fit_circle
+        P = self.start_point
+        for edge in mesh.edges:
+            if getattr(edge, "curve", None) is None:
+                continue
+            if (edge.a - P).length() > 1e-6 and (edge.b - P).length() > 1e-6:
+                continue
+            chain = mesh.curve_edges(edge)
+            incident = [e for e in chain
+                        if (e.a - P).length() <= 1e-6 or (e.b - P).length() <= 1e-6]
+            if len(incident) != 1:
+                continue                       # not the arc's end
+            e = incident[0]
+            Q = e.b if (e.a - P).length() <= 1e-6 else e.a
+            pts: dict = {}
+            for c in chain:
+                for vv in (c.v0, c.v1):
+                    pts[id(vv)] = vv.position
+            fit = fit_circle(list(pts.values())) if len(pts) >= 3 else None
+            if fit is None:
+                continue
+            radial = (P - fit[0])
+            if radial.length() < 1e-9:
+                continue
+            r_hat = radial.normalized()
+            leaving = P - Q
+            t = leaving - r_hat * QVector3D.dotProduct(leaving, r_hat)
+            if t.length() < 1e-9:
+                continue
+            return t.normalized()
+        return None
+
+    def _tangent_bulge(self) -> float | None:
+        """The signed bulge that makes this arc leave the start along
+        ``_tangent_dir``: for a chord of length L meeting the tangent at
+        angle a, the sagitta is (L/2)·tan(a/2), on the tangent's side."""
+        if self._tangent_dir is None or self.end_point is None:
+            return None
+        u, v = self._axes()
+        e2 = self._to2(self.end_point, u, v)
+        length = math.hypot(*e2)
+        if length < 1e-9:
+            return None
+        cx, cy = e2[0] / length, e2[1] / length
+        tx = QVector3D.dotProduct(self._tangent_dir, u)
+        ty = QVector3D.dotProduct(self._tangent_dir, v)
+        tl = math.hypot(tx, ty)
+        if tl < 1e-6:
+            return None                        # tangent leaves the plane
+        tx, ty = tx / tl, ty / tl
+        angle = math.atan2(cx * ty - cy * tx, cx * tx + cy * ty)
+        if abs(abs(angle) - math.pi) < 1e-3:
+            return None                        # doubling back: no arc
+        return (length / 2.0) * math.tan(angle / 2.0)
 
     def on_value(self, viewport, value) -> bool:
         if self.end_point is None or self.hover_point is None:
@@ -192,8 +283,10 @@ class ArcTool(PlaneLock, Tool):
     def value_label(self):
         if self.end_point is None or self.hover_point is None:
             return None
-        b = self._bulge_for(self.hover_point)
         mid = (self.start_point + self.end_point) * 0.5
+        if self._snap_bulge is not None:
+            return (tr("Tangent at vertex") + f"  {abs(self._snap_bulge):.2f} m", mid)
+        b = self._bulge_for(self.hover_point)
         return (f"Bulge {abs(b):.2f} m", mid)
 
     # ---- Internals ----------------------------------------------------------
@@ -224,7 +317,12 @@ class ArcTool(PlaneLock, Tool):
         length = math.hypot(*e2)
         if length < 1e-9:
             return []
-        h = bulge if bulge is not None else self._bulge_for(cursor)
+        if bulge is not None:
+            h = bulge
+        elif self._snap_bulge is not None:
+            h = self._snap_bulge                        # tangent to the arc before
+        else:
+            h = self._bulge_for(cursor)
         if abs(h) < 1e-4:
             return [self.start_point, self.end_point]   # flat → straight chord
         px, py = -e2[1] / length, e2[0] / length
@@ -248,6 +346,9 @@ class ArcTool(PlaneLock, Tool):
         self.work_plane = None
         self.hover_plane = None
         self.plane_lock = None
+        self._tangent_dir = None
+        self._snap_bulge = None
+        self.wireframe_color = None
 
 
 class ThreePointArcTool(PlaneLock, Tool):

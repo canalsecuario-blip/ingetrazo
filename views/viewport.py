@@ -74,7 +74,7 @@ def _plog(tag: str, ms: float, extra: str = "", floor: float = 50.0) -> None:
                      f"{tag} {ms:.0f}ms"
                      f"{' ' + extra if extra else ''}\n")
 
-from PySide6.QtCore import QEvent, Qt, QPointF, QRectF, Signal
+from PySide6.QtCore import QEvent, Qt, QPointF, QRectF, QTimer, Signal
 from PySide6.QtGui import (
     QColor,
     QFont,
@@ -146,12 +146,19 @@ class _SnapEdge:
     ``compute_snap`` only reads ``.a``/``.b`` (world endpoints). ``center``
     marks the degenerate one that carries a circle's centre."""
 
-    __slots__ = ("a", "b", "center")
+    __slots__ = ("a", "b", "center", "component_origin", "arc_midpoint",
+                 "guide", "in_group")
 
-    def __init__(self, a, b, center: bool = False) -> None:
+    def __init__(self, a, b, center: bool = False, component_origin: bool = False,
+                 arc_midpoint: bool = False, guide: bool = False,
+                 in_group: bool = False) -> None:
         self.a = a
         self.b = b
         self.center = center
+        self.component_origin = component_origin   # a group's insertion point
+        self.arc_midpoint = arc_midpoint           # the middle of an arc's sweep
+        self.guide = guide                         # a construction guide: 'on line'
+        self.in_group = in_group                   # magenta point inferences
 
 
 # OpenGL constants — kept as literals so we don't depend on PyOpenGL.
@@ -505,9 +512,16 @@ class Viewport(QOpenGLWidget):
     #: A circle smaller than this on screen offers no centre at all.
     CENTER_MIN_RADIUS_PX = 12.0
 
+    #: How long the cursor must rest on a point to encourage it (ms).
+    ENCOURAGE_MS = 250
+
     _SNAP_LABELS = {
         "endpoint": "Endpoint",
         "midpoint": "Midpoint",
+        "arc_midpoint": "Arc midpoint",
+        "component_origin": "Component origin",
+        "on_line": "On line",
+        "tangent": "Tangent at vertex",
         "on_edge": "On edge",
         "on_face": "On face",
         "origin": "Origin",
@@ -579,6 +593,17 @@ class Viewport(QOpenGLWidget):
         self._acquired_edge = None
         self._acquired_point = None
         self._acquired_face_normal = None
+        # SketchUp's encouraged points: the last two points the cursor
+        # PAUSED on (a corner, a circle's centre). The 'from point' dotted
+        # line runs from them — from both at once where their axis lines
+        # cross. Pausing, not merely crossing: sweeping over a vertex on the
+        # way somewhere else must not steal the reference.
+        self._encouraged: list = []
+        self._dwell_point: Optional[QVector3D] = None
+        self._dwell_timer = QTimer(self)
+        self._dwell_timer.setSingleShot(True)
+        self._dwell_timer.setInterval(self.ENCOURAGE_MS)
+        self._dwell_timer.timeout.connect(self._encourage_dwelt)
         self._last_mouse_pos: Optional[QPointF] = None
 
         # Pixel radius for point snaps (endpoint, origin, close). 12 px felt
@@ -5018,6 +5043,14 @@ class Viewport(QOpenGLWidget):
                 vis = self._clip_pixel_line(gp0, gp1)
                 if vis is not None:
                     painter.drawLine(QPointF(*vis[0]), QPointF(*vis[1]))
+        for ga, gb_, gc in (snap.guides or []):
+            gp0 = self._world_to_pixel(ga)
+            gp1 = self._world_to_pixel(gb_)
+            if gp0 is not None and gp1 is not None:
+                painter.setPen(QPen(QColor.fromRgbF(gc[0], gc[1], gc[2], 0.9), 2.0, Qt.DashLine))
+                vis = self._clip_pixel_line(gp0, gp1)
+                if vis is not None:
+                    painter.drawLine(QPointF(*vis[0]), QPointF(*vis[1]))
         # A white halo under the marker lifts it off busy geometry, then
         # the coloured marker on top — bigger and bolder than before so the
         # snap point reads at a glance (a common request: the dots were too
@@ -5040,7 +5073,8 @@ class Viewport(QOpenGLWidget):
             painter.setPen(mark)
             painter.setBrush(QColor.fromRgbF(r, g, b, 0.85))
             painter.drawEllipse(QPointF(px, py), 6.5, 6.5)
-        elif snap.kind in ("endpoint", "origin", "on_edge", "extension", "from_point"):
+        elif snap.kind in ("endpoint", "origin", "component_origin", "on_edge",
+                           "on_line", "extension", "from_point", "tangent"):
             rect = QRectF(px - 7, py - 7, 14, 14)
             painter.setPen(halo)
             painter.setBrush(Qt.NoBrush)
@@ -5048,7 +5082,7 @@ class Viewport(QOpenGLWidget):
             painter.setPen(mark)
             painter.setBrush(QColor.fromRgbF(r, g, b, 0.30))
             painter.drawRect(rect)
-        elif snap.kind == "midpoint":
+        elif snap.kind in ("midpoint", "arc_midpoint"):
             # Cyan diamond, SketchUp-style.
             diamond = QPolygonF([
                 QPointF(px, py - 9), QPointF(px + 9, py),
@@ -7784,8 +7818,74 @@ class Viewport(QOpenGLWidget):
             cand = cand[np.argsort(d[cand])[:cap]]
         idx = self._pick_index()
         ga, gb = idx.gedge_a, idx.gedge_b
-        return [_SnapEdge(QVector3D(*ga[i]), QVector3D(*gb[i]))
+        return [_SnapEdge(QVector3D(*ga[i]), QVector3D(*gb[i]), in_group=True)
                 for i in cand]
+
+    #: How close (px) the cursor must come to a component's origin or an
+    #: arc's midpoint for it to enter the snap scene at all.
+    POINT_INFERENCE_PX = 40.0
+
+    def _component_origin_points(self, px: float, py: float) -> list:
+        """SketchUp's "Component Origin Point": each placed group's own
+        origin (its insertion point), as a degenerate pseudo-edge when it
+        lies near the cursor. One projection per placement."""
+        out: list = []
+        moving = getattr(self.active_tool, "_group", None)
+        for g in self._placements():
+            xf = getattr(g, "xform", None)
+            if xf is None or g is moving or getattr(g, "billboard", False):
+                continue
+            o = xf.map(QVector3D(0.0, 0.0, 0.0))
+            pc = self._world_to_pixel(o)
+            if pc is None or math.hypot(pc[0] - px, pc[1] - py) > self.POINT_INFERENCE_PX:
+                continue
+            out.append(_SnapEdge(o, QVector3D(o), component_origin=True))
+        return out
+
+    def _arc_midpoints(self, px: float, py: float) -> list:
+        """SketchUp's "Arc Midpoint": the middle of each loose arc's sweep
+        (the point on the arc bisecting its two ends — not any facet's
+        midpoint). Closed curves (circles) have none. Computed once per
+        scene version, offered when near the cursor."""
+        cache = getattr(self, "_arc_mid_cache", None)
+        if cache is None or cache[0] != self.scene.version:
+            from core.snap import fit_circle
+            mesh = self.scene.mesh
+            by_curve: dict = {}
+            for e in mesh.edges:
+                cid = getattr(e, "curve", None)
+                if cid is not None:
+                    by_curve.setdefault(cid, []).append(e)
+            mids = []
+            for edges in by_curve.values():
+                degree: dict = {}
+                pos: dict = {}
+                for e in edges:
+                    for v in (e.v0, e.v1):
+                        degree[id(v)] = degree.get(id(v), 0) + 1
+                        pos[id(v)] = v.position
+                ends = [pos[k] for k, n in degree.items() if n == 1]
+                if len(ends) != 2 or len(pos) < 3:
+                    continue                     # a circle, or not a chain
+                fit = fit_circle(list(pos.values()))
+                if fit is None:
+                    continue
+                c, r = fit[0], fit[1]
+                m = QVector3D(0.0, 0.0, 0.0)
+                for pt in pos.values():
+                    m += (pt - c)
+                if m.length() < 1e-9:
+                    continue
+                mids.append(c + m.normalized() * r)
+            cache = (self.scene.version, mids)
+            self._arc_mid_cache = cache
+        out: list = []
+        for m in cache[1]:
+            pc = self._world_to_pixel(m)
+            if pc is None or math.hypot(pc[0] - px, pc[1] - py) > self.POINT_INFERENCE_PX:
+                continue
+            out.append(_SnapEdge(QVector3D(m), QVector3D(m), arc_midpoint=True))
+        return out
 
     def _billboard_snap_edges(self) -> list:
         """Pseudo-edges for face-me billboards: the base edge and the vertical
@@ -7826,7 +7926,7 @@ class Viewport(QOpenGLWidget):
             if g.is_line:
                 seg = self._clip_segment_front(*g.segment())
                 if seg is not None:
-                    lines.append(_SnapEdge(*seg))
+                    lines.append(_SnapEdge(*seg, guide=True))
             else:
                 lines.append(_SnapEdge(QVector3D(g.point), QVector3D(g.point)))
         # Reference-image borders snap like guides: aligning a scan against
@@ -7841,6 +7941,12 @@ class Viewport(QOpenGLWidget):
         near = self._nearby_group_edges(px, py) if px is not None else []
         if px is not None:
             near += self._billboard_snap_edges()
+            origins = getattr(self, "_component_origin_points", None)   # stub VPs in tests
+            if origins is not None:
+                near += origins(px, py)
+            arcs = getattr(self, "_arc_midpoints", None)
+            if arcs is not None:
+                near += arcs(px, py)
         near += self._selection_box_points()
         valid = getattr(self, "_valid_center_ref", None)   # stub VPs in tests
         ref = valid() if callable(valid) else None
@@ -8449,6 +8555,8 @@ class Viewport(QOpenGLWidget):
         self._acquired_edge = None  # drop any held parallel reference
         self._acquired_point = None
         self._acquired_face_normal = None
+        self._encouraged = []
+        self._dwell_point = None
         if tool is not None:
             tool.on_activate(self)
         self._apply_tool_cursor()
@@ -9007,6 +9115,33 @@ class Viewport(QOpenGLWidget):
             # under the frame telemetry's floor.
             _plog("hover.move", self._hover_cost * 1000.0, floor=80.0)
 
+    def _dwell_on(self, point: Optional[QVector3D]) -> None:
+        """The cursor is over ``point`` (or nothing): (re)start the pause
+        that turns it into an encouraged point."""
+        if point is None:
+            self._dwell_point = None
+            self._dwell_timer.stop()
+            return
+        if (self._dwell_point is not None
+                and (self._dwell_point - point).length() < 1e-6):
+            return                                  # still resting on it
+        self._dwell_point = QVector3D(point)
+        self._dwell_timer.start()
+
+    def _encourage_dwelt(self) -> None:
+        if self._dwell_point is not None:
+            self.encourage_point(self._dwell_point)
+
+    def encourage_point(self, point: QVector3D) -> None:
+        """Make ``point`` the newest encouraged point (two are kept, the
+        older one drops), and the 'from point' reference."""
+        pt = QVector3D(point)
+        self._encouraged = [p for p in self._encouraged if (p - pt).length() > 1e-6]
+        self._encouraged.append(pt)
+        del self._encouraged[:-2]
+        self._acquired_point = pt
+        self.update()
+
     def _process_hover(self, pos, modifiers) -> None:
         if self._last_pos is not None or self._box_active:
             return          # a camera drag / box select started meanwhile
@@ -9052,14 +9187,16 @@ class Viewport(QOpenGLWidget):
         )
         if self.active_tool is not None and self.active_tool.uses_snap:
             corner = self.pick_vertex(ev.position().x(), ev.position().y())
-            if corner is not None:
-                self._acquired_point = corner
             center = getattr(self, "_hover_center", None)
             # A circle's rim: its centre is the point worth remembering, not
             # the facet vertex the cursor happens to sit on; on a face with
             # arcs a real corner under the cursor still wins.
+            point = corner
             if center is not None and (corner is None or center[2][0] == "edge"):
-                self._acquired_point = QVector3D(center[0])
+                point = QVector3D(center[0])
+            if drawing and point is not None:
+                self._acquired_point = point       # soft, instant, as before
+            self._dwell_on(point)
         if not drawing:
             self._acquired_edge = None
             self._acquired_face_normal = None
@@ -9427,6 +9564,7 @@ class Viewport(QOpenGLWidget):
             acquired_edge=self._acquired_edge,
             acquired_point=self._acquired_point,
             acquired_face_normal=self._acquired_face_normal,
+            acquired_points=self._encouraged,
             shift_lock_dir=self._shift_lock[0] if self._shift_lock else None,
             shift_lock_color=self._shift_lock[1] if self._shift_lock else None,
             linear_mode=self.linear_inference_mode,
@@ -9688,6 +9826,7 @@ class Viewport(QOpenGLWidget):
             acquired_edge=self._acquired_edge,
             acquired_point=self._acquired_point,
             acquired_face_normal=self._acquired_face_normal,
+            acquired_points=self._encouraged,
             shift_lock_dir=self._shift_lock[0] if self._shift_lock else None,
             shift_lock_color=self._shift_lock[1] if self._shift_lock else None,
             linear_mode=self.linear_inference_mode,

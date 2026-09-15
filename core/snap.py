@@ -40,6 +40,8 @@ COLOR_AXIS_Y = (0.16, 0.62, 0.36)
 COLOR_AXIS_Z = (0.20, 0.40, 0.78)
 COLOR_REFERENCE = (0.85, 0.30, 0.80)  # magenta — parallel / perpendicular
 COLOR_EXTENSION = (0.55, 0.55, 0.58)  # grey — collinear extension of an edge
+COLOR_IN_GROUP = (0.85, 0.30, 0.80)   # magenta — a point inside a group / component (SketchUp)
+COLOR_TANGENT = (0.20, 0.66, 0.74)    # cyan — an arc tangent to the arc it starts from
 COLOR_NONE = (0.0, 0.0, 0.0)
 
 AXIS_COLORS = {
@@ -63,6 +65,9 @@ class SnapResult:
     # Colour for the dashed guide line when it should differ from the marker
     # colour (e.g. 'from point' draws an axis-coloured guide but a green point).
     guide_color: Optional[tuple[float, float, float]] = None
+    # Extra dashed guides, ``[(a, b, rgb), ...]`` — the two-point 'from point'
+    # draws one from each encouraged point.
+    guides: Optional[list] = None
 
 
 # ---- Helpers ---------------------------------------------------------------
@@ -427,6 +432,60 @@ def _vertex_on_line(
     return (rel - proj).length() < tol
 
 
+def _two_point_snap(
+    refs, candidate, cx, cy, world_to_pixel, threshold_px, is_occluded=None,
+) -> Optional[SnapResult]:
+    """Where the axis lines through two encouraged points cross: for every
+    pair of points and pair of DIFFERENT axes, the crossing (if the two
+    lines meet — coplanar within a millimetre) within the snap radius of
+    the cursor. Green point, one dotted guide from each point in its axis
+    colour."""
+    pts = [p for p in refs if p is not None]
+    if len(pts) < 2:
+        return None
+    best = None
+    axes = list(_AXIS_VECTORS.items())
+    for i in range(len(pts)):
+        for j in range(i + 1, len(pts)):
+            p, q = pts[i], pts[j]
+            for ka, a in axes:
+                for kb, b in axes:
+                    if ka == kb:
+                        continue
+                    # Closest points of the two lines p + a·s and q + b·t.
+                    w = p - q
+                    ab = QVector3D.dotProduct(a, b)
+                    denom = 1.0 - ab * ab
+                    if denom < 1e-9:
+                        continue
+                    wa = QVector3D.dotProduct(w, a)
+                    wb = QVector3D.dotProduct(w, b)
+                    s_ = (ab * wb - wa) / denom
+                    t_ = (wb - ab * wa) / denom
+                    pa = p + a * s_
+                    pb = q + b * t_
+                    if (pa - pb).length() > 1e-3:
+                        continue                    # skew: no crossing
+                    if abs(s_) < 1e-3 or abs(t_) < 1e-3:
+                        continue                    # on a point itself
+                    px = world_to_pixel(pa)
+                    if px is None:
+                        continue
+                    d = math.hypot(px[0] - cx, px[1] - cy)
+                    if d > threshold_px:
+                        continue
+                    if is_occluded is not None and is_occluded(pa):
+                        continue
+                    if best is None or d < best[0]:
+                        best = (d, pa, p, ka, q, kb)
+    if best is None:
+        return None
+    _, cross, p, ka, q, kb = best
+    return SnapResult(cross, "from_point", COLOR_ENDPOINT,
+                      guide=(QVector3D(p), cross), guide_color=AXIS_COLORS[ka],
+                      guides=[(QVector3D(q), cross, AXIS_COLORS[kb])])
+
+
 def _first_point_from_point(
     ref, candidate, cx, cy, world_to_pixel, threshold_px, is_occluded=None,
 ) -> Optional[SnapResult]:
@@ -658,6 +717,7 @@ def compute_snap(
     acquired_edge=None,
     acquired_point=None,
     acquired_face_normal=None,
+    acquired_points=None,
     shift_lock_dir=None,
     shift_lock_color=None,
     linear_mode: str = "all",
@@ -799,14 +859,34 @@ def compute_snap(
         # scene geometry — never occlusion-cull it.
         _consider(chain_first_point, "close", COLOR_CLOSE, occludable=False)
     if best is None or best[2] != "close":
+        # The named points first (a tie goes to the first considered): an
+        # arc's midpoint that happens to fall on one of its facet vertices
+        # reads "Arc midpoint", as SketchUp says, not "Endpoint".
+        plain = []
         for edge in scene.edges:
             if getattr(edge, "center", False):
                 # The centre of a circle or arc the cursor visited (the
                 # viewport hands it in as a degenerate pseudo-edge).
                 _consider(edge.a, "center", COLOR_ENDPOINT)
+            elif getattr(edge, "component_origin", False):
+                # A group's / component's own origin (SketchUp's "Component
+                # Origin Point") — its insertion point, worth grabbing.
+                _consider(edge.a, "component_origin", COLOR_ORIGIN)
+            elif getattr(edge, "arc_midpoint", False):
+                # The middle of an arc's sweep, not of any one of its facets.
+                _consider(edge.a, "arc_midpoint", COLOR_MIDPOINT)
+            elif getattr(edge, "guide", False):
+                # A construction guide's ends are not endpoints (they are
+                # clipped to the view) — it offers 'on line' below.
                 continue
-            _consider(edge.a, "endpoint", COLOR_ENDPOINT)
-            _consider(edge.b, "endpoint", COLOR_ENDPOINT)
+            else:
+                plain.append(edge)
+        for edge in plain:
+            # SketchUp paints every point inference magenta when the
+            # geometry is inside a group or component.
+            col = COLOR_IN_GROUP if getattr(edge, "in_group", False) else COLOR_ENDPOINT
+            _consider(edge.a, "endpoint", col)
+            _consider(edge.b, "endpoint", col)
     if best is not None:
         return SnapResult(best[1], best[2], best[3])
 
@@ -913,6 +993,16 @@ def compute_snap(
     #     door's top (Rafael's review, 2026-09-10: «te salía una línea de
     #     extensión para poder dibujar aquí la ventana»); the 'from point'
     #     above only knew segments already under way.
+    if allow_axis and start_point is None and acquired_points:
+        # Two encouraged points at once (SketchUp's two-point method): a
+        # dotted line from each, the cursor pinned where they cross —
+        # level with the door's top AND in line with the other jamb.
+        tp = _two_point_snap(
+            acquired_points, candidate_world, cx, cy, world_to_pixel,
+            threshold_px, is_occluded,
+        )
+        if tp is not None:
+            return tp
     if allow_axis and start_point is None and acquired_point is not None:
         fp = _first_point_from_point(
             acquired_point, candidate_world, cx, cy, world_to_pixel,
@@ -924,7 +1014,11 @@ def compute_snap(
     # 6. Midpoint + origin.
     best = None
     for edge in scene.edges:
-        _consider((edge.a + edge.b) * 0.5, "midpoint", COLOR_MIDPOINT)
+        if getattr(edge, "guide", False) or (edge.a - edge.b).length() < 1e-9:
+            continue
+        _consider((edge.a + edge.b) * 0.5, "midpoint",
+                  COLOR_IN_GROUP if getattr(edge, "in_group", False)
+                  else COLOR_MIDPOINT)
     _consider(QVector3D(0.0, 0.0, 0.0), "origin", COLOR_ORIGIN)
     if best is not None:
         return SnapResult(best[1], best[2], best[3])
@@ -955,9 +1049,14 @@ def compute_snap(
         if is_occluded is not None and is_occluded(on_pt):
             continue
         if best_edge is None or d < best_edge[0]:
-            best_edge = (d, on_pt)
+            best_edge = (d, on_pt, edge)
     if best_edge is not None:
-        return SnapResult(best_edge[1], "on_edge", COLOR_ON_EDGE)
+        _d, on_pt, edge = best_edge
+        if getattr(edge, "guide", False):
+            return SnapResult(on_pt, "on_line", COLOR_ON_EDGE)   # a guide line
+        return SnapResult(on_pt, "on_edge",
+                          COLOR_IN_GROUP if getattr(edge, "in_group", False)
+                          else COLOR_ON_EDGE)
 
     # 8b. Acquired-edge parallel inference. An edge the cursor hovered while
     #     drawing is held as a reference; when the draw runs parallel to it the
