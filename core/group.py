@@ -466,18 +466,49 @@ def _hull_2d(pts):
     Python scan, which is the difference between half a second and a blink."""
     import numpy as np
     pts = np.asarray(pts, dtype=np.float64)
+
+    def outside(points, poly):
+        """Mask of points NOT strictly inside the convex polygon ``poly``
+        (counter-clockwise) — the only ones that can still be hull
+        vertices."""
+        inside = np.ones(len(points), dtype=bool)
+        for i in range(len(poly)):
+            a, b = poly[i], poly[(i + 1) % len(poly)]
+            side = ((b[0] - a[0]) * (points[:, 1] - a[1])
+                    - (b[1] - a[1]) * (points[:, 0] - a[0]))
+            inside &= side > 1e-12          # strictly left of every edge
+        return ~inside
+
     if len(pts) > 64:
+        # Stage 1, four axis extremes: one cheap pass over everything.
         quad = pts[[int(np.argmin(pts[:, 0])), int(np.argmin(pts[:, 1])),
                     int(np.argmax(pts[:, 0])), int(np.argmax(pts[:, 1]))]]
-        inside = np.ones(len(pts), dtype=bool)
-        for i in range(4):
-            a, b = quad[i], quad[(i + 1) % 4]
-            side = ((b[0] - a[0]) * (pts[:, 1] - a[1])
-                    - (b[1] - a[1]) * (pts[:, 0] - a[0]))
-            inside &= side > 1e-12          # strictly left of every edge
-        keep = ~inside
+        keep = outside(pts, quad)
         if keep.any():
             pts = pts[keep]
+    if len(pts) > 64:
+        # Stage 2, sixteen directions on what survived: the four axis
+        # extremes of a rectangular site are its corners, and everything
+        # along its slightly bowed edges survived stage 1 — 100k points
+        # reached the Python scan on the Plaza Yanque, 350 ms per box
+        # (2026-09-14). The extremes along 16 directions are hull vertices
+        # themselves and, in angular order, a convex polygon; what lies
+        # strictly inside it cannot be a hull vertex either.
+        ang = np.arange(16) * (2.0 * np.pi / 16)
+        dirs = np.stack([np.cos(ang), np.sin(ang)], axis=1)
+        ext = np.unique(np.argmax(pts @ dirs.T, axis=0))
+        poly = pts[ext]
+        c = poly.mean(axis=0)
+        poly = poly[np.argsort(np.arctan2(poly[:, 1] - c[1], poly[:, 0] - c[0]))]
+        if len(poly) >= 3:
+            keep = outside(pts, poly)
+            if keep.any():
+                pts = pts[keep]
+    if len(pts) > 1:
+        # Coincident survivors (a mesh repeats positions across faces and
+        # placements) only cost scan time — deduped HERE, on the few that
+        # are left: a sort of the whole million cost 75 ms.
+        pts = np.unique(pts, axis=0)
     p = pts[np.lexsort((pts[:, 1], pts[:, 0]))]
     if len(p) < 3:
         return p
