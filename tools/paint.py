@@ -71,6 +71,29 @@ def _same_plane(face, plane, tol: float = 1e-4) -> bool:
     return abs(QVector3D.dotProduct(n, p) - d) <= tol
 
 
+def _surface_commands(mesh, faces, seed, tex, plane) -> list | None:
+    """The commands that paint a curved SURFACE (faces joined by soft
+    edges) with ``tex`` running continuously from ``seed`` — see
+    ``core.texture.continuous_maps``. ``None`` when ``faces`` is not such
+    a surface (a single face, or a plain selection), so the caller falls
+    back to the per-face rule."""
+    if mesh is None or seed is None or len(faces) < 2:
+        return None
+    from core.texture import continuous_maps
+    look = tex
+    if tex.get("uvw") and (plane is None or not _same_plane(seed, plane)):
+        from core.texture import flattened_texture
+        look = flattened_texture(tex, plane[0] if plane else None)
+    maps = continuous_maps(mesh, faces, seed, look)
+    if len(maps) < 2:
+        return None
+    cmds = [SetFaceTextureCommand([f], maps[id(f)]) for f in faces if id(f) in maps]
+    rest = [f for f in faces if id(f) not in maps]
+    if rest:
+        cmds.extend(_texture_commands(rest, tex, plane))
+    return cmds
+
+
 def _texture_commands(faces, tex, plane) -> list:
     """Apply ``tex`` the way SketchUp's eyedropper does.
 
@@ -226,10 +249,17 @@ class PaintTool(Tool):
             faces, mat.name if mat is not None else None, mat)
         opacity = SetFaceOpacityCommand(faces, PaintTool.current_opacity)
         if PaintTool.current_texture is not None:
-            vp.history.execute(CompoundCommand(
-                _texture_commands(faces, PaintTool.current_texture,
-                                  PaintTool.current_texture_plane)
-                + [opacity, tag]))
+            # A curved surface gets the image wrapped around it from the
+            # clicked face (SketchUp); anything else, face by face.
+            cmds = None
+            if face not in sel_faces:
+                cmds = _surface_commands(vp.scene.mesh, faces, face,
+                                         PaintTool.current_texture,
+                                         PaintTool.current_texture_plane)
+            if cmds is None:
+                cmds = _texture_commands(faces, PaintTool.current_texture,
+                                         PaintTool.current_texture_plane)
+            vp.history.execute(CompoundCommand(cmds + [opacity, tag]))
         else:
             # Painting a solid colour clears any texture on those faces, in one
             # undoable step.

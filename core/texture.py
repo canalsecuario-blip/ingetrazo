@@ -434,6 +434,80 @@ def flattened_texture(tex: dict, normal=None) -> dict:
     return flat
 
 
+def _rotated_map(gu, cu, gv, cv, axis_point, axis_dir, cos_t, sin_t):
+    """The map ``uv(p) = g·p + c`` carried across a hinge: the new face's
+    map is ``uv(R⁻¹ p)`` for the rotation ``R`` about the shared edge that
+    lays the previous face onto the new one, so the image continues across
+    the edge without a cut. ``g' = R·g``, ``c' = c + g·A − g'·A``."""
+    def rot(v):
+        return (v * cos_t + QVector3D.crossProduct(axis_dir, v) * sin_t
+                + axis_dir * (QVector3D.dotProduct(axis_dir, v) * (1.0 - cos_t)))
+    gu2, gv2 = rot(gu), rot(gv)
+    cu2 = cu + QVector3D.dotProduct(gu, axis_point) - QVector3D.dotProduct(gu2, axis_point)
+    cv2 = cv + QVector3D.dotProduct(gv, axis_point) - QVector3D.dotProduct(gv2, axis_point)
+    return gu2, cu2, gv2, cv2
+
+
+def continuous_maps(mesh, faces, seed, tex: dict) -> dict:
+    """Per-face texture dicts that make ``tex`` run CONTINUOUSLY over a
+    curved surface — ``faces`` joined by soft edges — the way SketchUp
+    paints a cylinder or a rounded corner: the image is laid on ``seed``
+    (its planar projection, or the map it already carries) and walked to
+    each neighbour across their shared soft edge, turned about that edge
+    into the neighbour's plane, so bricks wrap around the bend instead of
+    restarting on every facet (Marco's rounded corner, 2026-09-15).
+
+    Returns ``{id(face): tex dict with uvw}`` for the faces reached from
+    ``seed``; faces of the set not connected to it are left out (the
+    caller paints them the ordinary way)."""
+    faces = list(faces)
+    if seed is None or not faces:
+        return {}
+    ids = {id(f) for f in faces}
+    gu, cu, gv, cv = face_uv_axes(tex, seed.normal())
+    out = {id(seed): (gu, cu, gv, cv)}
+    stack = [seed]
+    while stack:
+        f = stack.pop()
+        g_u, c_u, g_v, c_v = out[id(f)]
+        n1 = f.normal()
+        if n1.lengthSquared() < 1e-18:
+            continue
+        n1 = n1.normalized()
+        for lp in (f.loop, *f.hole_loops):
+            n = len(lp)
+            for i in range(n):
+                e = mesh.find_edge(lp[i], lp[(i + 1) % n])
+                if e is None or not e.soft:
+                    continue
+                for g in e.faces:
+                    if g is f or id(g) not in ids or id(g) in out:
+                        continue
+                    n2 = g.normal()
+                    d = e.b - e.a
+                    if n2.lengthSquared() < 1e-18 or d.lengthSquared() < 1e-18:
+                        continue
+                    n2 = n2.normalized()
+                    d = d.normalized()
+                    cos_t = QVector3D.dotProduct(n1, n2)
+                    sin_t = QVector3D.dotProduct(d, QVector3D.crossProduct(n1, n2))
+                    if cos_t < -0.999:
+                        continue                # folded back: no hinge
+                    out[id(g)] = _rotated_map(g_u, c_u, g_v, c_v, e.a, d,
+                                              cos_t, sin_t)
+                    stack.append(g)
+    result = {}
+    base = {k: v for k, v in tex.items() if k not in ("uvw", "rot")}
+    for f in faces:
+        m = out.get(id(f))
+        if m is None:
+            continue
+        gu, cu, gv, cv = m
+        result[id(f)] = {**base, "uvw": [gu.x(), gu.y(), gu.z(), float(cu),
+                                         gv.x(), gv.y(), gv.z(), float(cv)]}
+    return result
+
+
 def uv_reference_points(points, normal=None):
     """Three points on the face's plane, forming a well-conditioned triangle,
     for pinning an affine UV map. ``None`` when the face is degenerate.

@@ -25,6 +25,11 @@ de mediciones sobre la plaza de Yanque.
   interno Listo / Restablecer / Voltear / Girar / Deshacer, Enter termina y
   Esc restaura. Textura ▸ Restablecer posición vuelve a la proyección por
   defecto. (El pin amarillo de perspectiva se muestra pero aún no se arrastra.)
+- **La textura envuelve las superficies curvas**: al pintar un cilindro o
+  una esquina redondeada, la imagen se apoya en la faceta clicada y va
+  girando de faceta en faceta alrededor de cada arista suave, así que los
+  ladrillos continúan sin cortes ni saltos (antes cada faceta proyectaba por
+  su cuenta).
 - **La muestra de una textura posicionada viaja a otras caras**: el
   cuentagotas sobre una cara con la textura escalada o girada con los pines
   y el cubo sobre otra cara de distinto plano aplican el mismo tamaño de
