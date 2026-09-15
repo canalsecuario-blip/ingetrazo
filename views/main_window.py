@@ -58,6 +58,7 @@ from tools.scale import ScaleTool
 from tools.followme import FollowMeTool
 from tools.rotated_rectangle import RotatedRectangleTool
 from tools.offset import OffsetTool
+from tools.texture_position import TexturePositionTool
 from tools.paint import PaintTool
 from tools.paste import PasteTool
 from tools.arc import PieTool
@@ -101,6 +102,9 @@ class MainWindow(QMainWindow):
             "scale": ScaleTool(),
             "flip": FlipTool(),
             "followme": FollowMeTool(),
+            # Entered from a textured face's right-click menu, never from
+            # the toolbar (SketchUp's Texture ▸ Position).
+            "texture_position": TexturePositionTool(),
             "paint": PaintTool(),
             "dimension": DimensionTool(),
             "eraser": EraserTool(),
@@ -1818,6 +1822,12 @@ class MainWindow(QMainWindow):
             # which is where anyone looks for it. It lived only in the Edit
             # menu and Marco could not find it (2026-09-10).
             menu.addAction(tr("Reverse Faces"), self._on_reverse_faces)
+            face = self._single_textured_face()
+            if face is not None:
+                # SketchUp's Texture submenu, on a face with an image.
+                texm = menu.addMenu(tr("Texture"))
+                texm.addAction(tr("Position"), self._on_texture_position)
+                texm.addAction(tr("Reset Position"), self._on_texture_reset)
         if any(isinstance(e, Edge) for e in sel):
             menu.addAction(tr("Hide Edges"), self._on_hide_edges)
         if has_group:
@@ -1855,6 +1865,50 @@ class MainWindow(QMainWindow):
         redo.setEnabled(bool(self.viewport.history.redo_stack))
 
         menu.exec(global_pos)
+
+    def _single_textured_face(self):
+        """The one selected face carrying an image texture, else ``None``
+        (SketchUp offers Texture ▸ Position for exactly one face)."""
+        from core.mesh import Face
+        faces = [e for e in self.viewport.scene.selection if isinstance(e, Face)]
+        if len(faces) != 1:
+            return None
+        tex = (faces[0].attrs or {}).get("texture")
+        if not tex or not tex.get("path"):
+            return None
+        return faces[0]
+
+    def _on_texture_position(self) -> None:
+        """Texture ▸ Position: the pins on the tile under the right-click."""
+        face = self._single_textured_face()
+        if face is None:
+            return
+        tool = self._tools["texture_position"]
+        at = None
+        px = getattr(self.viewport, "_context_pixel", None)
+        if px is not None:
+            from core.snap import face_plane_world
+            origin, direction = self.viewport._pixel_to_ray(px[0], px[1])
+            if origin is not None:
+                p0, n = face_plane_world(face, None)
+                at = self.viewport._ray_plane(origin, direction, p0, n)
+        self._activate_tool("texture_position")
+        if not tool.begin(self.viewport, face, at):
+            self._activate_tool("select")
+
+    def _on_texture_reset(self) -> None:
+        """Texture ▸ Reset Position: back to the default planar projection
+        (no per-face map, no rotation)."""
+        face = self._single_textured_face()
+        if face is None:
+            return
+        tex = face.attrs.get("texture") or {}
+        if "uvw" not in tex and "rot" not in tex:
+            return
+        from core.history import SetFaceTextureCommand
+        flat = {k: v for k, v in tex.items() if k not in ("uvw", "rot")}
+        self.viewport.history.execute(SetFaceTextureCommand([face], flat))
+        self.viewport.update()
 
     def _on_hide_edges(self) -> None:
         """SketchUp's Edit ▸ Hide, scoped to edges: the selected edges stop

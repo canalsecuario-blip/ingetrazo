@@ -4828,6 +4828,11 @@ class Viewport(QOpenGLWidget):
             self._preview_faces_vao.release()
             self._set_back_face_color()          # leave the real tint behind
         if by_texture:
+            # A tool may want its textured preview translucent (Position
+            # Texture shows the image through, SketchUp-style).
+            opacity = float(getattr(tool, "preview_opacity", 1.0) or 1.0)
+            if opacity < 1.0:
+                self._program.setUniformValue1f(self._loc_opacity, opacity)
             self._program.setUniformValue(self._loc_use_tex, 1)
             self._preview_tex_vao.bind()
             for key, buf in by_texture.items():
@@ -4846,6 +4851,8 @@ class Viewport(QOpenGLWidget):
             self._preview_tex_vao.release()
             self._program.setUniformValue1f(self._loc_shade, 1.0)
             self._program.setUniformValue(self._loc_use_tex, 0)
+            if opacity < 1.0:
+                self._program.setUniformValue1f(self._loc_opacity, 1.0)
         self._gl.glDisable(GL_POLYGON_OFFSET_FILL)
 
     def _draw_rubber_band(self) -> None:
@@ -8972,6 +8979,13 @@ class Viewport(QOpenGLWidget):
                 icon = "eyedropper"
         cur = (tool_cursor(icon)
                if self.active_tool is not None else None)
+        if cur is None and self.active_tool is not None:
+            # A tool without a drawn icon can still ask for a stock Qt
+            # cursor (Position Texture shows SketchUp's hand).
+            shape = getattr(self.active_tool, "qt_cursor", None)
+            if shape is not None:
+                from PySide6.QtGui import QCursor
+                cur = QCursor(shape)
         if cur is not None:
             self.setCursor(cur)
         else:
@@ -9297,9 +9311,17 @@ class Viewport(QOpenGLWidget):
         """Right-click: select what's under the cursor (SketchUp-style) and open
         a context menu of actions relevant to the current selection."""
         win = self.window()
+        # A tool with its own right-click menu (Position Texture: Done /
+        # Reset / Flip / Rotate) takes the click instead.
+        hook = getattr(self.active_tool, "context_menu", None)
+        if callable(hook) and hook(self, ev.globalPos()):
+            return
         if not hasattr(win, "show_viewport_context_menu"):
             return
         x, y = ev.pos().x(), ev.pos().y()
+        # Where the menu was opened, for entries that act at the cursor
+        # (Texture ▸ Position puts its pins on the tile under it).
+        self._context_pixel = (x, y)
         picked = (self.pick_text_label(x, y, rect_only=True)
                   or self.pick_group(x, y) or self.pick_edge(x, y)
                   or self.pick_geopath(x, y) or self.pick_dimension(x, y)
