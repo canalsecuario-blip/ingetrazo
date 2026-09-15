@@ -8189,7 +8189,8 @@ class Viewport(QOpenGLWidget):
         elif getattr(edge, "in_group", False) and getattr(edge, "group", None) is not None:
             found = self._center_of_group_edge(edge)
         if found is None:
-            face, group = self.pick_face_placement(x, y)
+            pick = getattr(self, "pick_face_placement", None) or self.pick_face_any   # stub VPs in tests
+            face, group = pick(x, y)
             if face is not None:
                 mesh = group.mesh if group is not None else self.scene.mesh
                 found = self._center_of_face(face, group, mesh, x, y)
