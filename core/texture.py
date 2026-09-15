@@ -375,6 +375,65 @@ def face_uv_axes(tex: dict, normal):
     return (u_axis / sw, 0.0, v_axis / sh, 0.0)
 
 
+def placement_of(tex: dict, normal) -> tuple[float, float, float] | None:
+    """``(sw, sh, rot)`` — the tile size and in-plane rotation a positioned
+    texture (one carrying a fitted ``uvw``) shows on the face of ``normal``:
+    the lengths of the tile axes dual to the map's gradients, and the angle
+    from SketchUp's projection basis to the U axis. ``None`` when the map is
+    missing or degenerate. What the eyedropper hands to a face on ANOTHER
+    plane: the map itself only means something on its own plane, but the
+    look — the scale and the turn — travels (Marco, 2026-09-15: «debería
+    poder copiar esa muestra… y aplicarlo a otra cara»). Shear and a mirror
+    have no planar equivalent and are dropped."""
+    import math
+    uvw = tex.get("uvw")
+    if not uvw or len(uvw) != 8:
+        return None
+    n = QVector3D(normal)
+    if n.lengthSquared() < 1e-18:
+        return None
+    n = n.normalized()
+    gu = QVector3D(uvw[0], uvw[1], uvw[2])
+    gv = QVector3D(uvw[4], uvw[5], uvw[6])
+    gu = gu - n * QVector3D.dotProduct(gu, n)
+    gv = gv - n * QVector3D.dotProduct(gv, n)
+    g11 = QVector3D.dotProduct(gu, gu)
+    g12 = QVector3D.dotProduct(gu, gv)
+    g22 = QVector3D.dotProduct(gv, gv)
+    det = g11 * g22 - g12 * g12
+    if abs(det) < 1e-24:
+        return None
+    e_u = (gu * g22 - gv * g12) / det
+    e_v = (gv * g11 - gu * g12) / det
+    sw, sh = e_u.length(), e_v.length()
+    if sw < 1e-9 or sh < 1e-9:
+        return None
+    u_axis, v_axis = projection_axes(n)
+    rot = math.degrees(math.atan2(QVector3D.dotProduct(e_u, v_axis),
+                                  QVector3D.dotProduct(e_u, u_axis)))
+    return sw, sh, rot
+
+
+def flattened_texture(tex: dict, normal=None) -> dict:
+    """``tex`` without its per-face map, keeping the look it had on the
+    plane of ``normal`` as a planar projection: ``sw``/``sh``/``rot`` from
+    :func:`placement_of` when a map was fitted there, else the dict as it
+    is minus ``uvw``."""
+    flat = {k: v for k, v in tex.items() if k != "uvw"}
+    if normal is None or not tex.get("uvw"):
+        return flat
+    placed = placement_of(tex, normal)
+    if placed is None:
+        return flat
+    sw, sh, rot = placed
+    flat["sw"], flat["sh"] = float(sw), float(sh)
+    if abs(rot) > 1e-6:
+        flat["rot"] = float(round(rot, 6))
+    else:
+        flat.pop("rot", None)
+    return flat
+
+
 def uv_reference_points(points, normal=None):
     """Three points on the face's plane, forming a well-conditioned triangle,
     for pinning an affine UV map. ``None`` when the face is degenerate.

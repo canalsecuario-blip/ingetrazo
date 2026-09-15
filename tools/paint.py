@@ -77,8 +77,10 @@ def _texture_commands(faces, tex, plane) -> list:
     An explicit ``uvw`` is where the image sits IN THE WORLD; it only means
     the same thing on the plane it was fitted for. Faces on that plane keep
     it, so a pattern continues across a seam; every other face takes the
-    material without it and projects the image on its own plane at the same
-    applied size."""
+    material without it and projects the image on its own plane with the
+    LOOK the sample had — its tile size and turn, read off the map
+    (``core.texture.flattened_texture``) — so a texture scaled and rotated
+    with the pins carries to the next wall (Marco, 2026-09-15)."""
     if not tex.get("uvw") or plane is None:
         return [SetFaceTextureCommand(faces, tex)]
     same = [f for f in faces if _same_plane(f, plane)]
@@ -87,8 +89,8 @@ def _texture_commands(faces, tex, plane) -> list:
     if same:
         cmds.append(SetFaceTextureCommand(same, tex))
     if other:
-        flat = {k: v for k, v in tex.items() if k != "uvw"}
-        cmds.append(SetFaceTextureCommand(other, flat))
+        from core.texture import flattened_texture
+        cmds.append(SetFaceTextureCommand(other, flattened_texture(tex, plane[0])))
     return cmds
 
 
@@ -250,7 +252,9 @@ class PaintTool(Tool):
             if tex.get("uvw") and (cls.current_texture_plane is None
                                    or not _same_plane(
                                        face, cls.current_texture_plane)):
-                tex.pop("uvw", None)
+                from core.texture import flattened_texture
+                plane = cls.current_texture_plane
+                tex = flattened_texture(tex, plane[0] if plane else None)
             back["texture"] = tex
         else:
             back["color"] = list(cls.current_color)

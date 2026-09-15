@@ -25,6 +25,11 @@ de mediciones sobre la plaza de Yanque.
   interno Listo / Restablecer / Voltear / Girar / Deshacer, Enter termina y
   Esc restaura. Textura ▸ Restablecer posición vuelve a la proyección por
   defecto. (El pin amarillo de perspectiva se muestra pero aún no se arrastra.)
+- **La muestra de una textura posicionada viaja a otras caras**: el
+  cuentagotas sobre una cara con la textura escalada o girada con los pines
+  y el cubo sobre otra cara de distinto plano aplican el mismo tamaño de
+  baldosa y el mismo giro (las caras coplanarias siguen recibiendo la
+  posición exacta).
 - **Arco que redondea esquinas como SketchUp**: al empezar sobre una arista la
   vista previa es el arco tangente (cian, «Tangente a la arista»); en la arista
   contigua, a la misma distancia del vértice, se clava y se vuelve magenta;
