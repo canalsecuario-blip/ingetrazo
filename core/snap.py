@@ -8,11 +8,12 @@ Snap kinds (priority high → low):
 3. ``"axis"`` via Shift — Shift held while an axis inference is active.
 4. ``"close"``          — closing the current polygon chain.
 5. ``"endpoint"``       — vertex of an existing edge.
-6. ``"midpoint"``       — midpoint of an existing edge.
-7. ``"origin"``         — world origin.
-8. ``"on_edge"``        — arbitrary point along an edge (start a shape on it).
-9. ``"axis_inference"`` — soft auto-detected axis alignment (visual cue only).
-10. ``"none"``          — no snap.
+6. ``"intersection"``   — where two edges / guide lines actually cross (green X).
+7. ``"midpoint"``       — midpoint of an existing edge.
+8. ``"origin"``         — world origin.
+9. ``"on_edge"``        — arbitrary point along an edge (start a shape on it).
+10. ``"axis_inference"`` — soft auto-detected axis alignment (visual cue only).
+11. ``"none"``          — no snap.
 
 Distance checks for point snaps are done in **screen-space pixels** so the
 snap radius stays constant under zoom. The caller supplies a
@@ -732,6 +733,73 @@ def _perpendicular_face_snap(
     return SnapResult(locked, "perp_face", COLOR_REFERENCE)
 
 
+def _intersection_snap(
+    cx, cy, scene, world_to_pixel, et, is_occluded
+) -> Optional[SnapResult]:
+    """Green intersection point where two edges / guide lines actually cross.
+
+    Every other ``"intersection"`` in this module is *directional*: it only
+    appears while a lock line is active (an axis lock, a perpendicular draw, an
+    extension). Two construction guides crossing produce no such direction, so
+    their meeting point was never offered — the cursor slid along whichever
+    guide was nearest (``on_edge``). The X of two guides is the whole reason to
+    draw them, so collect the edges whose screen span passes under the cursor
+    and intersect them pairwise in 3-D (SketchUp's edge intersection).
+
+    ``segment_intersection`` rejects parallel and *skew* pairs, so two edges
+    that merely cross in projection do not light up a point that isn't there.
+    Real model edges that cross are already split into a shared vertex by the
+    topology pass (the endpoint snap wins first); this mainly catches the
+    guides, which live outside the mesh, and any unsplit crossing."""
+
+    # Local import: keep the snap engine free of a module-load dependency on
+    # the topology package (and any import cycle it might grow into).
+    from core.topology import segment_intersection
+
+    # Only edges whose screen span passes under the cursor can contribute:
+    # that keeps the pairwise test tiny and stops a far-away crossing (whose
+    # pixel happens to land near the cursor by coincidence of depth) from
+    # firing.
+    near = []
+    for edge in scene.edges:
+        if getattr(edge, "center", False):
+            continue  # the degenerate pseudo-edge that carries a circle centre
+        ab = edge.b - edge.a
+        if QVector3D.dotProduct(ab, ab) < 1e-12:
+            continue
+        pa = world_to_pixel(edge.a)
+        pb = world_to_pixel(edge.b)
+        if pa is None or pb is None:
+            continue
+        d, _t = _closest_on_segment_2d((cx, cy), pa, pb)
+        if d <= et:
+            near.append(edge)
+    if len(near) < 2:
+        return None
+
+    best = None  # (dist_px, hit)
+    for i in range(len(near)):
+        e1 = near[i]
+        for j in range(i + 1, len(near)):
+            e2 = near[j]
+            hit = segment_intersection(e1.a, e1.b, e2.a, e2.b)
+            if hit is None:
+                continue  # parallel, collinear or skew — no real meeting
+            hp = world_to_pixel(hit)
+            if hp is None:
+                continue
+            dh = math.hypot(hp[0] - cx, hp[1] - cy)
+            if dh > et:
+                continue
+            if is_occluded is not None and is_occluded(hit):
+                continue
+            if best is None or dh < best[0]:
+                best = (dh, hit)
+    if best is None:
+        return None
+    return SnapResult(best[1], "intersection", COLOR_ENDPOINT)
+
+
 def compute_snap(
     candidate_world: QVector3D,
     candidate_pixel: tuple[float, float],
@@ -1055,7 +1123,16 @@ def compute_snap(
         if fp is not None:
             return fp
 
-    # 5c. 'From point' for the FIRST click — SketchUp's encouraged point: with
+    # 5c. Edge / guide intersection (SketchUp's green X): where two edges or
+    #     guide lines actually cross. Only the directional locks above build an
+    #     intersection, so crossing guides never offered their meeting point —
+    #     the cursor slid along the nearest guide. Runs before midpoint/on-edge
+    #     so the exact crossing wins, but below every endpoint and lock.
+    inter = _intersection_snap(cx, cy, scene, world_to_pixel, et, is_occluded)
+    if inter is not None:
+        return inter
+
+    # 5d. 'From point' for the FIRST click — SketchUp's encouraged point: with
     #     no segment in progress, the cursor lines up along an axis with the
     #     corner it hovered last, on a dotted axis-coloured line from that
     #     corner. This is how a window's first corner lands level with the
@@ -1064,7 +1141,7 @@ def compute_snap(
     #     above only knew segments already under way.
     if allow_axis and start_point is None and acquired_points:
         # Two encouraged points at once (SketchUp's two-point method): a
-        # dotted line from each, the cursor pinned where they cross —
+        # dotted line from each point, the cursor pinned where they cross —
         # level with the door's top AND in line with the other jamb.
         tp = _two_point_snap(
             acquired_points, candidate_world, cx, cy, world_to_pixel,
