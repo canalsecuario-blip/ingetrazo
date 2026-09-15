@@ -77,15 +77,14 @@ def test_a_fresh_install_gets_marcos_layout_and_large_icons(settings_file, monke
     from PySide6.QtCore import Qt
     from views import icons
     from views.main_window import MainWindow
-    monkeypatch.setattr(icons, "default_toolbar_icon_px", lambda: 32)   # a desktop screen
-    assert icons.toolbar_icon_px() == 32
+    assert icons.toolbar_icon_px() == 24                                # normal, since 14-09
     win = MainWindow()
     try:
         assert win.toolBarArea(win.toolbars["draw"]) == Qt.LeftToolBarArea
         assert win.toolBarArea(win.toolbars["annotate"]) == Qt.LeftToolBarArea
         for name in ("main", "modify", "view", "sections", "views"):
             assert win.toolBarArea(win.toolbars[name]) == Qt.TopToolBarArea, name
-        assert all(tb.iconSize().width() == 32 for tb in win.toolbars.values())
+        assert all(tb.iconSize().width() == 24 for tb in win.toolbars.values())
     finally:
         win._saved_version = win.viewport.scene.version
         win.close()
@@ -248,31 +247,15 @@ def test_the_composer_toolbars_are_movable_and_their_arrangement_is_remembered(s
         win.close()
 
 
-def test_a_laptop_screen_starts_at_24_px_and_a_choice_wins(settings_file, monkeypatch):
-    """The factory layout at 32 px overflows a 1366×768 screen (Annotate
-    and Panels lose icons behind the chevron); a fresh profile on such a
-    screen starts at 24 px, and a saved choice is never second-guessed."""
-    from PySide6.QtCore import QRect
-    from PySide6.QtGui import QGuiApplication
+def test_the_default_is_normal_on_any_screen_and_a_choice_wins(settings_file):
+    """Large (32 px) was the default for the 0.3.20 (fine on a 27" monitor,
+    clumsy on the laptop — Marco, 2026-09-14); normal since, on every
+    screen. A saved choice is never second-guessed."""
     from views import icons
-
-    class _Screen:
-        def __init__(self, h):
-            self._h = h
-
-        def availableGeometry(self):
-            return QRect(0, 0, 1366, self._h)
-
-    monkeypatch.setattr(QGuiApplication, "primaryScreen",
-                        staticmethod(lambda: _Screen(740)))
     assert icons.toolbar_icon_px() == 24
-    monkeypatch.setattr(QGuiApplication, "primaryScreen",
-                        staticmethod(lambda: _Screen(1050)))
-    assert icons.toolbar_icon_px() == 32
     icons.save_toolbar_icon_px(40)
-    monkeypatch.setattr(QGuiApplication, "primaryScreen",
-                        staticmethod(lambda: _Screen(740)))
     assert icons.toolbar_icon_px() == 40
+
 
 
 def test_the_overflow_button_wears_the_program_chevron(settings_file, monkeypatch):

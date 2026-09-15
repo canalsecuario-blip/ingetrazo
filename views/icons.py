@@ -1516,25 +1516,14 @@ def tool_cursor(key: str | None) -> QCursor | None:
 #: persona que instale el programa»).
 TOOLBAR_ICON_SIZES = ((20, "Small"), (24, "Normal"), (32, "Large"),
                       (40, "Extra large"))
-DEFAULT_TOOLBAR_ICON_PX = 32
-#: Below this screen height a fresh profile starts at 24 px: the factory
-#: layout at 32 px (Draw + Annotate in one column, six bars along the top)
-#: overflows a 1366×768 laptop — measured: Annotate and Panels hide their
-#: last icons behind the chevron; at 24 px everything shows.
-SMALL_SCREEN_PX = 900
-SMALL_SCREEN_ICON_PX = 24
+DEFAULT_TOOLBAR_ICON_PX = 24
 
 
 def default_toolbar_icon_px() -> int:
-    """32 px on a desktop screen, 24 px on a laptop's (Marco, 2026-09-14:
-    «¿y para pantallas más pequeñas?»)."""
-    try:
-        from PySide6.QtGui import QGuiApplication
-        screen = QGuiApplication.primaryScreen()
-        if screen is not None and screen.availableGeometry().height() < SMALL_SCREEN_PX:
-            return SMALL_SCREEN_ICON_PX
-    except Exception:  # noqa: BLE001 — no GUI yet: the desktop default
-        pass
+    """The size a profile that never chose gets: normal (24 px). Large was
+    the default for one release (Marco liked it on his 27" monitor) and
+    looked clumsy on his laptop — «se ven mejor los tamaños normales»
+    (2026-09-14); Preferences keeps 20/24/32/40 for whoever wants more."""
     return DEFAULT_TOOLBAR_ICON_PX
 
 
