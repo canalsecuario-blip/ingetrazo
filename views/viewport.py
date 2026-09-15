@@ -7903,6 +7903,7 @@ class Viewport(QOpenGLWidget):
             pa = self._world_to_pixel(loose.a)
             pb = self._world_to_pixel(loose.b)
             if pa is not None and pb is not None:
+                from core.snap import _closest_on_segment_2d
                 dl, _t = _closest_on_segment_2d((screen_x, screen_y), pa, pb)
                 if dl <= d[i]:
                     return loose

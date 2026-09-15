@@ -440,3 +440,29 @@ def test_the_centre_of_a_components_circle_comes_from_its_rim():
     vp._process_hover(QPointF(*vp._world_to_pixel(rim)), Qt.NoModifier)
     ref = vp._valid_center_ref()
     assert ref is not None and (ref[0] - V(7, 6, 0)).length() < 1e-3
+
+
+def test_a_loose_edge_and_a_components_edge_under_the_cursor_together():
+    """Marco's session (2026-09-14): with his planter rectangle drawn (loose
+    edges) and the pergola (a component) under the cursor, every mouse move
+    raised NameError inside pick_edge_any — the hover died and clicks «no
+    hacían nada». The nearer of the two must simply win."""
+    from PySide6.QtCore import QPointF, Qt
+    from core.mesh import Mesh
+    from tools.line import LineTool
+    vp = _offscreen_vp()
+    vp.camera.target = V(6, 5, 0)
+    vp.camera.distance = 12
+    mesh = Mesh()
+    mesh.add_face([V(0, 0, 0), V(2, 0, 0), V(2, 2, 0), V(0, 2, 0)])
+    _placed(vp, mesh, 5, 4)                                  # component edge (5,4)-(7,4)
+    vp.scene.mesh.add_edge(V(5, 4.1, 0), V(7, 4.1, 0))       # a loose edge right beside it
+    vp.scene.version += 1
+    vp.set_active_tool(LineTool())
+    px = vp._world_to_pixel(V(6, 4.09, 0))                   # nearer the loose edge
+    vp._process_hover(QPointF(*px), Qt.NoModifier)           # must not raise
+    e = vp._hover_edge
+    assert e is not None and not getattr(e, "in_group", False)
+    px = vp._world_to_pixel(V(6, 4.0, 0))                    # on the component's edge
+    vp._process_hover(QPointF(*px), Qt.NoModifier)
+    assert getattr(vp._hover_edge, "in_group", False)
