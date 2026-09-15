@@ -298,6 +298,10 @@ class Mesh:
         #: clears it after (re)validating — an O(1) dirty signal so render
         #: caches never content-hash a 131k-vertex mesh per scene change.
         self._chunk_dirty = True
+        # Bumped by every mutation primitive: a cheap 'has this mesh
+        # changed since I looked' for caches that must never build a
+        # chunk to find out (the container box's point arrays).
+        self._mut_serial = 0
         self.vertices: list[Vertex] = []
         self.edges: list[Edge] = []
         self.faces: list[Face] = []
@@ -377,6 +381,7 @@ class Mesh:
         of the loop's segments, so a segment split by crossing geometry still has
         all its pieces tagged. Returns the id, or ``None`` if nothing matched."""
         self._chunk_dirty = True
+        self._mut_serial += 1
         from core.topology import _point_on_seg_incl
         global _CURVE_COUNTER
         pts = list(loop_points)
@@ -417,6 +422,7 @@ class Mesh:
         circle crossed by a square's edges selects as two separate arcs, exactly
         SketchUp's 'two contours'. A pristine circle stays one curve."""
         self._chunk_dirty = True
+        self._mut_serial += 1
         global _CURVE_COUNTER
         by_id: dict[int, list[Edge]] = {}
         for e in self.edges:
@@ -463,6 +469,7 @@ class Mesh:
 
     def _link_edge(self, v0: Vertex, v1: Vertex) -> Edge:
         self._chunk_dirty = True
+        self._mut_serial += 1
         e = self.find_edge(v0, v1)
         if e is not None:
             return e
@@ -485,6 +492,7 @@ class Mesh:
         """Detach and drop an edge. Callers remove any incident faces first when
         needed; this does not cascade."""
         self._chunk_dirty = True
+        self._mut_serial += 1
         e.v0.edges.discard(e)
         e.v1.edges.discard(e)
         if e in self.edges:
@@ -642,6 +650,7 @@ class Mesh:
         indices — pass it to :meth:`add_faces_welded` so face boundaries
         reuse these edges without rescanning ``self.edges``."""
         self._chunk_dirty = True
+        self._mut_serial += 1
         u = len(vobjs)
         emap: dict = {}
         ia = list(ia.tolist() if hasattr(ia, "tolist") else ia)
@@ -689,6 +698,7 @@ class Mesh:
         derive it from ``self.edges``). Returns the new faces in order."""
         import numpy as np
         self._chunk_dirty = True
+        self._mut_serial += 1
         u = len(vobjs)
         inverse = np.ascontiguousarray(inverse, dtype=np.int64)
         ring_sizes = np.ascontiguousarray(ring_sizes, dtype=np.int64)
@@ -797,6 +807,7 @@ class Mesh:
         does not geometrically touch, which lets ``is_closed`` report a broken
         solid as watertight (defeating the BIM push guard)."""
         self._chunk_dirty = True
+        self._mut_serial += 1
         loop = [self.vertex(p) for p in loop_positions]
         raw_holes = [list(h) for h in (hole_loops or [])]
         if len(raw_holes) > 1:
@@ -839,6 +850,7 @@ class Mesh:
         """Drop a face and detach it from its boundary edges' radial lists. The
         edges themselves stay (they may border other faces or stand alone)."""
         self._chunk_dirty = True
+        self._mut_serial += 1
         for lp in (face.loop, *face.hole_loops):
             n = len(lp)
             for i in range(n):
@@ -925,6 +937,7 @@ class Mesh:
         """Restore a :meth:`capture_state` snapshot. Objects created since are
         dropped; captured ones are re-listed with their fields reset."""
         self._chunk_dirty = True
+        self._mut_serial += 1
         self.vertices[:] = snap["vertices"]
         self.edges[:] = snap["edges"]
         self.faces[:] = snap["faces"]
@@ -954,6 +967,7 @@ class Mesh:
     # ---- Reset --------------------------------------------------------------
     def clear(self) -> None:
         self._chunk_dirty = True
+        self._mut_serial += 1
         self._registry.clear()
         self.vertices.clear()
         self.edges.clear()
@@ -977,6 +991,7 @@ class Mesh:
         that topological merge is a separate operation (migration phase M2).
         """
         self._chunk_dirty = True
+        self._mut_serial += 1
         old = _key(v.position)
         v.position = v.position + delta
         new = _key(v.position)
@@ -1040,6 +1055,7 @@ class Mesh:
         are dropped. Returns whether anything merged. No undo bookkeeping —
         callers run under a snapshot, like the rest of the stitch."""
         self._chunk_dirty = True
+        self._mut_serial += 1
         groups: dict = {}
         for v in self.vertices:
             groups.setdefault(_key(v.position), []).append(v)
@@ -1099,6 +1115,7 @@ class Mesh:
         its holes are filled by their own faces. Returns how many were
         removed."""
         self._chunk_dirty = True
+        self._mut_serial += 1
         seen: dict = {}
         removed = 0
         for f in list(self.faces):

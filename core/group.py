@@ -575,9 +575,12 @@ def frame_from_points(positions) -> tuple:
             QVector3D(0.0, 0.0, 1.0))
 
 
-def placement_points(group):
+def placement_points(group, cache=None):
     """Every vertex position of ``group`` and its nested placements, in WORLD
-    space, as an ``(N, 3)`` float64 array.
+    space, as an ``(N, 3)`` float64 array. ``cache`` (``{id(mesh): array}``)
+    lets a caller keep each prototype's local array across calls — filled
+    here, validated by the caller (the viewport keys it on the chunk's
+    revision): rebuilding the plaza's arrays cost 73 ms per box.
 
     A bounding box only ever needed the POINTS, but the only way to get them
     used to be ``world_mesh`` — which welds a merged copy of the whole
@@ -587,7 +590,8 @@ def placement_points(group):
     built ONCE and every placement is one matrix multiply over it."""
     import numpy as np
     out: list = []
-    cache: dict = {}
+    if cache is None:
+        cache = {}
     for g, m in iter_placements(group):
         verts = g.mesh.vertices
         if not verts:

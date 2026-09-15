@@ -8161,7 +8161,11 @@ class Viewport(QOpenGLWidget):
             hit = cache.get(id(group))
             if hit is not None and hit[0] == key:
                 return hit[1]
-            obb = self._compute_obb(group)
+            fetch = getattr(self, "_proto_points_cache", None)   # stub VPs in tests
+            protos = fetch(group) if fetch is not None else None
+            obb = self._compute_obb(group, protos)
+            if fetch is not None:
+                self._proto_points_store(group, protos)
             if len(cache) > 256:            # ids of groups long gone
                 cache.clear()
             cache[id(group)] = (key, obb)
@@ -8173,13 +8177,68 @@ class Viewport(QOpenGLWidget):
         obb = entry["obb"] = self._compute_obb(group)
         return obb
 
+    def _proto_points_cache(self, group) -> dict:
+        """``{id(mesh): local points}`` of the prototypes under ``group``
+        that are still current. A prototype's LOCAL array only changes
+        when its mesh is edited — never when a placement moves — so an
+        entry is dropped when the mesh is the one open for editing (or
+        under a share-back) or a mutation primitive flagged it
+        (``_chunk_dirty``, O(1)). No chunk is built to find out: validating
+        against fresh local chunks built one per nested child, 384 ms on
+        the first box after entering the plaza."""
+        from core.group import iter_placements
+        store = getattr(self, "_proto_pts_store", None)
+        if store is None:
+            store = self._proto_pts_store = {}
+        editing = self._editing_meshes()
+        valid: dict = {}
+        for g, _m in iter_placements(group):
+            mesh = g.mesh
+            if mesh is None or not mesh.vertices or id(mesh) in valid:
+                continue
+            hit = store.get(id(mesh))
+            if hit is None:
+                continue
+            serial, arr = hit
+            if (id(mesh) in editing
+                    or getattr(mesh, "_mut_serial", None) != serial
+                    or len(arr) != len(mesh.vertices)):
+                del store[id(mesh)]
+                continue
+            valid[id(mesh)] = arr
+        return valid
+
+    def _editing_meshes(self) -> set:
+        """ids of the meshes a command can be mutating right now: the open
+        context's, and every level's share-back prototype."""
+        scene = self.scene
+        ids = {id(scene.mesh)}
+        for level in getattr(scene, "_edit_stack", None) or ():
+            share = level.get("share") if isinstance(level, dict) else None
+            if share:
+                ids.add(id(share[1]))                  # the prototype
+                ids.add(id(share[0].mesh))             # the working copy
+        return ids
+
+    def _proto_points_store(self, group, protos: dict) -> None:
+        store = self._proto_pts_store
+        if len(store) > 512:
+            store.clear()
+        from core.group import iter_placements
+        editing = self._editing_meshes()
+        serials = {id(g.mesh): getattr(g.mesh, "_mut_serial", None)
+                   for g, _m in iter_placements(group) if g.mesh is not None}
+        for mid, arr in protos.items():
+            if mid not in editing:
+                store[mid] = (serials.get(mid), arr)
+
     @staticmethod
-    def _compute_obb(group):
+    def _compute_obb(group, protos=None):
         from core.group import (frame_from_points, oriented_bounds,
                                 placement_points)
         # The corners come from the POINTS — never from a merged copy of the
         # component (see ``placement_points``).
-        pos = placement_points(group)
+        pos = placement_points(group, protos)
         world = oriented_bounds(None, points=pos)         # world axes
         own = oriented_bounds(None, frame_from_points(pos if len(pos) else None),
                               points=pos)
