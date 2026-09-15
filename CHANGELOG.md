@@ -70,6 +70,12 @@ de mediciones sobre la plaza de Yanque.
   de arrastre.
 
 ### Arreglado
+- **Empujar una pieza del borde hasta la cara opuesta la elimina** (la
+  esquina que deja un arco de redondeo, empujada hasta el fondo): la cara
+  trasera se recorta con el arco y no queda la tapa; antes solo se
+  perforaban aberturas interiores y el trozo del borde quedaba como una
+  lámina pegada al fondo. Si te pasas, el empuje se detiene justo en la cara
+  opuesta y recorta igual.
 - **El asistente IA reintenta cuando el proveedor está saturado** (el 503
   «high demand» de Gemini dejaba una casa en las paredes): hasta cuatro
   reintentos con espera creciente, avisando en el panel; los errores reales

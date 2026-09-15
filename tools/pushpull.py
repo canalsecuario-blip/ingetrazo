@@ -50,6 +50,7 @@ from core.history import (
     PruneOrphanEdgesCommand,
     SnapshotMutation,
     run_stitch,
+    subtract_loop_from_face,
     translate_points,
 )
 from core.arrangement import _interior_point, _point_in_polygon, plane_basis
@@ -1523,33 +1524,51 @@ class PushPullTool(Tool):
             back_loop = [v + push * dist for v in face.vertices]
             if loop_inside_face(g, back_loop):
                 if best is None or dist < best[0]:
-                    best = (dist, g, back_loop)
+                    best = (dist, g, back_loop, None)
+                continue
+            # Landing FLUSH on the far face with the opening on its rim — the
+            # corner piece left by a rounding arc pushed right through
+            # (Marco, 2026-09-15: «debería eliminarme ese triángulo como lo
+            # hace SketchUp»). Not a hole: the far face is trimmed to what
+            # is left of it (the arc becomes its outline) and the cap goes.
+            if abs(dist - abs(d)) <= 1e-4:
+                remainder = subtract_loop_from_face(g, back_loop)
+                if remainder is not None and (best is None or dist < best[0]):
+                    best = (dist, g, back_loop, remainder)
         if best is None:
             return None
-        return best[1], best[2]
+        return best[1], best[2], best[3]
 
     def _through_commands(self, face, base, through) -> list:
         """Build the commands for a through-hole: punch the far face, join it to
         the front opening with a tunnel, and sweep the dangling base edges."""
-        far_face, back_loop = through
+        far_face, back_loop, remainder = through
         count = len(base)
         commands: list = [
             DeleteFaceCommand(face),       # remove the pushed cap (window pane)
             DeleteFaceCommand(far_face),   # re-add the far face with a new hole
-            AddFaceCommand(
+        ]
+        if remainder is None:
+            commands.append(AddFaceCommand(
                 list(far_face.vertices), auto=False,
                 holes=[list(h) for h in far_face.holes] + [list(back_loop)],
-            ),
-        ]
-        for i in range(count):             # back opening boundary
-            commands.append(AddEdgeCommand(back_loop[i], back_loop[(i + 1) % count]))
+            ))
+            for i in range(count):         # back opening boundary
+                commands.append(AddEdgeCommand(back_loop[i], back_loop[(i + 1) % count]))
+        else:
+            # A notch on the rim: the far face becomes what is left of it;
+            # the opening's outline that ran along the old rim is nobody's
+            # edge any more and the prune below sweeps it.
+            commands.append(AddFaceCommand(
+                list(remainder), auto=False,
+                holes=[list(h) for h in far_face.holes]))
         for i in range(count):             # tunnel verticals
             commands.append(AddEdgeCommand(base[i], back_loop[i]))
         for i in range(count):             # tunnel walls
             j = (i + 1) % count
             commands.append(AddFaceCommand(
                 [base[i], base[j], back_loop[j], back_loop[i]], auto=False))
-        commands.append(PruneOrphanEdgesCommand(list(base)))
+        commands.append(PruneOrphanEdgesCommand(list(base) + list(back_loop)))
         return commands
 
     def _reset(self) -> None:
