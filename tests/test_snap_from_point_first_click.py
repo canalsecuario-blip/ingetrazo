@@ -11,6 +11,8 @@ the from-point while a segment was under way.
 """
 from __future__ import annotations
 
+import math
+
 from PySide6.QtGui import QVector3D
 
 from core.scene import Scene
@@ -88,3 +90,54 @@ def test_the_viewport_keeps_the_hovered_corner_before_the_first_click():
     away_px = vp._world_to_pixel(V(2, 0, 1))
     vp._process_hover(QPointF(*away_px), Qt.NoModifier)
     assert (vp._acquired_point - V(4, 0, 3)).length() < 1e-6      # still encouraged
+
+
+def test_hovering_a_circles_rim_encourages_its_centre(monkeypatch):
+    """Marco's capture of SketchUp (2026-09-14): with the Circle tool on
+    another circle's rim, the dotted line runs from THAT circle's centre —
+    the centre is an encouraged point like a corner."""
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    import pytest
+    from PySide6.QtCore import QPointF, Qt
+    from PySide6.QtWidgets import QApplication
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication([])
+    elif not isinstance(app, QApplication):
+        pytest.skip("another Qt application flavour is already running")
+    from views.viewport import Viewport
+    from tools.circle import CircleTool
+    from tools.base import ToolContext
+    vp = Viewport(None)
+    vp.resize(1000, 600)
+    vp.camera.set_aspect(1000, 600)
+    vp.flash_status = lambda *a, **k: None
+    vp.camera.set_view("top")
+    vp.camera.target = V(3, 2, 0)
+    vp.camera.distance = 12
+    tool = CircleTool()
+    vp.set_active_tool(tool)
+
+    def ctx(world):
+        return ToolContext(viewport=vp, world=world, screen=QPointF(0, 0),
+                           modifiers=Qt.NoModifier, snap=None)
+    tool.on_click(ctx(V(2, 2, 0)))
+    tool.on_click(ctx(V(3, 2, 0)))                  # a circle, centre (2,2), r = 1
+    assert len(vp.scene.mesh.edges) >= 12
+    tool2 = CircleTool()
+    vp.set_active_tool(tool2)
+    # The rim between two of its vertices (a vertex under the cursor would
+    # rightly be the encouraged point instead).
+    a0, a1 = 0.0, 2 * math.pi / tool.sides
+    mid = V(2 + (math.cos(a0) + math.cos(a1)) / 2, 2 + (math.sin(a0) + math.sin(a1)) / 2, 0)
+    rim_px = vp._world_to_pixel(mid)
+    vp._process_hover(QPointF(*rim_px), Qt.NoModifier)   # hover the rim
+    assert vp._acquired_point is not None
+    assert (vp._acquired_point - V(2, 2, 0)).length() < 1e-3
+    far_px = vp._world_to_pixel(V(5, 2.02, 0))          # level with the centre, along red
+    vp._process_hover(QPointF(*far_px), Qt.NoModifier)
+    snap = vp.last_snap
+    assert snap.kind == "from_point", snap.kind
+    assert abs(snap.point.y() - 2.0) < 1e-6 and abs(snap.point.x() - 5.0) < 0.05
+    assert (snap.guide[0] - V(2, 2, 0)).length() < 1e-3

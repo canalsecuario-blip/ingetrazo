@@ -7956,8 +7956,9 @@ class Viewport(QOpenGLWidget):
                 found = self._center_of_face(face, group, mesh, x, y)
         if found is not None:
             self._center_ref = found
-        else:
-            self._valid_center_ref()
+            return found
+        self._valid_center_ref()
+        return None
 
     def _center_of_edge(self, edge, mesh):
         from core.snap import fit_circle
@@ -9032,8 +9033,12 @@ class Viewport(QOpenGLWidget):
         _hmark("pickedge")
         if self.active_tool is not None and self.active_tool.uses_snap:
             # Only the tools that snap can use a centre; Select and
-            # Push/Pull never pay for the fit.
-            self._update_center_ref(ev.position().x(), ev.position().y())
+            # Push/Pull never pay for the fit. Hovering the rim ENCOURAGES
+            # the centre like a corner: the dotted axis line then runs from
+            # it (SketchUp; Marco's capture, 2026-09-14 — a circle placed
+            # in line with another's centre).
+            self._hover_center = self._update_center_ref(
+                ev.position().x(), ev.position().y())
 
         # While a segment is being drawn, hovering an edge acquires it as a soft
         # parallel reference; the acquisition is dropped once nothing is in
@@ -9049,6 +9054,12 @@ class Viewport(QOpenGLWidget):
             corner = self.pick_vertex(ev.position().x(), ev.position().y())
             if corner is not None:
                 self._acquired_point = corner
+            center = getattr(self, "_hover_center", None)
+            # A circle's rim: its centre is the point worth remembering, not
+            # the facet vertex the cursor happens to sit on; on a face with
+            # arcs a real corner under the cursor still wins.
+            if center is not None and (corner is None or center[2][0] == "edge"):
+                self._acquired_point = QVector3D(center[0])
         if not drawing:
             self._acquired_edge = None
             self._acquired_face_normal = None
