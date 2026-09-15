@@ -9619,17 +9619,13 @@ class Viewport(QOpenGLWidget):
             self._acquired_edge = None
             self._acquired_face_normal = None
         else:
-            # These are references to the CURRENT hover. Keeping the previous
-            # edge/face when the cursor moves onto a guide activates an old
-            # parallel/perpendicular inference and can hide a real crossing.
-            self._acquired_edge = self._hover_edge
+            if self._hover_edge is not None:
+                self._acquired_edge = self._hover_edge
             face, _g = self.pick_face_placement(ev.position().x(), ev.position().y())
             if face is not None:
                 from core.snap import face_plane_world
                 self._acquired_face_normal = face_plane_world(
                     face, getattr(_g, "xform", None))[1]
-            else:
-                self._acquired_face_normal = None
 
         if self.active_tool is None:
             return

@@ -4,6 +4,21 @@ All notable changes to IngeTrazo are documented here.
 Format inspired by [Keep a Changelog](https://keepachangelog.com); versions
 follow [SemVer](https://semver.org).
 
+## [Sin publicar]
+
+### Arreglado
+- **Dos guías que se cruzan vuelven a dar su intersección** (PR #21 de @pacaeiro, issue #18). El motor de
+  snaps solo fabricaba el punto «intersection» con una línea de bloqueo
+  activa (una flecha de eje, un trazo perpendicular, una extensión), así
+  que el cruce de dos guías —que no propone dirección alguna— nunca se
+  ofrecía: el cursor resbalaba por la guía más cercana («on_edge») y el «X»
+  verde no aparecía, aunque una guía sola sí se podía snapear. Ahora se
+  recogen las aristas que pasan bajo el cursor y se cruzan de dos en dos en
+  3-D —por debajo de los vértices y de los bloqueos, por encima del punto
+  medio y del borde—. Una guía sola sigue dando «on_edge»; las paralelas y
+  las que se cruzan solo en proyección (separadas en el espacio) no
+  inventan un punto.
+
 ## [0.4.1] — 2026-09-15
 
 ### Arreglado
@@ -321,19 +336,6 @@ punteadas y los iconos grandes.
   (`_draw_snap_indicator`), los dos únicos trazos punteados de extensión
   ilimitada del visor: la caja de selección, los contornos de imagen y los
   planos de sección viven dentro de la pantalla y no sufrían esto.
-
-### Arreglado
-- **Dos guías que se cruzan vuelven a dar su intersección.** El motor de
-  snaps solo fabricaba el punto «intersection» con una línea de bloqueo
-  activa (una flecha de eje, un trazo perpendicular, una extensión), así
-  que el cruce de dos guías —que no propone dirección alguna— nunca se
-  ofrecía: el cursor resbalaba por la guía más cercana («on_edge») y el «X»
-  verde no aparecía, aunque una guía sola sí se podía snapear. Ahora se
-  recogen las aristas que pasan bajo el cursor y se cruzan de dos en dos en
-  3-D —por debajo de los vértices y de los bloqueos, por encima del punto
-  medio y del borde—. Una guía sola sigue dando «on_edge»; las paralelas y
-  las que se cruzan solo en proyección (separadas en el espacio) no
-  inventan un punto.
 
 ## [0.3.18] — 2026-09-12
 
