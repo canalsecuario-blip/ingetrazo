@@ -230,7 +230,8 @@ def test_parse_value_buffer_units_and_sign():
     assert parse("1;2;50cm") == (1.0, 2.0, 0.5)
     assert parse("-30cm") == -0.3
     assert parse("abc") is None
-    assert parse("2x") is None
+    assert parse("2x") == ("array", 2, "x")   # SketchUp array (Move-copy)
+    assert parse("2xy") is None
 
 
 # ---- clamp: el aviso del límite -------------------------------------------
