@@ -4,6 +4,15 @@ All notable changes to IngeTrazo are documented here.
 Format inspired by [Keep a Changelog](https://keepachangelog.com); versions
 follow [SemVer](https://semver.org).
 
+## [Sin publicar]
+
+### Arreglado
+- **El origen gana a las inferencias lineales**: al acercarte al origen del
+  dibujo alineado con un punto «animado» o con el eje rojo, el clic caía a
+  milímetros del origen (proyección sobre el eje) y quedaban tramos
+  diminutos; el origen es un punto con nombre, como una esquina, y ahora
+  manda sobre «Desde el punto» y el eje.
+
 ## [0.4.0] — 2026-09-15
 
 **La inferencia a la altura de SketchUp, el visor más rápido, y las tres

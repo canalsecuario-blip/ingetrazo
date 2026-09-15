@@ -936,6 +936,13 @@ def compute_snap(
                 continue
             else:
                 plain.append(edge)
+        # The world origin is a point inference like a corner (SketchUp's
+        # "Origin"), so it must beat the LINEAR inferences of rule 5 — it
+        # sat in rule 6, behind 'from point' and the axis line, and a
+        # cursor aligned with an encouraged point or the red axis clicked
+        # millimetres beside it, leaving stubs along the axis (Marco,
+        # 2026-09-15: «me quiero poner en el origen y no se pone»).
+        _consider(QVector3D(0.0, 0.0, 0.0), "origin", COLOR_ORIGIN)
         for edge in plain:
             # SketchUp paints every point inference magenta when the
             # geometry is inside a group or component.
