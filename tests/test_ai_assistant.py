@@ -624,3 +624,52 @@ def test_each_provider_remembers_its_own_key_and_model(monkeypatch, tmp_path):
     finally:
         win._saved_version = win.viewport.scene.version
         win.close()
+
+
+def test_a_busy_provider_is_retried_with_backoff(monkeypatch):
+    import pytest
+    """Gemini's 503 «high demand» cut Marco's house short at the walls
+    (2026-09-15): the call is retried after a growing pause, telling the
+    caller each time; a real error (401) is not retried."""
+    import io
+    import urllib.error
+    from core import ai
+
+    calls = []
+    fails = [503, 503]
+
+    class _Resp(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def fake_urlopen(req, timeout=0):
+        calls.append(req.full_url)
+        if fails:
+            code = fails.pop(0)
+            raise urllib.error.HTTPError(req.full_url, code, "busy", {},
+                                         io.BytesIO(b'{"error": "high demand"}'))
+        return _Resp(b'{"choices": [{"message": {"content": "ok"}}]}')
+
+    monkeypatch.setattr(ai.urllib.request, "urlopen", fake_urlopen)
+    waits, told = [], []
+    out = ai._urlopen("https://x/v1/chat", {}, b"{}", retries=4,
+                      on_retry=lambda n, t, w, r: told.append((n, t, r[:8])),
+                      sleep=waits.append)
+    assert out.startswith(b'{"choices"')
+    assert len(calls) == 3 and waits == [2.0, 4.0]
+    assert told == [(1, 4, "HTTP 503"), (2, 4, "HTTP 503")]
+    # Out of retries: the error says how many tries it took.
+    fails[:] = [503] * 5
+    calls.clear()
+    with pytest.raises(RuntimeError, match="tras 3 intentos"):
+        ai._urlopen("https://x/v1/chat", {}, b"{}", retries=2, sleep=lambda s: None)
+    assert len(calls) == 3
+    # A 401 is final at once.
+    fails[:] = [401]
+    calls.clear()
+    with pytest.raises(RuntimeError, match="HTTP 401"):
+        ai._urlopen("https://x/v1/chat", {}, b"{}", retries=4, sleep=lambda s: None)
+    assert len(calls) == 1

@@ -1735,5 +1735,6 @@
  "Click an edge to round it (or select edges first); type the radius and Enter.": "Clic en una arista para redondearla (o selecciona aristas antes); teclea el radio y Enter.",
  "Click a point to measure, or an edge to pull a guide. Arrows lock an axis.": "Clic en un punto para medir, o en una arista para sacar una guía. Las flechas fijan un eje.",
  "Drag the texture or a pin: red moves, green scales/rotates, blue shears. Enter finishes.": "Arrastra la textura o un pin: rojo mueve, verde escala/rota, azul cizalla. Enter termina.",
- "Drag to orbit. Shift = pan. Wheel = zoom. The middle button orbits from any tool.": "Arrastra para orbitar. Mayús = desplazar. Rueda = zoom. El botón central orbita desde cualquier herramienta."
+ "Drag to orbit. Shift = pan. Wheel = zoom. The middle button orbits from any tool.": "Arrastra para orbitar. Mayús = desplazar. Rueda = zoom. El botón central orbita desde cualquier herramienta.",
+ "The provider is busy ({why}) — retry {n} of {total} in {wait} s…": "El proveedor está saturado ({why}): reintento {n} de {total} en {wait} s…"
 }

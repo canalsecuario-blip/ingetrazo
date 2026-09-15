@@ -24,6 +24,7 @@ import math
 import sys
 import traceback
 import urllib.error
+import time
 import urllib.request
 
 from core.history import SnapshotImport
@@ -351,34 +352,64 @@ def parse_reply(provider: str, raw: bytes) -> str:
     return choices[0].get("message", {}).get("content", "") or ""
 
 
+#: HTTP statuses worth another try: the provider is busy or rate-limited
+#: (Gemini's 503 «high demand», 429, the 5xx family, Anthropic's 529).
+RETRY_STATUSES = frozenset({429, 500, 502, 503, 504, 529})
+#: Seconds before retry n (1-based): 2, 4, 8, 16 — capped.
+RETRY_BACKOFF = (2.0, 4.0, 8.0, 16.0)
+
+
 def _urlopen(url: str, headers: dict, payload: bytes | None = None,
-             timeout: float = 180.0) -> bytes:
+             timeout: float = 180.0, retries: int = 0, on_retry=None,
+             sleep=time.sleep) -> bytes:
     """One HTTP round trip with the readable error shaping every caller
-    wants (the raw body is the useful part of a provider error)."""
-    req = urllib.request.Request(url, data=payload, headers=headers,
-                                 method="POST" if payload else "GET")
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return resp.read()
-    except urllib.error.HTTPError as exc:
-        detail = ""
+    wants (the raw body is the useful part of a provider error).
+
+    With ``retries``, a busy provider (:data:`RETRY_STATUSES`, or no
+    answer at all) is tried again after a growing pause; ``on_retry(n,
+    total, wait, reason)`` is told each time so a chat panel can say so.
+    Marco asked for a house and Gemini's 503 «high demand» cut it short
+    at the walls (2026-09-15): one spike must not end the recipe."""
+    attempt = 0
+    while True:
+        req = urllib.request.Request(url, data=payload, headers=headers,
+                                     method="POST" if payload else "GET")
         try:
-            detail = exc.read().decode()[:400]
-        except OSError:
-            pass
-        raise RuntimeError(f"HTTP {exc.code}: {detail or exc.reason}")
-    except urllib.error.URLError as exc:
-        raise RuntimeError(f"sin conexión: {exc.reason}")
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return resp.read()
+        except urllib.error.HTTPError as exc:
+            detail = ""
+            try:
+                detail = exc.read().decode()[:400]
+            except OSError:
+                pass
+            reason = f"HTTP {exc.code}: {detail or exc.reason}"
+            if exc.code not in RETRY_STATUSES or attempt >= retries:
+                if attempt:
+                    reason += f" (tras {attempt + 1} intentos)"
+                raise RuntimeError(reason)
+        except urllib.error.URLError as exc:
+            reason = f"sin conexión: {exc.reason}"
+            if attempt >= retries:
+                raise RuntimeError(reason)
+        wait = RETRY_BACKOFF[min(attempt, len(RETRY_BACKOFF) - 1)]
+        attempt += 1
+        if on_retry is not None:
+            on_retry(attempt, retries, wait, reason)
+        sleep(wait)
 
 
 def chat(provider: str, model: str, api_key: str, system: str,
          messages: list, ollama_url: str = "http://localhost:11434",
-         timeout: float = 180.0, max_tokens: int = 4096) -> str:
+         timeout: float = 180.0, max_tokens: int = 4096,
+         retries: int = 4, on_retry=None) -> str:
     """One blocking chat turn. Raises with a readable message on failure —
-    callers run this in a worker thread, never on the UI thread."""
+    callers run this in a worker thread, never on the UI thread. A busy
+    provider is retried ``retries`` times (see :func:`_urlopen`)."""
     url, headers, payload = build_request(
         provider, model, api_key, system, messages, ollama_url, max_tokens)
-    return parse_reply(provider, _urlopen(url, headers, payload, timeout))
+    return parse_reply(provider, _urlopen(url, headers, payload, timeout,
+                                          retries=retries, on_retry=on_retry))
 
 
 #: Substrings of model ids that are not chat models (speech, safety,

@@ -62,6 +62,10 @@ de mediciones sobre la plaza de Yanque.
   de arrastre.
 
 ### Arreglado
+- **El asistente IA reintenta cuando el proveedor está saturado** (el 503
+  «high demand» de Gemini dejaba una casa en las paredes): hasta cuatro
+  reintentos con espera creciente, avisando en el panel; los errores reales
+  (clave inválida) siguen cortando al momento.
 - **Bloquear un eje con la flecha ya lee la referencia bajo el cursor** (B3
   de Rafael, 04:20): Medir desde la arista inferior del muro, ↑, y el cursor
   sobre la esquina o el alféizar de la ventana → la guía toma esa altura,

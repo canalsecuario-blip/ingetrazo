@@ -428,10 +428,17 @@ class AsistenteDialog(QDialog):
 
         budget = TOKENS_BY_PROVIDER.get(provider, MAX_TOKENS)
 
+        def on_retry(n, total, wait, reason) -> None:
+            # A busy provider (Gemini's 503 «high demand»): say so and
+            # wait, instead of ending the recipe at the walls.
+            self._reply.emit({"retry": True, "n": n, "total": total,
+                              "wait": wait, "reason": reason})
+
         def worker() -> None:
             try:
                 text = ai.chat(provider, model, key, SYSTEM_PROMPT, convo,
-                               ollama_url=ollama, max_tokens=budget)
+                               ollama_url=ollama, max_tokens=budget,
+                               on_retry=on_retry)
                 self._reply.emit({"ok": True, "text": text})
             except Exception as exc:  # noqa: BLE001 — shown in the chat
                 self._reply.emit({"ok": False, "error": str(exc)})
@@ -439,6 +446,14 @@ class AsistenteDialog(QDialog):
         threading.Thread(target=worker, daemon=True).start()
 
     def _on_reply(self, msg: dict) -> None:
+        if msg.get("retry"):
+            reason = str(msg.get("reason", ""))
+            short = reason.split(":", 1)[0]
+            self._append(tr(
+                "The provider is busy ({why}) — retry {n} of {total} in {wait} s…",
+                why=short, n=msg.get("n"), total=msg.get("total"),
+                wait=int(msg.get("wait", 0))), "muted")
+            return
         if msg.get("modelos"):
             self._modelos.setEnabled(True)
             if msg.get("ok"):
