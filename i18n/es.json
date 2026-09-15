@@ -1736,5 +1736,7 @@
  "Click a point to measure, or an edge to pull a guide. Arrows lock an axis.": "Clic en un punto para medir, o en una arista para sacar una guía. Las flechas fijan un eje.",
  "Drag the texture or a pin: red moves, green scales/rotates, blue shears. Enter finishes.": "Arrastra la textura o un pin: rojo mueve, verde escala/rota, azul cizalla. Enter termina.",
  "Drag to orbit. Shift = pan. Wheel = zoom. The middle button orbits from any tool.": "Arrastra para orbitar. Mayús = desplazar. Rueda = zoom. El botón central orbita desde cualquier herramienta.",
- "The provider is busy ({why}) — retry {n} of {total} in {wait} s…": "El proveedor está saturado ({why}): reintento {n} de {total} en {wait} s…"
+ "The provider is busy ({why}) — retry {n} of {total} in {wait} s…": "El proveedor está saturado ({why}): reintento {n} de {total} en {wait} s…",
+ "The AI bridge is listening on 127.0.0.1:{port}. Connect ANY MCP client — MCP is an open standard: Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, Gemini CLI, Codex CLI…": "El puente IA está escuchando en 127.0.0.1:{port}. Conecta CUALQUIER cliente MCP (MCP es un estándar abierto): Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, Gemini CLI, Codex CLI…",
+ "Other clients take the same block in their own file:": "Los demás clientes toman el mismo bloque en su propio archivo:"
 }

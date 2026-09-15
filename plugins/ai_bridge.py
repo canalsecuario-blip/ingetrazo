@@ -239,21 +239,38 @@ def desktop_config_path(platform: str | None = None) -> str:
     return "~/.config/Claude/claude_desktop_config.json"
 
 
+#: Where the common MCP clients read a ``mcpServers`` block like the one the
+#: dialog prints (the same JSON, or the equivalent, works in every one:
+#: MCP is an open standard, not a Claude feature).
+OTHER_CLIENTS = (
+    ("Cursor", "~/.cursor/mcp.json"),
+    ("VS Code (Copilot)", ".vscode/mcp.json  (key \"servers\")"),
+    ("Windsurf", "~/.codeium/windsurf/mcp_config.json"),
+    ("Gemini CLI", "~/.gemini/settings.json"),
+    ("Codex CLI", "~/.codex/config.toml  ([mcp_servers.ingetrazo])"),
+)
+
+
 def connect_instructions(port: int, platform: str | None = None, **kw) -> str:
-    """Copy-and-paste text for the two Claude clients, for the dialog the
-    Extensions entry shows once the bridge is up."""
+    """Copy-and-paste text for the dialog the Extensions entry shows once
+    the bridge is up: Claude Code's one-liner, the JSON every other MCP
+    client takes, and where each of them reads it."""
     cmd = mcp_command(platform, **kw)
     quoted = " ".join(f'"{c}"' if " " in c else c for c in cmd)
     config = {"mcpServers": {"ingetrazo": {"command": cmd[0], "args": cmd[1:]}}}
+    others = "\n".join(f"    {name}: {path}" for name, path in OTHER_CLIENTS)
     return (
-        tr("The AI bridge is listening on 127.0.0.1:{port}. Connect a Claude client:",
-           port=port)
+        tr("The AI bridge is listening on 127.0.0.1:{port}. Connect ANY MCP "
+           "client — MCP is an open standard: Claude Code, Claude Desktop, "
+           "Cursor, VS Code, Windsurf, Gemini CLI, Codex CLI…", port=port)
         + "\n\n"
         + tr("Claude Code (in a terminal):") + "\n"
         + f"    claude mcp add ingetrazo -- {quoted}\n\n"
         + tr("Claude Desktop: add this to {path} and restart Claude Desktop:",
              path=desktop_config_path(platform)) + "\n"
         + json.dumps(config, indent=2) + "\n\n"
+        + tr("Other clients take the same block in their own file:") + "\n"
+        + others + "\n\n"
         + tr("Keep IngeTrazo open with the bridge on; the tools answer only while it runs.")
     )
 
