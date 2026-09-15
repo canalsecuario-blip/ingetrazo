@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
-from PySide6.QtCore import Qt, QSettings, QEvent, QCoreApplication
+from PySide6.QtCore import Qt, QSettings, QEvent, QCoreApplication, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QKeySequence, QVector3D
 from PySide6.QtWidgets import (
     QFileDialog,
@@ -1276,8 +1276,21 @@ class MainWindow(QMainWindow):
         bar.addPermanentWidget(self._vcb_value)
 
         self.viewport.valueBufferChanged.connect(self._on_value_buffer)
-        self.viewport.measurementChanged.connect(self._on_measurement)
-        self.viewport.coordinateChanged.connect(self._coord_label.setText)
+        # The coordinate and measurement texts change on EVERY mouse move;
+        # each setText dirties the status bar and Qt flushes the top-level
+        # window's backing store (3072×1920 px at scale 2 on Marco's
+        # laptop) — measured 2026-09-14 on the plaza: frames p90 190 ms with
+        # the labels live, 57 ms with them frozen. They now settle at most
+        # ~12 times a second, and only when the text actually changed.
+        self._status_pending: dict = {}
+        self._status_timer = QTimer(self)
+        self._status_timer.setSingleShot(True)
+        self._status_timer.setInterval(self.STATUS_TEXT_MS)
+        self._status_timer.timeout.connect(self._flush_status_texts)
+        self.viewport.measurementChanged.connect(
+            lambda text: self._queue_status_text("measurement", text))
+        self.viewport.coordinateChanged.connect(
+            lambda text: self._queue_status_text("coordinate", text))
 
     _VCB_IDLE_STYLE = (
         "color:#0F141B; background:#FFFFFF; border:1px solid #9aa3ad;"
@@ -1291,6 +1304,23 @@ class MainWindow(QMainWindow):
     def _on_value_buffer(self, text: str) -> None:
         self._vcb_buffer = text
         self._refresh_vcb()
+
+    #: How often the per-hover status texts may repaint (ms).
+    STATUS_TEXT_MS = 80
+
+    def _queue_status_text(self, which: str, text: str) -> None:
+        self._status_pending[which] = text
+        if not self._status_timer.isActive():
+            self._status_timer.start()
+
+    def _flush_status_texts(self) -> None:
+        pending, self._status_pending = self._status_pending, {}
+        coord = pending.get("coordinate")
+        if coord is not None and coord != self._coord_label.text():
+            self._coord_label.setText(coord)
+        meas = pending.get("measurement")
+        if meas is not None and meas != getattr(self, "_vcb_live", None):
+            self._on_measurement(meas)
 
     def _on_measurement(self, text: str) -> None:
         self._vcb_live = text
