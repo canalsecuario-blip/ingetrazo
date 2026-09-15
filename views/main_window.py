@@ -1869,22 +1869,34 @@ class MainWindow(QMainWindow):
         menu.exec(global_pos)
 
     def _single_textured_face(self):
-        """The one selected face carrying an image texture, else ``None``
-        (SketchUp offers Texture ▸ Position for exactly one face)."""
+        """``(face, side)``: the one selected face with an image texture on
+        the side the right-click saw — SketchUp's Texture menu acts on the
+        side you click; when only the other side carries an image, that
+        one (Marco painted the underside of a slab from above, 2026-09-15).
+        ``None`` otherwise."""
         from core.mesh import Face
+        from tools.paint import clicked_back_side
+        from tools.texture_position import TexturePositionTool
         faces = [e for e in self.viewport.scene.selection if isinstance(e, Face)]
         if len(faces) != 1:
             return None
-        tex = (faces[0].attrs or {}).get("texture")
-        if not tex or not tex.get("path"):
-            return None
-        return faces[0]
+        face = faces[0]
+        px = getattr(self.viewport, "_context_pixel", None)
+        clicked = "front"
+        if px is not None and clicked_back_side(self.viewport, face, None, px[0], px[1]):
+            clicked = "back"
+        other = "back" if clicked == "front" else "front"
+        for side in (clicked, other):
+            if TexturePositionTool.side_texture(face, side) is not None:
+                return face, side
+        return None
 
     def _on_texture_position(self) -> None:
         """Texture ▸ Position: the pins on the tile under the right-click."""
-        face = self._single_textured_face()
-        if face is None:
+        hit = self._single_textured_face()
+        if hit is None:
             return
+        face, side = hit
         tool = self._tools["texture_position"]
         at = None
         px = getattr(self.viewport, "_context_pixel", None)
@@ -1895,21 +1907,23 @@ class MainWindow(QMainWindow):
                 p0, n = face_plane_world(face, None)
                 at = self.viewport._ray_plane(origin, direction, p0, n)
         self._activate_tool("texture_position")
-        if not tool.begin(self.viewport, face, at):
+        if not tool.begin(self.viewport, face, at, side=side):
             self._activate_tool("select")
 
     def _on_texture_reset(self) -> None:
         """Texture ▸ Reset Position: back to the default planar projection
-        (no per-face map, no rotation)."""
-        face = self._single_textured_face()
-        if face is None:
+        (no per-face map, no rotation) on the clicked side."""
+        hit = self._single_textured_face()
+        if hit is None:
             return
-        tex = face.attrs.get("texture") or {}
+        face, side = hit
+        from tools.texture_position import TexturePositionTool
+        tex = TexturePositionTool.side_texture(face, side) or {}
         if "uvw" not in tex and "rot" not in tex:
             return
-        from core.history import SetFaceTextureCommand
         flat = {k: v for k, v in tex.items() if k not in ("uvw", "rot")}
-        self.viewport.history.execute(SetFaceTextureCommand([face], flat))
+        self.viewport.history.execute(
+            TexturePositionTool.side_command(face, side, flat))
         self.viewport.update()
 
     def _on_hide_edges(self) -> None:

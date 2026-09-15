@@ -224,3 +224,27 @@ def test_a_face_without_an_image_is_refused(viewport):
     tool = TexturePositionTool()
     assert not tool.begin(viewport, face, QVector3D(1, 1, 0))
     assert not tool.active
+
+
+def test_the_back_side_texture_is_positioned_and_stored_on_the_back(viewport):
+    face = _textured_square(viewport)
+    face.attrs.pop("texture")
+    face.attrs["back"] = {"texture": dict(TEX), "mat": "brick_clay"}
+    tool = TexturePositionTool()
+    viewport.set_active_tool(tool)
+    assert TexturePositionTool.side_texture(face, "front") is None
+    assert not tool.begin(viewport, face, QVector3D(0.7, 0.3, 0), side="front")
+    assert tool.begin(viewport, face, QVector3D(0.7, 0.3, 0), side="back")
+    _drag(viewport, tool, (0.5, 0, 0), (0.8, 0.2, 0))
+    assert tool.on_key(viewport, Qt.Key_Return, Qt.NoModifier)
+    assert "texture" not in face.attrs                 # the front stays bare
+    back = face.attrs["back"]
+    assert back["mat"] == "brick_clay" and len(back["texture"]["uvw"]) == 8
+    viewport.history.undo()
+    assert "uvw" not in face.attrs["back"]["texture"]
+    # Reset on the back side clears its map too.
+    viewport.history.redo()
+    cmd = TexturePositionTool.side_command(
+        face, "back", {k: v for k, v in back["texture"].items() if k != "uvw"})
+    viewport.history.execute(cmd)
+    assert "uvw" not in face.attrs["back"]["texture"]

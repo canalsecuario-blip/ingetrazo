@@ -164,6 +164,7 @@ class TexturePositionTool(Tool):
 
     def __init__(self) -> None:
         self.face = None
+        self.side = "front"
         self._tex0: dict | None = None
         self._entry: TextureMap | None = None
         self.map: TextureMap | None = None
@@ -182,12 +183,32 @@ class TexturePositionTool(Tool):
         self._plane = None
 
     # ---- Entry ----------------------------------------------------------------
-    def begin(self, viewport, face, at: QVector3D | None = None) -> bool:
-        """Start positioning ``face``'s texture with the pins on the tile
-        under ``at``. Returns False when the face has no image texture."""
-        tex = (getattr(face, "attrs", None) or {}).get("texture")
+    @staticmethod
+    def side_texture(face, side: str):
+        """The image texture dict of ``face``'s ``side`` ("front"/"back"),
+        or ``None``. A back painted as a mirror of the front (``True``)
+        has no texture of its own."""
+        attrs = getattr(face, "attrs", None) or {}
+        if side == "back":
+            back = attrs.get("back")
+            tex = back.get("texture") if isinstance(back, dict) else None
+        else:
+            tex = attrs.get("texture")
         if not tex or not tex.get("path"):
+            return None
+        return tex
+
+    def begin(self, viewport, face, at: QVector3D | None = None,
+              side: str = "front") -> bool:
+        """Start positioning the texture of ``face``'s ``side`` with the
+        pins on the tile under ``at``. Returns False when that side has no
+        image texture. The back side projects with the same plane basis as
+        the front (the renderer builds both from the face normal), so one
+        map serves either; only where it is stored differs."""
+        tex = self.side_texture(face, side)
+        if tex is None:
             return False
+        self.side = side
         m = TextureMap.from_face(face, tex, at)
         if m is None:
             return False
@@ -520,9 +541,23 @@ class TexturePositionTool(Tool):
         if self.changed():
             tex = self.result_texture()
             if tex is not None:
-                from core.history import SetFaceTextureCommand
-                viewport.history.execute(SetFaceTextureCommand([self.face], tex))
+                viewport.history.execute(self.side_command(self.face, self.side, tex))
         self._exit(viewport)
+
+    @staticmethod
+    def side_command(face, side: str, tex: dict | None):
+        """The undoable command that puts ``tex`` on ``face``'s ``side``
+        (``None`` clears the texture of that side)."""
+        if side == "back":
+            from core.history import SetFaceBackCommand
+            back = dict(face.attrs.get("back") or {})
+            if tex is None:
+                back.pop("texture", None)
+            else:
+                back["texture"] = dict(tex)
+            return SetFaceBackCommand([face], [back])
+        from core.history import SetFaceTextureCommand
+        return SetFaceTextureCommand([face], tex)
 
     def cancel(self, viewport) -> None:
         self._exit(viewport)
