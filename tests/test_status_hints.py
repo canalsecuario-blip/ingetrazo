@@ -85,6 +85,10 @@ def test_the_message_keeps_to_the_left_half_of_the_bar():
     bar.resize(1600, 28)
     app.processEvents()
     assert bar._msg.maximumWidth() == 800
+    bar.showMessage("Select objects.")
+    app.processEvents()
+    assert bar._msg.x() < 200                   # glued to the left, after the strip
+    assert bar._msg.width() >= 700
     bar.resize(200, 28)
     app.processEvents()
     assert bar._msg.maximumWidth() == 120       # never squeezed to nothing
