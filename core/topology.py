@@ -181,12 +181,25 @@ def segment_intersection(
     if len1 < tol or len2 < tol:
         return None
 
-    a = QVector3D.dotProduct(d1, d1)
-    b = QVector3D.dotProduct(d1, d2)
-    c = QVector3D.dotProduct(d2, d2)
+    # Solve with unit directions. Guide lines are represented as segments of
+    # +/- 10 km; using the raw vectors makes ``a*c - b*b`` subtract values
+    # around 1e17 in float32 and loses the determinant for ordinary crossings.
+    # Keeping the direction products near one avoids that cancellation while
+    # preserving the segment parameters below in world units.
+    components = lambda vector: (float(vector.x()), float(vector.y()),
+                                 float(vector.z()))
+    d1c = components(d1)
+    d2c = components(d2)
+    u1 = tuple(component / len1 for component in d1c)
+    u2 = tuple(component / len2 for component in d2c)
+    dot = lambda left, right: sum(left[i] * right[i] for i in range(3))
+    a = dot(u1, u1)
+    b = dot(u1, u2)
+    c = dot(u2, u2)
     w0 = p1 - p3
-    d = QVector3D.dotProduct(d1, w0)
-    e = QVector3D.dotProduct(d2, w0)
+    w = components(w0)
+    d = dot(u1, w)
+    e = dot(u2, w)
     denom = a * c - b * b
     if denom < 1e-12:
         return None  # parallel or collinear
@@ -199,16 +212,23 @@ def segment_intersection(
     # vs endpoint later.
     margin1 = tol / len1
     margin2 = tol / len2
-    if not (-margin1 <= s <= 1.0 + margin1):
+    if not (-margin1 <= s / len1 <= 1.0 + margin1):
         return None
-    if not (-margin2 <= t <= 1.0 + margin2):
+    if not (-margin2 <= t / len2 <= 1.0 + margin2):
         return None
 
-    point_on_1 = p1 + d1 * s
-    point_on_2 = p3 + d2 * t
-    if (point_on_1 - point_on_2).length() > tol:
+    p1c = components(p1)
+    p3c = components(p3)
+    point_on_1 = tuple(p1c[i] + u1[i] * s for i in range(3))
+    point_on_2 = tuple(p3c[i] + u2[i] * t for i in range(3))
+    gap = sum((point_on_1[i] - point_on_2[i]) ** 2 for i in range(3)) ** 0.5
+    # QVector3D stores endpoints as float32. Long guide segments therefore
+    # carry a small, length-dependent rounding error after normalization.
+    distance_tol = max(tol, 1.0e-7 * max(len1, len2))
+    if gap > distance_tol:
         return None  # skew: lines pass without meeting
-    return (point_on_1 + point_on_2) * 0.5
+    return QVector3D(*((point_on_1[i] + point_on_2[i]) * 0.5
+                       for i in range(3)))
 
 
 def _order_along(a: QVector3D, b: QVector3D, points: list[QVector3D]) -> list[QVector3D]:

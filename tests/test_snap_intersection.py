@@ -58,6 +58,20 @@ def test_two_crossing_guides_snap_to_the_x():
     assert (r.point - V(2, 1, 0)).length() < 1e-3
 
 
+def test_three_long_guides_find_all_triangle_vertices():
+    # The viewport represents infinite guides as +/-10 km segments. The
+    # normalized intersection solver must not lose two crossings to float32
+    # cancellation in that representation.
+    scene = _scene(
+        _guide(V(0, 0, 0), (1, 0, 0)),
+        _guide(V(0, 0, 0), (0, 1, 0)),
+        _guide(V(10, 0, 0), (1, -1, 0)),
+    )
+    for point in (V(0, 0), V(10, 0), V(0, 10)):
+        result = _snap(scene, point)
+        assert result.kind in {"intersection", "origin"}, point
+
+
 def test_crossing_beats_on_edge_just_beside_it():
     # Cursor a few px off the X but still within the on-edge band of guide A:
     # the exact crossing must win over sliding along the guide.
