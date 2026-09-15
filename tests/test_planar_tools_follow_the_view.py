@@ -416,3 +416,44 @@ def test_paste_places_on_the_plane_through_the_clipboard_reference(viewport):
         assert abs(world.x() - 1.0) < 0.05
     finally:
         viewport.set_active_tool(None)
+
+
+def test_a_group_inserted_while_editing_a_container_becomes_its_child(viewport):
+    """Marco (2026-09-14): a roof pasted while editing the pergola landed at
+    the top level. Inside an open container, InsertGroupCommand (paste,
+    place, import) appends to the container's children; undo removes it
+    from there."""
+    from PySide6.QtGui import QMatrix4x4
+    from core.group import Group
+    from core.history import InsertGroupCommand
+    from core.mesh import Mesh
+    scene = viewport.scene
+    mesh = Mesh()
+    mesh.add_face([QVector3D(0, 0, 0), QVector3D(1, 0, 0), QVector3D(1, 1, 0), QVector3D(0, 1, 0)])
+    child = Group(mesh, "techo")
+    child.xform = QMatrix4x4()
+    container = Group(Mesh(), "pergola")
+    container.xform = QMatrix4x4()
+    container.children = [child]
+    scene.groups.append(container)
+    scene.version += 1
+    tops = len(scene.groups)
+    try:
+        scene.begin_group_edit(container)
+        copy = Group(mesh, "techo")
+        m = QMatrix4x4()
+        m.translate(0, 0, 3)
+        copy.xform = m
+        viewport.history.execute(InsertGroupCommand(copy))
+        assert copy in container.children and copy not in scene.groups
+        assert len(scene.groups) == tops
+        viewport.history.undo()
+        assert copy not in container.children
+        viewport.history.redo()
+        assert copy in container.children
+    finally:
+        while scene.edit_group is not None:
+            scene.end_one_group_edit()
+        if container in scene.groups:
+            scene.groups.remove(container)
+        scene.version += 1

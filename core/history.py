@@ -2692,21 +2692,53 @@ class GroupToComponentCommand(Command):
 
 
 class InsertGroupCommand(Command):
-    """Insert a ready-made Group (a bundled component, a future collection
-    item) into the scene, selected so the user can Move it into place."""
+    """Insert a ready-made Group (a bundled component, a paste, a future
+    collection item) into the scene, selected so the user can Move it into
+    place.
+
+    INSIDE an open container it goes into the container — SketchUp's rule
+    that whatever you create while editing a group belongs to it. A roof
+    pasted while editing the pergola used to land at the top level, beside
+    the plaza («se supone que todo lo que edite debería estar dentro del
+    grupo», Marco, 2026-09-14). The group arrives in WORLD coordinates and
+    is expressed in the container's own space when that one carries a
+    matrix (entering usually pushes it down into the children already)."""
 
     def __init__(self, group) -> None:
         self.group = group
+        self._owner: Optional[list] = None
+
+    @staticmethod
+    def _target(scene):
+        ctx = getattr(scene, "edit_group", None)
+        if ctx is not None and getattr(ctx, "children", None) is not None:
+            return ctx
+        return None
 
     def do(self, scene) -> None:
-        scene.groups.append(self.group)
+        ctx = self._target(scene)
+        if ctx is not None:
+            owner = ctx.children
+            if ctx.xform is not None:
+                inv, ok = ctx.xform.inverted()
+                if ok:
+                    from core.group import transformed_mesh
+                    if self.group.xform is not None:
+                        self.group.xform = inv * self.group.xform
+                    else:
+                        self.group.mesh = transformed_mesh(self.group.mesh, inv)
+        else:
+            owner = scene.groups
+        owner.append(self.group)
+        self._owner = owner
         scene.selection.clear()
         scene.selection.add(self.group)
         scene.version += 1
 
     def undo(self, scene) -> None:
-        if self.group in scene.groups:
-            scene.groups.remove(self.group)
+        owner = self._owner if self._owner is not None else scene.groups
+        if self.group in owner:
+            owner.remove(self.group)
         scene.selection.discard(self.group)
         scene.version += 1
 
