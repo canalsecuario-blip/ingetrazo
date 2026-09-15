@@ -18,6 +18,7 @@ import math
 from PySide6.QtGui import QVector3D
 
 from core.edits import build_add_edges
+from core.i18n import tr
 from core.history import AddFaceCommand
 from tools.base import PlaneLock, Tool, ToolContext
 
@@ -79,6 +80,16 @@ class RectangleTool(PlaneLock, Tool):
                 self.work_plane = self.locked_work_plane(ctx.world)
             return
         far, _ = self._square_corner(self.start_point, ctx.world)
+        du, dv = self._dimensions(self.start_point, far)
+        if abs(du) < 1e-6 or abs(dv) < 1e-6:
+            # A side of zero (the second corner on the first's row or
+            # column, an edge snap along one axis): SketchUp draws nothing.
+            # Committing it raised a degenerate-edge error deep in the
+            # history (Marco's log, 2026-09-14) and rolled back noisily.
+            flash = getattr(ctx.viewport, "flash_status", None)
+            if flash is not None:
+                flash(tr("Rectangle needs two sides — pick the opposite corner"))
+            return
         self._commit_rect(ctx.viewport, self._corners(self.start_point, far))
 
     def on_hover(self, ctx: ToolContext) -> None:

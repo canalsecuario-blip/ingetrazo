@@ -831,6 +831,13 @@ def compute_snap(
     et = edge_threshold_px if edge_threshold_px is not None else threshold_px
     best: Optional[tuple[float, QVector3D, str, tuple[float, float, float]]] = None
 
+    # Candidates within the snap radius, resolved LAZILY: sorted by screen
+    # distance and occlusion-tested in that order until the first visible
+    # one. Testing every candidate up front cast a ray per point — dozens
+    # per hover next to dense geometry (the plaza's pergola: 70 ms a move,
+    # measured 2026-09-14) for the same answer the nearest visible gives.
+    pending: list = []
+
     def _consider(
         world: QVector3D,
         kind: str,
@@ -838,20 +845,29 @@ def compute_snap(
         occludable: bool = True,
         context: Optional[str] = None,
     ) -> None:
-        nonlocal best
         px = world_to_pixel(world)
         if px is None:
             return
         d = math.hypot(px[0] - cx, px[1] - cy)
         if d > threshold_px:
             return
-        # Only snap to geometry the user can actually see — a vertex hidden
-        # behind a face shouldn't light up. The occlusion test is run after
-        # the cheap pixel filter so it only fires for points near the cursor.
-        if occludable and is_occluded is not None and is_occluded(world):
-            return
-        if best is None or d < best[0]:
-            best = (d, world, kind, color, context)
+        pending.append((d, world, kind, color, context, occludable))
+
+    def _resolve():
+        """The nearest visible candidate, or ``None``; clears the list."""
+        nonlocal best
+        pending.sort(key=lambda c: c[0])
+        chosen = None
+        for d, world, kind, color, context, occludable in pending:
+            # Only snap to geometry the user can actually see — a vertex
+            # hidden behind a face shouldn't light up.
+            if occludable and is_occluded is not None and is_occluded(world):
+                continue
+            chosen = (d, world, kind, color, context)
+            break
+        pending.clear()
+        best = chosen
+        return chosen
 
     # 4. Vertex snaps (close, endpoint) — the highest-priority discrete points.
     if (
@@ -862,6 +878,7 @@ def compute_snap(
         # The point being chained to is part of the live drawing, not hidden
         # scene geometry — never occlusion-cull it.
         _consider(chain_first_point, "close", COLOR_CLOSE, occludable=False)
+        _resolve()
     if best is None or best[2] != "close":
         # The named points first (a tie goes to the first considered): an
         # arc's midpoint that happens to fall on one of its facet vertices
@@ -891,6 +908,11 @@ def compute_snap(
             col = COLOR_IN_GROUP if getattr(edge, "in_group", False) else COLOR_ENDPOINT
             _consider(edge.a, "endpoint", col, context=getattr(edge, "context", None))
             _consider(edge.b, "endpoint", col, context=getattr(edge, "context", None))
+        # A "close" already chosen stands; otherwise the nearest visible of
+        # the named points and endpoints (named ones first on a tie — they
+        # were appended first and the sort is stable).
+        if best is None:
+            _resolve()
     if best is not None:
         return SnapResult(best[1], best[2], best[3], context=best[4])
 
@@ -1024,6 +1046,7 @@ def compute_snap(
                   COLOR_IN_GROUP if getattr(edge, "in_group", False)
                   else COLOR_MIDPOINT, context=getattr(edge, "context", None))
     _consider(QVector3D(0.0, 0.0, 0.0), "origin", COLOR_ORIGIN)
+    _resolve()
     if best is not None:
         return SnapResult(best[1], best[2], best[3], context=best[4])
 

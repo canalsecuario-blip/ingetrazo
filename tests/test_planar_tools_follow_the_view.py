@@ -200,3 +200,21 @@ def test_rectangle_shows_a_square_on_the_cursor_and_keeps_the_colour_while_drawi
     assert _plane_of(tool.rubber_band_lines()).x() < 1e-6
     tool._reset()
     assert tool.wireframe_color is None and tool.plane_lock is None
+
+
+def test_a_zero_sided_rectangle_is_refused_instead_of_raising(viewport):
+    """Marco's log (2026-09-14): «degenerate edge: endpoints weld to one
+    vertex» from the history — the second corner sat on the first's row.
+    SketchUp draws nothing; we say why."""
+    from tools.rectangle import RectangleTool
+    viewport.camera.set_view("iso")
+    said = []
+    viewport.flash_status = lambda text, *a, **k: said.append(text)
+    tool = RectangleTool()
+    viewport.active_tool = tool
+    before = len(viewport.scene.mesh.edges)
+    tool.on_click(_ctx(viewport, QVector3D(0, 0, 0), (0, 0)))
+    tool.on_click(_ctx(viewport, QVector3D(3, 0, 0), (0, 0)))    # same row: no height
+    assert len(viewport.scene.mesh.edges) == before
+    assert said and "two sides" in said[-1]
+    viewport.flash_status = lambda *a, **k: None
