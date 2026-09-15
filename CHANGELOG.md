@@ -6,10 +6,32 @@ follow [SemVer](https://semver.org).
 
 ## [Sin publicar]
 
-**La inferencia a la altura de SketchUp y el visor más rápido.** Revisión 1
-de Rafael (parte B) y una tarde de mediciones sobre la plaza de Yanque.
+**La inferencia a la altura de SketchUp, el visor más rápido, y las tres
+herramientas que faltaban.** Revisión 1 de Rafael (partes B y C) y una tarde
+de mediciones sobre la plaza de Yanque.
 
 ### Añadido
+- **Redondear (fillet)** — la herramienta que SketchUp no tiene. Clic en una
+  arista (o las aristas seleccionadas), mueve el cursor para fijar el radio o
+  tecléalo, clic: la arista se convierte en una tira tangente a las dos caras;
+  las tapas reciben el arco, las aristas encadenadas (el borde de una losa) se
+  unen a inglete y en las esquinas de tres aristas (una caja) aparece el
+  parche esférico. Cóncavas también. Lo que no se puede redondear lo dice y no
+  toca el modelo. «Ns» fija los segmentos.
+- **Posicionar textura** (clic derecho en una cara con imagen ▸ Textura ▸
+  Posicionar): los cuatro pines de SketchUp — rojo mueve, verde escala y
+  rota, azul escala y cizalla —, la textura semitransparente con su retícula
+  de baldosas, levantar un pin con un clic para clavarlo en una esquina, menú
+  interno Listo / Restablecer / Voltear / Girar / Deshacer, Enter termina y
+  Esc restaura. Textura ▸ Restablecer posición vuelve a la proyección por
+  defecto. (El pin amarillo de perspectiva se muestra pero aún no se arrastra.)
+- **Arco que redondea esquinas como SketchUp**: al empezar sobre una arista la
+  vista previa es el arco tangente (cian, «Tangente a la arista»); en la arista
+  contigua, a la misma distancia del vértice, se clava y se vuelve magenta;
+  doble clic ahí dibuja el arco y **recorta la esquina sola**; doble clic
+  cerca de otra esquina repite el mismo radio; Alt deja los tramos.
+  «Semicírculo» en la fase de curvatura y «Ns» segmentos (también rehace el
+  arco recién dibujado).
 - **Inferencia como en SketchUp**: rectángulo, círculo, polígono y arcos
   dibujan en el plano más perpendicular a la vista (de pie junto al
   horizonte, planos al orbitar arriba) y **enseñan el plano en el cursor**
