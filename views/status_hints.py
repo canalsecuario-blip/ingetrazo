@@ -25,9 +25,9 @@ HINTS: dict = {
                   "Click the opposite corner, or type width;height and Enter."),
     "rotated_rect": ("Click the first corner of the base edge.",
                      "Click the end of the base edge, then the height; or type it."),
-    "circle": ("Click the centre. Type the number of sides and Enter first, if you want.",
+    "circle": ("Click the centre. Arrows pick the plane; Down over an edge makes it perpendicular to the edge. Type the number of sides and Enter first, if you want.",
                "Click the radius, or type it and Enter."),
-    "polygon": ("Click the centre. Type the number of sides and Enter first, if you want.",
+    "polygon": ("Click the centre. Arrows pick the plane; Down over an edge makes it perpendicular to the edge. Type the number of sides and Enter first, if you want.",
                 "Click the radius, or type it and Enter."),
     "arc": {
         "idle": "Click the start point — on an edge to draw a tangent arc.",

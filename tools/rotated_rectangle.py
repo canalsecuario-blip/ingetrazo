@@ -308,6 +308,6 @@ class RotatedRectangleTool(PlaneLock, Tool):
         self.start_point = None
         self.base_point = None
         self.work_plane = None
-        self.plane_lock = None
+        self.clear_plane_lock()
         self.angle = 0.0
         self._locked = None

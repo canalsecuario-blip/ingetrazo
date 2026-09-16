@@ -241,4 +241,4 @@ class RectangleTool(PlaneLock, Tool):
         self.work_plane = None
         self.hover_plane = None
         self.wireframe_color = None
-        self.plane_lock = None
+        self.clear_plane_lock()

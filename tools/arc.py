@@ -733,7 +733,7 @@ class ArcTool(PlaneLock, Tool):
         self.end_point = None
         self.work_plane = None
         self.hover_plane = None
-        self.plane_lock = None
+        self.clear_plane_lock()
         self._tangent_dir = None
         self._snap_bulge = None
         self._bulge_kind = None
@@ -830,7 +830,7 @@ class ThreePointArcTool(PlaneLock, Tool):
         self.mid_point = None
         self.work_plane = None
         self.hover_plane = None
-        self.plane_lock = None
+        self.clear_plane_lock()
 
 
 class CenterArcTool(PlaneLock, Tool):
@@ -973,7 +973,7 @@ class CenterArcTool(PlaneLock, Tool):
         self.arm_point = None
         self.work_plane = None
         self.hover_plane = None
-        self.plane_lock = None
+        self.clear_plane_lock()
 
 
 class PieTool(CenterArcTool):

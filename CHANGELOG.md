@@ -32,6 +32,15 @@ SketchUp.
   largo del arrastre, fuera de los planos ortogonales; el ángulo se mide y
   la guía se coloca en ese plano inclinado. Rotar ya tenía el gesto; ahora
   lo comparten. Un clic seco conserva el plano inferido.
+- **Flecha «abajo»: el círculo perpendicular a una arista** (issue #10,
+  segunda parte). El bloqueo magenta de SketchUp (2016+) en el círculo, el
+  polígono, el rectángulo, el rectángulo girado y los arcos: antes del
+  primer clic, `↓` con el cursor sobre una arista fija el plano de dibujo
+  perpendicular a ella, y sobre una cara, paralelo a ella; `↓` otra vez lo
+  libera y una flecha de eje lo sustituye. El anillo del cursor se pinta
+  magenta mientras dura. Es el flujo de las tuberías de Pedro: la línea
+  inclinada del eje, `↓` sobre ella, centro en su extremo, radio y Sígueme,
+  sin rotar el círculo después.
 
 ### Arreglado
 - **Mover y Rotar ya no infieren contra sí mismos** (issue #19). Lo que se

@@ -44,9 +44,21 @@ class PlaneLock:
     a qué plano quiero dibujar apretando las teclas de desplazamiento»).
     Once the first point is down the arrows are the viewport's linear
     axis lock again, as always. The lock is spent by the shape (or Esc),
-    like SketchUp's."""
+    like SketchUp's.
+
+    The DOWN arrow is SketchUp's magenta reference lock (2016+): over an
+    edge the plane goes PERPENDICULAR to that edge, over a face PARALLEL
+    to it; Down again frees it. It is the native way to start a pipe's
+    circle on an inclined axis line, then Follow Me it (issue #10,
+    @pacaeiro: «I draw lines to represent the axis of the tubes … then
+    have to rotate [the circle] to align the normal of the circle's plane
+    to the line»)."""
 
     plane_lock: str | None = None
+    #: Down-arrow reference lock: ``(normal, kind)``, kind ``"edge"`` (the
+    #: plane perpendicular to the hovered edge) or ``"face"`` (parallel to
+    #: the hovered face). Exclusive with ``plane_lock``: the last key wins.
+    plane_ref: tuple[QVector3D, str] | None = None
     #: The plane the viewport used for the last cursor hit (`_last_work_plane`).
     #: A shape started on a free point (no face, no lock) has no captured
     #: ``work_plane``; its geometry is laid out on THIS plane instead, which
@@ -108,7 +120,11 @@ class PlaneLock:
         return None
 
     def lock_color(self):
-        """The rubber band's colour while an arrow-key lock is on."""
+        """The rubber band's colour while an arrow-key lock is on: the axis
+        colour, or SketchUp's magenta for the Down-arrow reference."""
+        if self.plane_ref is not None:
+            from core.snap import COLOR_REFERENCE
+            return (*COLOR_REFERENCE, 1.0)
         if self.plane_lock is None:
             return None
         from tools.base import PLANE_LOCK_AXES
@@ -134,9 +150,12 @@ class PlaneLock:
     def plane_lock_key(self, viewport, key: int) -> bool:
         if getattr(self, "start_point", None) is not None:
             return False
+        if int(key) == int(Qt.Key_Down):
+            return self._reference_lock_key(viewport)
         axis = PLANE_LOCK_KEYS.get(int(key))
         if axis is None:
             return False
+        self.plane_ref = None
         self.plane_lock = None if self.plane_lock == axis else axis
         flash = getattr(viewport, "flash_status", None)
         if flash is not None:
@@ -149,12 +168,70 @@ class PlaneLock:
             update()
         return True
 
+    def _reference_lock_key(self, viewport) -> bool:
+        """Down before the first click: lock the plane perpendicular to the
+        edge under the cursor (or parallel to the face under it); Down
+        again frees it. With nothing under the cursor SketchUp does
+        nothing, and neither do we — but the key stays ours, so the
+        viewport's linear reference (which is for the SECOND point) does
+        not swallow it."""
+        from core.i18n import tr
+        flash = getattr(viewport, "flash_status", None)
+        update = getattr(viewport, "update", None)
+        if self.plane_ref is not None:
+            self.plane_ref = None
+            if flash is not None:
+                flash(tr("Drawing plane free"))
+        else:
+            ref = self.hovered_reference(viewport)
+            if ref is None:
+                return True
+            self.plane_ref = ref
+            self.plane_lock = None
+            if flash is not None:
+                flash(tr("Drawing plane locked: perpendicular to the edge")
+                      if ref[1] == "edge" else
+                      tr("Drawing plane locked: parallel to the face"))
+        if update is not None:
+            update()
+        return True
+
+    @staticmethod
+    def hovered_reference(viewport):
+        """``(normal, kind)`` of the reference under the cursor: the edge
+        (loose or a group's, as the viewport's hover pick returns it in
+        world space) beats the face, as in SketchUp; ``None`` over
+        nothing."""
+        edge = getattr(viewport, "_hover_edge", None)
+        if edge is not None:
+            d = QVector3D(edge.b) - QVector3D(edge.a)
+            if d.length() > 1e-9:
+                return d.normalized(), "edge"
+        pos = getattr(viewport, "_last_mouse_pos", None)
+        pick = getattr(viewport, "pick_face_placement", None)
+        if pos is not None and pick is not None:
+            face, grp = pick(pos.x(), pos.y())
+            if face is not None:
+                from core.snap import face_plane_world
+                _p, n = face_plane_world(face, getattr(grp, "xform", None))
+                if n.length() > 1e-9:
+                    return n.normalized(), "face"
+        return None
+
+    def clear_plane_lock(self) -> None:
+        """Both locks off — the shape spent them, or Esc / deactivation."""
+        self.plane_lock = None
+        self.plane_ref = None
+
     def locked_work_plane(self, point: QVector3D):
-        """``(point, normal)`` of the locked plane through *point*, or
-        ``None`` without a lock."""
-        if self.plane_lock is None:
-            return None
-        return QVector3D(point), PLANE_LOCK_AXES[self.plane_lock]
+        """``(point, normal)`` of the locked plane through *point* — the
+        arrow-key axis plane or the Down-arrow reference — or ``None``
+        without a lock."""
+        if self.plane_lock is not None:
+            return QVector3D(point), PLANE_LOCK_AXES[self.plane_lock]
+        if self.plane_ref is not None:
+            return QVector3D(point), QVector3D(self.plane_ref[0])
+        return None
 
 
 @dataclass
