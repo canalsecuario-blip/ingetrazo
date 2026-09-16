@@ -4,12 +4,14 @@ All notable changes to IngeTrazo are documented here.
 Format inspired by [Keep a Changelog](https://keepachangelog.com); versions
 follow [SemVer](https://semver.org).
 
-## [Sin publicar]
+## [0.4.2] — 2026-09-16
 
-**Lo que pidió Pedro Caeiro.** @pacaeiro, delineante, prueba IngeTrazo como
-si fuera SketchUp y anota cada gesto que no responde igual. Esta semana
-caen sus cuatro pendientes de inferencia y herramientas, todos paridad con
-SketchUp.
+**Lo que pidió Pedro Caeiro, y exportar a SketchUp otra vez.** @pacaeiro,
+delineante, prueba IngeTrazo como si fuera SketchUp y anota cada gesto que
+no responde igual: aquí caen sus cuatro pendientes de inferencia y
+herramientas, todos paridad con SketchUp. Y el arreglo que no podía
+esperar: Exportar ▸ SketchUp moría en el .exe, el AppImage, el tar y el
+snap.
 
 ### Añadido
 - **Mover + Ctrl copia, y «3x» / «/3» hacen una matriz** (issue #20). Un
@@ -43,6 +45,14 @@ SketchUp.
   sin rotar el círculo después.
 
 ### Arreglado
+- **Exportar ▸ SketchUp volvía «[Errno 2] No such file or directory:
+  …\_internal\openskp\_scaffold\blank_v17.skp»** en el instalador de
+  Windows, el AppImage, el tar y el snap (solo el Flatpak se salvaba).
+  openskp escribe cada .skp sobre un andamio que carga como dato del
+  paquete, y el empaquetado llevaba sus módulos pero no sus datos; roto
+  desde la 0.3.5, reportado desde Windows con la 0.4.1. Ahora se incluyen
+  los datos y el `--check` de cada paquete exige el andamio, así que la CI
+  del release atrapa esta clase de olvido.
 - **Mover y Rotar ya no infieren contra sí mismos** (issue #19). Lo que se
   está arrastrando o girando queda fuera de los candidatos del snap —como
   hace SketchUp con las entidades en movimiento—, así que arrastrar una

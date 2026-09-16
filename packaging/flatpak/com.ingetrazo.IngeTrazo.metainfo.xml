@@ -77,6 +77,32 @@
   <url type="vcs-browser">https://github.com/ingelibre/ingetrazo</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.4.2" date="2026-09-16">
+      <description>
+        <p>Export to SketchUp works again in the Windows installer, the
+        AppImage, the tarball and the snap (the packaging shipped openskp's
+        modules but not its data). SketchUp parity requested by a
+        draughtsman: Move + Ctrl copies and "3x" / "/3" lay an array; the
+        Tape Measure pulls a guide from another guide; the Protractor
+        tilts with click-and-drag; the Down arrow locks the Circle,
+        Polygon, Rectangle and arcs perpendicular to the hovered edge
+        (SketchUp's magenta reference), the way to start a pipe on an
+        inclined axis; Move and Rotate no longer infer against the
+        geometry being moved; two crossing guides give their intersection
+        again.</p>
+        <p xml:lang="es">Exportar a SketchUp vuelve a funcionar en el
+        instalador de Windows, el AppImage, el tar y el snap (el paquete
+        llevaba los módulos de openskp pero no sus datos). Paridad con
+        SketchUp pedida por un delineante: Mover + Ctrl copia y «3x» /
+        «/3» hacen una matriz; la cinta métrica saca una guía de otra guía;
+        el transportador se inclina con clic y arrastre; la flecha abajo
+        fija el círculo, el polígono, el rectángulo y los arcos
+        perpendiculares a la arista bajo el cursor (la referencia magenta
+        de SketchUp), la manera de empezar un tubo sobre un eje inclinado;
+        Mover y Rotar ya no infieren contra lo que se mueve; dos guías que
+        se cruzan vuelven a dar su intersección.</p>
+      </description>
+    </release>
     <release version="0.4.1" date="2026-09-15">
       <description>
         <p>The world origin wins: coming to the origin aligned with an
