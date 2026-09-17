@@ -191,6 +191,20 @@ messages are in **English**; the UI is bilingual (Spanish / English).
 
 ## Acknowledgements
 
+- **[Pedro Caeiro](https://github.com/pacaeiro)** — architectural and
+  mechanical draftsman, and IngeTrazo's most persistent outside contributor:
+  five merged pull requests and fifteen issues filed from real drafting work.
+  He uses IngeTrazo as if it were the tool he already knows and writes down
+  every gesture that does not answer the same way, which is how most of our
+  parity with SketchUp's everyday behaviour got found. See [AUTHORS](AUTHORS).
+- **Rafael García Rodríguez** — [Rafael 3D](https://www.youtube.com/@Rafa3D),
+  draftsman and reviewer.
+  His filmed reviews put the program through a professional's hands and
+  drove the sheet composer; his tutorial on drafting standards, with a
+  reference plate drawn in AutoCAD, is the specification IngeTrazo's
+  dimensions are being built to. A CAD program that does not meet the
+  drafting norms is not a technical tool, and that is knowledge we did not
+  have.
 - **[OpenSKP](https://github.com/iamahsanmehmood/openskp)** (MIT) by Ahsan
   Mehmood — the clean-room, pure-Python SketchUp `.skp` reader that powers
   IngeTrazo's native import. It replaced our Wine/DLL converter path entirely.

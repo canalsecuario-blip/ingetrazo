@@ -1759,5 +1759,9 @@
  "Sun hour": "Hora del sol",
  "model's hour": "la del modelo",
  "Time of day for this frame's sun, without moving the model's. Mid-morning or mid-afternoon rakes the light across the façades; noon flattens them. 0 = the model's own hour.": "Hora del día para el sol de este marco, sin mover la del modelo. Media mañana o media tarde rasan la luz sobre las fachadas; el mediodía las aplana. 0 = la hora del propio modelo.",
- "Exported {name} — but a view would not render on {sheets}": "Exportado {name} — pero una vista no se pudo dibujar en {sheets}"
+ "Exported {name} — but a view would not render on {sheets}": "Exportado {name} — pero una vista no se pudo dibujar en {sheets}",
+ "With contributions from": "Con aportes de",
+ "draftsman; pull requests and issue reports": "delineante; PRs y reportes",
+ "draftsman; reviews and drafting standards": "delineante; revisiones y normativa de dibujo",
+ "author of OpenSKP, the SketchUp reader": "autor de OpenSKP, el lector de SketchUp"
 }

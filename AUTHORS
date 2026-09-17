@@ -8,6 +8,42 @@ Marco Sumari Tellez <ing.sumari@gmail.com>
     Original author and designer of IngeTrazo; wrote the topology engine,
     tools, rendering, and file formats.
 
+Contributors
+-------------
+Pedro Caeiro <pacaeiro2@sapo.pt>  (github.com/pacaeiro)
+    Architectural and mechanical draftsman.
+    Five merged pull requests (#11, #13, #15, #17, #21): the protractor
+    shortcut conflict with pan, the exact axis Shift lock, opt-in larger
+    toolbar icons, guides kept dashed by clipping to the window, and snapping
+    to intersections between guides.
+    Fifteen issues reported from daily drafting work (#7–#26) — mirrored
+    orbit, snap points inside groups, axis lock accuracy, the protractor's
+    click-drag, Move with Ctrl, self-inference, guide-from-guide, guides
+    drawn in front of geometry, rotate-copy arrays, and the Alt key
+    colliding with Alt+Tab. Much of IngeTrazo's parity with SketchUp's
+    everyday gestures comes from him using the program as a draftsman does
+    and writing down every one that did not answer the same.
+
+Rafael García Rodríguez — "Rafael 3D" (youtube.com/@Rafa3D)
+    Draftsman and 3D modelling reviewer.
+    Hour-long filmed reviews of IngeTrazo, walking the program as a
+    professional would and narrating every friction — the source of the
+    sheet-composer work and of dozens of fixes. Diagnosed the NVIDIA +
+    Wayland startup failure on his own machine.
+    Above all, the drafting-STANDARDS tutorial: twenty minutes and a
+    reference plate drawn in AutoCAD setting out how dimensions must be laid
+    out under ISO and under the German/Japanese norm — text above the line,
+    read counter-clockwise, diameters through the centre, radii from it. A
+    written specification for something the project had no way to get right
+    on its own. In his words: «a software can be very powerful but it can
+    all go to waste if it does not meet the standards designers need».
+
+Ahsan Mehmood <mail.ahsanmehmood@gmail.com>  (github.com/iamahsanmehmood)
+    Author of OpenSKP, the clean-room pure-Python SketchUp reader IngeTrazo's
+    native .skp import is built on, and reviewer of the patches contributed
+    back upstream. His plugin pull requests (#1–#3) became the Extensions
+    system.
+
 ---
 
 IngeTrazo is free software under GPL-3.0-or-later (see LICENSE).

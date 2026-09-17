@@ -1136,6 +1136,18 @@ class MainWindow(QMainWindow):
             f"<p>{tr('Free 3D modeler for architecture, civil engineering and 3D printing.')}</p>"
             f"<p>{tr('Created by')} <b>Marco Sumari Tellez</b><br>"
             f"{tr('Civil Engineer — Arequipa, Peru')}</p>"
+            # The people outside the project whose work is IN it. A draftsman
+            # who files what does not answer like SketchUp and a reviewer who
+            # says what the drafting norms require are contributions the code
+            # could not have reached on its own, and they leave no trace
+            # anywhere the user looks. AUTHORS says what each one gave.
+            f"<p>{tr('With contributions from')}<br>"
+            "<b>Pedro Caeiro</b> — "
+            f"{tr('draftsman; pull requests and issue reports')}<br>"
+            "<b>Rafael García Rodríguez</b> — "
+            f"{tr('draftsman; reviews and drafting standards')}<br>"
+            "<b>Ahsan Mehmood</b> — "
+            f"{tr('author of OpenSKP, the SketchUp reader')}</p>"
             f"<p>{tr('Licensed under GPL-3.0-or-later.')}<br>"
             "<a href='https://github.com/ingelibre/ingetrazo'>"
             "github.com/ingelibre/ingetrazo</a></p>",
