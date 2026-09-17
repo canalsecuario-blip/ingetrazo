@@ -18,6 +18,8 @@ import math
 from dataclasses import dataclass, field
 from typing import Optional
 
+from core.i18n import tr as _tr
+
 #: ISO 216 portrait sizes, mm (width, height).
 PAPER_SIZES_MM = {
     "A4": (210.0, 297.0),
@@ -70,6 +72,69 @@ def ortho_distance_for_height(model_h_m: float, fov_deg: float) -> float:
     if t <= 0:
         raise ValueError("fov must be in (0, 180)")
     return half / t
+
+
+def fit_distance_for_scene(scene, fov_deg: float,
+                           default: float = 30.0) -> float:
+    """Eye distance that fits the whole model in a perspective frame — what
+    a view with no scene of its own (``std:iso``, the live camera) needs the
+    moment it turns perspective, or it would open standing inside a wall."""
+    if scene is None:
+        return default
+    try:
+        lo, hi = scene.bounds()
+    except Exception:  # noqa: BLE001 — a stub scene in tests
+        return default
+    if lo is None:
+        return default
+    a, b = _xyz(lo), _xyz(hi)
+    diag = math.sqrt(sum((b[i] - a[i]) ** 2 for i in range(3)))
+    if diag <= 0:
+        return default
+    t = math.tan(math.radians(fov_deg) / 2.0)
+    return (diag / 2.0) / max(t, 1e-6) * 1.15
+
+
+def frame_page_projector(frame: "MarcoVista", camera):
+    """``(cx, cy, cz) -> (px, py)``: a point in CAMERA space (metres — x
+    right, y up, z depth away from the eye, as ``core.hlr._to_cam`` gives
+    it) to FRAME-LOCAL page millimetres, for the very camera that rendered
+    the frame. Scalars or NumPy arrays alike.
+
+    Parallel frames keep their exact-scale arithmetic untouched (the scale
+    IS the contract); a perspective frame divides by depth, which is the
+    whole difference between an axonometric and standing there. Points at
+    or behind the eye have no projection: they are pushed a bounded way off
+    the page instead of to infinity, so a polyline crossing the eye plane
+    still leaves the frame in the right direction rather than drawing a
+    line to the next galaxy."""
+    import numpy as np
+
+    ar = frame.w_mm / frame.h_mm if frame.h_mm else 1.0
+    if not getattr(frame, "perspective", False):
+        half_h = model_height_for_frame(frame.h_mm, frame.scale_n) / 2.0
+        half_w = half_h * ar
+        k = frame.h_mm / (2.0 * half_h) if half_h else 0.0
+
+        def to_page(cx, cy, cz=None):
+            return ((cx + half_w) * k, (half_h - cy) * k)
+        return to_page
+
+    t = math.tan(math.radians(getattr(camera, "fov_deg", 45.0)) / 2.0)
+    lim_x, lim_y = 10.0 * frame.w_mm, 10.0 * frame.h_mm
+
+    def to_page(cx, cy, cz=None):
+        if cz is None:                       # depth-less call: cannot divide
+            raise ValueError("a perspective frame projects with the depth")
+        hh = t * np.maximum(np.asarray(cz, dtype=float), 1e-4)
+        px = (np.asarray(cx, dtype=float) / (hh * ar) + 1.0) * frame.w_mm / 2.0
+        py = (1.0 - np.asarray(cy, dtype=float) / hh) * frame.h_mm / 2.0
+        px = np.clip(px, -lim_x, lim_x + frame.w_mm)
+        py = np.clip(py, -lim_y, lim_y + frame.h_mm)
+        if np.isscalar(cz) or np.ndim(cz) == 0:
+            return (float(px), float(py))
+        return (px, py)
+    return to_page
 
 
 #: The style a NEW model view is born with: the Architectural preset —
@@ -138,6 +203,29 @@ class MarcoVista:
     cam_target: Optional[list] = None      # world point the camera centres on
     cam_yaw: Optional[float] = None        # radians, overrides the view's
     cam_pitch: Optional[float] = None
+    #: PERSPECTIVE frame (LayOut's viewport switch): the view renders with a
+    #: real vanishing point instead of the parallel projection every other
+    #: frame uses — the 3D «como si lo viera en campo» that an axonometric
+    #: never gives (Marco, 2026-09-17). Off by default and never inherited
+    #: from the bound scene: a sheet made before this existed must open
+    #: drawing exactly what it drew, and half the scenes of a model are
+    #: saved in perspective from modelling. A perspective frame has NO
+    #: scale (its size on paper depends on depth), so the scale box, the
+    #: scale label and anchored dimensions step aside for it.
+    perspective: bool = False
+    #: Eye distance to the camera target, in metres, and the field of view
+    #: in degrees — the perspective frame's «zoom». ``None`` = whatever the
+    #: bound scene carries, or a fit to the model when there is no scene.
+    cam_distance: Optional[float] = None
+    cam_fov: Optional[float] = None
+    #: Sun shadows in THIS frame: ``None`` = whatever the bound scene (or
+    #: the live model) says, True / False force them for the frame alone —
+    #: the field 3D wants the sun on while the plan beside it does not.
+    #: ``sun_hour`` (local decimal hour, 0–24) overrides the model's time
+    #: of day so one sheet can raking-light a view without moving the
+    #: model's own sun. ``None`` = the model's hour.
+    shadows: Optional[bool] = None
+    sun_hour: Optional[float] = None
     #: Turn of the DRAWING inside the frame, in degrees CLOCKWISE on paper
     #: (the north arrow's and QPainter's convention) — the frame, its title
     #: and the sheet stay put while the model spins, so a plan sits straight
@@ -189,6 +277,8 @@ class MarcoVista:
     scale_mm: float = 3.0
 
     def scale_label(self) -> str:
+        if getattr(self, "perspective", False):
+            return _tr("NO SCALE")
         n = f"{self.scale_n:g}"
         try:
             return (self.scale_text or "ESC. 1:{n}").replace("{n}", n)
@@ -1404,8 +1494,24 @@ def apply_frame_camera(camera, frame: MarcoVista,
             camera.target = (x, y, z)
     # Last, over whatever up vector the view left: the frame's own turn.
     roll_camera(camera, float(getattr(frame, "rot_deg", 0.0) or 0.0))
+    w_px, h_px = frame.render_px()
+    camera.aspect = w_px / h_px
+    if getattr(frame, "perspective", False):
+        # A perspective frame is framed by WHERE THE EYE STANDS, not by a
+        # scale: distance and field of view are the whole framing.
+        fov = frame.cam_fov
+        if fov is None and saved_view is not None:
+            fov = saved_view.fov_deg
+        if fov is not None:
+            camera.fov_deg = max(5.0, min(120.0, float(fov)))
+        dist = frame.cam_distance
+        if dist is None and saved_view is not None:
+            dist = saved_view.distance
+        if dist is None:
+            dist = fit_distance_for_scene(scene, camera.fov_deg)
+        camera.perspective = True
+        camera.distance = max(1e-3, float(dist))
+        return
     camera.perspective = False
     camera.distance = ortho_distance_for_height(
         frame.model_height_m(), camera.fov_deg)
-    w_px, h_px = frame.render_px()
-    camera.aspect = w_px / h_px

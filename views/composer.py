@@ -193,8 +193,31 @@ def frame_view_name(frame: MarcoVista) -> str:
     return tr("View")
 
 
+def apply_frame_shadows(frame, scene) -> None:
+    """The frame's own sun, over whatever the scene left: a field 3D wants
+    shadows while the plan beside it does not, and neither should have to
+    move the model's sun to get them (Marco, 2026-09-17). Runs inside
+    ``_with_frame_camera``, which puts the model's settings back after."""
+    want = getattr(frame, "shadows", None)
+    hour = getattr(frame, "sun_hour", None)
+    if (want is None and hour is None) or getattr(scene, "shadows",
+                                                  None) is None:
+        return
+    state = scene.shadows.to_dict()
+    if want is not None:
+        state["enabled"] = bool(want)
+    if hour is not None:
+        h = max(0.0, min(23.999, float(hour)))
+        state["hour"] = int(h)
+        state["minute"] = int(round((h - int(h)) * 60.0))
+    apply_shadow_state(scene, state)
+
+
 def frame_title_text(frame: MarcoVista) -> str:
-    """The automatic title: view name — scale («Planta — 1:100»)."""
+    """The automatic title: view name — scale («Planta — 1:100»). A
+    perspective frame has no scale to give, so it says what it is."""
+    if getattr(frame, "perspective", False):
+        return f"{frame_view_name(frame)} — {tr('perspective')}"
     return f"{frame_view_name(frame)} — 1:{frame.scale_n:g}"
 
 
@@ -205,16 +228,21 @@ def view_title_texts(frame: MarcoVista) -> dict:
     always reads THIS frame's scale, bound uid or not."""
     from core.composition import expand_fields
     uid = getattr(frame, "uid", "") or ""
+    # A perspective frame is not drawn to any scale: «ESC. 1:N» under it
+    # would be a lie on a printed sheet, so it reads «SIN ESCALA» — what
+    # LayOut writes under a perspective viewport (Marco, 2026-09-17).
+    persp = bool(getattr(frame, "perspective", False))
     n = f"{frame.scale_n:g}"
+    scale_field = tr("no scale") if persp else f"1:{n}"
 
     def ex(text) -> str:
-        text = (text or "").replace("{escala}", f"1:{n}")
+        text = (text or "").replace("{escala}", scale_field)
         return expand_fields(text, uid) if text else ""
     return {
         "title": ex(getattr(frame, "title_text", "")) or frame_view_name(frame),
         "subtitle": ex(getattr(frame, "title_subtitle", "")),
-        "scale": (f"ESC. 1:{n}" if getattr(frame, "title_scale", True)
-                  else ""),
+        "scale": ("" if not getattr(frame, "title_scale", True)
+                  else tr("NO SCALE") if persp else f"ESC. 1:{n}"),
         "number": ex(getattr(frame, "title_number", "")),
         "sheet": ex(getattr(frame, "title_sheet", "")),
     }
@@ -679,8 +707,9 @@ def paint_frame_mm(painter: QPainter, frame: MarcoVista,
                       color=QColor(140, 150, 160))
     if annots:
         _paint_annots_mm(painter, frame, annots)
-    if frame.grid_m > 0:
-        # the graticule: model-metre grid at the frame's scale
+    if frame.grid_m > 0 and not getattr(frame, "perspective", False):
+        # the graticule: model-metre grid at the frame's scale (a
+        # perspective frame has none, so its squares would be a fiction)
         from core.composition import model_height_for_frame
         model_h = model_height_for_frame(frame.h_mm, frame.scale_n)
         step = frame.grid_m * frame.h_mm / model_h
@@ -5152,6 +5181,8 @@ class ComposerWindow(QMainWindow):
         self._frame_form = form
         self._title_rows: list = []
         self._pen_rows: list = []
+        #: Rows only a perspective frame shows (its lens).
+        self._persp_rows: list = []
         #: The subset of pen rows a RASTER frame shows too (edge and profile
         #: weights thicken its GL lines; cut pen and poché are vector-only).
         self._pen_rows_raster: list = []
@@ -5174,6 +5205,54 @@ class ComposerWindow(QMainWindow):
         self.scale_combo.lineEdit().editingFinished.connect(
             self._on_scale_committed)
         form.addRow(tr("Scale"), self.scale_combo)
+        # Perspective: the one frame on a sheet that is not a drawing but a
+        # look at the thing — «que se vea como un 3D de verdad, como si lo
+        # viera en campo» (Marco, 2026-09-17).
+        self.persp_check = QCheckBox(tr("Perspective"))
+        self.persp_check.setToolTip(tr(
+            "Render this frame with a vanishing point instead of the "
+            "parallel projection of a drawing — the view as the eye sees "
+            "it standing there. A perspective frame has no scale: its "
+            "framing is the eye's distance and the field of view, the "
+            "scale box steps aside and the label reads «SIN ESCALA». "
+            "Double-click the frame to walk it: drag orbits, the wheel "
+            "steps closer, Shift+drag pans."))
+        self.persp_check.toggled.connect(self._on_frame_perspective)
+        form.addRow("", self.persp_check)
+        self.fov_spin = QDoubleSpinBox()
+        self.fov_spin.setRange(10.0, 120.0)
+        self.fov_spin.setDecimals(0)
+        self.fov_spin.setSuffix("°")
+        self.fov_spin.setValue(45.0)
+        self.fov_spin.setToolTip(tr(
+            "Field of view, like a lens: 35° is a long lens that keeps the "
+            "lines calm, 60–75° is the wide angle that takes a whole "
+            "courtyard in from inside it. SketchUp's default is 35°."))
+        self.fov_spin.valueChanged.connect(self._on_frame_perspective)
+        _row(self._persp_rows, tr("Field of view"), self.fov_spin)
+        self.shadow_combo = QComboBox()
+        self.shadow_combo.addItem(tr("As the model"), "model")
+        self.shadow_combo.addItem(tr("Sun on"), "on")
+        self.shadow_combo.addItem(tr("Sun off"), "off")
+        self.shadow_combo.setToolTip(tr(
+            "Sun shadows in THIS frame. «As the model» follows the shadow "
+            "settings the model (or the frame's scene) carries; the other "
+            "two decide for this frame alone, so the field 3D can stand in "
+            "the sun next to a plan that does not."))
+        self.shadow_combo.currentIndexChanged.connect(self._on_frame_props)
+        form.addRow(tr("Shadows"), self.shadow_combo)
+        self.sun_hour_spin = QDoubleSpinBox()
+        self.sun_hour_spin.setRange(0.0, 23.5)
+        self.sun_hour_spin.setDecimals(1)
+        self.sun_hour_spin.setSingleStep(0.5)
+        self.sun_hour_spin.setSpecialValueText(tr("model's hour"))
+        self.sun_hour_spin.setSuffix(" h")
+        self.sun_hour_spin.setToolTip(tr(
+            "Time of day for this frame's sun, without moving the model's. "
+            "Mid-morning or mid-afternoon rakes the light across the "
+            "façades; noon flattens them. 0 = the model's own hour."))
+        self.sun_hour_spin.valueChanged.connect(self._on_frame_props)
+        form.addRow(tr("Sun hour"), self.sun_hour_spin)
         self.rot_spin = QDoubleSpinBox()
         self.rot_spin.setRange(-360.0, 360.0)
         self.rot_spin.setDecimals(1)
@@ -6542,6 +6621,17 @@ class ComposerWindow(QMainWindow):
                 idx = self.view_combo.findData(f.view_key)
                 self.view_combo.setCurrentIndex(max(idx, 0))
                 self.scale_combo.setCurrentText(f"1:{f.scale_n:g}")
+                self.persp_check.setChecked(
+                    bool(getattr(f, "perspective", False)))
+                self.fov_spin.setValue(
+                    float(getattr(f, "cam_fov", None) or 45.0))
+                sh = getattr(f, "shadows", None)
+                sidx2 = self.shadow_combo.findData(
+                    "model" if sh is None else ("on" if sh else "off"))
+                self.shadow_combo.setCurrentIndex(max(sidx2, 0))
+                self.sun_hour_spin.setValue(
+                    float(getattr(f, "sun_hour", None) or 0.0))
+                self._sync_perspective_widgets(f)
                 self.rot_spin.setValue(
                     float(getattr(f, "rot_deg", 0.0) or 0.0))
                 self.fw_spin.setValue(f.w_mm)
@@ -7575,6 +7665,7 @@ class ComposerWindow(QMainWindow):
                      "border", "border_mm", "border_color"),
         MarcoVista: ("style", "scale_n", "rot_deg", "show_title", "annotations",
                      "annot_text_mm", "km_marks", "km_step_m", "grid_m",
+                     "shadows", "sun_hour",
                      "section_marks", "border", "border_mm", "border_color",
                      "title_style", "title_scale", "title_align",
                      "title_pos", "title_mm",
@@ -7732,9 +7823,24 @@ class ComposerWindow(QMainWindow):
                     cam.yaw, cam.pitch)
         return self._with_frame_camera(item.model, run)
 
-    @staticmethod
-    def _view_scale_k(frame) -> float:
-        """Page millimetres per model metre at the frame's scale."""
+    def _frame_eye(self, frame) -> tuple:
+        """``(distance, fov_deg)`` the frame's camera stands at — what a
+        perspective frame has instead of a scale."""
+        def run():
+            cam = self._window.viewport.camera
+            return (float(cam.distance), float(cam.fov_deg))
+        return self._with_frame_camera(frame, run)
+
+    def _view_scale_k(self, frame) -> float:
+        """Page millimetres per model metre. A parallel frame has one for
+        the whole drawing (that IS its scale); a perspective frame only has
+        one AT THE CAMERA TARGET — which is the depth the hand is working
+        at while it pans or zooms, so it is the right one for the gesture."""
+        import math
+        if self.frame_is_perspective(frame):
+            dist, fov = self._frame_eye(frame)
+            half_h = dist * math.tan(math.radians(fov) / 2.0)
+            return frame.h_mm / (2.0 * half_h) if half_h > 0 else 0.0
         from core.composition import model_height_for_frame
         return frame.h_mm / model_height_for_frame(frame.h_mm, frame.scale_n)
 
@@ -7744,7 +7850,9 @@ class ComposerWindow(QMainWindow):
                                else list(frame.cam_target)),
                 "cam_yaw": frame.cam_yaw, "cam_pitch": frame.cam_pitch,
                 "rot_deg": float(getattr(frame, "rot_deg", 0.0) or 0.0),
-                "scale_n": frame.scale_n}
+                "scale_n": frame.scale_n,
+                "cam_distance": getattr(frame, "cam_distance", None),
+                "cam_fov": getattr(frame, "cam_fov", None)}
 
     def pan_view(self, item, dx_mm: float, dy_mm: float) -> None:
         """Slide the drawing inside the frame by a page delta: the camera
@@ -7793,6 +7901,24 @@ class ComposerWindow(QMainWindow):
         ``at_mm`` (a page point) the model under the cursor stays put."""
         import numpy as np
         frame = item.model
+        if self.frame_is_perspective(frame):
+            # No scale to divide: the eye WALKS toward what it looks at.
+            dist, _fov = self._frame_eye(frame)
+            new_d = max(0.01, dist / max(factor, 1e-6))
+            if at_mm is not None:
+                (tx, ty, tz), right, up, _y, _p = \
+                    self._frame_camera_state(item)
+                k = self._view_scale_k(frame)
+                if k > 0:
+                    mx = (at_mm[0] - frame.x_mm) / k - (frame.w_mm / k) / 2.0
+                    my = (frame.h_mm / k) / 2.0 - (at_mm[1] - frame.y_mm) / k
+                    sfac = new_d / dist if dist else 1.0
+                    t = (np.array([tx, ty, tz])
+                         + (right * mx + up * my) * (1.0 - sfac))
+                    frame.cam_target = [float(v) for v in t]
+            frame.cam_distance = round(new_d, 4)
+            self._after_view_edit(item)
+            return
         old_n = frame.scale_n
         new_n = max(0.01, old_n / factor)
         if at_mm is not None:
@@ -7831,6 +7957,14 @@ class ComposerWindow(QMainWindow):
         ext_w = float(c[:, 0].max() - c[:, 0].min())
         ext_h = float(c[:, 1].max() - c[:, 1].min())
         need_h = max(ext_h, ext_w * frame.h_mm / frame.w_mm) * 1.1 or 1.0
+        if self.frame_is_perspective(frame):
+            # Fit by STEPPING BACK until the model subtends the frame.
+            from core.composition import ortho_distance_for_height
+            _d, fov = self._frame_eye(frame)
+            frame.cam_distance = round(
+                ortho_distance_for_height(need_h, fov), 4)
+            self._commit_view_edit(item, before)
+            return
         n_min = need_h * 1000.0 / frame.h_mm        # 1:N showing need_h
         candidates = sorted(set(COMMON_SCALES) | {
             1, 2, 5, 10, 20, 25, 75, 125, 150, 300, 400, 750, 1500, 2500,
@@ -8024,22 +8158,21 @@ class ComposerWindow(QMainWindow):
         of the frame's scene apply."""
         import math
         import numpy as np
-        from core.composition import model_height_for_frame
+        from core.composition import frame_page_projector
         from core.hlr import _to_cam, camera_basis
 
         def run():
             vp = self._window.viewport
             scene = vp.scene
             eye, right, up, fwd = camera_basis(vp.camera)
-            model_h = model_height_for_frame(frame.h_mm, frame.scale_n)
-            k = frame.h_mm / model_h
-            half_h = model_h / 2.0
-            half_w = half_h * (frame.w_mm / frame.h_mm)
+            # One projector for every overlay: the scale for a parallel
+            # frame, the depth divide for a perspective one.
+            to_page = frame_page_projector(frame, vp.camera)
 
             def pt(p):
                 c = _to_cam(np.array([[p.x(), p.y(), p.z()]], dtype=float),
                             eye, right, up, fwd)[0]
-                return ((c[0] + half_w) * k, (half_h - c[1]) * k)
+                return to_page(c[0], c[1], c[2])
 
             out: list = []
             drape = getattr(vp, "drape", None) or (lambda p: p)
@@ -8580,9 +8713,14 @@ class ComposerWindow(QMainWindow):
             "annot_text_mm": self.annot_mm_spin.value(),
             "km_marks": self.km_check.isChecked(),
             "km_step_m": float(self.km_step_spin.value()),
+            "grid_m": float(self.grid_spin.value()),
             "section_marks": self.secmark_check.isChecked(),
             "border": self.frame_border_check.isChecked(),
-            "border_mm": self.frame_border_mm.value()}
+            "border_mm": self.frame_border_mm.value(),
+            "shadows": {"model": None, "on": True, "off": False}.get(
+                self.shadow_combo.currentData(), None),
+            "sun_hour": (None if self.sun_hour_spin.value() <= 0.0
+                         else float(self.sun_hour_spin.value()))}
         m = item.model
         if changes["view_key"] != m.view_key:
             # A new source is a new camera: the in-place view edits (orbit,
@@ -8591,13 +8729,14 @@ class ComposerWindow(QMainWindow):
             # (Marco, 2026-09-08: «la escena 1 como que no me actualiza la
             # vista»).
             changes.update({"cam_target": None, "cam_yaw": None,
-                            "cam_pitch": None})
+                            "cam_pitch": None, "cam_distance": None})
         # The title and the border are paint-only: a vector frame keeps its
         # drawing instead of going blank until the next Update. The paper
         # overlay's own switches only redo the overlay (cheap).
         paint_only = {"show_title", "border", "border_mm"}
         annot_only = {"annotations", "annot_text_mm", "km_marks",
                       "km_step_m", "section_marks"}
+        paint_only = paint_only | {"grid_m"}
         changed = {k for k, v in changes.items() if getattr(m, k) != v}
         self._panel_edit(item, changes)
         if changed - paint_only - annot_only:
@@ -8610,6 +8749,69 @@ class ComposerWindow(QMainWindow):
         self._sync_vector_widgets(m)
         self._sync_title_widgets(m)
         self.refresh_items()                 # bound scale labels re-read {escala}
+
+    def _on_frame_perspective(self, *_a) -> None:
+        """The perspective switch and its lens. Turning it ON seeds the eye
+        from the frame's scene (or fits the model) so the view opens looking
+        at something instead of from inside a wall; turning it OFF leaves
+        the distance stored, so flipping back and forth does not lose the
+        walk the user already did."""
+        item = self._selected_item()
+        if self._updating or not isinstance(item, FrameItem):
+            return
+        frame = item.model
+        on = self.persp_check.isChecked()
+        fov = float(self.fov_spin.value())
+        changes = {"perspective": on, "cam_fov": fov}
+        if on and getattr(frame, "cam_distance", None) is None:
+            changes["cam_distance"] = round(self._seed_eye_distance(frame), 4)
+        if all(getattr(frame, k) == v for k, v in changes.items()):
+            return
+        self._panel_edit(item, changes)
+        self._sync_perspective_widgets(frame)
+        self._sync_vector_widgets(frame)
+        self._forget_frame(frame)
+        self.render_frame(frame)
+        self.refresh_items()                 # the «SIN ESCALA» label follows
+        self._rebuild_canvas()
+
+    def _seed_eye_distance(self, frame) -> float:
+        """Where the eye stands the first time a frame turns perspective:
+        the bound scene's own distance if it has one, else a fit to the
+        model."""
+        from core.composition import fit_distance_for_scene
+        scene = self._scene()
+        if frame.view_key.startswith("scene:"):
+            name = frame.view_key[6:]
+            sv = next((v for v in getattr(scene, "saved_views", [])
+                       if v.name == name), None)
+            if sv is not None and getattr(sv, "distance", None):
+                return float(sv.distance)
+        fov = float(getattr(frame, "cam_fov", None) or self.fov_spin.value())
+        return fit_distance_for_scene(scene, fov)
+
+    def _sync_perspective_widgets(self, frame) -> None:
+        """A perspective frame has a lens instead of a scale, and the exact
+        hidden-line pass cannot draw it (it projects in parallel)."""
+        on = self.frame_is_perspective(frame)
+        self.scale_combo.setEnabled(not on)
+        for w in (self.fov_spin,):
+            w.setEnabled(on)
+        # The scale-bound overlays measure paper millimetres per metre —
+        # a perspective frame has no single one, so they step aside.
+        for w in (self.grid_spin, self.km_check, self.km_step_spin,
+                  self.secmark_check):
+            w.setEnabled(not on)
+        vidx = self.style_combo.findData("vectorial")
+        model = self.style_combo.model()
+        if vidx >= 0 and model is not None:
+            entry = model.item(vidx)
+            if entry is not None:
+                entry.setEnabled(not on)
+        form = getattr(self, "_frame_form", None)
+        if form is not None:
+            for r in getattr(self, "_persp_rows", []):
+                form.setRowVisible(r, on)
 
     def _on_frame_rotation(self, *_a) -> None:
         """The view's turn, from the panel: apply it and refill the frame
@@ -9586,6 +9788,7 @@ class ComposerWindow(QMainWindow):
         keep_shadows = shadows.to_dict() if shadows is not None else None
         try:
             apply_frame_camera(cam, frame, saved_view, scene)
+            apply_frame_shadows(frame, scene)
             return fn()
         finally:
             (cam.target, cam.distance, cam.yaw, cam.pitch, cam.fov_deg,
@@ -9603,6 +9806,13 @@ class ComposerWindow(QMainWindow):
             if keep_shadows is not None:
                 apply_shadow_state(scene, keep_shadows)
             vp.update()
+
+    def frame_is_perspective(self, frame) -> bool:
+        """Whether *frame* renders with a vanishing point. A plain read of
+        the frame's own switch — kept as a method so every caller asks the
+        same question and a future «inherit from the scene» has one place
+        to live."""
+        return bool(getattr(frame, "perspective", False))
 
     #: Above this many hard edges the EXACT hidden-line snap pass (minutes
     #: on a photogrammetry-scale scene — it is O(edges × triangles)) gives
@@ -9655,21 +9865,19 @@ class ComposerWindow(QMainWindow):
         cached = self.snap_cache.get(id(frame))
         if cached is not None:
             return cached
-        from core.composition import model_height_for_frame
+        from core.composition import frame_page_projector
         from core.hlr import _to_cam, camera_basis, hlr_view
 
         geometry = self._scene_geometry()
         tris, hard, soft, _soft_n = geometry
 
         def page_mapper():
-            model_h = model_height_for_frame(frame.h_mm, frame.scale_n)
-            k = frame.h_mm / model_h
-            half_h = model_h / 2.0
-            half_w = half_h * (frame.w_mm / frame.h_mm)
+            local = frame_page_projector(
+                frame, self._window.viewport.camera)
 
-            def to_page(mx, my):
-                return (frame.x_mm + (mx + half_w) * k,
-                        frame.y_mm + (half_h - my) * k)
+            def to_page(mx, my, mz=None):
+                px, py = local(mx, my, mz)
+                return (frame.x_mm + px, frame.y_mm + py)
             return to_page
 
         def clip(arr, warr):
@@ -9702,16 +9910,20 @@ class ComposerWindow(QMainWindow):
             if not len(E):
                 return np.empty((0, 2)), np.empty((0, 3))
             eye, right, up, fwd = camera_basis(vp.camera)
-            a2 = _to_cam(E[:, 0, :], eye, right, up, fwd)[:, :2]
-            b2 = _to_cam(E[:, 1, :], eye, right, up, fwd)[:, :2]
+            a3 = _to_cam(E[:, 0, :], eye, right, up, fwd)
+            b3 = _to_cam(E[:, 1, :], eye, right, up, fwd)
             to_page = page_mapper()
-            cam = np.concatenate([a2, b2, (a2 + b2) / 2.0])
+            cam = np.concatenate([a3, b3, (a3 + b3) / 2.0])
             world = np.concatenate([E[:, 0, :], E[:, 1, :],
                                     (E[:, 0, :] + E[:, 1, :]) / 2.0])
-            px, py = to_page(cam[:, 0], cam[:, 1])
+            px, py = to_page(cam[:, 0], cam[:, 1], cam[:, 2])
             return clip(np.stack([px, py], axis=1), world)
 
-        exact = len(hard) + len(soft) <= self._EXACT_SNAP_EDGE_BUDGET
+        # The exact pass goes through ``hlr_view``, which projects in
+        # PARALLEL: a perspective frame always takes the projected path,
+        # whose points carry their depth.
+        exact = (len(hard) + len(soft) <= self._EXACT_SNAP_EDGE_BUDGET
+                 and not self.frame_is_perspective(frame))
         pair = self._with_frame_camera(frame, run_exact if exact
                                        else run_fast)
         self.snap_cache[id(frame)] = pair
@@ -9721,7 +9933,7 @@ class ComposerWindow(QMainWindow):
         """Project points in WORLD metres to PAGE millimetres through
         *frame*'s camera — the inverse trip of a snap hit."""
         import numpy as np
-        from core.composition import model_height_for_frame
+        from core.composition import frame_page_projector
         from core.hlr import _to_cam, camera_basis
 
         def run():
@@ -9729,13 +9941,12 @@ class ComposerWindow(QMainWindow):
             eye, right, up, fwd = camera_basis(vp.camera)
             cam = _to_cam(np.asarray(world_pts, dtype=np.float64),
                           eye, right, up, fwd)
-            model_h = model_height_for_frame(frame.h_mm, frame.scale_n)
-            k = frame.h_mm / model_h
-            half_h = model_h / 2.0
-            half_w = half_h * (frame.w_mm / frame.h_mm)
-            return [(frame.x_mm + (mx + half_w) * k,
-                     frame.y_mm + (half_h - my) * k)
-                    for mx, my in cam[:, :2]]
+            to_page = frame_page_projector(frame, vp.camera)
+            out = []
+            for mx, my, mz in cam:
+                px, py = to_page(mx, my, mz)
+                out.append((frame.x_mm + px, frame.y_mm + py))
+            return out
 
         return self._with_frame_camera(frame, run)
 
@@ -9939,7 +10150,7 @@ class ComposerWindow(QMainWindow):
         # the render pixels (where a 9 pt screen font came out unreadably
         # small).
         self.annot_cache[id(frame)] = self.compute_annotations(frame)
-        if frame.style == "vectorial":
+        if frame.style == "vectorial" and not self.frame_is_perspective(frame):
             self.compute_hlr(frame)
             return None
 
@@ -9948,6 +10159,13 @@ class ComposerWindow(QMainWindow):
             try:
                 if frame.style in ("tecnico", "lineas"):
                     vp.plano_style = frame.style
+                elif frame.style == "vectorial":
+                    # A perspective frame asked for the vector style: the
+                    # exact hidden-line pass projects in PARALLEL by
+                    # construction, so it renders shaded instead of coming
+                    # back blank. The panel greys the option out; a document
+                    # can still carry the pair.
+                    pass
                 elif (isinstance(frame.style, str)
                         and frame.style.startswith("style:")):
                     from core.style import style_by_name
@@ -9999,8 +10217,14 @@ class ComposerWindow(QMainWindow):
             "PDF (*.pdf)")
         if not path:
             return
-        self.export_all_pdf(path)
-        self.statusBar().showMessage(tr("Exported {name}", name=path), 4000)
+        troubled = self.export_all_pdf(path)
+        if troubled:
+            self.statusBar().showMessage(
+                tr("Exported {name} — but a view would not render on {sheets}",
+                   name=path, sheets=", ".join(troubled)), 10000)
+        else:
+            self.statusBar().showMessage(tr("Exported {name}", name=path),
+                                         4000)
 
     def _on_export_dxf(self) -> None:
         item = self._selected_item()
@@ -10132,13 +10356,22 @@ class ComposerWindow(QMainWindow):
         finally:
             painter.end()
 
-    def export_all_pdf(self, path: str) -> None:
+    def export_all_pdf(self, path: str) -> list:
         """The atlas: every sheet of the document into ONE PDF, each on
-        its own page at its own paper size."""
+        its own page at its own paper size. Returns the names of the sheets
+        where a frame would not render.
+
+        A frame that blows up must not take the rest of the document with
+        it: the atlas used to abort on the first bad render and leave a PDF
+        with the sheets it had got to, with nothing said — Marco exported
+        Plaza Yanque and got three pages of four, and only the terminal
+        knew why (2026-09-17). Now that frame prints as «Actualiza la
+        vista» and the caller says which sheets to look at."""
         comps = self._scene().compositions
         writer = QPdfWriter(path)
         writer.setResolution(RENDER_DPI)
         painter = None
+        troubled: list = []
         try:
             for i, comp in enumerate(comps):
                 for f in comp.frames:          # fresh renders per sheet
@@ -10146,6 +10379,12 @@ class ComposerWindow(QMainWindow):
                     self.comp = comp
                     try:
                         self.render_frame(f)
+                    except Exception:  # noqa: BLE001 — one frame, not the doc
+                        import traceback
+                        traceback.print_exc()
+                        self._forget_frame(f)
+                        if comp.name not in troubled:
+                            troubled.append(comp.name)
                     finally:
                         self.comp = saved
                 writer.setPageSize(QPageSize(getattr(QPageSize, comp.paper)))
@@ -10162,6 +10401,7 @@ class ComposerWindow(QMainWindow):
         finally:
             if painter is not None:
                 painter.end()
+        return troubled
 
     def _set_field_context(self, comp) -> None:
         comps = list(getattr(self._scene(), "compositions", []) or [])

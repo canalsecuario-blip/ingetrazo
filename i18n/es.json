@@ -1744,5 +1744,20 @@
  "Move a copy: on": "Mover una copia: activado",
  "Move a copy: off": "Mover una copia: desactivado",
  "{n} copies": "{n} copias",
- "Protractor axis set along the drag": "Eje del transportador fijado por el arrastre"
+ "Protractor axis set along the drag": "Eje del transportador fijado por el arrastre",
+ "perspective": "perspectiva",
+ "no scale": "sin escala",
+ "NO SCALE": "SIN ESCALA",
+ "Perspective": "Perspectiva",
+ "Render this frame with a vanishing point instead of the parallel projection of a drawing — the view as the eye sees it standing there. A perspective frame has no scale: its framing is the eye's distance and the field of view, the scale box steps aside and the label reads «SIN ESCALA». Double-click the frame to walk it: drag orbits, the wheel steps closer, Shift+drag pans.": "Dibuja este marco con punto de fuga en vez de la proyección paralela de un plano — la vista tal como la ve el ojo estando ahí. Un marco en perspectiva no tiene escala: lo encuadran la distancia del ojo y el campo de visión, la casilla de escala se apaga y el rótulo dice «SIN ESCALA». Doble clic en el marco para recorrerlo: arrastrar orbita, la rueda acerca, Mayús+arrastrar encuadra.",
+ "Field of view": "Campo de visión",
+ "Field of view, like a lens: 35° is a long lens that keeps the lines calm, 60–75° is the wide angle that takes a whole courtyard in from inside it. SketchUp's default is 35°.": "Campo de visión, como un objetivo: 35° es un teleobjetivo que deja las líneas tranquilas, 60–75° es el gran angular que toma un patio entero desde dentro. El de SketchUp es 35°.",
+ "As the model": "Como el modelo",
+ "Sun on": "Sol encendido",
+ "Sun off": "Sol apagado",
+ "Sun shadows in THIS frame. «As the model» follows the shadow settings the model (or the frame's scene) carries; the other two decide for this frame alone, so the field 3D can stand in the sun next to a plan that does not.": "Sombras del sol en ESTE marco. «Como el modelo» sigue lo que traiga el modelo (o la escena del marco); las otras dos deciden solo para este marco, así la 3D de campo puede estar al sol junto a una planta que no.",
+ "Sun hour": "Hora del sol",
+ "model's hour": "la del modelo",
+ "Time of day for this frame's sun, without moving the model's. Mid-morning or mid-afternoon rakes the light across the façades; noon flattens them. 0 = the model's own hour.": "Hora del día para el sol de este marco, sin mover la del modelo. Media mañana o media tarde rasan la luz sobre las fachadas; el mediodía las aplana. 0 = la hora del propio modelo.",
+ "Exported {name} — but a view would not render on {sheets}": "Exportado {name} — pero una vista no se pudo dibujar en {sheets}"
 }
