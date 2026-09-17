@@ -18,6 +18,7 @@ locks onto, erasable with the Eraser or Edit ▸ Delete Guides. Esc cancels.
 """
 from __future__ import annotations
 
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QVector3D
 
 from core.guide import Guide
@@ -38,6 +39,11 @@ class TapeMeasureTool(Tool):
         self.work_plane: tuple | None = None
         self._edge = None            # source edge → guide-line mode
         self._measured: float | None = None
+        #: SketchUp's Ctrl on the Tape: with guides OFF the tool only
+        #: measures, and clicking an edge's body no longer leaves a guide
+        #: behind (issue #29, @pacaeiro). Survives between operations, like
+        #: SketchUp's — it is a mode, not a per-click modifier.
+        self._guides = True
 
     # ---- Lifecycle ----------------------------------------------------------
     def on_activate(self, viewport) -> None:
@@ -47,6 +53,18 @@ class TapeMeasureTool(Tool):
         self._reset()
         self.hover_point = None
 
+    # ---- Keyboard -----------------------------------------------------------
+    def on_key(self, viewport, key: int, modifiers) -> bool:
+        # Ctrl toggles guide creation (SketchUp: the Tape either measures or
+        # leaves a guide, and the cursor shows a + when it will).
+        if key == Qt.Key_Control:
+            self._guides = not self._guides
+            viewport.flash_status(tr("Create guides: on") if self._guides
+                                  else tr("Create guides: off — measure only"))
+            viewport.update()
+            return True
+        return super().on_key(viewport, key, modifiers)
+
     # ---- Spatial input ------------------------------------------------------
     def on_click(self, ctx: ToolContext) -> None:
         viewport = ctx.viewport
@@ -54,7 +72,16 @@ class TapeMeasureTool(Tool):
             self.start_point = ctx.world
             # Clicking an edge's BODY starts guide mode; an endpoint measures.
             kind = ctx.snap.kind if ctx.snap is not None else "none"
-            edge = viewport.pick_edge(ctx.screen.x(), ctx.screen.y())
+            # pick_edge_ANY, not pick_edge: the plain one only ever sees
+            # the loose mesh, so a click on a component's edge found
+            # nothing and fell through to plain measuring (issue #28,
+            # @pacaeiro). SketchUp reads a group's edges from outside
+            # without opening it, and so does the rest of IngeTrazo — this
+            # is the same picker the Down-arrow reference lock uses, which
+            # hands a group's edge back as a world pseudo-edge.
+            pick_any = getattr(viewport, "pick_edge_any", None)
+            edge = (pick_any(ctx.screen.x(), ctx.screen.y()) if pick_any
+                    else viewport.pick_edge(ctx.screen.x(), ctx.screen.y()))
             if edge is None:
                 # A guide LINE is a source too (a ``Guide`` exposes the same
                 # ``.a``/``.b`` span as an edge): guides pulled from guides
@@ -63,7 +90,7 @@ class TapeMeasureTool(Tool):
                 g = pick(ctx.screen.x(), ctx.screen.y()) if pick else None
                 if g is not None and getattr(g, "is_line", False):
                     edge = g
-            self._edge = edge if (edge is not None
+            self._edge = edge if (self._guides and edge is not None
                                   and kind not in ("endpoint", "midpoint",
                                                    "close", "origin",
                                                    "intersection")) else None
