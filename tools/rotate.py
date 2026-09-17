@@ -56,6 +56,7 @@ class RotateTool(ProtractorBase):
     shortcut = "Q"
     vcb_label = "Angle"
     accepts_angle_ratio = True  # VCB "3:12" (rise:run) arrives as degrees
+    accepts_array = True  # VCB "3x" / "/3" after a copy: a POLAR array
 
     def __init__(self) -> None:
         super().__init__()
@@ -193,15 +194,49 @@ class RotateTool(ProtractorBase):
             side = last["sign"] * (1.0 if value >= 0 else -1.0)
             deg = side * abs(value)
             viewport.history.undo()
-            cmd = last["build"](deg)
+            cmd = last["build"]([deg])
             if cmd is None:
                 self._last = None
                 return False
             viewport.history.execute(cmd)
             last["cmd"] = cmd
+            last["deg"] = deg
             viewport.update()
             return True
         return False
+
+    def on_array_value(self, viewport, count: int, mode: str) -> bool:
+        """SketchUp's polar array, typed right after a rotate-COPY: ``3x``
+        lays three copies at multiples of the angle (30° → 30/60/90) and
+        ``/3`` three copies dividing it (90° → 30/60/90). Retyping re-lays
+        the fan; the window closes at the next click or tool change.
+
+        Move had this since issue #20 and Rotate did not, so the typed
+        number fell through to ``on_value`` and turned into an angle
+        (issue #24, @pacaeiro)."""
+        last = self._last
+        if (last is None or not last.get("copy")
+                or self.ref_point is not None or count < 1):
+            return False
+        stack = getattr(viewport.history, "undo_stack", None)
+        if not stack or stack[-1] is not last["cmd"]:
+            self._last = None
+            return False
+        deg = last["deg"]
+        if mode == "/":
+            degs = [deg * (k / float(count)) for k in range(1, count + 1)]
+        else:
+            degs = [deg * float(k) for k in range(1, count + 1)]
+        viewport.history.undo()
+        cmd = last["build"](degs)
+        if cmd is None:
+            self._last = None
+            return False
+        viewport.history.execute(cmd)
+        last["cmd"] = cmd
+        viewport.flash_status(tr("{n} copies").format(n=count))
+        viewport.update()
+        return True
 
     def on_cancel(self, viewport) -> None:
         self._revert_preview(viewport)
@@ -385,31 +420,42 @@ class RotateTool(ProtractorBase):
         faces = list(self._sel_faces)
         edges = list(self._sel_edges)
 
-        def build(deg: float):
+        def build(degs):
+            """One command for the whole operation. ``degs`` is a LIST of
+            angles: a plain rotation passes one, a polar array passes the
+            whole fan, and the copies land in a single undo step."""
+            degs = [float(d) for d in degs]
             cmds: list = []
             if copy:
-                m = rotation_matrix(start, axis, deg)
-                for group in groups:
-                    g = copy_group(group)   # instance → sibling instance
-                    cmds.append(InsertGroupCommand(g))
-                    cmds.append(RotateGroupCommand(g, start, axis, deg))
-                for f in faces:
-                    cmds.append(AddFaceCommand(
-                        [m.map(v) for v in f.vertices],
-                        holes=[[m.map(v) for v in h] for h in f.holes] or None,
-                        auto=False,
-                        attrs=transformed_attrs(f.attrs, m),
-                    ))
                 id_map: dict[int, int] = {}
-                for e in edges:
-                    curve = getattr(e, "curve", None)
-                    if curve is not None and curve not in id_map:
-                        id_map[curve] = Mesh.next_curve_id()
-                    cmds.append(AddEdgeCommand(
-                        m.map(e.a), m.map(e.b),
-                        soft=getattr(e, "soft", False) or None,
-                        curve=id_map.get(curve)))
+                for deg in degs:
+                    m = rotation_matrix(start, axis, deg)
+                    for group in groups:
+                        g = copy_group(group)  # instance → sibling instance
+                        cmds.append(InsertGroupCommand(g))
+                        cmds.append(RotateGroupCommand(g, start, axis, deg))
+                    for f in faces:
+                        cmds.append(AddFaceCommand(
+                            [m.map(v) for v in f.vertices],
+                            holes=[[m.map(v) for v in h] for h in f.holes]
+                            or None,
+                            auto=False,
+                            attrs=transformed_attrs(f.attrs, m),
+                        ))
+                    for e in edges:
+                        curve = getattr(e, "curve", None)
+                        # One fresh curve id per (curve, copy): the arms of
+                        # an array are separate curves, not one long one.
+                        key = None if curve is None else (curve, deg)
+                        if key is not None and key not in id_map:
+                            id_map[key] = Mesh.next_curve_id()
+                        cmds.append(AddEdgeCommand(
+                            m.map(e.a), m.map(e.b),
+                            soft=getattr(e, "soft", False) or None,
+                            curve=id_map.get(key)))
             else:
+                # Nothing is copied, so there is only ever one angle.
+                deg = degs[-1]
                 cmds.extend(RotateGroupCommand(g, start, axis, deg)
                             for g in groups)
                 if positions:
@@ -434,12 +480,15 @@ class RotateTool(ProtractorBase):
         self._end_vp_preview(viewport)
         if abs(deg) > 1e-9:
             build = self._make_builder()
-            cmd = build(deg)
+            copy = self._copy
+            cmd = build([deg])
             if cmd is not None:
                 viewport.history.execute(cmd)
                 # SketchUp: the angle stays hot — typing a value + Enter
-                # redoes this rotation until the next click or tool change.
-                self._last = {"cmd": cmd, "build": build,
+                # redoes this rotation until the next click or tool change,
+                # and after a COPY «3x» / «/3» fan it into a polar array.
+                self._last = {"cmd": cmd, "build": build, "deg": float(deg),
+                              "copy": copy,
                               "sign": -1.0 if deg < 0 else 1.0}
         self._reset()
         viewport.update()
