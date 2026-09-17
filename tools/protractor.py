@@ -67,10 +67,43 @@ class ProtractorBase(Tool):
         self._shift_normal: QVector3D | None = None  # Shift-frozen plane
         self._custom_axis: QVector3D | None = None  # drag-defined axis
         self._axis_drag_armed = False               # centre press → release watches
+        #: While that drag is past the threshold, the axis it WOULD set —
+        #: so the disc tilts live instead of the gesture happening in the
+        #: dark (issue #25, @pacaeiro). One source of truth: the release
+        #: commits exactly the axis the preview showed.
+        self._axis_drag_live: QVector3D | None = None
         self._disc_r = 1.0                          # world radius of the disc
         self._snap_ticks = False                    # cursor near the disc?
 
     # ---- Click-drag axis ----------------------------------------------------
+    #: How far the cursor must travel from the vertex for the press to read
+    #: as a DRAG that tilts the instrument, rather than a plain click.
+    _AXIS_DRAG_PX = 8.0
+
+    def _track_axis_drag(self, viewport) -> None:
+        """While the centre is held, decide on every move whether the drag
+        has gone far enough to tilt the instrument — and remember the axis
+        it would set, so the disc shows it as the hand moves. Before this
+        the gesture gave no sign at all until the button came up
+        (issue #25, @pacaeiro: «could have live preview, indicating that it
+        is reacting to the mouse movement»)."""
+        if not self._axis_drag_armed:
+            self._axis_drag_live = None
+            return
+        if self.hover_point is None or self.start_point is None:
+            self._axis_drag_live = None
+            return
+        w2p = getattr(viewport, "_world_to_pixel", None)
+        if w2p is not None:
+            p0, p1 = w2p(self.start_point), w2p(self.hover_point)
+            if p0 is None or p1 is None or math.hypot(
+                    p1[0] - p0[0], p1[1] - p0[1]) <= self._AXIS_DRAG_PX:
+                self._axis_drag_live = None
+                return
+        d = self.hover_point - self.start_point
+        self._axis_drag_live = (d.normalized() if d.length() > 1e-9
+                                else None)
+
     def _release_axis_drag(self, viewport) -> bool:
         """A real DRAG from the centre fixes the instrument's axis along it
         (SketchUp's fold gesture on Rotate, and the Protractor's way off the
@@ -78,22 +111,13 @@ class ProtractorBase(Tool):
         True when an axis was set."""
         if not self._axis_drag_armed:
             return False
+        self._track_axis_drag(viewport)      # a release with no move in between
         self._axis_drag_armed = False
-        if self.hover_point is None or self.start_point is None:
+        axis = self._axis_drag_live
+        self._axis_drag_live = None
+        if axis is None:                     # a plain click keeps the plane
             return False
-        w2p = getattr(viewport, "_world_to_pixel", None)
-        dragged = False
-        if w2p is not None:
-            p0 = w2p(self.start_point)
-            p1 = w2p(self.hover_point)
-            if p0 is not None and p1 is not None:
-                dragged = math.hypot(p1[0] - p0[0], p1[1] - p0[1]) > 8.0
-        if not dragged:
-            return False
-        d = self.hover_point - self.start_point
-        if d.length() < 1e-9:
-            return False
-        self._custom_axis = d.normalized()
+        self._custom_axis = axis
         viewport.update()
         return True
 
@@ -222,10 +246,11 @@ class ProtractorBase(Tool):
         return (u * math.cos(t) + v * math.sin(t)).normalized()
 
     # ---- Disc rendering -----------------------------------------------------
-    def _protractor_disc(self, centre: QVector3D):
+    def _protractor_disc(self, centre: QVector3D, axis=None):
         """The fixed-screen-size disc with tick marks every 15° (long at 90°),
-        rotated so its zero sits on the base arm once that is set."""
-        u, v = plane_axes(self._axis())
+        rotated so its zero sits on the base arm once that is set. ``axis``
+        borrows a different one — what the live tilt preview draws."""
+        u, v = plane_axes(self._axis() if axis is None else axis)
         r = self._disc_r
         base = 0.0
         if self.start_point is not None and self.ref_point is not None:
@@ -251,6 +276,7 @@ class ProtractorBase(Tool):
         self.work_plane = None
         self._shift_normal = None
         self._custom_axis = None
+        self._axis_drag_live = None
         self._axis_drag_armed = False
         self._snap_ticks = False
 
@@ -294,6 +320,7 @@ class ProtractorTool(ProtractorBase):
 
     def on_hover(self, ctx: ToolContext) -> None:
         self.hover_point = ctx.world
+        self._track_axis_drag(ctx.viewport)
         self._infer_plane(ctx)
         self._update_screen_metrics(ctx)
         ctx.viewport.update()
@@ -343,7 +370,12 @@ class ProtractorTool(ProtractorBase):
                   else self.hover_point)
         if centre is None:
             return []
-        segments = list(self._protractor_disc(centre))
+        # Dragging from the vertex to tilt the instrument: draw the disc it
+        # WOULD land on, so the hand sees the gesture take (issue #25). The
+        # committed axis is untouched — the release decides, from the very
+        # same ``_axis_drag_live`` this draws.
+        tilt = self._axis_drag_live if self._axis_drag_armed else None
+        segments = list(self._protractor_disc(centre, tilt))
         if self.start_point is None or self.hover_point is None:
             return segments
         segments.append((self.start_point, self.hover_point))

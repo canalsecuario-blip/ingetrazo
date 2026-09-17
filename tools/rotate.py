@@ -156,6 +156,7 @@ class RotateTool(ProtractorBase):
 
     def on_hover(self, ctx: ToolContext) -> None:
         self.hover_point = ctx.world
+        self._track_axis_drag(ctx.viewport)   # live tilt preview (issue #25)
         self._infer_plane(ctx)
         self._update_screen_metrics(ctx)
         if self.ref_point is not None and not self._copy:
@@ -267,7 +268,10 @@ class RotateTool(ProtractorBase):
                   else self.hover_point)
         if centre is None:
             return []
-        segments = list(self._protractor_disc(centre))
+        # The disc the drag from the vertex WOULD land on, drawn as the hand
+        # moves instead of only at the release (issue #25).
+        tilt = self._axis_drag_live if self._axis_drag_armed else None
+        segments = list(self._protractor_disc(centre, tilt))
         if self.start_point is None or self.hover_point is None:
             return segments
         segments.append((self.start_point, self.hover_point))
