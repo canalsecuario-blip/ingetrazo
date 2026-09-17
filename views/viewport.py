@@ -7975,13 +7975,21 @@ class Viewport(QOpenGLWidget):
         """Whether the active tool has an operation in progress that Esc should
         cancel before falling through to clearing the selection: an unfinished
         chain (start_point / nodes), a drag (dragging / grab / node edit), or
-        an eraser stroke."""
-        for attr in ("start_point", "dragging", "grab", "_drag"):
+        an eraser stroke.
+
+        The POINTS are tested against None, not for truth: ``QVector3D(0, 0,
+        0)`` is falsy in PySide6 (the house gotcha), so a line or a move
+        started exactly ON THE ORIGIN read as "nothing in progress" — Esc
+        would skip straight to clearing the selection instead of cancelling
+        it. Found on 2026-09-17 writing the Alt gate, which asks this same
+        question."""
+        for attr in ("start_point", "grab"):
+            if getattr(tool, attr, None) is not None:
+                return True
+        for attr in ("dragging", "_drag", "_stroke"):
             if getattr(tool, attr, None):
                 return True
         if getattr(tool, "nodes", None):
-            return True
-        if getattr(tool, "_stroke", False):
             return True
         return False
 
@@ -9946,9 +9954,8 @@ class Viewport(QOpenGLWidget):
         #     moment the key goes down, not after the next mouse move.
         if ev.key() == Qt.Key_Alt and not ev.isAutoRepeat():
             self._apply_alt_cursor()
-            self._alt_tap = True         # armed; any other key disarms it
         elif self._alt_tap and not ev.isAutoRepeat():
-            # Alt+something is a shortcut, not a tap.
+            # Alt+something is a shortcut: we are not taking its release.
             self._alt_tap = False
 
         # 1. Numeric value buffer (VCB-style length input).
@@ -9972,14 +9979,24 @@ class Viewport(QOpenGLWidget):
             self.toggle_projection()
             return
 
-        # 3b. Alt: cycle linear inferences — on the RELEASE of a clean tap,
-        #     never on the press. Pressing was how Alt+Tab stole it: the
-        #     switcher's Alt cycled the mode and left it stuck, and Pedro
-        #     Caeiro switches windows all day («every time I do that with
-        #     ingetrazo I lost the inferences», issue #26). He likes the
-        #     feature — it is the key that betrays it, so only the gesture
-        #     changes. ``keyReleaseEvent`` does the cycling.
+        # 3b. Alt: cycle linear inferences — ONLY while an operation is in
+        #     progress, which is what SketchUp does. Its status bar offers
+        #     «Alt = Activar/desactivar "Inferencias lineales"» after the
+        #     first click of a line and not before, and the three states are
+        #     ours exactly: all → off → parallel/perp.
+        #
+        #     We had it global, at any moment, and that is the whole of
+        #     issue #26: Pedro Caeiro switches windows with Alt+Tab all day
+        #     and every switch moved a mode he was not using. Idle, there is
+        #     now nothing to steal. Cycling on the PRESS (not the release) is
+        #     deliberate: the release is what makes Qt's menu bar take focus,
+        #     so it lands on the QMenuBar, not here — measured on Marco's
+        #     desktop, one tap in six reached us.
         if ev.key() == Qt.Key_Alt and not ev.isAutoRepeat():
+            if self.active_tool is not None and self._tool_busy(
+                    self.active_tool):
+                self._alt_tap = True        # the release is ours too
+                self._cycle_linear_inference_mode()
             return
 
         # 4. Axis lock (arrow keys). Pressing the same arrow toggles it off.
@@ -10005,9 +10022,13 @@ class Viewport(QOpenGLWidget):
         super().keyPressEvent(ev)
 
     def _cycle_linear_inference_mode(self) -> None:
-        """Alt: cycle linear inferences all → off → parallel/perp → all
-        (SketchUp's Alt toggle). Point snaps (endpoint, midpoint, …) stay on;
-        explicit locks (arrow keys, Down reference) keep working in every mode."""
+        """Alt: cycle linear inferences all → off → parallel/perp → all.
+
+        SketchUp's own toggle, states and all — its status bar reads «Alt =
+        Activar/desactivar "Inferencias lineales"» while a line is being
+        drawn. Offered only DURING an operation there, and here too since
+        issue #26. Point snaps (endpoint, midpoint, …) stay on; explicit
+        locks (arrow keys, Down reference) keep working in every mode."""
         order = {"all": "off", "off": "parallel_perp", "parallel_perp": "all"}
         self.linear_inference_mode = order[self.linear_inference_mode]
         label = {
@@ -10152,19 +10173,23 @@ class Viewport(QOpenGLWidget):
     def keyReleaseEvent(self, ev) -> None:
         if ev.key() == Qt.Key_Alt and not ev.isAutoRepeat():
             self._apply_alt_cursor()
-            if self._alt_tap:            # a clean tap, and only then
+            if self._alt_tap:
+                # We acted on the press, so the release is ours: swallowing
+                # it keeps Qt's menu bar from taking focus on it. Otherwise
+                # the focus ping-pongs viewport → menu bar → viewport and
+                # every other Alt lands on the menu bar instead of here
+                # (issue #26; measured: one tap in six got through).
                 self._alt_tap = False
-                self._cycle_linear_inference_mode()
+                ev.accept()
+                return
         if ev.key() == Qt.Key_Shift and not ev.isAutoRepeat():
             self._shift_lock = None
             self._refresh_snap()
         super().keyReleaseEvent(ev)
 
     def focusOutEvent(self, ev) -> None:
-        """The window going away mid-Alt IS the Alt+Tab of issue #26: the
-        release will land in the switcher or come back out of order, so the
-        tap is void. Shift's lock goes too — it cannot be held across a
-        window change either."""
+        """Focus gone means the Alt release will land somewhere else, so the
+        claim on it lapses (issue #26)."""
         self._alt_tap = False
         super().focusOutEvent(ev)
 

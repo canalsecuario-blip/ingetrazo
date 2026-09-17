@@ -93,8 +93,29 @@ def phase_of(key: str, tool) -> str:
     return "idle"
 
 
-def hint_for(key: str | None, tool, nav_mode: str | None = None) -> str:
-    """The one line the status bar shows now."""
+#: What each linear-inference mode reads as in the hint, SketchUp's way of
+#: saying it: its own status bar carries «Alt = Activar/desactivar
+#: "Inferencias lineales" (Ninguno activo)» while a line is being drawn —
+#: the offer AND the current state, right where the hand is looking.
+_LINEAR_MODES = {
+    "all": "all on",
+    "off": "none active",
+    "parallel_perp": "parallel / perpendicular only",
+}
+
+
+def alt_inference_hint(mode: str | None) -> str:
+    """The «Alt = …» clause, or "" when there is nothing to offer."""
+    label = _LINEAR_MODES.get(mode or "all")
+    if label is None:
+        return ""
+    return tr('Alt = linear inferences ({state})', state=tr(label))
+
+
+def hint_for(key: str | None, tool, nav_mode: str | None = None,
+             linear_mode: str | None = None) -> str:
+    """The one line the status bar shows now. With ``linear_mode`` and a
+    tool mid-operation, the Alt offer is appended the way SketchUp does."""
     if nav_mode is not None and nav_mode in NAV_HINTS:
         return tr(NAV_HINTS[nav_mode])
     entry = HINTS.get(key or "")
@@ -102,9 +123,20 @@ def hint_for(key: str | None, tool, nav_mode: str | None = None) -> str:
         name = getattr(tool, "name", None)
         return tr("{name}: Esc cancels.", name=tr(name)) if name else ""
     if isinstance(entry, str):
-        return tr(entry)
+        return _with_alt(tr(entry), key, tool, linear_mode)
     phase = phase_of(key, tool)
     if isinstance(entry, dict):
-        return tr(entry.get(phase) or entry.get("idle") or "")
+        return _with_alt(tr(entry.get(phase) or entry.get("idle") or ""),
+                         key, tool, linear_mode)
     idle, started = entry
-    return tr(started if phase != "idle" else idle)
+    text = tr(started if phase != "idle" else idle)
+    return _with_alt(text, key, tool, linear_mode)
+
+
+def _with_alt(text: str, key, tool, linear_mode) -> str:
+    """Append the Alt clause while an operation is under way — not before,
+    because that is exactly when the key does nothing (issue #26)."""
+    if linear_mode is None or phase_of(key, tool) == "idle":
+        return text
+    clause = alt_inference_hint(linear_mode)
+    return f"{text} | {clause}" if clause else text

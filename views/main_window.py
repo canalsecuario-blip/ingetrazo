@@ -1351,7 +1351,9 @@ class MainWindow(QMainWindow):
         from views.status_hints import hint_for
         vp = self.viewport
         tool = vp.active_tool
-        text = hint_for(self._tool_key(tool), tool, getattr(vp, "nav_mode", None))
+        text = hint_for(self._tool_key(tool), tool,
+                        getattr(vp, "nav_mode", None),
+                        getattr(vp, "linear_inference_mode", None))
         if text != getattr(bar, "_base", None):
             if hasattr(bar, "_base"):
                 # Keep a running timed message; only the base changes.

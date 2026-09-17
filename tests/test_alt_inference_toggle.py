@@ -1,21 +1,29 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""Alt cycles the linear inferences — but Alt+Tab must not (issue #26).
+"""Alt cycles the linear inferences DURING an operation, as SketchUp does.
 
-@pacaeiro, on 0.4.2: «I finally discovered that ALT key switch off some
-inferences (witch is very good), but the problem is the ALT key itself. In
-my daily job (windows 10 and 11) I use a lot the shortcuts ALT and ALT+TAB
-to switch between programs, and every time I do that with ingetrazo I lost
-the inferences.»
+@pacaeiro, on 0.4.2 (issue #26): «I finally discovered that ALT key switch
+off some inferences (witch is very good), but the problem is the ALT key
+itself. In my daily job I use a lot the shortcuts ALT and ALT+TAB to switch
+between programs, and every time I do that with ingeTrazo I lost the
+inferences.»
 
-He likes the feature; the key is what betrays it. The cycle used to fire on
-the Alt **press**, so every window switch left the mode stuck. Now it fires
-on the **release of a clean Alt tap**: no other key in between, and the
-window never lost focus — which is exactly what an Alt+Tab is.
+The key is right — Marco's own SketchUp screenshot reads «Alt =
+Activar/desactivar "Inferencias lineales" (Ninguno activo)», the same three
+states we cycle. What was wrong is WHEN: SketchUp offers it only after the
+first click of a line, and we had it global, at any idle moment. So an
+Alt+Tab with nothing in progress moved a mode he was not even using.
 
-The real remedy is the configurable-shortcut editor (Fase 6 of the release
-plan); this makes the collision harmless today without moving the key he
-already likes.
+Gated on an operation being under way, his daily window switching cannot
+touch it: idle, there is nothing to steal.
+
+The first attempt cycled on the RELEASE of a clean tap instead, and he
+tested it from main: «sometimes it triggers the command, some other do
+not». Measured on Marco's desktop with an application-level probe — the
+Alt release is what makes Qt's menu bar take focus, so it lands on the
+QMenuBar and the focus ping-pongs. One tap in six reached the viewport.
+Hence: act on the PRESS, and swallow the release so the menu bar never
+takes it.
 """
 from __future__ import annotations
 
@@ -25,7 +33,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFocusEvent, QKeyEvent
+from PySide6.QtGui import QFocusEvent, QKeyEvent, QVector3D
 from PySide6.QtWidgets import QApplication
 
 _app = QApplication.instance() or QApplication([])
@@ -44,76 +52,114 @@ def _press(vp, key, text=""):
 
 
 def _release(vp, key, text=""):
-    vp.keyReleaseEvent(QKeyEvent(QKeyEvent.KeyRelease, key, Qt.NoModifier,
-                                 text))
+    ev = QKeyEvent(QKeyEvent.KeyRelease, key, Qt.NoModifier, text)
+    vp.keyReleaseEvent(ev)
+    return ev
+
+
+def _busy(vp):
+    """Put the active tool mid-operation, the way the first click does."""
+    vp.active_tool.start_point = QVector3D(0.0, 0.0, 0.0)
+    assert vp._tool_busy(vp.active_tool)
 
 
 def _close(win, vp):
-    win._saved_version = vp.scene.version       # close without the prompt
+    win._saved_version = vp.scene.version
     win.close()
 
 
-def test_a_clean_alt_tap_still_cycles():
-    """The feature he likes, untouched."""
+def test_alt_does_nothing_when_no_operation_is_under_way():
+    """The whole of issue #26: his Alt+Tab happens between operations."""
     win, vp = _viewport()
     try:
         assert vp.linear_inference_mode == "all"
         _press(vp, Qt.Key_Alt)
         _release(vp, Qt.Key_Alt)
-        assert vp.linear_inference_mode == "off"
-        _press(vp, Qt.Key_Alt)
-        _release(vp, Qt.Key_Alt)
-        assert vp.linear_inference_mode == "parallel_perp"
-        _press(vp, Qt.Key_Alt)
-        _release(vp, Qt.Key_Alt)
-        assert vp.linear_inference_mode == "all"        # round trip
-    finally:
-        _close(win, vp)
-
-
-def test_the_press_alone_does_not_cycle_yet():
-    """Holding Alt down must not change anything: the mode is a TAP."""
-    win, vp = _viewport()
-    try:
-        _press(vp, Qt.Key_Alt)
         assert vp.linear_inference_mode == "all"
     finally:
         _close(win, vp)
 
 
-def test_alt_tab_leaves_the_inferences_alone():
-    """The report, reproduced: Alt goes down, the window loses focus to the
-    switcher, and whatever release arrives later must not cycle."""
+def test_alt_cycles_while_a_line_is_being_drawn():
     win, vp = _viewport()
     try:
+        win._activate_tool("line")
+        _busy(vp)
+        for expected in ("off", "parallel_perp", "all"):
+            _press(vp, Qt.Key_Alt)
+            _release(vp, Qt.Key_Alt)
+            assert vp.linear_inference_mode == expected
+    finally:
+        _close(win, vp)
+
+
+def test_it_acts_on_the_press_so_the_menu_bar_cannot_steal_it():
+    """Qt's menu bar takes focus on the Alt RELEASE. Acting on the press is
+    what makes the toggle reach us at all."""
+    win, vp = _viewport()
+    try:
+        win._activate_tool("line")
+        _busy(vp)
+        _press(vp, Qt.Key_Alt)
+        assert vp.linear_inference_mode == "off"      # already done
+    finally:
+        _close(win, vp)
+
+
+def test_the_release_is_swallowed_so_the_menu_bar_never_sees_it():
+    win, vp = _viewport()
+    try:
+        win._activate_tool("line")
+        _busy(vp)
+        _press(vp, Qt.Key_Alt)
+        ev = _release(vp, Qt.Key_Alt)
+        assert ev.isAccepted()
+    finally:
+        _close(win, vp)
+
+
+def test_an_idle_alt_release_is_left_alone_for_the_menus():
+    """With nothing in progress the key is not ours: Alt must keep opening
+    the menu bar like it does in every other program."""
+    win, vp = _viewport()
+    try:
+        _press(vp, Qt.Key_Alt)
+        assert vp._alt_tap is False
+    finally:
+        _close(win, vp)
+
+
+def test_losing_focus_drops_the_claim_on_the_release():
+    win, vp = _viewport()
+    try:
+        win._activate_tool("line")
+        _busy(vp)
         _press(vp, Qt.Key_Alt)
         vp.focusOutEvent(QFocusEvent(QFocusEvent.FocusOut,
                                      Qt.ActiveWindowFocusReason))
-        _release(vp, Qt.Key_Alt)
-        assert vp.linear_inference_mode == "all"
+        assert vp._alt_tap is False
     finally:
         _close(win, vp)
 
 
-def test_alt_with_another_key_does_not_cycle():
-    """Alt+F for a menu, Alt+anything: not a tap, not a cycle."""
+def test_the_status_bar_offers_alt_and_names_the_state():
+    """SketchUp puts the offer AND the current state on the same line while
+    drawing: «Alt = Activar/desactivar "Inferencias lineales" (Ninguno
+    activo)»."""
+    from views.status_hints import alt_inference_hint, hint_for
+
+    assert "all on" in alt_inference_hint("all")
+    assert "none active" in alt_inference_hint("off")
+    assert "parallel" in alt_inference_hint("parallel_perp")
+
     win, vp = _viewport()
     try:
-        _press(vp, Qt.Key_Alt)
-        _press(vp, Qt.Key_F, "f")
-        _release(vp, Qt.Key_F, "f")
-        _release(vp, Qt.Key_Alt)
-        assert vp.linear_inference_mode == "all"
-    finally:
-        _close(win, vp)
-
-
-def test_an_alt_release_out_of_nowhere_does_not_cycle():
-    """A release with no press of ours before it — the tail of a shortcut
-    handled elsewhere — must not move the mode."""
-    win, vp = _viewport()
-    try:
-        _release(vp, Qt.Key_Alt)
-        assert vp.linear_inference_mode == "all"
+        win._activate_tool("line")
+        key = win._tool_key(vp.active_tool)
+        idle = hint_for(key, vp.active_tool, None, "all")
+        _busy(vp)
+        drawing = hint_for(key, vp.active_tool, None, "off")
+        assert "Alt" not in idle, "nothing to offer before the first click"
+        assert "Alt" in drawing and "none active" in drawing
     finally:
         _close(win, vp)
