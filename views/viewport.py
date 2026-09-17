@@ -3242,14 +3242,25 @@ class Viewport(QOpenGLWidget):
                                           round(clip.w(), 4)),
                round(lo.x(), 2), round(lo.y(), 2), round(lo.z(), 2),
                round(hi.x(), 2), round(hi.y(), 2), round(hi.z(), 2))
+        # The light matrix is a pure function of the sun and the bounds —
+        # all of them in the key — so deriving it every frame costs two
+        # matrix builds and keeps it in step with the map. It must NOT hang
+        # off the cache-hit branch: a pass with the sun OFF in between
+        # clears it while leaving the map and its key intact (a sheet
+        # exports plans without shadows beside a 3D with them, and the live
+        # viewport does the same on any Shadows off→on with no edit between)
+        # — the next hit then pushed None into the uniform and the render
+        # died with «setUniformValue(15, None)». Marco, 2026-09-17,
+        # exporting the sheets of Plaza Yanque to PDF.
+        vp = self._light_vp(d, lo, hi)
         if self._shadow_fbo is not None and self._shadow_key == key:
+            self._shadow_vp = vp
             return self._shadow_fbo
         if self._shadow_fbo is None:
             fmt = QOpenGLFramebufferObjectFormat()
             fmt.setAttachment(QOpenGLFramebufferObject.CombinedDepthStencil)
             self._shadow_fbo = QOpenGLFramebufferObject(
                 self._SHADOW_MAP_SIZE, self._SHADOW_MAP_SIZE, fmt)
-        vp = self._light_vp(d, lo, hi)
         self._render_shadow_map(vp)
         self._shadow_key = key
         self._shadow_vp = vp
