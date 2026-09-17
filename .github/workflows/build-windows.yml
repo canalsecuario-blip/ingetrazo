@@ -57,6 +57,21 @@ jobs:
           test -f dist/ingetrazo/_internal/resources/shaders/basic.vert
           test -f dist/ingetrazo/_internal/i18n/es.json
           test -f dist/ingetrazo/_internal/resources/components/components.json
+          # La plantilla .skp en blanco sobre la que el exportador escribe
+          # cada archivo. Es dato de paquete, no código: PyInstaller no la
+          # recoge solo y la 0.4.1 salió sin ella — el programa arrancaba
+          # perfecto y Exportar ▸ SketchUp moría con «[Errno 2] No such
+          # file or directory» (reportado desde Windows, 15-09). Se
+          # comprueba aquí explícitamente porque el mensaje de un test -f
+          # que falla nombra el archivo, y el exe es windowed: su salida
+          # no llega al log.
+          test -f dist/ingetrazo/_internal/openskp/_scaffold/blank_v17.skp
+          # Y el mismo --check que ya corren el tar, el AppImage y el snap
+          # (release.yml), que Windows no tenía: cubre estos archivos y los
+          # que se añadan después, sin que haya que acordarse de listarlos
+          # aquí. Va antes que Qt, así que no abre ventana; devuelve 1 si
+          # falta algo.
+          ./dist/ingetrazo/ingetrazo.exe --check
           echo "bundle OK"
 
       - name: Incluir LEEME en el bundle
