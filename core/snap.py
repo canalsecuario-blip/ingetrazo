@@ -630,6 +630,14 @@ def _from_point_snap(
         refs.append((edge.a, "from_point", COLOR_ENDPOINT))
         refs.append((edge.b, "from_point", COLOR_ENDPOINT))
         refs.append(((edge.a + edge.b) * 0.5, "midpoint", COLOR_MIDPOINT))
+    # The world origin is a reference like any corner. It is a named snap of
+    # its own (rule 6) but lives in no edge, so under an axis lock — which
+    # returns from this function and never reaches rule 6 — it existed only
+    # when a piece of geometry happened to touch it. Measured with the red
+    # axis locked and the cursor four pixels off each point: a corner gave
+    # an exact foot, the origin gave the cursor's own projection, i.e.
+    # nothing (issue #27, @pacaeiro).
+    refs.append((QVector3D(0.0, 0.0, 0.0), "origin", COLOR_ORIGIN))
 
     if hovered_refs:
         # The point of an edge under the cursor is a reference too (the
@@ -841,6 +849,17 @@ def compute_snap(
         axis_dir = _AXIS_VECTORS[axis_lock]
         locked = project_onto_line(start_point, axis_dir)
         cx, cy = candidate_pixel
+        # A lock line runs BOTH ways from the start, so point it at the
+        # cursor. 'From point' below drops any reference behind the draw
+        # direction — sound when the draw direction IS the cursor, but here
+        # the axis was handed over as its positive vector whichever way the
+        # user was going, so HALF THE AXIS offered nothing: the same corner,
+        # the same lock, snapped when approached from the left and not from
+        # the right (measured 2026-09-17; issue #27, @pacaeiro: «almost none
+        # of them are detected»). The two rules above work on the infinite
+        # line and do not care about the sign.
+        if QVector3D.dotProduct(locked - start_point, axis_dir) < 0:
+            axis_dir = -axis_dir
         # 1a. Existing vertices that sit on the lock line → endpoint snap, so
         #     you can land exactly on a corner without leaving the lock.
         for edge in scene.edges:
