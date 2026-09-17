@@ -142,6 +142,75 @@ def test_losing_focus_drops_the_claim_on_the_release():
         _close(win, vp)
 
 
+def test_the_toggle_lasts_one_operation_and_no_longer():
+    """SketchUp's rule, checked by Marco against the real thing: «desactivo
+    con alt, termino de dibujar la línea, aprieto la flechita y aprieto otra
+    vez la línea y está activo la inferencia». Ours was sticky — off stayed
+    off for the session, which is a trap, and it is what made an accidental
+    Alt+Tab bite so hard in issue #26."""
+    from PySide6.QtCore import QPointF
+    from PySide6.QtGui import QMouseEvent
+
+    win, vp = _viewport()
+    try:
+        win._activate_tool("line")
+        _busy(vp)
+        _press(vp, Qt.Key_Alt)
+        assert vp.linear_inference_mode == "off"
+
+        vp.active_tool.start_point = None          # the line was finished
+        # the NEXT gesture starts clean
+        vp.mousePressEvent(QMouseEvent(
+            QMouseEvent.MouseButtonPress, QPointF(5, 5), Qt.LeftButton,
+            Qt.LeftButton, Qt.NoModifier))
+        assert vp.linear_inference_mode == "all"
+    finally:
+        _close(win, vp)
+
+
+def test_a_click_mid_operation_does_not_give_the_inferences_back():
+    """The second click of a line is not a new gesture."""
+    from PySide6.QtCore import QPointF
+    from PySide6.QtGui import QMouseEvent
+
+    win, vp = _viewport()
+    try:
+        win._activate_tool("line")
+        _busy(vp)
+        _press(vp, Qt.Key_Alt)
+        vp.mousePressEvent(QMouseEvent(
+            QMouseEvent.MouseButtonPress, QPointF(5, 5), Qt.LeftButton,
+            Qt.LeftButton, Qt.NoModifier))
+        assert vp.linear_inference_mode == "off"
+    finally:
+        _close(win, vp)
+
+
+def test_changing_tool_gives_the_inferences_back():
+    win, vp = _viewport()
+    try:
+        win._activate_tool("line")
+        _busy(vp)
+        _press(vp, Qt.Key_Alt)
+        assert vp.linear_inference_mode == "off"
+        win._activate_tool("select")
+        assert vp.linear_inference_mode == "all"
+    finally:
+        _close(win, vp)
+
+
+def test_escape_gives_the_inferences_back():
+    win, vp = _viewport()
+    try:
+        win._activate_tool("line")
+        _busy(vp)
+        _press(vp, Qt.Key_Alt)
+        vp.escape()
+        assert vp.linear_inference_mode == "all"
+    finally:
+        _close(win, vp)
+
+
 def test_the_status_bar_offers_alt_and_names_the_state():
     """SketchUp puts the offer AND the current state on the same line while
     drawing: «Alt = Activar/desactivar "Inferencias lineales" (Ninguno

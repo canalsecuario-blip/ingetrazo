@@ -9058,6 +9058,7 @@ class Viewport(QOpenGLWidget):
         if self.active_tool is not None:
             self.active_tool.on_deactivate(self)
         self.active_tool = tool
+        self.linear_inference_mode = "all"   # the toggle lasts one operation
         self._hover_entity = None  # stale highlight from the previous tool
         self.last_snap = None      # stale snap marker from the previous tool
         self._center_ref = None
@@ -9453,6 +9454,10 @@ class Viewport(QOpenGLWidget):
             ev.globalPos(), locked_image=under if under is not picked else None)
 
     def mousePressEvent(self, ev) -> None:
+        # A new gesture starts with the inferences back on: the Alt
+        # toggle lasts ONE operation, as in SketchUp. Mid-operation (the
+        # second click of a line) the tool is still busy and nothing moves.
+        self._release_linear_mode()
         self._input_t = _time_mod.monotonic()   # P0: input→paint latency
         if ev.button() == Qt.MiddleButton:
             self._last_pos = ev.position().toPoint()
@@ -10021,6 +10026,29 @@ class Viewport(QOpenGLWidget):
 
         super().keyPressEvent(ev)
 
+    def _release_linear_mode(self) -> None:
+        """Back to «all inferences» once the operation is over.
+
+        The toggle lasts ONE operation in SketchUp, and Marco checked it
+        against the real thing (2026-09-17): «desactivo con alt, termino de
+        dibujar la línea, aprieto la flechita y aprieto otra vez la línea y
+        está activo la inferencia». Ours was sticky — switched off it stayed
+        off for the rest of the session, which is a trap: you turn it off
+        for one line and then wonder for an hour why nothing snaps. It is
+        also what made issue #26 bite so hard, since an accidental Alt+Tab
+        left it off for good.
+
+        Called where an operation can END: a click that commits, a release,
+        Esc, and any change of tool."""
+        if self.linear_inference_mode == "all":
+            return
+        tool = self.active_tool
+        if tool is not None and self._tool_busy(tool):
+            return
+        self.linear_inference_mode = "all"
+        self._refresh_snap()
+        self.update()
+
     def _cycle_linear_inference_mode(self) -> None:
         """Alt: cycle linear inferences all → off → parallel/perp → all.
 
@@ -10063,6 +10091,7 @@ class Viewport(QOpenGLWidget):
                 return
         if tool is not None and self._tool_busy(tool):
             tool.on_cancel(self)
+            self._release_linear_mode()
             return
         if self.scene.selection:
             self.scene.clear_selection()
