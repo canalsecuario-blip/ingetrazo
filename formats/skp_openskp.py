@@ -851,6 +851,34 @@ def _merge_equal_protos(protos):
     return protos
 
 
+def file_layer_records(model):
+    """The file's layers (tags) as ``[{"name", "visible"}]`` — Scene-level,
+    so the importer can register them even when nothing sits on one yet.
+    The model's default layer never travels (it IS IngeTrazo's default).
+
+    openskp spells the switch ``hidden``; this asked for ``visible``, which
+    no generation of the library has ever had, so the ``getattr`` default
+    won every time and EVERY layer arrived visible however the author had
+    left it. Rafael's ``edificio.skp`` hides ``Camera_FOV_Lines`` and
+    ``Camera_FOV_Volume``: SketchUp shows a small camera glyph, IngeTrazo
+    drew the whole frustum across the model (Marco, 2026-09-17, comparing
+    screenshots). ``visible`` is still honoured if a future library grows
+    it, but ``hidden`` is what decides today.
+    """
+    out = []
+    for ly in getattr(model, "layers", []) or []:
+        name = getattr(ly, "name", "")
+        if (not name or getattr(ly, "default", False)
+                or name in ("Layer0", "Untagged")):
+            continue
+        if hasattr(ly, "hidden"):
+            visible = not bool(ly.hidden)
+        else:
+            visible = bool(getattr(ly, "visible", True))
+        out.append({"name": name, "visible": visible})
+    return out
+
+
 def _adapt(model, name: str, skp_path=None):
     """An ``SkpModel`` → a payload ``{"backend", "groups", "protos"}`` or
     ``None`` when it yields no geometry (so the seam can fall back to skp2dae).
@@ -1154,15 +1182,7 @@ def _adapt(model, name: str, skp_path=None):
     # The file's named materials → the scene registry (core.materials).
     if materials:
         payload["materials"] = materials
-    # The file's layers (tags), with their visibility — Scene-level, so the
-    # importer can register them even when nothing sits on one yet. The
-    # model's default layer never travels (it IS IngeTrazo's default layer).
-    file_layers = [{"name": ly.name,
-                    "visible": bool(getattr(ly, "visible", True))}
-                   for ly in getattr(model, "layers", []) or []
-                   if getattr(ly, "name", "")
-                   and not getattr(ly, "default", False)
-                   and ly.name not in ("Layer0", "Untagged")]
+    file_layers = file_layer_records(model)
     if file_layers:
         payload["layers"] = file_layers
     # The file's saved scenes (camera + hidden layers), inches → metres.
