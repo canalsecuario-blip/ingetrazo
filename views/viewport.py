@@ -365,6 +365,63 @@ def _axes_vertices(spacing: float, pos_len: float = 1.0e5):
     return coords, spans
 
 
+def _guide_vertices(guides, spacing: float, selection=(), centre=None,
+                    reach: float = 0.0):
+    """Guides as world-space DASHES for the GL pass, so they are hidden by
+    the geometry in front of them like any other line (issue #23,
+    @pacaeiro: «guide lines are always in front of other objects, even if
+    they are behind the object»).
+
+    The QPainter overlay they used to live in has no depth buffer at all —
+    it paints after the render, so a guide could only ever be on top. And
+    the cheap fix does not exist: asking the pick index per sample point
+    (``_is_occluded``, what the snap engine uses) measured **618 µs a ray**
+    on the Plaza Yanque model, so ten guides would have cost 200 ms a
+    frame. The depth buffer already knows the answer for free.
+
+    A guide is a HALF-MILLION-METRE line (``GUIDE_HALF_LEN``), so it is not
+    dashed end to end: the run is centred on the guide's closest point to
+    ``centre`` (the camera target) and reaches ``reach`` metres each way,
+    with ``spacing`` scaled to the camera distance — the recipe of
+    ``_axes_vertices``, so the on-screen density stays put across zoom and
+    the dashes converge toward the horizon in perspective. Dashing the
+    whole length instead, under any sane cap, gave 27-metre dashes with
+    22-metre gaps: at a 16-metre view the guide fell in a gap and vanished.
+
+    Returns ``(coords, spans)``: a flat float array and
+    ``[(first_vertex, count, selected)]``, one entry per guide LINE, so the
+    caller can colour the selected ones without a second buffer. Guide
+    points are not here — they stay screen-space crosses in the overlay.
+    """
+    coords = array("f")
+    spans: list[tuple[int, int, bool]] = []
+    spacing = max(float(spacing), 1e-6)
+    reach = float(reach) if reach > 0 else spacing * 500.0
+    dash = spacing * 0.5
+    origin = QVector3D(centre) if centre is not None else QVector3D(0, 0, 0)
+    sel = {id(g) for g in (selection or ())}
+    n = max(1, min(int(2.0 * reach / spacing), 4000))
+    for g in guides or ():
+        if not getattr(g, "is_line", False):
+            continue
+        d = getattr(g, "direction", None)
+        p = getattr(g, "point", None)
+        if d is None or p is None:
+            continue
+        # Foot of the perpendicular from the centre: the stretch of guide
+        # the camera is actually looking at.
+        t0 = QVector3D.dotProduct(origin - p, d) - reach
+        start = len(coords) // 3
+        for k in range(n):
+            a = p + d * (t0 + k * spacing)
+            b = p + d * (t0 + k * spacing + dash)
+            coords.extend([a.x(), a.y(), a.z(), b.x(), b.y(), b.z()])
+        count = len(coords) // 3 - start
+        if count:
+            spans.append((start, count, id(g) in sel))
+    return coords, spans
+
+
 def _ray_triangle(
     origin: QVector3D,
     direction: QVector3D,
@@ -649,6 +706,7 @@ class Viewport(QOpenGLWidget):
 
         self._axes_vao = None
         self._axes_vbo = None
+        self._guides_vbo = None
 
         self._edges_vao = None
         self._edges_vbo = None
@@ -884,6 +942,7 @@ class Viewport(QOpenGLWidget):
 
         # Axes rebuilt per frame (dash spacing scales with zoom), so dynamic.
         self._axes_vao, self._axes_vbo = self._create_dynamic()
+        self._guides_vao, self._guides_vbo = self._create_dynamic()
         self._axes_spans: dict = {}
 
         self._sky_vao, self._sky_vbo = self._create_dynamic()
@@ -1579,6 +1638,35 @@ class Viewport(QOpenGLWidget):
                 self._gl.glDrawArrays(GL_LINES, start, count)
             self._gl.glDepthMask(GL_TRUE)
             self._axes_vao.release()
+
+        # Guides — dashed, DEPTH-TESTED, so geometry in front hides them
+        # (issue #23). They used to be painted in the QPainter overlay,
+        # which runs after the render and has no depth at all, so a guide
+        # behind a wall still showed through. Same rules as the axes:
+        # depth-write off (scaffolding must not cull anything), and none on
+        # a plan sheet or a styled composer frame — a printed lámina does
+        # not carry the scaffolding, and that is also how it behaved before.
+        if (self.plano_style is None and self.style_override is None
+                and getattr(self.scene, "guides", None)):
+            dist = max(float(self.camera.distance), 1e-3)
+            g_coords, g_spans = _guide_vertices(
+                self.scene.guides, dist * 0.03, self.scene.selection,
+                centre=self.camera.target, reach=dist * 15.0)
+            if g_spans:
+                data = g_coords.tobytes()
+                self._guides_vbo.bind()
+                self._guides_vbo.allocate(data, len(data))
+                self._guides_vbo.release()
+                self._guides_vao.bind()
+                self._gl.glDepthMask(GL_FALSE)
+                for start, count, selected in g_spans:
+                    if selected:
+                        self._set_color(0.95, 0.45, 0.16, 1.0)   # selection
+                    else:
+                        self._set_color(0.27, 0.35, 0.47, 1.0)
+                    self._gl.glDrawArrays(GL_LINES, start, count)
+                self._gl.glDepthMask(GL_TRUE)
+                self._guides_vao.release()
 
         self._set_section_clip(True)
         show_edges = style.edges or mode == "wireframe"
@@ -5667,37 +5755,28 @@ class Viewport(QOpenGLWidget):
                 (x0 + t1 * dx, y0 + t1 * dy))
 
     def _draw_guides(self, painter: QPainter) -> None:
-        """Draw construction guides: fine dashed lines (and small crosses for
-        guide points), SketchUp-style scaffolding."""
+        """The small crosses of guide POINTS, SketchUp-style scaffolding.
+
+        Guide LINES are not here any more: they are drawn in the GL pass so
+        the depth buffer hides them behind geometry (issue #23). A cross is
+        a screen-space mark a few pixels wide, not a line through the
+        model, so it stays in the overlay where its size is in pixels."""
         guides = getattr(self.scene, "guides", None)
         if not guides:
             return
         pen = QPen(QColor(70, 90, 120), 1, Qt.DashLine)
-        pen.setDashPattern([14.0, 10.0])                      # traço 14px / falha 10px
+        pen.setDashPattern([14.0, 10.0])
         sel_pen = QPen(QColor(243, 115, 41), 2, Qt.DashLine)  # selection orange
         sel_pen.setDashPattern([14.0, 10.0])
         selection = self.scene.selection
         for g in guides:
-            painter.setPen(sel_pen if g in selection else pen)
             if g.is_line:
-                seg = self._clip_segment_front(*g.segment())
-                if seg is None:
-                    continue
-                pa = self._world_to_pixel(seg[0])
-                pb = self._world_to_pixel(seg[1])
-                if pa is not None and pb is not None:
-                    # Trim to the visible rect BEFORE drawing: a clipped guide
-                    # endpoint sits beside the camera plane and projects to
-                    # millions of px, where Qt draws the dash solid (see
-                    # _clip_pixel_line).
-                    vis = self._clip_pixel_line(pa, pb)
-                    if vis is not None:
-                        painter.drawLine(QPointF(*vis[0]), QPointF(*vis[1]))
-            else:
-                q = self._world_to_pixel(g.point)
-                if q is not None:
-                    painter.drawLine(QPointF(q[0] - 5, q[1]), QPointF(q[0] + 5, q[1]))
-                    painter.drawLine(QPointF(q[0], q[1] - 5), QPointF(q[0], q[1] + 5))
+                continue
+            painter.setPen(sel_pen if g in selection else pen)
+            q = self._world_to_pixel(g.point)
+            if q is not None:
+                painter.drawLine(QPointF(q[0] - 5, q[1]), QPointF(q[0] + 5, q[1]))
+                painter.drawLine(QPointF(q[0], q[1] - 5), QPointF(q[0], q[1] + 5))
 
     def _draw_geo_surfaces(self, painter: QPainter) -> None:
         """Draw terrain-surface fills as shaded, back-to-front triangles so the
