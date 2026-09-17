@@ -595,6 +595,9 @@ class Viewport(QOpenGLWidget):
         self.reference_mode: Optional[str] = None  # None | "parallel" | "perpendicular"
         # Linear-inference toggle (SketchUp's Alt): "all" | "off" | "parallel_perp".
         self.linear_inference_mode = "all"
+        #: A bare Alt is down and nothing else has happened since — the tap
+        #: that cycles the mode on release (issue #26).
+        self._alt_tap = False
         # Sticky inference lock (Shift): (direction, color) captured from the
         # active inference, held until Shift is released.
         self._shift_lock: Optional[tuple] = None
@@ -9864,6 +9867,10 @@ class Viewport(QOpenGLWidget):
         #     moment the key goes down, not after the next mouse move.
         if ev.key() == Qt.Key_Alt and not ev.isAutoRepeat():
             self._apply_alt_cursor()
+            self._alt_tap = True         # armed; any other key disarms it
+        elif self._alt_tap and not ev.isAutoRepeat():
+            # Alt+something is a shortcut, not a tap.
+            self._alt_tap = False
 
         # 1. Numeric value buffer (VCB-style length input).
         if self._handle_value_key(ev):
@@ -9886,9 +9893,14 @@ class Viewport(QOpenGLWidget):
             self.toggle_projection()
             return
 
-        # 3b. Alt: cycle linear inferences (SketchUp) — all → off → parallel/perp.
+        # 3b. Alt: cycle linear inferences — on the RELEASE of a clean tap,
+        #     never on the press. Pressing was how Alt+Tab stole it: the
+        #     switcher's Alt cycled the mode and left it stuck, and Pedro
+        #     Caeiro switches windows all day («every time I do that with
+        #     ingetrazo I lost the inferences», issue #26). He likes the
+        #     feature — it is the key that betrays it, so only the gesture
+        #     changes. ``keyReleaseEvent`` does the cycling.
         if ev.key() == Qt.Key_Alt and not ev.isAutoRepeat():
-            self._cycle_linear_inference_mode()
             return
 
         # 4. Axis lock (arrow keys). Pressing the same arrow toggles it off.
@@ -10061,10 +10073,21 @@ class Viewport(QOpenGLWidget):
     def keyReleaseEvent(self, ev) -> None:
         if ev.key() == Qt.Key_Alt and not ev.isAutoRepeat():
             self._apply_alt_cursor()
+            if self._alt_tap:            # a clean tap, and only then
+                self._alt_tap = False
+                self._cycle_linear_inference_mode()
         if ev.key() == Qt.Key_Shift and not ev.isAutoRepeat():
             self._shift_lock = None
             self._refresh_snap()
         super().keyReleaseEvent(ev)
+
+    def focusOutEvent(self, ev) -> None:
+        """The window going away mid-Alt IS the Alt+Tab of issue #26: the
+        release will land in the switcher or come back out of order, so the
+        tap is void. Shift's lock goes too — it cannot be held across a
+        window change either."""
+        self._alt_tap = False
+        super().focusOutEvent(ev)
 
     # Inferences whose direction can be captured by a Shift lock.
     _SHIFT_LOCKABLE = frozenset({
