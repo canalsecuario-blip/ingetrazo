@@ -132,6 +132,14 @@ hiddenimports += [
 from PyInstaller.utils.hooks import collect_data_files
 hiddenimports += collect_submodules('openskp')
 datas += collect_data_files('openskp')
+# openskp 1.3.0 triangulates with mapbox_earcut instead of Shapely, so the
+# reader now pulls a NATIVE extension (_core*.so) that did not exist in the
+# dependency tree before. ``import openskp`` fails outright without it, so
+# a bundle that misses it is dead on arrival — the same shape of failure as
+# the missing scaffold in 0.4.1. PyInstaller would probably follow the
+# import on its own; "probably" is what cost us that release, so it is
+# named here and ``main.py --check`` verifies it in CI.
+hiddenimports += collect_submodules('mapbox_earcut')
 
 excludes = [
     'tkinter',

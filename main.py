@@ -178,6 +178,19 @@ def _self_check() -> int:
     if not ok:
         problems.append("skp scaffold")
 
+    # openskp 1.3.0 triangulates with mapbox_earcut, a NATIVE extension that
+    # ``import openskp`` needs before it will load at all. Reported on its
+    # own line: without it the scaffold probe above fails too, and its
+    # message would blame the wrong thing.
+    try:
+        import mapbox_earcut  # noqa: F401
+        ok, where = True, getattr(mapbox_earcut, "__file__", "?")
+    except Exception as exc:  # noqa: BLE001 — a bundle without the .so
+        ok, where = False, f"({exc})"
+    print(f"  earcut (openskp): {'found' if ok else 'MISSING'}  {where}")
+    if not ok:
+        problems.append("mapbox_earcut")
+
     # The .skp fallback converter is optional (user-installed, runs under
     # Wine); report presence without failing on absence.
     wine = shutil.which("wine")
