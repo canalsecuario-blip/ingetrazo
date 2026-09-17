@@ -1099,11 +1099,24 @@ def _both_sides(sink) -> bool:
     return ok
 
 
+#: OpenSKP's placement for "no transform at all".
+_IDENTITY_PLACEMENT = ((0.0, 0.0, 0.0),
+                       (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0))
+
+
 def _instance_placement(xform):
     """Split a ``QMatrix4x4`` (local metres → world metres) into OpenSKP's
     ``(translation, matrix3x3)``: the rotation/scale 3×3 is unitless so it
     passes through row-major unchanged; only the translation converts to
-    inches. Inverse of ``skp_openskp._matrix``."""
+    inches. Inverse of ``skp_openskp._matrix``.
+
+    ``None`` is the IDENTITY, not an error: a CLASSIC group owns its
+    geometry in the coordinates its parent expects and has no matrix at all
+    — that is the whole difference from an instance. Reading rows off the
+    None killed Export ▸ SketchUp on any container holding such a child
+    (found on Plaza Yanque, 2026-09-17: «Group 8»)."""
+    if xform is None:
+        return _IDENTITY_PLACEMENT
     r0, r1, r2 = xform.row(0), xform.row(1), xform.row(2)
     matrix3x3 = (r0.x(), r0.y(), r0.z(),
                  r1.x(), r1.y(), r1.z(),
