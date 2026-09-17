@@ -123,6 +123,18 @@ class ProtractorBase(Tool):
 
     # ---- Keyboard -----------------------------------------------------------
     def on_key(self, viewport, key: int, modifiers) -> bool:
+        # Ctrl toggles guide creation on the tools that leave one behind
+        # (SketchUp: measure, or measure AND mark). Subclasses that never
+        # create a guide — Rotate — take their own Ctrl first and never
+        # reach here.
+        if key == Qt.Key_Control and hasattr(type(self), "_guides"):
+            from core.i18n import tr as _tr
+            self._guides = not self._guides
+            viewport.flash_status(
+                _tr("Create guides: on") if self._guides
+                else _tr("Create guides: off — measure only"))
+            viewport.update()
+            return True
         # Arrow keys lock the protractor plane to an axis (SketchUp): Right =
         # red, Left = green, Up = blue; the same arrow again releases it.
         picks = {Qt.Key_Right: "x", Qt.Key_Left: "y", Qt.Key_Up: "z"}
@@ -282,6 +294,11 @@ class ProtractorBase(Tool):
 
 
 class ProtractorTool(ProtractorBase):
+    #: SketchUp's Ctrl on the Protractor: with guides OFF it only reports
+    #: the angle instead of leaving a guide behind (issue #29, @pacaeiro).
+    #: A mode, not a per-click modifier, like the Tape's.
+    _guides = True
+
     name = "Protractor"
     shortcut = "Shift+H"
     vcb_label = "Angle"
@@ -403,6 +420,14 @@ class ProtractorTool(ProtractorBase):
     # ---- Internals ----------------------------------------------------------
     def _commit(self, viewport, deg: float) -> None:
         d = self._direction_at(deg)
+        if not self._guides:
+            # Measure only: report the angle and leave nothing behind.
+            from core.i18n import tr as _tr
+            viewport.flash_status(
+                _tr("Angle: {a}°").format(a=f"{deg:+.1f}"), 4000)
+            self._reset()
+            viewport.update()
+            return
         guide = Guide(self.start_point, d)
         viewport.history.execute(AddGuideCommand(guide))
         # SketchUp: the tool resets for the next measurement, but the angle

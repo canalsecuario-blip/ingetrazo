@@ -1767,5 +1767,8 @@
  "Alt = linear inferences ({state})": "Alt = inferencias lineales ({state})",
  "all on": "todas activas",
  "none active": "ninguna activa",
- "parallel / perpendicular only": "solo paralela y perpendicular"
+ "parallel / perpendicular only": "solo paralela y perpendicular",
+ "Create guides: on": "Crear guías: sí",
+ "Create guides: off — measure only": "Crear guías: no — solo medir",
+ "Angle: {a}°": "Ángulo: {a}°"
 }
