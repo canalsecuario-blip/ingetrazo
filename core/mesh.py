@@ -498,6 +498,42 @@ class Mesh:
         if e in self.edges:
             self.edges.remove(e)
 
+    def prune_orphan_vertices(self) -> int:
+        """Drop vertices nothing references any more. Returns how many went.
+
+        ``remove_edge`` detaches an edge from its endpoints and leaves the
+        endpoints in the mesh, so every erase used to leave its vertices
+        behind. They do not draw and ``bounds()`` ignores them, which is why
+        it went unseen for so long — Marco only hit it when a stray line 16 km
+        out was deleted and the leftovers were all the document had, so
+        zoom-to-extents had nothing to find and could not bring him back.
+
+        A face holds real ``Vertex`` objects in its loops, so "has no edges"
+        is not enough on its own: the corners of a face with no free edges
+        would go with it. Both are checked.
+
+        The position registry is cleaned by IDENTITY, in one pass. A vertex
+        that has been moved no longer hashes to the key it was filed under,
+        and a stale entry is worse than a stray vertex — the next point drawn
+        there would weld to an object that is no longer in the mesh.
+        """
+        used = set()
+        for f in self.faces:
+            for v in f.loop:
+                used.add(id(v))
+            for hole in f.hole_loops:
+                for v in hole:
+                    used.add(id(v))
+        doomed = {id(v) for v in self.vertices if not v.edges and id(v) not in used}
+        if not doomed:
+            return 0
+        self.vertices[:] = [v for v in self.vertices if id(v) not in doomed]
+        for k in [k for k, v in self._registry.items() if id(v) in doomed]:
+            del self._registry[k]
+        self._chunk_dirty = True
+        self._mut_serial += 1
+        return len(doomed)
+
     # ---- Bulk construction (imports / .igz load) ----------------------------
     def bulk_weld(self, pos):
         """Weld a ``(P, 3)`` float array of positions into shared vertices —

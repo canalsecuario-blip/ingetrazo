@@ -408,6 +408,12 @@ class EraseSelectionCommand(Command):
         # drop any such redundant mother (covered by the snapshot undo above).
         for f in heal_overlapping_faces(m):
             scene.selection.discard(f)
+        # And the endpoints go with them. remove_edge only detaches, so an
+        # erase used to leave its vertices in the mesh: invisible, ignored by
+        # bounds(), and written into the .igz. Nine of them 16 km out were
+        # all Marco's document had left after deleting a stray line, which is
+        # why zoom-to-extents could not bring him back (2026-09-18).
+        m.prune_orphan_vertices()
         scene.version += 1
 
     def undo(self, scene) -> None:
