@@ -1778,5 +1778,7 @@
  "guide lines": "líneas guía",
  "guide points": "puntos guía",
  "measure": "medida",
- "guide": "guía"
+ "guide": "guía",
+ "Click a point or an edge to measure. Arrows lock an axis.": "Clic en un punto o una arista para medir. Las flechas fijan un eje.",
+ "Click the second point, or type the distance and Enter.": "Clic en el segundo punto, o teclea la distancia y Enter."
 }

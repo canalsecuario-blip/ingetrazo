@@ -239,6 +239,28 @@ def test_the_status_bar_keeps_the_ctrl_clause_up():
         assert all("Ctrl =" in t for t in seen)
         assert len(set(seen)) == 3, "the clause must change with the mode"
         assert seen[0].index("[") < seen[1].index("[") < seen[2].index("[")
+
+        # ONE modifier at a time, each in the phase where it does
+        # something: SketchUp's line carries Ctrl before the first click
+        # and Alt once the measurement is under way, never both. Stacked,
+        # the bar ran out of room and elided.
+        from PySide6.QtGui import QVector3D
+        from views.status_hints import hint_for
+        tool.start_point = QVector3D(1.0, 1.0, 0.0)
+        midway = hint_for("tape", tool, None, "off")
+        assert "Ctrl =" not in midway
+        assert "Alt =" in midway
+
+        # …and it fits: the bar caps the message at half its width, and a
+        # hint that does not fit is elided with an ellipsis.
+        from PySide6.QtGui import QFontMetrics
+        win.resize(1366, 900)
+        app.processEvents()
+        bar = win.statusBar()
+        cap = int(bar.width() * bar.MESSAGE_SHARE) - 4
+        fm = QFontMetrics(bar._msg.font())
+        for text in (*seen, midway):
+            assert fm.horizontalAdvance(text) <= cap, text
     finally:
         win._saved_version = vp.scene.version
         win.close()

@@ -54,10 +54,15 @@ HINTS: dict = {
         "idle": "Click an edge to round it (or select edges first); type the radius and Enter.",
         "sizing": "Move to set the radius, or type it and Enter; click to round. 'Ns' = segments.",
     },
-    "tape": ("Click a point to measure, or an edge to pull a guide. Arrows lock an axis.",
-             "Click the second point, or type the distance and Enter for an exact guide."),
+    # Short on purpose: the Ctrl clause these two now carry says what they
+    # leave behind, so repeating "to pull a guide" here only ate the room
+    # and got the line elided (Marco, 2026-09-17). SketchUp's own is just
+    # as terse — «Haz clic en un elemento que desees medir.» — with the
+    # modifiers as their own clauses after it.
+    "tape": ("Click a point or an edge to measure. Arrows lock an axis.",
+             "Click the second point, or type the distance and Enter."),
     "protractor": ("Click the vertex of the angle.",
-                   "Click the start of the angle, then the end; or type the degrees for a guide."),
+                   "Click the start of the angle, then the end; or type the degrees."),
     "dimension": ("Click the first point of the dimension.",
                   "Click the second point, then place the dimension line."),
     "text": "Click a point to attach a label; click empty space for a screen note.",
@@ -139,11 +144,15 @@ def _with_alt(text: str, key, tool, linear_mode) -> str:
     The tool's stays up the whole time it is active (SketchUp keeps its
     modifiers on screen); Alt's only appears mid-operation, because that is
     the only time the key does anything (issue #26)."""
-    own = getattr(tool, "status_clause", None)
-    own = own() if callable(own) else ""
-    if own:
-        text = f"{text} | {own}"
-    if linear_mode is None or phase_of(key, tool) == "idle":
+    # One modifier at a time, each in the phase where it does something —
+    # SketchUp's own line carries «Ctrl = …» before the first click and
+    # «Alt = …» once a line is under way, never both. Stacking them made
+    # the bar elide (Marco, 2026-09-17: «no sale completo el texto»).
+    if phase_of(key, tool) == "idle":
+        own = getattr(tool, "status_clause", None)
+        own = own() if callable(own) else ""
+        return f"{text} | {own}" if own else text
+    if linear_mode is None:
         return text
     clause = alt_inference_hint(linear_mode)
     return f"{text} | {clause}" if clause else text
