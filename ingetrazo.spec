@@ -19,6 +19,7 @@ bundled software rasterizer (``opengl32sw.dll``, shipped by the PySide6
 wheel) when the driver can't give a 3.3 core context — both paths satisfy
 the viewport's requirements, no forcing needed.
 """
+import site
 import sys
 from pathlib import Path
 
@@ -140,6 +141,29 @@ datas += collect_data_files('openskp')
 # import on its own; "probably" is what cost us that release, so it is
 # named here and ``main.py --check`` verifies it in CI.
 hiddenimports += collect_submodules('mapbox_earcut')
+# …and naming it was not enough. The Windows wheel is repaired with
+# delvewheel: ``_core.pyd`` is linked against DLLs that live in a SIBLING
+# directory of the package, ``site-packages/mapbox_earcut.libs/``, exactly
+# like numpy.libs and shapely.libs. Those two work because
+# pyinstaller-hooks-contrib ships hooks for them; mapbox_earcut has none,
+# so the .pyd travelled without its dependencies and the bundle died with
+# «DLL load failed while importing _core: The specified module could not
+# be found» — which, because openskp imports it at module level, means no
+# SketchUp import or export at all. Caught by ``--check`` on the v0.4.3
+# tag, which is what that check is for.
+#
+# The DLLs go to the bundle root: PyInstaller puts sys._MEIPASS on the DLL
+# search path, and delvewheel's own ``os.add_dll_directory`` preamble
+# cannot help here because it resolves a path relative to a __file__ that
+# does not exist in a frozen app.
+from PyInstaller.utils.hooks import collect_dynamic_libs
+_earcut_libs = collect_dynamic_libs('mapbox_earcut')
+for _sp in site.getsitepackages() + [site.getusersitepackages()]:
+    _sib = Path(_sp) / 'mapbox_earcut.libs'
+    if _sib.is_dir():
+        _earcut_libs += [(str(f), '.') for f in _sib.iterdir() if f.is_file()]
+        break
+print('spec: mapbox_earcut native files: %d' % len(_earcut_libs))
 
 excludes = [
     'tkinter',
@@ -156,7 +180,7 @@ excludes = [
 a = Analysis(
     ['main.py'],
     pathex=[str(ROOT)],
-    binaries=[],
+    binaries=_earcut_libs,
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
