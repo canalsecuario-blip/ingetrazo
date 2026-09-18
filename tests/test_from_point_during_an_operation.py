@@ -142,3 +142,58 @@ def test_the_alignment_still_answers_where_no_named_point_does():
         start_point=None, acquired_point=V(2.0, 1.0, 0.0))
     assert r.kind == "from_point"
     assert r.point.y() == pytest.approx(1.0, abs=1e-6)
+
+
+def test_pausing_on_a_point_does_not_make_it_unsnappable():
+    """Marco, 2026-09-18, second rectangle: he hooked the midpoint of its
+    bottom edge, saw the marker, clicked ONCE, and the line stopped 3.9 cm
+    short — the edge did not even split, so it never reached it.
+
+        the edge's midpoint      (29.4704, 6.0837)
+        where the line ended     (29.4400, 6.0587)
+
+    The offset ran precisely back along the draw direction, which is what
+    named the culprit: 'through point'. Pausing over the midpoint ACQUIRED
+    it, and that rule then kept him on the ray through it instead of
+    letting him land on it — so hovering a point quietly made that point
+    unsnappable. Measured with the cursor exactly on it:
+
+        nothing acquired          midpoint        0.00 cm
+        that midpoint acquired    through_point   0.73 cm
+
+    Same shape as the from-point fix an hour before: an inference DERIVED
+    from a point must not beat the point it came from.
+    """
+    a, b = V(23.0, 6.0, 0.0), V(36.0, 6.0, 0.0)
+    medio = (a + b) * 0.5
+    inicio = V(22.0, -0.1, 0.0)
+    escena = SimpleNamespace(edges=[SimpleNamespace(a=a, b=b, center=False)])
+
+    def project(s, d):
+        return s + d * QVector3D.dotProduct(medio - s, d)
+
+    r = compute_snap(
+        candidate_world=medio, candidate_pixel=_w2p(medio), scene=escena,
+        world_to_pixel=_w2p, threshold_px=9.0, edge_threshold_px=14.0,
+        start_point=inicio, project_onto_line=project, acquired_point=medio)
+    assert r.kind == "midpoint"
+    assert (r.point - medio).length() == pytest.approx(0.0, abs=1e-6)
+
+
+def test_but_it_still_carries_you_PAST_the_point():
+    """That is what the rule is for, and it keeps it: beyond the acquired
+    point the ray still locks, so a segment can run exactly through a
+    corner and out the other side."""
+    medio = V(29.5, 6.0, 0.0)
+    inicio = V(22.0, -0.1, 0.0)
+    lejos = inicio + (medio - inicio) * 1.6
+
+    def project(s, d):
+        return s + d * QVector3D.dotProduct(lejos - s, d)
+
+    r = compute_snap(
+        candidate_world=lejos, candidate_pixel=_w2p(lejos),
+        scene=SimpleNamespace(edges=[]), world_to_pixel=_w2p,
+        threshold_px=9.0, edge_threshold_px=14.0, start_point=inicio,
+        project_onto_line=project, acquired_point=medio)
+    assert r.kind == "through_point"

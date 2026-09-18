@@ -1180,13 +1180,35 @@ def compute_snap(
     # 4e. 'Through point': heading along the line from the start through an
     #     encouraged corner locks onto it (magenta), so the segment passes
     #     exactly through that point even past it.
+    #
+    #     …but not when the cursor is ON that point. Then the user is not
+    #     heading through it, they are landing on it, and this rule kept
+    #     them on the ray SHORT of it — pausing over a point quietly made
+    #     that point unsnappable. Marco, 2026-09-18: he hooked the midpoint
+    #     of a rectangle's edge, saw its marker, clicked once, and the line
+    #     stopped 3.9 cm short without even splitting the edge. Measured
+    #     with the cursor exactly on the midpoint:
+    #
+    #         nothing acquired            midpoint        0.00 cm
+    #         that midpoint acquired      through_point   0.73 cm
+    #
+    #     The offset ran precisely back along the draw direction, which is
+    #     what gave it away. Same shape as the from-point fix an hour
+    #     earlier: an inference DERIVED from a point must not beat the
+    #     point it came from.
     if allow_axis and start_point is not None:
-        tp = _through_point_snap(
-            start_point, acquired_point, candidate_world - start_point,
-            project_onto_line, inference_angle_deg,
-        )
-        if tp is not None:
-            return tp
+        sobre_el_punto = False
+        if acquired_point is not None:
+            ap = world_to_pixel(acquired_point)
+            if ap is not None:
+                sobre_el_punto = math.hypot(ap[0] - cx, ap[1] - cy) <= threshold_px
+        if not sobre_el_punto:
+            tp = _through_point_snap(
+                start_point, acquired_point, candidate_world - start_point,
+                project_onto_line, inference_angle_deg,
+            )
+            if tp is not None:
+                return tp
 
     # 5. Extension: when drawing collinear with an edge, snap along its dashed
     #     continuation — and to where that extension crosses another edge (a
