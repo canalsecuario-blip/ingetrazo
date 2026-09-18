@@ -77,6 +77,48 @@
   <url type="vcs-browser">https://github.com/ingelibre/ingetrazo</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.4.4" date="2026-09-18">
+      <description>
+        <p>The inference release, and nearly all of it came out of drawing.
+        An afternoon of live testing turned up seven faults no automated test
+        had seen. The arrow-key axis lock now lasts one operation instead of
+        until Esc, and a locked axis no longer traps you inside a polyline —
+        the click meant to close the figure came back as a plain axis point,
+        so it only LOOKED closed. The axis inference now magnetises instead
+        of merely lighting up: the status bar said "On red axis" while the
+        line came out a couple of centimetres out of true. The Line tool can
+        reach the third axis, the one most perpendicular to the camera, which
+        no camera could offer before because the cursor lands on the work
+        plane and a plane holds only two of the three. Three faults of one
+        family: an inference derived from a point was beating the point it
+        came from, so clicking the middle of a wall landed centimetres off,
+        and pausing over a point to see it made that point unreachable.
+        Rectangles are born facing the right way whichever diagonal you drag
+        — two of the four gave a back face, which travels into the .skp and
+        the BIM tagging. Erasing no longer leaves stray vertices in the
+        document. And the two labels on the canvas are finally in your own
+        language.</p>
+        <p xml:lang="es">La release de la inferencia, y casi toda salió de
+        dibujar. Una tarde de pruebas en vivo destapó siete fallos que no
+        había visto ninguna prueba automática. El bloqueo de eje con las
+        flechas dura ahora una operación en vez de hasta que pulses Esc, y
+        con un eje bloqueado ya se puede cerrar una figura: el clic sobre el
+        punto de partida volvía como un punto de eje cualquiera, así que solo
+        PARECÍA cerrada. La inferencia de eje imanta de verdad en vez de
+        limitarse a encenderse: la barra decía «En eje rojo» y la línea salía
+        dos o tres centímetros torcida. La Línea alcanza el tercer eje, el
+        más perpendicular a la cámara, que ninguna vista podía ofrecer porque
+        el cursor se apoya en el plano de trabajo y un plano solo contiene
+        dos de los tres. Tres fallos de una misma familia: una inferencia
+        derivada de un punto le ganaba al punto del que salía, así que clicar
+        el medio de un muro caía centímetros al lado, y pausar sobre un punto
+        para verlo lo volvía inalcanzable. Los rectángulos nacen con la cara
+        correcta arrastres por donde arrastres — dos de las cuatro diagonales
+        daban el reverso, que viaja al .skp y al etiquetado BIM. Borrar ya no
+        deja vértices sueltos en el documento. Y los dos rótulos del visor
+        salen por fin en tu idioma.</p>
+      </description>
+    </release>
     <release version="0.4.3" date="2026-09-17">
       <description>
         <p>SketchUp files that used to be refused now open: the reader moves

@@ -4,6 +4,71 @@ All notable changes to IngeTrazo are documented here.
 Format inspired by [Keep a Changelog](https://keepachangelog.com); versions
 follow [SemVer](https://semver.org).
 
+## [0.4.4] — 2026-09-18
+
+**La release de la inferencia, y casi toda salió de dibujar.** Marco se pasó
+la tarde probando en vivo y encontró, uno detrás de otro, siete fallos que no
+había visto ninguna prueba automática — incluida una rejilla de medio millón
+de situaciones construida ese mismo día para vigilar justo eso. Se cierran
+además las dos issues que @pacaeiro tenía abiertas.
+
+### Arreglado
+- **El bloqueo de eje dura una operación, no hasta que pulses Esc**
+  (issue #30). Con la flecha fijas un eje, terminas la línea… y seguía
+  puesto, así que la siguiente salía constreñida en silencio. Se suelta al
+  terminar y también **al cambiar de herramienta**, que era una fuga peor
+  que la reportada: un bloqueo tomado dibujando una línea seguía activo al
+  pasar a Rectángulo.
+- **Con un eje bloqueado ya se puede CERRAR la figura.** El clic sobre el
+  punto de partida volvía como un punto de eje cualquiera, así que la
+  polilínea nunca terminaba: parecía cerrada —el punto cae donde debe— y el
+  bloqueo no se iba porque la operación seguía viva.
+- **La inferencia de eje IMANTA de verdad** (issue #31). La barra decía «En
+  eje rojo» y la línea salía dos o tres centímetros torcida: el rótulo
+  prometía un imantado que no ocurría. De paso, el conmutador **Alt** ahora
+  también apaga el de Mover, donde nunca había llegado.
+- **La Línea alcanza el tercer eje** (issue #31, segunda parte). Cada vista
+  ofrecía dos ejes y nunca tres —x/y en planta, x/z de frente— porque el
+  cursor se convierte en punto apoyándose en el plano de trabajo, y un plano
+  contiene como mucho dos de los tres. El que faltaba es el más perpendicular
+  a la cámara, como precisó @pacaeiro. Con un tope para que el punto no se
+  dispare: visto de punta, un eje ocupa poquísima pantalla y un temblor del
+  ratón llegó a mandar un punto **a 16 km**.
+- **Tres fallos de la misma familia con los puntos con nombre.** Una
+  inferencia *derivada* de un punto le ganaba al punto del que salía, y eso
+  desplazaba el dibujo unos centímetros sin avisar: (a) la línea de
+  alineación de un punto adquirido tapaba el punto medio —clicar el medio de
+  un muro caía 2,8 cm al lado—; (b) esa misma referencia moría al primer
+  clic, justo cuando hace falta para sujetar el largo de un rectángulo a una
+  esquina; (c) **pausar sobre un punto lo volvía inalcanzable**: al mirarlo
+  lo adquirías y la recta «a través» te dejaba corto, sin llegar a él.
+- **Los rectángulos nacen con la cara correcta.** Dos de las cuatro
+  diagonales por las que puedes arrastrar daban la cara al revés —azul en
+  vez de blanca— porque el contorno heredaba el signo del recorrido. Igual el
+  rectángulo girado en sentido antihorario. No es cosmético: el reverso viaja
+  al `.skp` y al etiquetado BIM.
+- **Borrar ya no deja vértices huérfanos.** `remove_edge` solo desenganchaba,
+  así que cada borrado dejaba sus vértices en el documento: invisibles, pero
+  se guardaban en el `.igz` y se acumulaban. Cuando son lo único que queda,
+  Zoom a extensión no tiene nada que encajar y te deja mirando el vacío.
+- **El rectángulo dice la verdad cuando sale plano.** «Elige la esquina
+  opuesta» era mentira cuando ya la habías elegido: el problema era el plano
+  heredado de la cara bajo el cursor. Ahora lo distingue y nombra la flecha
+  que sirve.
+- **Los dos rótulos del visor salen en tu idioma.** «X axis locked» nunca
+  pasaba por el traductor y el del estado del Alt llevaba el español escrito
+  a mano — cada uno roto en una dirección.
+
+### Para quien mantenga esto
+`scripts/probe_snap_matrix.py` congela lo que responde el motor de
+inferencia en **513 216** situaciones (11 cámaras × 3 escenas × 6
+herramientas × 3 estados de Alt × con y sin punto adquirido × antes y
+después del primer clic × 3 radios × 72 direcciones) y se reproduce byte a
+byte. Nació con 57 024 y hubo que ensancharla **cuatro veces** en una tarde,
+cada vez porque no podía ver un fallo que la mano ya había medido. La
+lección quedó escrita en su cabecera: una red no demuestra nada sobre una
+forma que no sabe sostener.
+
 ## [0.4.3] — 2026-09-17
 
 **La release de openskp 1.3.0 y de los cuatro reportes de Pedro Caeiro.**
