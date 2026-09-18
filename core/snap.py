@@ -178,6 +178,52 @@ def _detect_axis_alignment(
     return None
 
 
+#: An axis whose screen projection is shorter than this is pointing at the
+#: camera: its image is a dot, every cursor is "on" it, and the
+#: perpendicular distance below means nothing. Skip it rather than let it
+#: swallow the screen (looking straight down would glue everything to blue).
+_MIN_AXIS_SCREEN_PX = 12.0
+
+
+def _detect_axis_on_screen(
+    start: QVector3D, candidate_world: QVector3D,
+    candidate_pixel: tuple[float, float], world_to_pixel, threshold_px: float
+) -> Optional[str]:
+    """Which axis the cursor is sitting on, measured in PIXELS.
+
+    The world-space detector above can only ever see the axes contained in
+    the work plane, because that is where ``_world_from_pixel`` puts the
+    candidate. Measured over the whole camera grid on 2026-09-18: every
+    camera reaches exactly two axes and never three — x/y from the top,
+    x/z from the front, y/z from the side. That is issue #31's second
+    point, and it is geometry, not a threshold that needs widening.
+
+    A straight line in the world projects to a straight line on screen, so
+    two projected points give the axis's exact screen line and the question
+    becomes the cursor's perpendicular distance to it. The reach is taken
+    from how far the user is already drawing, which keeps the sampled point
+    in the same region of the screen as the cursor.
+    """
+    reach = (candidate_world - start).length()
+    if reach < 1e-6:
+        return None
+    sx, sy = world_to_pixel(start)
+    cx, cy = candidate_pixel
+    best: Optional[tuple[float, str]] = None
+    for name in ("x", "y", "z"):
+        ax, ay = world_to_pixel(start + _AXIS_VECTORS[name] * reach)
+        dx, dy = ax - sx, ay - sy
+        span = math.hypot(dx, dy)
+        if span < _MIN_AXIS_SCREEN_PX:
+            continue
+        # Distance from the cursor to the INFINITE line: the axis runs both
+        # ways from the start point, as the arrow lock does.
+        dist = abs((cx - sx) * dy - (cy - sy) * dx) / span
+        if dist <= threshold_px and (best is None or dist < best[0]):
+            best = (dist, name)
+    return best[1] if best else None
+
+
 def _direction_from_edge(edge, mode: str,
                         plane_normal: Optional[QVector3D] = None
                         ) -> Optional[QVector3D]:
@@ -822,6 +868,7 @@ def compute_snap(
     reference_edge=None,
     reference_mode: Optional[str] = None,
     inference_angle_deg: float = 3.0,
+    screen_axis_px: Optional[float] = None,
     is_occluded: Optional[Callable[[QVector3D], bool]] = None,
     face_under_cursor: bool = False,
     edge_threshold_px: Optional[float] = None,
@@ -1278,6 +1325,22 @@ def compute_snap(
             if inferred is not None:
                 locked = project_onto_line(start_point, _AXIS_VECTORS[inferred])
                 return SnapResult(locked, "axis", AXIS_COLORS[inferred], axis=inferred)
+        # …and the axes that one CANNOT reach, measured in pixels instead
+        # (issue #31). Deliberately placed after it and only consulted when
+        # it found nothing: an axis the work plane already offers keeps
+        # coming from the world detector, so this can only turn a "no
+        # inference" into one and never change an answer that existed.
+        # Inert until a tool asks for it by setting ``screen_axis_px``.
+        if (allow_axis and screen_axis_px is not None
+                and project_onto_line is not None):
+            inferred = _detect_axis_on_screen(
+                start_point, candidate_world, candidate_pixel,
+                world_to_pixel, screen_axis_px,
+            )
+            if inferred is not None:
+                locked = project_onto_line(start_point, _AXIS_VECTORS[inferred])
+                return SnapResult(locked, "axis", AXIS_COLORS[inferred],
+                                  axis=inferred)
         if allow_axis:
             inferred = _detect_axis_alignment(
                 start_point, candidate_world, inference_angle_deg
