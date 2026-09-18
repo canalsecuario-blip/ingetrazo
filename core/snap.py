@@ -911,6 +911,27 @@ def compute_snap(
         # line and do not care about the sign.
         if QVector3D.dotProduct(locked - start_point, axis_dir) < 0:
             axis_dir = -axis_dir
+        # 1-close. The chain's own first point closes the polyline, lock or
+        #     no lock. Without this the arrow lock TRAPS you in the chain:
+        #     rule 1 returns before rule 4 is ever reached, so the click that
+        #     should have closed the figure came back as a plain "axis" and
+        #     the Line tool went on chaining. Marco, testing 2026-09-18:
+        #     «se cerró la figura … sigue apareciendo el eje X bloqueado» —
+        #     it LOOKED closed, because the point does land where it should,
+        #     and the axis lock never lifted because the operation had not
+        #     actually ended. Same shape as issue #27, where this early
+        #     return also hid the origin.
+        #
+        #     Held to the same standard as 1a below: only when the point
+        #     really is on the lock line, so closing never quietly breaks
+        #     the lock the user asked for.
+        if chain_first_point is not None and _vertex_on_line(
+                chain_first_point, start_point, axis_dir):
+            fp_px = world_to_pixel(chain_first_point)
+            if fp_px is not None and math.hypot(
+                    fp_px[0] - cx, fp_px[1] - cy) <= threshold_px:
+                return SnapResult(QVector3D(chain_first_point), "close",
+                                  COLOR_CLOSE)
         # 1a. Existing vertices that sit on the lock line → endpoint snap, so
         #     you can land exactly on a corner without leaving the lock.
         for edge in scene.edges:
