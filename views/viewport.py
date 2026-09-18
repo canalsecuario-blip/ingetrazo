@@ -9059,6 +9059,11 @@ class Viewport(QOpenGLWidget):
             self.active_tool.on_deactivate(self)
         self.active_tool = tool
         self.linear_inference_mode = "all"   # the toggle lasts one operation
+        # …and so does the arrow-key axis lock (issue #30). It was the one
+        # sticky state this reset forgot, so a lock taken while drawing a
+        # line was still on — label and all — after switching to Rectangle,
+        # quietly constraining a tool that never asked for it.
+        self.axis_lock = None
         self._hover_entity = None  # stale highlight from the previous tool
         self.last_snap = None      # stale snap marker from the previous tool
         self._center_ref = None
@@ -9563,6 +9568,7 @@ class Viewport(QOpenGLWidget):
                 self.flash_status(
                     tr("Operation failed and was undone: {err}",
                        err=self.history.last_error), 8000)
+            self._release_axis_lock_after_operation()
             self.update()
 
     def mouseDoubleClickEvent(self, ev) -> None:
@@ -9806,6 +9812,7 @@ class Viewport(QOpenGLWidget):
         if (ev.button() == Qt.LeftButton and self.active_tool is not None
                 and not self._box_active and self.nav_mode is None):
             self.active_tool.on_release(self)
+            self._release_axis_lock_after_operation()
 
         if ev.button() == Qt.LeftButton and self._box_active:
             self._box_active = False
@@ -10049,6 +10056,35 @@ class Viewport(QOpenGLWidget):
         if tool is not None and self._tool_busy(tool):
             return
         self.linear_inference_mode = "all"
+        self._refresh_snap()
+        self.update()
+
+    def _release_axis_lock_after_operation(self) -> None:
+        """Drop the arrow-key axis lock when the operation that used it ends.
+
+        SketchUp's rule, reported by @pacaeiro (issue #30): «if you're
+        drawing a line and press Arrow to lock X and finish drawing the
+        line, the X lock is released automatically. In ingeTrazo the Axis
+        lock keeps active». Ours only came off in the Esc cascade, so the
+        lock — and its label on screen — outlived the line it was for and
+        silently constrained whatever you drew next.
+
+        Same shape as the Alt toggle two issues ago (#26): a mode meant to
+        last one operation that lasted the session. The Down-arrow
+        reference is deliberately NOT released here — it is bound to an
+        edge the user went and picked, which is a more deliberate act than
+        tapping an arrow, and it already has Esc.
+
+        Called where an operation can END: a click that commits, a stroke
+        released, a typed value applied. A no-op mid-operation, so the
+        second click of a line keeps its lock.
+        """
+        if self.axis_lock is None:
+            return
+        tool = self.active_tool
+        if tool is not None and self._tool_busy(tool):
+            return
+        self.axis_lock = None
         self._refresh_snap()
         self.update()
 
@@ -10331,6 +10367,7 @@ class Viewport(QOpenGLWidget):
                     value = ("abs_len", value)
             self.active_tool.on_value(self, value)
             self._set_value_buffer("")
+            self._release_axis_lock_after_operation()
             return True
 
         if key == Qt.Key_Backspace:
