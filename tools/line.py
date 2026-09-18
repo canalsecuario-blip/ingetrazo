@@ -49,6 +49,22 @@ class LineTool(Tool):
     #: possible; the toggle Alt still switches it off entirely.
     magnetic_axis_deg = 3.0
 
+    #: …and the axes that the one above CANNOT reach, found in pixels.
+    #:
+    #: @pacaeiro (issue #31, second point): «in certain viewport positions,
+    #: is impossible to get Inference of the 3 axis (X, Y, Z)». Measured
+    #: over the whole camera grid, every camera reaches exactly TWO and
+    #: never three — x/y from the top, x/z from the front, y/z from the
+    #: side — because the cursor becomes a world point by landing on the
+    #: work plane, and a plane holds at most two of the three axes. Drawing
+    #: in plan, blue does not exist; from the front, green does not.
+    #:
+    #: The engine consults this only where the world detector found
+    #: nothing, so the two axes that already worked keep coming from where
+    #: they always did. The threshold is the one point snaps already use
+    #: rather than a new constant of its own.
+    screen_axis_px = 9.0
+
     def __init__(self) -> None:
         self.start_point: QVector3D | None = None
         self.hover_point: QVector3D | None = None
