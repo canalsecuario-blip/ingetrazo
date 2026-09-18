@@ -88,9 +88,43 @@ class RectangleTool(PlaneLock, Tool):
             # history (Marco's log, 2026-09-14) and rolled back noisily.
             flash = getattr(ctx.viewport, "flash_status", None)
             if flash is not None:
-                flash(tr("Rectangle needs two sides — pick the opposite corner"))
+                flash(self._degenerate_reason(ctx.world))
             return
         self._commit_rect(ctx.viewport, self._corners(self.start_point, far))
+
+    def _degenerate_reason(self, world) -> str:
+        """Why the rectangle came out flat, in the words that actually help.
+
+        «Pick the opposite corner» is a lie when the user DID pick it: Marco
+        put the two base corners of a wall in and got told off (2026-09-18).
+        The real cause was the plane. Clicking the first corner while
+        hovering the wall's vertical face locks the rectangle to that
+        vertical plane, where those two corners share a line — 4.000 x 0.000
+        — so a step on the ground cannot be drawn at all. The Rotated
+        Rectangle works because it takes its plane from the edge you draw,
+        not from the face under the cursor.
+
+        So: if the far corner lies OFF the locked plane, say that, and name
+        the arrow that picks the plane where the two points do span a
+        rectangle (the axis the span barely uses).
+        """
+        from tools.base import PLANE_LOCK_AXES, PLANE_LOCK_NAMES
+        if self.work_plane is None or self.start_point is None:
+            return tr("Rectangle needs two sides — pick the opposite corner")
+        origin, normal = self.work_plane
+        n = QVector3D(normal).normalized()
+        off = abs(QVector3D.dotProduct(world - origin, n))
+        if off < 1e-3:
+            return tr("Rectangle needs two sides — pick the opposite corner")
+        span = world - self.start_point
+        axis = min(("x", "y", "z"),
+                   key=lambda a: abs(QVector3D.dotProduct(
+                       span, PLANE_LOCK_AXES[a])))
+        arrow = {"x": "\u2192", "y": "\u2190", "z": "\u2191"}[axis]
+        return tr(
+            "That corner is off the drawing plane, so the rectangle has no "
+            "width. Press {arrow} for the {plane} plane.",
+            arrow=arrow, plane=PLANE_LOCK_NAMES[axis])
 
     def on_hover(self, ctx: ToolContext) -> None:
         self.note_plane(ctx.viewport)
