@@ -25,7 +25,7 @@ from core.edits import build_add_edges
 from core.i18n import tr
 from core.history import AddFaceCommand
 from core.triangulate import plane_axes
-from tools.base import PlaneLock, Tool, ToolContext
+from tools.base import face_the_plane, PlaneLock, Tool, ToolContext
 
 
 class RotatedRectangleTool(PlaneLock, Tool):
@@ -296,6 +296,17 @@ class RotatedRectangleTool(PlaneLock, Tool):
                 self.base_point + off, self.start_point + off]
 
     def _commit(self, viewport, corners: list[QVector3D]) -> None:
+        # Same inversion as the plain Rectangle, reached by going round the
+        # base edge the other way: anticlockwise landed the face backwards.
+        # Stood upright on its base edge (angle 90) the loop is square to
+        # the plane and face_the_plane leaves it alone.
+        plano = self.work_plane[1] if self.work_plane else None
+        if plano is None:
+            # getattr, not a bare call: the tool must not hard-depend on a
+            # private of the viewport, and the test doubles do not have it.
+            leer = getattr(viewport, "_work_plane_normal", None)
+            plano = leer() if callable(leer) else None
+        corners = face_the_plane(corners, plano)
         segments = [(corners[i], corners[(i + 1) % 4]) for i in range(4)]
         cmd = build_add_edges(
             viewport.scene, segments, detect_faces=False,

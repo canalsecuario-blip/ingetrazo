@@ -20,7 +20,7 @@ from PySide6.QtGui import QVector3D
 from core.edits import build_add_edges
 from core.i18n import tr
 from core.history import AddFaceCommand
-from tools.base import PlaneLock, Tool, ToolContext
+from tools.base import face_the_plane, PlaneLock, Tool, ToolContext
 
 
 def _plane_axes(normal: QVector3D) -> tuple[QVector3D, QVector3D]:
@@ -251,6 +251,8 @@ class RectangleTool(PlaneLock, Tool):
         return [a, a + u * du, a + u * du + v * dv, a + v * dv]
 
     def _commit_rect(self, viewport, corners: list[QVector3D]) -> None:
+        u, v = self._axes()
+        corners = face_the_plane(corners, QVector3D.crossProduct(u, v))
         segments = [(corners[i], corners[(i + 1) % 4]) for i in range(4)]
         # The rectangle owns its face explicitly (the loop spans corner to
         # corner regardless of how its edges get subdivided by crossings), so

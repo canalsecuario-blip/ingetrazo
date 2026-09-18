@@ -234,6 +234,40 @@ class PlaneLock:
         return None
 
 
+def loop_normal(corners) -> QVector3D:
+    """Newell normal of a closed loop of points."""
+    n = QVector3D(0.0, 0.0, 0.0)
+    for i in range(len(corners)):
+        n += QVector3D.crossProduct(corners[i], corners[(i + 1) % len(corners)])
+    return n
+
+
+def face_the_plane(corners, plane_normal):
+    """Wind ``corners`` so the face looks the way its plane does.
+
+    A shape built by walking «along u, then along v» inherits the SIGN of
+    that walk: drag the other diagonal and the face comes out backwards.
+    Marco saw it as a rectangle landing blue instead of white and read it
+    as random, which is what it looks like when it depends on a diagonal
+    nobody thinks about (2026-09-18). Measured across the four drags, two
+    gave −Z and two +Z; the Rotated Rectangle did the same going
+    anticlockwise. Circle and Polygon are safe — they sweep an angle, so
+    their winding never changes sign.
+
+    Not cosmetic: the back side travels into the .skp and into the BIM
+    tagging, so a wall can arrive inside-out somewhere else.
+
+    A loop lying square to the plane (a rotated rectangle stood upright on
+    its base edge) has no side facing it, and is left exactly as it came.
+    """
+    if plane_normal is None or len(corners) < 3:
+        return list(corners)
+    dot = QVector3D.dotProduct(loop_normal(corners), plane_normal)
+    if dot < -1e-12:
+        return [corners[0]] + list(corners)[:0:-1]
+    return list(corners)
+
+
 @dataclass
 class ToolContext:
     """Bundle of data a tool needs to react to a viewport event."""
