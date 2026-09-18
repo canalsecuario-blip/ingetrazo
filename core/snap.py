@@ -987,14 +987,51 @@ def compute_snap(
         and project_onto_line is not None
     ):
         cx, cy = candidate_pixel
+        lock_dir = QVector3D(shift_lock_dir)
+        locked = project_onto_line(start_point, lock_dir)
+        # The lock line runs BOTH ways from the start: point it at the cursor,
+        # exactly as rule 1 does since issue #27, or half of it offers nothing.
+        if QVector3D.dotProduct(locked - start_point, lock_dir) < 0:
+            lock_dir = -lock_dir
+        # Everything rule 1 gained in issue #27 and this one never did.
+        # @pacaeiro on 0.4.4: «when I get an Axis and locked it with Shift, I
+        # do not have any Snaps… P.S. If I use hard lock (arrows) I have the
+        # Snaps working». He is right, and he also says why it matters: Shift
+        # is the lock you use precisely to go and fetch a point from another
+        # object. Held to a direction with no points to fetch, it is half a
+        # tool. Same three sub-rules, same order.
         for edge in scene.edges:
             for vertex in (edge.a, edge.b):
-                if not _vertex_on_line(vertex, start_point, shift_lock_dir):
+                if not _vertex_on_line(vertex, start_point, lock_dir):
                     continue
                 vp = world_to_pixel(vertex)
                 if vp is not None and math.hypot(vp[0] - cx, vp[1] - cy) <= threshold_px:
                     return SnapResult(vertex, "endpoint", COLOR_ENDPOINT)
-        locked = project_onto_line(start_point, shift_lock_dir)
+        best_hit: Optional[tuple[float, QVector3D]] = None
+        for edge in scene.edges:
+            hit = _line_segment_intersection(start_point, lock_dir, edge.a, edge.b)
+            if hit is None:
+                continue
+            hp = world_to_pixel(hit)
+            if hp is None:
+                continue
+            dh = math.hypot(hp[0] - cx, hp[1] - cy)
+            if dh > threshold_px:
+                continue
+            if is_occluded is not None and is_occluded(hit):
+                continue
+            if best_hit is None or dh < best_hit[0]:
+                best_hit = (dh, hit)
+        if best_hit is not None:
+            return SnapResult(best_hit[1], "intersection", COLOR_ENDPOINT,
+                              guide=(start_point, best_hit[1]))
+        fp = _from_point_snap(
+            scene, start_point, lock_dir, cx, cy, world_to_pixel,
+            threshold_px, is_occluded, extra_point=acquired_point,
+            hovered_refs=True,
+        )
+        if fp is not None:
+            return fp
         color = shift_lock_color if shift_lock_color is not None else COLOR_REFERENCE
         return SnapResult(locked, "reference", color)
 

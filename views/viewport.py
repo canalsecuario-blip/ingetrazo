@@ -9541,10 +9541,18 @@ class Viewport(QOpenGLWidget):
                 ev.position().x(), ev.position().y())
         ctx = self._build_ctx(ev)
         if ctx is not None:
+            _before = len(self.history.undo_stack)
             if double:
                 self.active_tool.on_double_click(ctx)
             else:
                 self.active_tool.on_click(ctx)
+            # Did this click actually MAKE something? That, not «the tool
+            # went idle», is when the arrow lock should go — @pacaeiro on
+            # 0.4.4: «I draw a line with hard lock (arrows) and, after the
+            # line is created the lock is still active». The Line tool
+            # chains, so it is still busy the instant a segment exists, and
+            # the first fix waited for the whole polyline to end.
+            _drew = len(self.history.undo_stack) > _before
             # If the click established a new start point on top of an
             # existing face, lock the rest of the chain to that face's
             # plane so subsequent clicks stay coplanar.
@@ -9573,7 +9581,7 @@ class Viewport(QOpenGLWidget):
                 self.flash_status(
                     tr("Operation failed and was undone: {err}",
                        err=self.history.last_error), 8000)
-            self._release_axis_lock_after_operation()
+            self._release_axis_lock_after_operation(committed=_drew)
             self.update()
 
     def mouseDoubleClickEvent(self, ev) -> None:
@@ -10064,7 +10072,7 @@ class Viewport(QOpenGLWidget):
         self._refresh_snap()
         self.update()
 
-    def _release_axis_lock_after_operation(self) -> None:
+    def _release_axis_lock_after_operation(self, committed: bool = False) -> None:
         """Drop the arrow-key axis lock when the operation that used it ends.
 
         SketchUp's rule, reported by @pacaeiro (issue #30): «if you're
@@ -10087,7 +10095,7 @@ class Viewport(QOpenGLWidget):
         if self.axis_lock is None:
             return
         tool = self.active_tool
-        if tool is not None and self._tool_busy(tool):
+        if not committed and tool is not None and self._tool_busy(tool):
             return
         self.axis_lock = None
         self._refresh_snap()

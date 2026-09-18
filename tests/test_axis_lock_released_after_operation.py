@@ -49,17 +49,42 @@ def _click(vp, x=5.0, y=5.0):
         Qt.LeftButton, Qt.NoModifier))
 
 
-def test_the_lock_survives_the_second_click_of_the_same_line():
-    """Mid-operation it must NOT be dropped — that is the whole point of
-    locking an axis before placing the end point."""
+def test_the_lock_goes_the_moment_the_SEGMENT_exists():
+    """Corrected 2026-09-18 by @pacaeiro, testing 0.4.4: «I draw a line with
+    hard lock (arrows) and, after the line is created the lock is still
+    active».
+
+    This test used to assert the opposite — that the lock survives the
+    second click — and that was my reading, not SketchUp's. The first fix
+    released the lock when the OPERATION ended, and for the Line tool the
+    operation is the whole polyline, because it chains. He means the
+    moment the line EXISTS. He draws in SketchUp every day; the test was
+    encoding my guess over his measurement.
+
+    The signal is «did this click make something», not «is the tool idle».
+    """
     win, vp = _viewport()
     try:
         win._activate_tool("line")
         vp.active_tool.start_point = QVector3D(0.0, 0.0, 0.0)
         vp.axis_lock = "x"
-        _click(vp)
-        assert vp._tool_busy(vp.active_tool), "the line is still under way"
+        _click(vp)                       # this one commits a segment
+        assert vp.axis_lock is None
+    finally:
+        _close(win, vp)
+
+
+def test_but_a_click_that_makes_NOTHING_keeps_it():
+    """The first click of a line only sets the start point, so a lock taken
+    before it must still be there to constrain the segment — otherwise the
+    lock would be useless in the only place it is used."""
+    win, vp = _viewport()
+    try:
+        win._activate_tool("line")
+        vp.axis_lock = "x"
+        _click(vp)                       # first click: nothing committed
         assert vp.axis_lock == "x"
+        assert vp._tool_busy(vp.active_tool), "the line is under way"
     finally:
         _close(win, vp)
 
