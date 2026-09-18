@@ -1770,5 +1770,9 @@
  "parallel / perpendicular only": "solo paralela y perpendicular",
  "Create guides: on": "Crear guías: sí",
  "Create guides: off — measure only": "Crear guías: no — solo medir",
- "Angle: {a}°": "Ángulo: {a}°"
+ "Angle: {a}°": "Ángulo: {a}°",
+ "Guides: guide lines": "Guías: líneas guía",
+ "Guides: guide points": "Guías: puntos guía",
+ "Guides: off — measure only": "Guías: no — solo medir",
+ "Guide point at {d} m": "Punto guía a {d} m"
 }

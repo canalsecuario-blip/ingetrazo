@@ -8,8 +8,15 @@ commands, allowing just to measure a distance or angle, or to create a
 Guideline, if necessary. It would be handy to have that!»
 
 Both tools left a guide behind whether you wanted one or not, so measuring
-meant cleaning up afterwards. Ctrl is a MODE, not a per-click modifier —
-it survives between operations, the way SketchUp's does.
+meant cleaning up afterwards. Ctrl is a MODE, not a per-click modifier; it
+survives between operations and resets when the tool is picked up, the way
+SketchUp's does.
+
+On the TAPE it cycles three ways, not two — its status bar spells them out
+(Marco's screenshot, 2026-09-17): «Ctrl = Líneas guía del ciclo / Puntos
+guía / Medida». Guide POINTS were a mode we did not have at all: the
+entity exists (a Guide with no direction) and the Tape never made one.
+The Protractor has only guides on/off; it cannot make a point.
 
 Rotate shares the Protractor's base and takes Ctrl for its own copy mode;
 it never creates a guide, so it must keep it.
@@ -85,11 +92,47 @@ def test_the_tape_leaves_a_guide_by_default():
     assert len(scene.guides) == 1
 
 
+def test_ctrl_cycles_the_tape_through_the_three_sketchup_modes():
+    scene = Scene()
+    vp = _Vp(scene, _edge(V(0, 0), V(4, 0)))
+    tool = TapeMeasureTool()
+    assert tool._mode == "line"
+    for expected in ("point", "measure", "line"):
+        assert tool.on_key(vp, Qt.Key_Control, Qt.NoModifier)
+        assert tool._mode == expected
+
+
+def test_the_middle_mode_drops_a_guide_POINT():
+    scene = Scene()
+    vp = _Vp(scene, _edge(V(0, 0), V(4, 0)))
+    tool = TapeMeasureTool()
+    tool.on_key(vp, Qt.Key_Control, Qt.NoModifier)     # → points
+    tool.on_click(_ctx(vp, 1, 0))
+    tool.on_click(_ctx(vp, 1, 2))
+    assert len(scene.guides) == 1
+    g = scene.guides[0]
+    assert not g.is_line, "a POINT, not a line"
+    assert abs(g.point.y() - 2.0) < 1e-6
+
+
+def test_a_typed_distance_places_the_point_exactly():
+    scene = Scene()
+    vp = _Vp(scene, _edge(V(0, 0), V(4, 0)))
+    tool = TapeMeasureTool()
+    tool.on_key(vp, Qt.Key_Control, Qt.NoModifier)     # → points
+    tool.on_click(_ctx(vp, 0, 0))
+    tool.on_hover(_ctx(vp, 0, 1))                      # pointing up +Y
+    assert tool.on_value(vp, 2.5)
+    assert len(scene.guides) == 1
+    assert abs(scene.guides[0].point.y() - 2.5) < 1e-6
+
+
 def test_ctrl_turns_the_tape_into_a_plain_ruler():
     scene = Scene()
     vp = _Vp(scene, _edge(V(0, 0), V(4, 0)))
     tool = TapeMeasureTool()
-    assert tool.on_key(vp, Qt.Key_Control, Qt.NoModifier)
+    tool.on_key(vp, Qt.Key_Control, Qt.NoModifier)     # → points
+    tool.on_key(vp, Qt.Key_Control, Qt.NoModifier)     # → measure
     assert tool._guides is False
     tool.on_click(_ctx(vp, 1, 0))
     tool.on_click(_ctx(vp, 1, 2))
@@ -105,8 +148,8 @@ def test_picking_the_tool_up_starts_in_guide_mode():
     scene = Scene()
     vp = _Vp(scene, _edge(V(0, 0), V(4, 0)))
     for tool in (TapeMeasureTool(), ProtractorTool()):
-        tool.on_key(vp, Qt.Key_Control, Qt.NoModifier)
-        assert tool._guides is False
+        while tool._guides:                    # walk to the measure-only mode
+            tool.on_key(vp, Qt.Key_Control, Qt.NoModifier)
         tool.on_activate(vp)
         assert tool._guides is True, type(tool).__name__
 
@@ -119,7 +162,8 @@ def test_the_cursor_says_which_mode_it_is_in():
     for tool in (TapeMeasureTool(), ProtractorTool()):
         tool.on_activate(vp)
         assert tool.cursor_plus is True, type(tool).__name__
-        tool.on_key(vp, Qt.Key_Control, Qt.NoModifier)
+        while tool._guides:
+            tool.on_key(vp, Qt.Key_Control, Qt.NoModifier)
         assert tool.cursor_plus is False, type(tool).__name__
 
 
@@ -128,14 +172,15 @@ def test_the_tape_toggle_survives_the_operation():
     scene = Scene()
     vp = _Vp(scene, _edge(V(0, 0), V(4, 0)))
     tool = TapeMeasureTool()
-    tool.on_key(vp, Qt.Key_Control, Qt.NoModifier)
+    tool.on_key(vp, Qt.Key_Control, Qt.NoModifier)   # → points
+    tool.on_key(vp, Qt.Key_Control, Qt.NoModifier)   # → measure
     tool.on_click(_ctx(vp, 1, 0))
     tool.on_click(_ctx(vp, 1, 2))
     tool.on_click(_ctx(vp, 1, 0))          # a second measurement
     tool.on_click(_ctx(vp, 1, 3))
     assert scene.guides == []
-    tool.on_key(vp, Qt.Key_Control, Qt.NoModifier)   # …until it is turned back
-    assert tool._guides is True
+    tool.on_key(vp, Qt.Key_Control, Qt.NoModifier)   # …until it comes round
+    assert tool._mode == "line"
 
 
 # ── Protractor ──────────────────────────────────────────────────────────────
