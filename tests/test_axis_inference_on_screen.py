@@ -23,6 +23,7 @@ tool, with zero cells that already held an axis moving.
 from __future__ import annotations
 
 import math
+from types import SimpleNamespace
 
 import pytest
 from PySide6.QtGui import QVector3D
@@ -149,3 +150,56 @@ def test_the_line_tool_asks_for_it_and_nobody_else_yet():
     from tools.rectangle import RectangleTool
     assert LineTool.screen_axis_px == 9.0
     assert getattr(RectangleTool, "screen_axis_px", None) is None
+
+def test_the_point_may_not_run_to_the_other_side_of_the_county():
+    """Marco's first live test, 2026-09-18, and the reason for the cap.
+
+    Seen edge-on an axis occupies almost no screen, so one pixel of mouse
+    is metres of line. He put a point 16 km out, deleted it, and was left
+    staring at empty space — with nothing bounded left in the document,
+    zoom-to-extents had nothing to find and could not rescue him.
+
+    Over the grid the honest cases sit at D/R around 1 (median 0.99, p99
+    2.05, worst 4.01), so a 5x ceiling keeps every one of them and kills a
+    runaway, which arrives in the thousands. When it bites, the answer
+    falls through to what it would have been without screen detection at
+    all — never to something new.
+    """
+    import core.snap as snap
+
+    start = V(0, 0, 0)
+    cand = V(0.0, 0.5, 0.0)
+
+    def apenas_de_punta(p):
+        """Blue at 14 px per metre: nearly pointing at the camera."""
+        return (400.0 + p.x() * 60.0, 300.0 - p.y() * 60.0 - p.z() * 14.0)
+
+    def lejisimos(s, d):
+        return s + d * 300.0          # the line's nearest point, far away
+
+    def pide(cap):
+        previo = snap._MAX_AXIS_REACH
+        snap._MAX_AXIS_REACH = cap
+        try:
+            return snap.compute_snap(
+                candidate_world=cand, candidate_pixel=apenas_de_punta(cand),
+                scene=SimpleNamespace(edges=[]), world_to_pixel=apenas_de_punta,
+                threshold_px=9.0, edge_threshold_px=14.0, start_point=start,
+                screen_axis_px=9.0, project_onto_line=lejisimos)
+        finally:
+            snap._MAX_AXIS_REACH = previo
+
+    suelto = pide(1e9)
+    assert suelto.kind == "axis"
+    assert (suelto.point - start).length() > 200.0, "sin tope se dispara"
+
+    atado = pide(5.0)
+    assert atado.kind != "axis", "el tope debe descartar la inferencia"
+    assert (atado.point - start).length() < 1.0, "y dejar el punto donde apuntas"
+
+
+def test_the_cap_is_loose_enough_for_the_real_cases():
+    """It must not cost anything that works: the worst honest ratio
+    measured over the 57,024-cell grid was 4.01x."""
+    from core.snap import _MAX_AXIS_REACH
+    assert _MAX_AXIS_REACH > 4.01

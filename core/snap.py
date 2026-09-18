@@ -184,6 +184,10 @@ def _detect_axis_alignment(
 #: swallow the screen (looking straight down would glue everything to blue).
 _MIN_AXIS_SCREEN_PX = 12.0
 
+#: How far along an axis the resolved point may land, as a multiple of how
+#: far the cursor itself is from the start. See the guard in ``compute_snap``.
+_MAX_AXIS_REACH = 5.0
+
 
 def _detect_axis_on_screen(
     start: QVector3D, candidate_world: QVector3D,
@@ -1339,8 +1343,20 @@ def compute_snap(
             )
             if inferred is not None:
                 locked = project_onto_line(start_point, _AXIS_VECTORS[inferred])
-                return SnapResult(locked, "axis", AXIS_COLORS[inferred],
-                                  axis=inferred)
+                # …but not to the other side of the county. Seen edge-on, an
+                # axis occupies almost no screen, so a pixel of mouse is
+                # metres of line: Marco's first live test put a point 16 km
+                # out and left him staring at empty space with nothing for
+                # zoom-to-extents to find. The point may not run further
+                # from the start than a small multiple of where the cursor
+                # actually is. Measured over the grid, the honest cases sit
+                # at D/R ≈ 1 (median 0.99, p99 2.05, worst 4.01), so this
+                # keeps every one of them and kills a runaway, which came
+                # in at some thousands.
+                reach = (candidate_world - start_point).length()
+                if (locked - start_point).length() <= _MAX_AXIS_REACH * reach:
+                    return SnapResult(locked, "axis", AXIS_COLORS[inferred],
+                                      axis=inferred)
         if allow_axis:
             inferred = _detect_axis_alignment(
                 start_point, candidate_world, inference_angle_deg
