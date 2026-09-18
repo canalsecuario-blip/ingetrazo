@@ -19,7 +19,7 @@ HINTS: dict = {
     "eraser": "Drag over edges to erase them. Shift = hide instead.",
     "paint": "Click a face to paint it. Alt = sample the material under the cursor.",
     "line": ("Click the start point. Arrows lock an axis, Shift locks the inference.",
-             "Click the end point, or type the length and Enter. Arrows lock an axis."),
+             "Click the end point, or type the length. Arrows lock an axis."),
     "freehand": "Press and drag to draw a freehand line.",
     "rectangle": ("Click the first corner. Arrows pick the plane.",
                   "Click the opposite corner, or type width;height and Enter."),
@@ -31,7 +31,7 @@ HINTS: dict = {
                 "Click the radius, or type it and Enter."),
     "arc": {
         "idle": "Click the start point — on an edge to draw a tangent arc.",
-        "end": "Click the end point. Magenta = same distance; double-click to round.",
+        "end": "End point. Magenta = same distance; double-click rounds.",
         "bulge": "Click the bulge, or type it. 'Nr' = radius, 'Ns' = segments. Alt keeps the corner.",
     },
     "arc3": ("Click the start point.", "Click a point the arc passes through, then the end."),
@@ -40,7 +40,7 @@ HINTS: dict = {
     "pushpull": ("Click a face and move. Ctrl keeps the starting face.",
                  "Move, or type the distance and Enter. Double-click repeats the last."),
     "move": ("Click what to move (or select it first). Arrows lock an axis.",
-             "Click the destination, or type the distance and Enter. Arrows lock an axis."),
+             "Click the destination, or type the distance. Arrows lock an axis."),
     "rotate": ("Click the centre of rotation — on a face, the protractor takes its plane.",
                "Click the start of the angle, then the end; or type the degrees."),
     "scale": ("Select something, then drag a grip: corners uniform, edges along an axis.",
@@ -65,7 +65,12 @@ HINTS: dict = {
                    "Click the start of the angle, then the end; or type the degrees."),
     "dimension": ("Click the first point of the dimension.",
                   "Click the second point, then place the dimension line."),
-    "text": "Click a point for a label, or empty space for a screen note.",
+    # Two phases, because after the anchor click the tool is doing
+    # something else entirely — the second click sets where the label sits
+    # and the wording is then asked for in a dialog. Repeating the opening
+    # sentence there said nothing and left no room for the Alt clause.
+    "text": ("Click a point for a label, or empty space for a screen note.",
+             "Click where the label goes; the text is asked for next."),
     "geopath": "Click the points of the path; Enter or double-click finishes.",
     "section": "Click a face to place the section plane. Shift keeps the orientation.",
     "texture_position": "Drag a pin: red moves, green scales/rotates, blue shears. Enter finishes.",
@@ -102,10 +107,18 @@ def phase_of(key: str, tool) -> str:
 #: saying it: its own status bar carries «Alt = Activar/desactivar
 #: "Inferencias lineales" (Ninguno activo)» while a line is being drawn —
 #: the offer AND the current state, right where the hand is looking.
+#:
+#: Ours says «inferences», not «linear inferences», and names the state in
+#: a word: SketchUp has the whole bar for this line and we have half of it
+#: (MESSAGE_SHARE), so the full name spent 52 characters of a 110-character
+#: budget and got the end of the hint elided. The long name still shows
+#: where it is not competing for room — Viewport._draw_linear_mode_label
+#: paints «Inferencias: solo paralela / perpendicular (Alt)» on the canvas
+#: the whole time the mode is off the default.
 _LINEAR_MODES = {
-    "all": "all on",
-    "off": "none active",
-    "parallel_perp": "parallel / perpendicular only",
+    "all": "all",
+    "off": "none",
+    "parallel_perp": "parallel / perpendicular",
 }
 
 
@@ -114,7 +127,7 @@ def alt_inference_hint(mode: str | None) -> str:
     label = _LINEAR_MODES.get(mode or "all")
     if label is None:
         return ""
-    return tr('Alt = linear inferences ({state})', state=tr(label))
+    return tr('Alt = inferences ({state})', state=tr(label))
 
 
 def hint_for(key: str | None, tool, nav_mode: str | None = None,
@@ -153,6 +166,13 @@ def _with_alt(text: str, key, tool, linear_mode) -> str:
         own = own() if callable(own) else ""
         return f"{text} | {own}" if own else text
     if linear_mode is None:
+        return text
+    # …and only where the key HAS something to do. Linear inferences reach
+    # a tool through the snap engine, so a tool that does not snap — the
+    # eraser, Scale, Select, Position Texture — was being offered a toggle
+    # that changes nothing for it, and the dead clause was what pushed
+    # those lines past the end of the bar.
+    if not getattr(tool, "uses_snap", False):
         return text
     clause = alt_inference_hint(linear_mode)
     return f"{text} | {clause}" if clause else text

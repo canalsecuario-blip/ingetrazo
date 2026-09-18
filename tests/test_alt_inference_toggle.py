@@ -217,8 +217,13 @@ def test_the_status_bar_offers_alt_and_names_the_state():
     activo)»."""
     from views.status_hints import alt_inference_hint, hint_for
 
-    assert "all on" in alt_inference_hint("all")
-    assert "none active" in alt_inference_hint("off")
+    # Shorter than SketchUp's own wording on purpose: it has the whole bar
+    # for this line and we have half of it, so the full name «linear
+    # inferences (none active)» spent 52 of a ~110-character budget and got
+    # the end of the hint elided on a 1366 screen. The long name still runs
+    # on the canvas, where it competes with nothing.
+    assert "all" in alt_inference_hint("all")
+    assert "none" in alt_inference_hint("off")
     assert "parallel" in alt_inference_hint("parallel_perp")
 
     win, vp = _viewport()
@@ -229,6 +234,6 @@ def test_the_status_bar_offers_alt_and_names_the_state():
         _busy(vp)
         drawing = hint_for(key, vp.active_tool, None, "off")
         assert "Alt" not in idle, "nothing to offer before the first click"
-        assert "Alt" in drawing and "none active" in drawing
+        assert "Alt" in drawing and "none" in drawing
     finally:
         _close(win, vp)
