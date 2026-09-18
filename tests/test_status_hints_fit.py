@@ -14,13 +14,13 @@ longer than the English it is translated from.
 
 TWO THINGS THE FIRST VERSION OF THIS TEST GOT WRONG, both found by CI:
 
-1. **It measured with the local font and left no headroom.** Font metrics
-   are a property of the machine: the same Spanish strings that came to
-   662 px here measured 682–723 px on the GitHub runner, so the guard
-   passed on the desktop and failed in CI. Measured against the runner's
-   own numbers, it runs up to :data:`_CI_MARGIN` wider — the budget now
-   carries that margin, and a character cap underneath it so an even wider
-   font somewhere else still gets caught.
+1. **It measured in pixels, which are a property of the machine.** The same
+   Spanish strings that came to 626/647/650 px here measured 682/704/723 px
+   on the GitHub runner. Shaving a margin off the budget does not fix that,
+   and CI said so a second time: the margin lands on BOTH machines, so the
+   wide one pays for its width twice and fails strings that fit it fine.
+   What travels is a character count, calibrated against the widest font we
+   have measured; the pixel check stays as the local truth beside it.
 
 2. **It invented phases no tool can be in.** It set ``start_point`` on
    every tool, including the ones that never have one — the section tool
@@ -48,18 +48,21 @@ _app = QApplication.instance() or QApplication([])
 #: sent the toolbar icons back to 24 px in the first place.
 _NARROW_PX = 1366
 
-#: How much wider the same string can measure on a machine that is not this
-#: one. Measured 2026-09-18 from the CI failure the first version of this
-#: test produced: three Spanish hints came to 626/647/650 px here and
-#: 682/704/723 px on the runner — 1.089, 1.088 and 1.112.
-_CI_MARGIN = 1.12
-
-#: A backstop against runaway growth, not a second budget: it must stay
-#: LOOSER than the pixel rule above or it starts overruling it with a
-#: cruder measure. Spanish runs ~5.2 px/character and English ~5.45, so a
-#: cap tight enough to bind in English rejects Spanish lines that fit with
-#: room to spare — which is exactly what it did at 110.
-_MAX_CHARS = 125
+#: THE portable rule, and the reason there is one. Pixels are a property
+#: of the machine: the same Spanish hints measure ~5.3 px/character here
+#: and up to 5.80 on the GitHub runner, so a hint that fits on the desktop
+#: can be cut off in CI or on a user's screen.
+#:
+#: The obvious patch — measure in pixels and shave a margin off the budget
+#: — does not work, and CI said so: the margin gets applied on BOTH
+#: machines, so the wide one is charged for its width twice and fails
+#: strings that comfortably fit it. A budget that travels has to be
+#: counted in something that does not change between machines.
+#:
+#: 112 characters is the 675 px cap at the worst density we have actually
+#: measured anywhere (5.80 px/character, from the runner's own failure
+#: output on 2026-09-17), with a little left over.
+_MAX_CHARS = 112
 
 #: Every state Alt can be in. The third one, «parallel / perpendicular», is
 #: the longest and the first version of this test never measured it.
@@ -95,8 +98,10 @@ def _overlong(language: str):
     _app.processEvents()
     vp, bar = win.viewport, win.statusBar()
     fm = QFontMetrics(bar._msg.font())
+    # The pixel check is the local truth — does it fit on THIS screen —
+    # and the character cap is what makes the guard mean the same thing
+    # everywhere. Neither is a margin on the other.
     cap = int(bar.width() * bar.MESSAGE_SHARE) - 4
-    budget = int(cap / _CI_MARGIN)
     bad = []
     try:
         for key in sorted(HINTS):
@@ -118,8 +123,8 @@ def _overlong(language: str):
                 for mode in _MODES:
                     text = hint_for(win._tool_key(tool), tool, None, mode)
                     width = fm.horizontalAdvance(text)
-                    if width > budget:
-                        bad.append(f"{key} ({width}px > {budget}px): {text}")
+                    if width > cap:
+                        bad.append(f"{key} ({width}px > {cap}px): {text}")
                     elif len(text) > _MAX_CHARS:
                         bad.append(f"{key} ({len(text)} chars > {_MAX_CHARS}): {text}")
     finally:
