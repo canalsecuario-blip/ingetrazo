@@ -45,8 +45,20 @@ class TapeMeasureTool(Tool):
         #: SketchUp's — it is a mode, not a per-click modifier.
         self._guides = True
 
+    @property
+    def cursor_plus(self) -> bool:
+        """SketchUp's little + beside the cursor: this one will leave a
+        guide."""
+        return self._guides
+
     # ---- Lifecycle ----------------------------------------------------------
     def on_activate(self, viewport) -> None:
+        # Picking the tool up starts in guide mode, as SketchUp does — the
+        # + «appears or disappears depending on whether you tapped Ctrl
+        # SINCE YOU PICKED UP THE TOOL». Ours used to stay off for good, so
+        # after one measure-only reading the guides looked broken (Marco,
+        # 2026-09-17: «solo funciona con ctrl»).
+        self._guides = True
         self._reset()
 
     def on_deactivate(self, viewport) -> None:
@@ -61,6 +73,9 @@ class TapeMeasureTool(Tool):
             self._guides = not self._guides
             viewport.flash_status(tr("Create guides: on") if self._guides
                                   else tr("Create guides: off — measure only"))
+            apply = getattr(viewport, "_apply_tool_cursor", None)
+            if apply is not None:
+                apply()                  # the + appears or disappears now
             viewport.update()
             return True
         return super().on_key(viewport, key, modifiers)

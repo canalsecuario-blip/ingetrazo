@@ -133,6 +133,9 @@ class ProtractorBase(Tool):
             viewport.flash_status(
                 _tr("Create guides: on") if self._guides
                 else _tr("Create guides: off — measure only"))
+            apply = getattr(viewport, "_apply_tool_cursor", None)
+            if apply is not None:
+                apply()
             viewport.update()
             return True
         # Arrow keys lock the protractor plane to an axis (SketchUp): Right =
@@ -296,8 +299,12 @@ class ProtractorBase(Tool):
 class ProtractorTool(ProtractorBase):
     #: SketchUp's Ctrl on the Protractor: with guides OFF it only reports
     #: the angle instead of leaving a guide behind (issue #29, @pacaeiro).
-    #: A mode, not a per-click modifier, like the Tape's.
+    #: Reset when the tool is picked up, as SketchUp does.
     _guides = True
+
+    @property
+    def cursor_plus(self) -> bool:
+        return self._guides
 
     name = "Protractor"
     shortcut = "Shift+H"
@@ -310,6 +317,11 @@ class ProtractorTool(ProtractorBase):
 
     # ---- Lifecycle ----------------------------------------------------------
     def on_activate(self, viewport) -> None:
+        # Picking the tool up starts in guide mode, as SketchUp does — its +
+        # «appears or disappears depending on whether you tapped Ctrl SINCE
+        # YOU PICKED UP THE TOOL». Ours stayed off for good, so after one
+        # measure-only reading the guides looked broken (Marco, 2026-09-17).
+        self._guides = True
         self._reset()
         self._last = None
 

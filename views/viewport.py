@@ -9089,7 +9089,10 @@ class Viewport(QOpenGLWidget):
             if (PaintTool.sample_armed
                     or QApplication.keyboardModifiers() & Qt.AltModifier):
                 icon = "eyedropper"
-        cur = (tool_cursor(icon)
+        # SketchUp's guide-mode plus: the Tape and the Protractor say with
+        # it whether this measurement will leave a guide behind (issue #29).
+        plus = bool(getattr(self.active_tool, "cursor_plus", False))
+        cur = (tool_cursor(icon, plus)
                if self.active_tool is not None else None)
         if cur is None and self.active_tool is not None:
             # A tool without a drawn icon can still ask for a stock Qt

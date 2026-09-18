@@ -97,6 +97,32 @@ def test_ctrl_turns_the_tape_into_a_plain_ruler():
     assert tool._measured is not None, "…but it did measure"
 
 
+def test_picking_the_tool_up_starts_in_guide_mode():
+    """SketchUp's rule: the + «appears or disappears depending on whether
+    you tapped Ctrl SINCE YOU PICKED UP THE TOOL». Ours stayed off for
+    good, so after one measure-only reading the guides looked broken —
+    Marco hit it straight away: «solo funciona con ctrl»."""
+    scene = Scene()
+    vp = _Vp(scene, _edge(V(0, 0), V(4, 0)))
+    for tool in (TapeMeasureTool(), ProtractorTool()):
+        tool.on_key(vp, Qt.Key_Control, Qt.NoModifier)
+        assert tool._guides is False
+        tool.on_activate(vp)
+        assert tool._guides is True, type(tool).__name__
+
+
+def test_the_cursor_says_which_mode_it_is_in():
+    """The + beside the cursor is the ENTIRE interface of this toggle in
+    SketchUp; without it the mode is invisible until after the click."""
+    scene = Scene()
+    vp = _Vp(scene)
+    for tool in (TapeMeasureTool(), ProtractorTool()):
+        tool.on_activate(vp)
+        assert tool.cursor_plus is True, type(tool).__name__
+        tool.on_key(vp, Qt.Key_Control, Qt.NoModifier)
+        assert tool.cursor_plus is False, type(tool).__name__
+
+
 def test_the_tape_toggle_survives_the_operation():
     """A mode, not a per-click modifier."""
     scene = Scene()

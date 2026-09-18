@@ -1462,9 +1462,15 @@ def _silhouette(src: QPixmap, color: QColor) -> QPixmap:
     return s
 
 
-def tool_cursor(key: str | None) -> QCursor | None:
+def tool_cursor(key: str | None, plus: bool = False) -> QCursor | None:
     """A cursor that IS the tool (SketchUp-style), or ``None`` to keep the
-    standard arrow (unknown keys, and Select — SketchUp's plain pointer)."""
+    standard arrow (unknown keys, and Select — SketchUp's plain pointer).
+
+    ``plus`` adds SketchUp's little ``+``: on the Tape and the Protractor it
+    is the ENTIRE interface of the Ctrl toggle — a plus beside the cursor
+    means this measurement will leave a guide, no plus means it only
+    measures. Without it the mode is invisible and you find out after the
+    click (issue #29, @pacaeiro)."""
     if not key or key == "select":
         return None
     pencil = key in _PENCIL_TOOLS
@@ -1476,7 +1482,7 @@ def tool_cursor(key: str | None) -> QCursor | None:
     app = QApplication.instance()
     screen = app.primaryScreen() if app is not None else None
     dpr = screen.devicePixelRatio() if screen is not None else 1.0
-    cache_key = (key, ink.rgb(), round(dpr, 2))
+    cache_key = (key, bool(plus), ink.rgb(), round(dpr, 2))
     cached = _cursor_cache.get(cache_key)
     if cached is not None:
         return cached
@@ -1508,6 +1514,14 @@ def tool_cursor(key: str | None) -> QCursor | None:
             p.restore()
     else:
         draw(p, ink)
+    if plus:
+        # SketchUp's guide-mode plus, top-right so it never sits under the
+        # hotspot. Drawn before the halo so it gets one too.
+        ppen = QPen(ink, 4.0)
+        ppen.setCapStyle(Qt.RoundCap)
+        p.setPen(ppen)
+        p.drawLine(34, 6, 44, 6)
+        p.drawLine(39, 1, 39, 11)
     p.end()
 
     # Halo: a 1 px light (or dark, on dark themes) outline all around, so the
