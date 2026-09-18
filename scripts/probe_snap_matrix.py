@@ -66,6 +66,14 @@ ALT_MODES = ("all", "off", "parallel_perp")
 #: offsets: the cursor is a pixel and that is where the question lives.
 RADII_PX = (30.0, 90.0)
 
+#: With and without a point the user has hovered and left. Added 2026-09-18:
+#: the grid cleared it on every cell, so it measured nothing about the
+#: acquired-point rules — and those are exactly what Marco's rectangle needs
+#: («en la segunda esquina está la referencia pero al momento de jalar el
+#: rectángulo se pierde la referencia»). A baseline that cannot see a rule
+#: cannot protect it.
+ACQUIRED = (None, (2.0, 1.0, 0.0))
+
 
 def _round(v: float) -> float:
     """Six decimals: enough to catch a real move, coarse enough that the
@@ -113,7 +121,7 @@ def _reset_tool(vp, start: QVector3D | None) -> object | None:
 
 def run(out_path: str, radii=RADII_PX, directions: int = 16,
         cameras=CAMERAS, tools=TOOLS, scenes=SCENES,
-        alt_modes=ALT_MODES) -> int:
+        alt_modes=ALT_MODES, acquired=ACQUIRED) -> int:
     app = QApplication.instance() or QApplication([])
     from views.main_window import MainWindow
 
@@ -144,36 +152,43 @@ def run(out_path: str, radii=RADII_PX, directions: int = 16,
                         continue
                     if vp.active_tool is None:
                         continue
-                    for mode in alt_modes:
-                        for radius in radii:
-                            for i in range(directions):
-                                ang = 2.0 * math.pi * i / directions
-                                px = sx + radius * math.cos(ang)
-                                py = sy + radius * math.sin(ang)
-                                _reset_tool(vp, start_world)
-                                vp.linear_inference_mode = mode
-                                vp._last_mouse_pos = QPointF(px, py)
-                                try:
-                                    vp._refresh_snap()
-                                except Exception as exc:    # noqa: BLE001
-                                    answer = {"kind": "ERROR",
-                                              "err": type(exc).__name__}
-                                else:
-                                    s = vp.last_snap
-                                    answer = ({"kind": "none-returned"}
-                                              if s is None else
-                                              {"kind": s.kind,
-                                               "axis": s.axis,
-                                               "x": _round(s.point.x()),
-                                               "y": _round(s.point.y()),
-                                               "z": _round(s.point.z())})
-                                fh.write(json.dumps({
-                                    "scene": scene_kind, "cam": cam_name,
-                                    "tool": tool_key, "alt": mode,
-                                    "r": radius, "dir": i,
-                                    **answer,
-                                }, sort_keys=True, ensure_ascii=False) + "\n")
-                                rows += 1
+                    for acq in acquired:
+                        for mode in alt_modes:
+                            for radius in radii:
+                                for i in range(directions):
+                                    ang = 2.0 * math.pi * i / directions
+                                    px = sx + radius * math.cos(ang)
+                                    py = sy + radius * math.sin(ang)
+                                    _reset_tool(vp, start_world)
+                                    # After the reset, never before: the reset
+                                    # is what clears it.
+                                    if acq is not None:
+                                        vp._acquired_point = QVector3D(*acq)
+                                        vp._encouraged = [QVector3D(*acq)]
+                                    vp.linear_inference_mode = mode
+                                    vp._last_mouse_pos = QPointF(px, py)
+                                    try:
+                                        vp._refresh_snap()
+                                    except Exception as exc:    # noqa: BLE001
+                                        answer = {"kind": "ERROR",
+                                                  "err": type(exc).__name__}
+                                    else:
+                                        s = vp.last_snap
+                                        answer = ({"kind": "none-returned"}
+                                                  if s is None else
+                                                  {"kind": s.kind,
+                                                   "axis": s.axis,
+                                                   "x": _round(s.point.x()),
+                                                   "y": _round(s.point.y()),
+                                                   "z": _round(s.point.z())})
+                                    fh.write(json.dumps({
+                                        "scene": scene_kind, "cam": cam_name,
+                                        "tool": tool_key, "alt": mode,
+                                        "r": radius, "dir": i,
+                                        "acq": "on" if acq else "off",
+                                        **answer,
+                                    }, sort_keys=True, ensure_ascii=False) + "\n")
+                                    rows += 1
     win._saved_version = vp.scene.version
     win.close()
     return rows

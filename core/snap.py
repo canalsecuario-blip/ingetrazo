@@ -1308,6 +1308,42 @@ def compute_snap(
         if pf is not None:
             return pf
 
+    # 8d. 'From point' while an operation is UNDER WAY. The same encouraged
+    #     point as rule 5d, which until now switched itself off the moment
+    #     you clicked — ``start_point is None`` was in its condition.
+    #
+    #     Marco, 2026-09-18, drawing a step along a wall: «en la segunda
+    #     esquina está la referencia pero al momento de jalar el rectángulo
+    #     se pierde la referencia». Measured with the wall's far corner
+    #     acquired and the cursor pulled out to give the step its depth:
+    #
+    #         before the first click   from_point   x = 6.430   (the corner)
+    #         rectangle under way      none         x = 6.370   (drifted)
+    #
+    #     The machinery was built and working; it was locked away at exactly
+    #     the moment he needed it. SketchUp offers it mid-operation too.
+    #
+    #     It is a SECOND call rather than an unlocked condition on 5d,
+    #     because 5d sits above the named points: opening it in place would
+    #     have let an alignment line outrank a midpoint or the origin, and
+    #     that precedence is not ours to spend. Down here it competes only
+    #     with the soft axis cue below — the weakest rule there is.
+    if allow_axis and start_point is not None:
+        if acquired_points:
+            tp = _two_point_snap(
+                acquired_points, candidate_world, cx, cy, world_to_pixel,
+                threshold_px, is_occluded,
+            )
+            if tp is not None:
+                return tp
+        if acquired_point is not None:
+            fp = _first_point_from_point(
+                acquired_point, candidate_world, cx, cy, world_to_pixel,
+                threshold_px, is_occluded,
+            )
+            if fp is not None:
+                return fp
+
     # 9. Axis inference. A soft visual cue when the tool asks for nothing more.
     #    When ``magnetic_axis_deg`` is set (the Move tool), the inference is
     #    *magnetic*: within that wider angle of an axis the point is projected
