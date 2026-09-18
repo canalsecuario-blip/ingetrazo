@@ -1223,31 +1223,6 @@ def compute_snap(
     if inter is not None:
         return inter
 
-    # 5d. 'From point' for the FIRST click — SketchUp's encouraged point: with
-    #     no segment in progress, the cursor lines up along an axis with the
-    #     corner it hovered last, on a dotted axis-coloured line from that
-    #     corner. This is how a window's first corner lands level with the
-    #     door's top (Rafael's review, 2026-09-10: «te salía una línea de
-    #     extensión para poder dibujar aquí la ventana»); the 'from point'
-    #     above only knew segments already under way.
-    if allow_axis and start_point is None and acquired_points:
-        # Two encouraged points at once (SketchUp's two-point method): a
-        # dotted line from each point, the cursor pinned where they cross —
-        # level with the door's top AND in line with the other jamb.
-        tp = _two_point_snap(
-            acquired_points, candidate_world, cx, cy, world_to_pixel,
-            threshold_px, is_occluded,
-        )
-        if tp is not None:
-            return tp
-    if allow_axis and start_point is None and acquired_point is not None:
-        fp = _first_point_from_point(
-            acquired_point, candidate_world, cx, cy, world_to_pixel,
-            threshold_px, is_occluded,
-        )
-        if fp is not None:
-            return fp
-
     # 6. Midpoint + origin.
     best = None
     for edge in scene.edges:
@@ -1329,9 +1304,31 @@ def compute_snap(
         if pf is not None:
             return pf
 
-    # 8d. 'From point' while an operation is UNDER WAY. The same encouraged
-    #     point as rule 5d, which until now switched itself off the moment
-    #     you clicked — ``start_point is None`` was in its condition.
+    # 8d. 'From point' from an encouraged point — SketchUp's dotted line
+    #     from the corner you last hovered. This is how a window's first
+    #     corner lands level with the door's top (Rafael, 2026-09-10: «te
+    #     salía una línea de extensión para poder dibujar aquí la ventana»).
+    #
+    #     It used to live ABOVE the named points and only before the first
+    #     click. Both halves of that were wrong, and Marco found them in one
+    #     afternoon. Measured with a clean 4 m line and one end acquired,
+    #     the cursor sitting exactly on its midpoint:
+    #
+    #         nothing acquired      midpoint     0.00 cm
+    #         one end acquired      from_point   0.65 cm
+    #
+    #     An alignment LINE was beating a named POINT, so clicking the
+    #     midpoint of a wall quietly landed centimetres off and the drawing
+    #     came out skewed — reported twice before it was caught («del medio
+    #     de la línea quiero dibujar una línea, dibujo sale desfasada»; «sí
+    #     agarra, solo cuando termina el dibujo está desfasado»). His own
+    #     case was 2.8 cm on a 4 m wall.
+    #
+    #     Down here it sits below endpoint, midpoint, intersection and
+    #     origin, and above the soft axis cue — and it no longer cares
+    #     whether an operation is under way, which is the other half: the
+    #     reference used to die at the first click, exactly when he needed
+    #     it to hold a rectangle's length to a corner.
     #
     #     Marco, 2026-09-18, drawing a step along a wall: «en la segunda
     #     esquina está la referencia pero al momento de jalar el rectángulo
@@ -1349,7 +1346,7 @@ def compute_snap(
     #     have let an alignment line outrank a midpoint or the origin, and
     #     that precedence is not ours to spend. Down here it competes only
     #     with the soft axis cue below — the weakest rule there is.
-    if allow_axis and start_point is not None:
+    if allow_axis:
         if acquired_points:
             tp = _two_point_snap(
                 acquired_points, candidate_world, cx, cy, world_to_pixel,

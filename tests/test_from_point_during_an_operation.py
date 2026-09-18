@@ -98,3 +98,47 @@ def test_it_still_works_before_the_first_click():
     r = _snap(V(6.37, 0.40, 0.0), start=None)
     assert r.kind == "from_point"
     assert r.point.x() == pytest.approx(6.43, abs=1e-6)
+
+
+def test_a_midpoint_beats_the_alignment_line_on_the_first_click():
+    """Marco's A1, 2026-09-18, and the reason this rule moved house.
+
+    He clicked the midpoint of a 4 m line and the drawing came out 2.8 cm
+    off — reported twice before it was caught («del medio de la línea
+    quiero dibujar una línea, dibujo sale desfasada»). Reading his scene
+    through the bridge: the line ran 2.2390 → 6.2390, so its middle is
+    4.2390, and his click had landed at 4.2670, leaving halves of 2.0280
+    and 1.9720.
+
+    He had acquired the line's own left END, whose alignment line runs
+    straight along the line itself — so it covered the midpoint for the
+    whole length. Reproduced with his exact geometry and camera:
+
+        nothing acquired     midpoint     0.00 cm
+        one end acquired     from_point   0.65 cm
+
+    An alignment LINE was beating a named POINT. The rule used to sit above
+    them AND only before the first click; both halves were wrong.
+    """
+    a, b = V(2.0, 1.0, 0.0), V(6.0, 1.0, 0.0)
+    medio = V(4.0, 1.0, 0.0)
+    escena = SimpleNamespace(edges=[SimpleNamespace(a=a, b=b, center=False)])
+    r = compute_snap(
+        candidate_world=medio, candidate_pixel=_w2p(medio), scene=escena,
+        world_to_pixel=_w2p, threshold_px=9.0, edge_threshold_px=14.0,
+        start_point=None, acquired_point=a)
+    assert r.kind == "midpoint"
+    assert r.point.x() == pytest.approx(4.0, abs=1e-6)
+
+
+def test_the_alignment_still_answers_where_no_named_point_does():
+    """Rafael's window, which is what the rule was built for: level with
+    the door's top, out in the open where nothing else competes."""
+    escena = SimpleNamespace(edges=[])
+    cand = V(5.0, 1.02, 0.0)
+    r = compute_snap(
+        candidate_world=cand, candidate_pixel=_w2p(cand), scene=escena,
+        world_to_pixel=_w2p, threshold_px=9.0, edge_threshold_px=14.0,
+        start_point=None, acquired_point=V(2.0, 1.0, 0.0))
+    assert r.kind == "from_point"
+    assert r.point.y() == pytest.approx(1.0, abs=1e-6)
