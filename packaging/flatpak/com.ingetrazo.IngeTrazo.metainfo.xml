@@ -77,6 +77,31 @@
   <url type="vcs-browser">https://github.com/ingelibre/ingetrazo</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.4.5" date="2026-09-18">
+      <description>
+        <p>Forty-eight minutes: that is how long it took @pacaeiro to
+        download 0.4.4, test it and reopen the two issues we had called
+        closed. He was right about both. The arrow-key axis lock now lets go
+        the moment the LINE exists rather than when the operation ends — the
+        Line tool chains, so the operation is the whole polyline, and that
+        is not what he meant. And Shift's lock finally offers the same snap
+        points the arrow lock does: an endpoint on the locked line, the
+        crossing with another edge, a corner or midpoint projected onto it.
+        Shift is the lock you reach for precisely so you can hold a
+        direction and go and fetch a point from another object.</p>
+        <p xml:lang="es">Cuarenta y ocho minutos: eso tardó @pacaeiro en
+        descargar la 0.4.4, probarla y reabrir las dos issues que dábamos por
+        cerradas. Tenía razón en las dos. El bloqueo de eje con las flechas
+        se suelta ahora en cuanto la LÍNEA existe, y no cuando termina la
+        operación — la herramienta Línea encadena, así que la operación es la
+        polilínea entera, y no era eso lo que él decía. Y el bloqueo con
+        Shift ofrece por fin los mismos puntos de imantado que el de flechas:
+        un extremo sobre la recta bloqueada, el cruce con otra arista, y una
+        esquina o punto medio proyectados sobre ella. Shift es el bloqueo que
+        usas precisamente para fijar una dirección e ir a buscar un punto a
+        otro objeto.</p>
+      </description>
+    </release>
     <release version="0.4.4" date="2026-09-18">
       <description>
         <p>The inference release, and nearly all of it came out of drawing.

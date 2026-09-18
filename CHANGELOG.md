@@ -4,6 +4,32 @@ All notable changes to IngeTrazo are documented here.
 Format inspired by [Keep a Changelog](https://keepachangelog.com); versions
 follow [SemVer](https://semver.org).
 
+## [0.4.5] — 2026-09-18
+
+**Cuarenta y ocho minutos.** Eso tardó @pacaeiro en descargar la 0.4.4,
+probarla y reabrir las dos issues que dábamos por cerradas. Tenía razón en
+las dos, y en una de ellas me había leído mal a mí mismo.
+
+### Arreglado
+- **El bloqueo de eje se suelta cuando la LÍNEA existe** (issue #30), no
+  cuando termina la operación. La herramienta Línea encadena, así que «la
+  operación» es la polilínea entera — pero él habla del momento en que la
+  línea está hecha: *«dibujo una línea con bloqueo de flecha y, después de
+  crear la línea, el bloqueo sigue activo»*. La señal correcta es **si el
+  clic creó geometría**, no si la herramienta quedó ociosa. Un clic que no
+  crea nada —el primero de una línea— conserva el bloqueo, que es el único
+  sitio donde sirve de algo.
+- **El bloqueo con Shift ya tiene snaps** (issue #31). Con las flechas
+  funcionaban y con Shift no: *«when I get an Axis and locked it with Shift,
+  I do not have any Snaps»*. La issue #27 le había dado al bloqueo de flechas
+  tres reglas —un extremo sobre la recta, el cruce con otra arista, y una
+  esquina o punto medio proyectados sobre ella— y el de Shift se había
+  quedado solo con la primera, y únicamente para un vértice que cayera
+  exactamente encima. Ahora tiene las tres, y lee la recta en los dos
+  sentidos. Su explicación es la que lo justifica: **Shift es el bloqueo que
+  usas precisamente para fijar una dirección e ir a buscar un punto a otro
+  objeto.**
+
 ## [0.4.4] — 2026-09-18
 
 **La release de la inferencia, y casi toda salió de dibujar.** Marco se pasó
