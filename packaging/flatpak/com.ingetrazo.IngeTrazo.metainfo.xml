@@ -77,6 +77,41 @@
   <url type="vcs-browser">https://github.com/ingelibre/ingetrazo</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.4.3" date="2026-09-17">
+      <description>
+        <p>SketchUp files that used to be refused now open: the reader moves
+        to the upstream openskp 1.3.0, checked against 214 real drawings
+        before the change. Exporting every sheet to PDF no longer drops one
+        silently. A sheet can now hold a PERSPECTIVE view, with its own sun
+        and shadows, for an isometric that looks like the site rather than a
+        drawing. More SketchUp parity from a draughtsman's testing: Rotate +
+        Ctrl lays a polar array with "3x" or "/3"; Ctrl on the Tape Measure
+        cycles guide lines, guide points and plain measuring, and on the
+        Protractor turns the guide on and off, with a + beside the cursor
+        telling you which; snapping with an axis locked works whichever way
+        you draw and finds the world origin; the Tape pulls a guide off an
+        edge inside a group or component; and Alt no longer takes the
+        inferences away when you switch windows with Alt+Tab. The people
+        outside the project whose work is in it are now credited in Help
+        &gt; About.</p>
+        <p xml:lang="es">Archivos de SketchUp que antes no abrían ahora
+        abren: el lector pasa a la versión oficial de openskp 1.3.0,
+        comprobada contra 214 dibujos reales antes del cambio. Exportar
+        todas las láminas a PDF ya no se deja una fuera en silencio. Una
+        lámina puede llevar ahora una vista en PERSPECTIVA, con su propio
+        sol y sus sombras, para que una isométrica se vea como en campo y no
+        como un dibujo. Más paridad con SketchUp salida de las pruebas de un
+        delineante: Girar + Ctrl reparte copias en círculo con «3x» o «/3»;
+        Ctrl en la cinta métrica recorre líneas guía, puntos guía y medida
+        sola, y en el transportador pone y quita la guía, con un + junto al
+        cursor que dice en cuál estás; con un eje bloqueado el imantado
+        funciona dibujes hacia donde dibujes y encuentra el origen del
+        mundo; la cinta saca una guía de una arista que está dentro de un
+        grupo o componente; y Alt ya no se lleva las inferencias al cambiar
+        de ventana con Alt+Tab. Las personas de fuera del proyecto cuyo
+        trabajo está dentro aparecen acreditadas en Ayuda ▸ Acerca de.</p>
+      </description>
+    </release>
     <release version="0.4.2" date="2026-09-16">
       <description>
         <p>Export to SketchUp works again in the Windows installer, the
