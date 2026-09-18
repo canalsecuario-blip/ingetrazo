@@ -28,6 +28,27 @@ class LineTool(Tool):
     shortcut = "L"
     vcb_label = "Length"
 
+    #: The axis inference MAGNETISES, it does not merely light up.
+    #:
+    #: @pacaeiro (issue #31): «The Soft inference of Axis shows the message
+    #: "In Red Axis (hold Shift to lock)", but only when we hit Shift the
+    #: Vector gets aligned with the X. It should magnetically align with
+    #: the axis (like other snap point). That allows to write a distance
+    #: and press Enter, finishing the line in the vector X.»
+    #:
+    #: He is right, and measured it is worse than "not aligned": the label
+    #: was a promise the engine did not keep. Within the inference angle
+    #: the point came back RAW — 2, 5, 8 cm off the axis at a 2 m reach —
+    #: while the status bar said you were on it. Shift is for pinning a
+    #: direction while you go hunting for a snap point elsewhere, not for
+    #: the everyday case of drawing something straight.
+    #:
+    #: The value is the soft inference angle, not Move's generous 15°, so
+    #: WHEN the cue appears is exactly as before and only WHAT it returns
+    #: changes. Drawing deliberately off-axis by a couple of degrees stays
+    #: possible; the toggle Alt still switches it off entirely.
+    magnetic_axis_deg = 3.0
+
     def __init__(self) -> None:
         self.start_point: QVector3D | None = None
         self.hover_point: QVector3D | None = None

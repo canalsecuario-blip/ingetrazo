@@ -1257,7 +1257,7 @@ def compute_snap(
         if pf is not None:
             return pf
 
-    # 9. Axis inference. Normally a soft visual cue only (you Shift to lock).
+    # 9. Axis inference. A soft visual cue when the tool asks for nothing more.
     #    When ``magnetic_axis_deg`` is set (the Move tool), the inference is
     #    *magnetic*: within that wider angle of an axis the point is projected
     #    onto the axis line and hard-locked, so dragging roughly up moves
@@ -1265,7 +1265,13 @@ def compute_snap(
     #    holding a modifier. Point/edge snaps above still win, so you can still
     #    move exactly onto an existing vertex.
     if start_point is not None:
-        if magnetic_axis_deg is not None and project_onto_line is not None:
+        # ``allow_axis`` gates the magnetic branch too. It did not, and that
+        # was a hole in issue #26: Alt is supposed to switch the linear
+        # inferences OFF, and measured on 2026-09-18 the Move tool still
+        # snapped to the axis with the toggle off. Nobody had noticed
+        # because Move was the only tool magnetic enough to show it.
+        if (allow_axis and magnetic_axis_deg is not None
+                and project_onto_line is not None):
             inferred = _detect_axis_alignment(
                 start_point, candidate_world, magnetic_axis_deg
             )
