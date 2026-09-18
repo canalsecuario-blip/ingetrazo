@@ -4,6 +4,92 @@ All notable changes to IngeTrazo are documented here.
 Format inspired by [Keep a Changelog](https://keepachangelog.com); versions
 follow [SemVer](https://semver.org).
 
+## [0.4.3] — 2026-09-17
+
+**La release de openskp 1.3.0 y de los cuatro reportes de Pedro Caeiro.**
+El lector de SketchUp pasa de nuestro fork a la versión oficial 1.3.0, y
+con ella un modelo que llevaba tiempo sin abrir —`edificio.skp`, de
+SketchUp 8— abre. Se midió archivo por archivo antes de dar el salto: 214
+del corpus de Marco, 212 idénticos, uno rescatado, ninguno perdido, y el
+`.skp` que exportamos sale byte a byte igual a través del SDK de Trimble.
+Lo demás son las cuatro issues que @pacaeiro abrió probando IngeTrazo
+como si fuera SketchUp, y la vista en perspectiva que Marco pidió para sus
+láminas.
+
+### Añadido
+- **Una lámina puede llevar una vista en PERSPECTIVA, con su propio sol.**
+  Hasta ahora todo marco era paralelo: bueno para plantas y cortes, pero
+  una isométrica no se ve «como en campo». El marco tiene ahora casilla de
+  perspectiva con distancia de cámara y ángulo de visión, y sombras e hora
+  propias, independientes del modelo. En perspectiva no hay escala, así que
+  el rótulo dice «SIN ESCALA» en vez de inventar un 1:N.
+- **Girar + Ctrl: «3x» y «/3» reparten copias en círculo** (issue #24). La
+  matriz polar de SketchUp, hermana de la que Mover estrenó en la 0.4.2:
+  con Ctrl pulsado, teclear `3x` deja tres copias a múltiplos del ángulo y
+  `/3` tres que lo dividen. Re-teclear rehace la matriz y todo cabe en un
+  solo deshacer.
+- **Ctrl en la Cinta y el Transportador: medir, o medir Y marcar**
+  (issue #29). En la Cinta, Ctrl recorre los tres modos de SketchUp —líneas
+  guía, puntos guía, medida sola— y los puntos guía son una entidad que no
+  teníamos. En el Transportador alterna guía sí/no. Es un modo, no un
+  modificador de un solo clic: se mantiene entre operaciones y vuelve a
+  guías al recoger la herramienta, como el original. El `+` junto al cursor
+  dice en cuál estás antes de hacer clic, que en SketchUp es toda la
+  interfaz de este conmutador.
+- **La barra de estado lleva los modificadores de la herramienta**, no solo
+  su nombre: la Cinta muestra «Ctrl = [líneas guía] / puntos guía / medida»
+  con el modo activo entre corchetes, y durante una operación aparece el
+  «Alt = inferencias (…)» con su estado. Uno por fase, que es como lo hace
+  SketchUp — apilarlos no cabía en la barra.
+- **Las personas de fuera del proyecto cuyo trabajo está dentro, acreditadas**
+  en `AUTHORS`, en el README y en Ayuda ▸ Acerca de IngeTrazo: Pedro
+  Caeiro (@pacaeiro) por los reportes y el PR #21, Rafael García Rodríguez
+  por la revisión y las sugerencias, y Ahsan Mehmood por openskp.
+
+### Arreglado
+- **Exportar todas las láminas a PDF ya no se deja una fuera.** Marco
+  exportó las cuatro de Plaza Yanque y salieron tres: la cuarta moría con
+  `setUniformValue(15, None)`, la exportación se abortaba desde dentro del
+  manejador del clic y Qt cerraba el PDF con lo que llevaba, sin decir nada
+  en pantalla. El mapa de sombras se guarda en caché y al reutilizarlo no
+  se reponía su matriz de luz. Además el atlas ya no pierde un documento
+  entero por un marco malo: lo imprime como «actualiza la vista», sigue y
+  al terminar nombra las láminas que hay que mirar.
+- **openskp 1.3.0, la versión oficial** (antes iba pineado a nuestro fork).
+  Con ella abre `edificio.skp`, de SketchUp 8, que caía en el lector de
+  archivos grandes. Verificado sobre 214 archivos del corpus de Marco:
+  212 idénticos, ese rescatado, ninguno perdido. El que queda no abre con
+  ninguna de las dos versiones y no cuenta como corpus: es salida de
+  nuestro propio exportador de cuando estaba roto, y el SDK de Trimble
+  también lo rechaza. Y la exportación a `.skp`
+  produce el mismo archivo medido con el SDK de Trimble (179 trozos, 35
+  materiales, 147 componentes en ambos sentidos).
+- **Los snaps funcionan en las dos direcciones con un eje bloqueado**
+  (issue #27). Con el eje rojo fijado, la misma esquina se imantaba viniendo
+  por la izquierda y no por la derecha: la rama del bloqueo pasaba el eje
+  como vector positivo dibujaras hacia donde dibujaras, y se descartaba todo
+  lo que quedaba «detrás». Y el origen del mundo no estaba en ninguna lista
+  de referencias, así que con un eje bloqueado solo existía si alguna
+  geometría lo tocaba por casualidad.
+- **La Cinta saca una guía de una arista que está DENTRO de un grupo o
+  componente** (issue #28). Preguntaba por la malla suelta, así que un clic
+  en la arista de un componente no encontraba nada y se quedaba midiendo.
+- **Alt ya no roba las inferencias al cambiar de ventana** (issue #26).
+  @pacaeiro usa Alt+Tab todo el día y cada vez perdía las inferencias.
+  Ahora la tecla solo actúa con una operación en marcha, que es cuando
+  SketchUp la ofrece, y el conmutador dura esa operación y no la sesión.
+  Se actúa en la PULSACIÓN y se traga la suelta: es la suelta la que hace
+  que la barra de menús tome el foco, y por ahí se perdían cinco de cada
+  seis toques.
+- **Exportar ▸ SketchUp con un grupo clásico dentro de un contenedor** ya
+  no revienta: sin matriz propia, la colocación es la identidad.
+- **Una capa apagada en el archivo .skp llega apagada.** Se leía un atributo
+  que no existe en openskp, así que todas entraban visibles.
+- **Las guías quedan tapadas por la geometría que tienen delante**
+  (issue #23), en vez de atravesarla.
+- **El Transportador y Girar enseñan la inclinación mientras arrastras**
+  (issue #25), no solo al soltar.
+
 ## [0.4.2] — 2026-09-16
 
 **Lo que pidió Pedro Caeiro, y exportar a SketchUp otra vez.** @pacaeiro,
