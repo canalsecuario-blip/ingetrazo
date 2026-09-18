@@ -5143,9 +5143,11 @@ class Viewport(QOpenGLWidget):
         painter.end()
 
     def _draw_linear_mode_label(self, painter: QPainter) -> None:
+        # The mirror image of the bug above: these had the Spanish written
+        # into the source, so an English UI showed Spanish.
         text = {
-            "off": "Inferencias lineales: OFF (Alt)",
-            "parallel_perp": "Inferencias: solo paralela / perpendicular (Alt)",
+            "off": tr("Linear inferences: OFF (Alt)"),
+            "parallel_perp": tr("Inferences: parallel / perpendicular only (Alt)"),
         }.get(self.linear_inference_mode)
         if not text:
             return
@@ -6239,7 +6241,10 @@ class Viewport(QOpenGLWidget):
         font.setBold(True)
         painter.setFont(font)
         painter.setPen(QPen(label[1]))
-        painter.drawText(QPointF(14, 24), f"{label[0]} axis locked")
+        # Through tr(): this read "X axis locked" in English even with the
+        # Spanish UI, because an f-string never reaches the catalogue.
+        painter.drawText(QPointF(14, 24),
+                         tr("{axis} axis locked", axis=label[0]))
 
     def _draw_plane_lock_label(self, painter: QPainter) -> None:
         """The arrow-key plane lock of a planar tool, in the colour of the

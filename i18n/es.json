@@ -1790,5 +1790,8 @@
  "End point. Magenta = same distance; double-click rounds.": "Punto final. Magenta = misma distancia; doble clic redondea.",
  "Click where the label goes; the text is asked for next.": "Clic donde va la etiqueta; luego te pide el texto.",
  "Click the end point, or type the length and Enter.": "Clic en el punto final, o teclea la longitud y Enter.",
- "Click the destination, or type the distance and Enter.": "Clic en el destino, o teclea la distancia y Enter."
+ "Click the destination, or type the distance and Enter.": "Clic en el destino, o teclea la distancia y Enter.",
+ "{axis} axis locked": "eje {axis} bloqueado",
+ "Linear inferences: OFF (Alt)": "Inferencias lineales: OFF (Alt)",
+ "Inferences: parallel / perpendicular only (Alt)": "Inferencias: solo paralela / perpendicular (Alt)"
 }
