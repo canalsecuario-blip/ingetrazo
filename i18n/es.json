@@ -1780,5 +1780,12 @@
  "measure": "medida",
  "guide": "guía",
  "Click a point or an edge to measure. Arrows lock an axis.": "Clic en un punto o una arista para medir. Las flechas fijan un eje.",
- "Click the second point, or type the distance and Enter.": "Clic en el segundo punto, o teclea la distancia y Enter."
+ "Click the second point, or type the distance and Enter.": "Clic en el segundo punto, o teclea la distancia y Enter.",
+ "Click the centre. Arrows pick the plane, Down = perpendicular to an edge. Type the sides first.": "Clic en el centro. Las flechas eligen el plano, Abajo = perpendicular a una arista. Teclea los lados antes.",
+ "Click the end point. Magenta = same distance; double-click to round.": "Clic en el punto final. Magenta = misma distancia; doble clic redondea.",
+ "Drag, or type a factor (2) or a size (2m). Ctrl = centre, Shift = uniform.": "Arrastra o teclea factor (2) o tamaño (2m). Ctrl = centro, Mayús = uniforme.",
+ "Click a face to place the section plane. Shift keeps the orientation.": "Clic en una cara para el plano de sección. Mayús conserva la orientación.",
+ "Shift = add/remove, Ctrl = add. Double-click a group to edit it.": "Mayús = añadir/quitar, Ctrl = añadir. Doble clic en un grupo para editarlo.",
+ "Click a point for a label, or empty space for a screen note.": "Clic en un punto para una etiqueta, o en vacío para una nota de pantalla.",
+ "Drag a pin: red moves, green scales/rotates, blue shears. Enter finishes.": "Arrastra un pin: rojo mueve, verde escala y gira, azul inclina. Enter termina."
 }
