@@ -1774,5 +1774,9 @@
  "Guides: guide lines": "Guías: líneas guía",
  "Guides: guide points": "Guías: puntos guía",
  "Guides: off — measure only": "Guías: no — solo medir",
- "Guide point at {d} m": "Punto guía a {d} m"
+ "Guide point at {d} m": "Punto guía a {d} m",
+ "guide lines": "líneas guía",
+ "guide points": "puntos guía",
+ "measure": "medida",
+ "guide": "guía"
 }

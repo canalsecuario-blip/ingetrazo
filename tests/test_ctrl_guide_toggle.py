@@ -212,6 +212,38 @@ def test_ctrl_turns_the_protractor_into_a_plain_protractor():
     assert any("°" in m for m in vp.flashed), "…but it reported the angle"
 
 
+def test_the_status_bar_keeps_the_ctrl_clause_up():
+    """SketchUp keeps its modifiers on screen the whole time the tool is
+    active — «Ctrl = Líneas guía del ciclo/Puntos guía/Medida» — instead of
+    flashing them once. A flash says what just happened; this says what you
+    can do and which way it is set (Marco, 2026-09-17)."""
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication
+    app = QApplication.instance() or QApplication([])
+    from views.main_window import MainWindow
+
+    win = MainWindow()
+    win.show()
+    app.processEvents()
+    vp = win.viewport
+    try:
+        win._activate_tool("tape")
+        tool = vp.active_tool
+        # the active mode is bracketed, and it MOVES with Ctrl — read off
+        # the status bar itself, with no mouse movement in between
+        seen = []
+        for _ in range(3):
+            seen.append(win.status_hint)
+            tool.on_key(vp, Qt.Key_Control, Qt.NoModifier)
+        assert all("Ctrl =" in t for t in seen)
+        assert len(set(seen)) == 3, "the clause must change with the mode"
+        assert seen[0].index("[") < seen[1].index("[") < seen[2].index("[")
+    finally:
+        win._saved_version = vp.scene.version
+        win.close()
+
+
 def test_ctrl_still_means_COPY_on_rotate():
     """Rotate shares the base and never creates a guide: its Ctrl is the
     copy modifier and must not be taken over."""

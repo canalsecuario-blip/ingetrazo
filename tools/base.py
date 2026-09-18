@@ -337,6 +337,17 @@ class Tool(ABC):
         """
         return False
 
+    def status_clause(self) -> str:
+        """A short clause this tool adds to the status bar, or "".
+
+        SketchUp keeps its modifiers ON SCREEN the whole time the tool is
+        active — «Ctrl = Líneas guía del ciclo/Puntos guía/Medida» sits
+        there next to the instruction — instead of flashing them once when
+        you press the key. A flash tells you what just happened; this tells
+        you what you can do, and which way it is set right now (Marco,
+        2026-09-17)."""
+        return ""
+
     # ---- Visual feedback hooks ---------------------------------------------
     def rubber_band_lines(self):
         """Return ``[(a, b), ...]`` line segments to draw as the live preview.

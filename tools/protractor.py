@@ -136,6 +136,9 @@ class ProtractorBase(Tool):
             apply = getattr(viewport, "_apply_tool_cursor", None)
             if apply is not None:
                 apply()
+            hint = getattr(viewport, "refresh_status_hint", None)
+            if hint is not None:
+                hint()                   # the clause says the new mode
             viewport.update()
             return True
         # Arrow keys lock the protractor plane to an axis (SketchUp): Right =
@@ -305,6 +308,14 @@ class ProtractorTool(ProtractorBase):
     @property
     def cursor_plus(self) -> bool:
         return self._guides
+
+    def status_clause(self) -> str:
+        """Kept on screen while the tool is active, as SketchUp does. Two
+        modes here: the Protractor cannot drop a guide POINT."""
+        from core.i18n import tr as _tr
+        guia, medir = _tr("guide"), _tr("measure")
+        return ("Ctrl = " + (f"[{guia}] / {medir}" if self._guides
+                             else f"{guia} / [{medir}]"))
 
     name = "Protractor"
     shortcut = "Shift+H"

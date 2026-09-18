@@ -10195,6 +10195,16 @@ class Viewport(QOpenGLWidget):
         self.active_tool.on_hover(ctx)
         self.measurementChanged.emit(self._measurement_text())
 
+    def refresh_status_hint(self) -> None:
+        """Redraw the status bar's base line now. The hint otherwise rides
+        the 12 Hz text timer, which only ticks on mouse movement — a tool
+        that changes mode on a KEY needs to say so without waiting for the
+        hand to move (the Tape's Ctrl, issue #29)."""
+        win = self.window()
+        fn = getattr(win, "_update_status_hint", None)
+        if fn is not None:
+            fn()
+
     def _apply_alt_cursor(self) -> None:
         """Refresh the pointer for an Alt state change (Paint <-> eyedropper);
         no-op while a camera nav mode owns the cursor."""

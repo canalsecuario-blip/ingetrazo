@@ -55,6 +55,16 @@ class TapeMeasureTool(Tool):
               ("point", "Guides: guide points"),
               ("measure", "Guides: off — measure only"))
 
+    def status_clause(self) -> str:
+        """SketchUp's own wording, kept on screen: «Ctrl = Líneas guía del
+        ciclo/Puntos guía/Medida». The active one is bracketed, because the
+        cursor's + says "this leaves something" but not WHICH of the two
+        guide modes is on."""
+        names = {"line": tr("guide lines"), "point": tr("guide points"),
+                 "measure": tr("measure")}
+        parts = [f"[{v}]" if k == self._mode else v for k, v in names.items()]
+        return "Ctrl = " + " / ".join(parts)
+
     @property
     def _guides(self) -> bool:
         """Whether this mode leaves anything behind."""
@@ -92,6 +102,9 @@ class TapeMeasureTool(Tool):
             apply = getattr(viewport, "_apply_tool_cursor", None)
             if apply is not None:
                 apply()                  # the + appears or disappears now
+            hint = getattr(viewport, "refresh_status_hint", None)
+            if hint is not None:
+                hint()                   # the clause says the new mode
             viewport.update()
             return True
         return super().on_key(viewport, key, modifiers)

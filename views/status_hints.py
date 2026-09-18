@@ -134,8 +134,15 @@ def hint_for(key: str | None, tool, nav_mode: str | None = None,
 
 
 def _with_alt(text: str, key, tool, linear_mode) -> str:
-    """Append the Alt clause while an operation is under way — not before,
-    because that is exactly when the key does nothing (issue #26)."""
+    """Append the tool's own clause, then the Alt one.
+
+    The tool's stays up the whole time it is active (SketchUp keeps its
+    modifiers on screen); Alt's only appears mid-operation, because that is
+    the only time the key does anything (issue #26)."""
+    own = getattr(tool, "status_clause", None)
+    own = own() if callable(own) else ""
+    if own:
+        text = f"{text} | {own}"
     if linear_mode is None or phase_of(key, tool) == "idle":
         return text
     clause = alt_inference_hint(linear_mode)
