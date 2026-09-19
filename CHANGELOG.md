@@ -77,8 +77,35 @@ follow [SemVer](https://semver.org).
   Mover o girar el texto entero no cuenta.
 - **Editar grupo** en el menú contextual, la entrada de SketchUp: la misma
   puerta que el doble clic.
+- **«A la altura del punto»: la ventana de la pared de al lado, a la misma
+  altura que la primera** (Rafael, 02:20: «que la línea guía se extendiera
+  por aquí y yo pudiera fijar la ventana aquí… tampoco eso lo hace
+  SketchUp»). Memoriza la esquina de una ventana —el mouse quieto un
+  instante encima— y ve a **otra pared**, perpendicular o la de enfrente:
+  al pasar a su altura, el cursor se engancha a una línea punteada que
+  recorre esa pared a esa altura, con el rótulo **A la altura del punto**.
+  Dos guías llevan el ojo desde la esquina hasta el cursor: por su pared
+  hasta la esquina del cuarto y desde ahí por la nueva, cada una del color
+  de su eje. SketchUp no lo hace porque su «Desde el punto» es la LÍNEA
+  del eje que pasa por la esquina, que a una pared perpendicular la toca
+  en un solo punto y a la de enfrente nunca; esto es el PLANO horizontal
+  por la esquina cortado con la pared, que es una línea entera. Los otros
+  dos planos también cuentan —**En línea con el punto**—: sobre el suelo,
+  bajo una esquina alta, la línea que la tiene justo encima. Va por
+  debajo de los puntos con nombre y del «Desde el punto» de siempre, así
+  que en la propia pared de la esquina no cambia nada.
 
 ### Arreglado
+- **«Desde el punto» ya no se sale de la cara.** Con una esquina
+  memorizada y el cursor sobre una cara, la línea del eje que pasaba por
+  la esquina *por el aire* —paralela a esa cara, o atravesándola en
+  diagonal— ofrecía su pie en el aire, un punto a metros de la pared a la
+  que apuntaba el cursor; un rectángulo empezado ahí nacía fuera de su
+  plano. Ahora la respuesta se queda en la cara: si la línea la atraviesa,
+  el punto donde la atraviesa; si corre paralela fuera de ella, nada (y
+  entra lo de arriba). Medido con la rejilla del arnés ampliada con una
+  escena de tres paredes: 250 celdas cambian, todas con una esquina
+  memorizada en otra pared; ninguna en las escenas planas de siempre.
 - **Tirar de una caja con la cámara a ras de suelo: se frenaba en el
   horizonte y el clic sobre la cara superior no fijaba la altura**
   (Rafael, 0:40: «te bloquea aquí… hago clic aquí para que quede fijado y

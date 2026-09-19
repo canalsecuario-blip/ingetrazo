@@ -62,7 +62,12 @@ CAMERAS = [
 #: this scene existed the grid could not express it — it reported zero
 #: changes for a fix whose effect had just been measured by hand twice.
 #: A net proves nothing about a shape it cannot hold.
-SCENES = ("empty", "corner", "midline")
+#: The fourth, "walls", was added 2026-09-19 for Rafael's window (02:20 of
+#: his second review): a corner encouraged on ONE wall and the cursor on
+#: ANOTHER — perpendicular or opposite — at that corner's height. Every
+#: earlier scene was flat, so no cell of any earlier baseline ever had a
+#: vertical face under the cursor with a reference on a different plane.
+SCENES = ("empty", "corner", "midline", "walls")
 
 TOOLS = ("line", "rectangle", "circle", "arc", "move", "pushpull")
 
@@ -85,7 +90,10 @@ RADII_PX = (30.0, 90.0, 170.0)
 #: («en la segunda esquina está la referencia pero al momento de jalar el
 #: rectángulo se pierde la referencia»). A baseline that cannot see a rule
 #: cannot protect it.
-ACQUIRED = (None, (2.0, 1.0, 0.0))
+#: The third, 2026-09-19, sits 1.2 m up on the "walls" scene's front wall:
+#: an acquired point OFF the plane the cursor is on, which the point on
+#: the ground could never be.
+ACQUIRED = (None, (2.0, 1.0, 0.0), (0.5, -1.5, 1.2))
 
 #: Before the first click, and with an operation under way. Added
 #: 2026-09-18 and the biggest hole of the four: ``_reset_tool`` always gave
@@ -116,6 +124,22 @@ def _build_scene(vp, kind: str) -> None:
         m = vp.scene.mesh
         m.add_face([QVector3D(1.5, 0.0, 0.0), QVector3D(2.5, 0.0, 0.0),
                     QVector3D(2.5, 1.0, 0.0), QVector3D(1.5, 1.0, 0.0)])
+    if kind == "walls":
+        # Three walls of a 3 x 3 room around the start point, 3 m high, on
+        # a slab, open at the back and above so the cameras see inside:
+        # the front wall (y = -1.5) carries the third ACQUIRED point, the
+        # right wall (x = 1.5) is perpendicular to it and the far wall
+        # (y = 1.5) faces it. The cursor ring reaches all three.
+        m = vp.scene.mesh
+        P = QVector3D
+        m.add_face([P(-1.5, -1.5, 0.0), P(1.5, -1.5, 0.0),
+                    P(1.5, 1.5, 0.0), P(-1.5, 1.5, 0.0)])
+        m.add_face([P(-1.5, -1.5, 0.0), P(1.5, -1.5, 0.0),
+                    P(1.5, -1.5, 3.0), P(-1.5, -1.5, 3.0)])
+        m.add_face([P(1.5, -1.5, 0.0), P(1.5, 1.5, 0.0),
+                    P(1.5, 1.5, 3.0), P(1.5, -1.5, 3.0)])
+        m.add_face([P(1.5, 1.5, 0.0), P(-1.5, 1.5, 0.0),
+                    P(-1.5, 1.5, 3.0), P(1.5, 1.5, 3.0)])
     vp.scene.version += 1
 
 

@@ -12,8 +12,10 @@ Snap kinds (priority high → low):
 7. ``"midpoint"``       — midpoint of an existing edge.
 8. ``"origin"``         — world origin.
 9. ``"on_edge"``        — arbitrary point along an edge (start a shape on it).
-10. ``"axis_inference"`` — soft auto-detected axis alignment (visual cue only).
-11. ``"none"``          — no snap.
+10. ``"aligned"``       — level with / in line with an encouraged point across
+                          the face under the cursor (the axis plane through it).
+11. ``"axis_inference"`` — soft auto-detected axis alignment (visual cue only).
+12. ``"none"``          — no snap.
 
 Distance checks for point snaps are done in **screen-space pixels** so the
 snap radius stays constant under zoom. The caller supplies a
@@ -542,18 +544,42 @@ def _two_point_snap(
 
 def _first_point_from_point(
     ref, candidate, cx, cy, world_to_pixel, threshold_px, is_occluded=None,
+    plane_normal=None,
 ) -> Optional[SnapResult]:
     """The foot of the cursor on the axis line through ``ref`` (the last
     hovered corner), when the cursor sits within the snap radius of one of
     the three axis lines — a green 'from point' with the axis-coloured
     dotted guide back to the corner. Sitting ON the corner is the endpoint
-    snap's job, not this one's."""
+    snap's job, not this one's.
+
+    With ``plane_normal`` — the cursor is on a face, and ``candidate`` lies
+    on that face's plane — the answer stays ON that plane: an axis line
+    that pierces the plane offers its piercing point, one lying in the
+    plane its foot as before, and one running parallel to the plane off
+    it offers nothing. It used to hand back the foot on the line in the
+    air, which is a point nowhere near the wall the cursor is pointing at
+    and, for a rectangle started on that wall, a corner off its plane."""
     best = None
+    n = None
+    if plane_normal is not None and plane_normal.length() > 1e-9:
+        n = plane_normal.normalized()
     for axis, a in _AXIS_VECTORS.items():
-        s = QVector3D.dotProduct(candidate - ref, a)
-        if abs(s) < 1e-3:
-            continue
-        foot = ref + a * s
+        an = QVector3D.dotProduct(a, n) if n is not None else 0.0
+        if abs(an) < 1e-6:
+            # The axis line runs parallel to the plane (or there is none):
+            # its foot — which lies in the plane exactly when the line does.
+            s = QVector3D.dotProduct(candidate - ref, a)
+            if abs(s) < 1e-3:
+                continue                    # that is ``ref`` itself
+            if n is not None and abs(QVector3D.dotProduct(ref - candidate, n)) > 1e-4:
+                continue                    # …and here it does not
+            foot = ref + a * s
+        else:
+            # The line pierces the plane: the one point of it on the face.
+            t = QVector3D.dotProduct(candidate - ref, n) / an
+            if abs(t) < 1e-3:
+                continue                    # that is ``ref`` itself
+            foot = ref + a * t
         fp = world_to_pixel(foot)
         if fp is None:
             continue
@@ -570,6 +596,82 @@ def _first_point_from_point(
     return SnapResult(foot, "from_point", COLOR_ENDPOINT,
                       guide=(QVector3D(ref), foot),
                       guide_color=AXIS_COLORS[axis])
+
+
+def _in_plane_with_point_snap(
+    ref, candidate, plane_normal, cx, cy, world_to_pixel, threshold_px,
+    is_occluded=None,
+) -> Optional[SnapResult]:
+    """Level with — or in line with — an encouraged point ACROSS the face
+    under the cursor: where the axis plane through ``ref`` (the horizontal
+    plane at its height, or a vertical one through it) cuts the plane the
+    cursor is on. That cut is a line lying on the face; when the cursor is
+    within the snap radius of it, the snap is the cursor's foot on it.
+
+    Rafael, 2026-09-16 (02:20), putting windows on a house: the corner of
+    the first window gives its dotted line along its own wall «estupendamente»,
+    but a window on ANOTHER wall at the same height had nothing to line up
+    with — «que la línea guía se extendiera por aquí y yo pudiera fijar la
+    ventana aquí… tampoco eso lo hace SketchUp». It does not: SketchUp's
+    'from point' is the axis LINE through the corner, which meets a
+    perpendicular wall in a single point and the opposite wall not at all.
+    The plane through the corner meets both in a line.
+
+    Two dotted guides, so the eye can walk from the corner to the cursor:
+    from ``ref`` to where it projects onto the line (along the first
+    wall), and from there along the line to the foot (along the second),
+    each in the colour of the axis it runs along. ``axis`` names the
+    plane's normal: ``"z"`` is 'level with', the other two 'in line with'.
+
+    Sits BELOW the axis lines through the point (a line on the face is
+    exactly one of those when the point is on the same wall, and the foot
+    is then the same point) — an inference derived from a point never
+    beats the point, and this one never beats the line it generalises."""
+    if plane_normal is None or plane_normal.length() < 1e-9:
+        return None
+    n = plane_normal.normalized()
+    best = None
+    for axis, a in _AXIS_VECTORS.items():
+        d = QVector3D.crossProduct(a, n)
+        if d.length() < 1e-6:
+            continue      # the axis plane is parallel to the face: no line
+        d = d.normalized()
+        # In the face, square to the line: the way the cursor has to move
+        # to reach the plane through ``ref``.
+        m = QVector3D.crossProduct(n, d)
+        ma = QVector3D.dotProduct(m, a)                       # = |a × n|, > 0
+        s = QVector3D.dotProduct(candidate - ref, a)
+        foot = candidate - m * (s / ma)
+        fp = world_to_pixel(foot)
+        if fp is None:
+            continue
+        dist = math.hypot(fp[0] - cx, fp[1] - cy)
+        if dist > threshold_px:
+            continue
+        if is_occluded is not None and is_occluded(foot):
+            continue
+        if best is None or dist < best[0]:
+            best = (dist, foot, axis, d)
+    if best is None:
+        return None
+    _, foot, axis, d = best
+    # The reference's own projection onto the line: the guide's elbow.
+    elbow = foot + d * QVector3D.dotProduct(ref - foot, d)
+
+    def _colour_along(v):
+        if v.length() < 1e-6:
+            return COLOR_EXTENSION
+        u = v.normalized()
+        k = max(_AXIS_VECTORS,
+                key=lambda k: abs(QVector3D.dotProduct(u, _AXIS_VECTORS[k])))
+        return AXIS_COLORS[k]
+
+    guides = []
+    if (elbow - QVector3D(ref)).length() > 1e-4:
+        guides.append((QVector3D(ref), elbow, _colour_along(elbow - ref)))
+    return SnapResult(foot, "aligned", COLOR_ENDPOINT, axis=axis,
+                      guide=(elbow, foot), guide_color=_colour_along(foot - elbow),
+                      guides=guides or None)
 
 
 def _extension_snap(
@@ -1414,12 +1516,25 @@ def compute_snap(
             if tp is not None:
                 return tp
         if acquired_point is not None:
+            # On a face, the point stays on the face (see the function).
+            on_plane = work_plane_normal if face_under_cursor else None
             fp = _first_point_from_point(
                 acquired_point, candidate_world, cx, cy, world_to_pixel,
-                threshold_px, is_occluded,
+                threshold_px, is_occluded, plane_normal=on_plane,
             )
             if fp is not None:
                 return fp
+            # 8e. …and level with / in line with it ACROSS this face: the
+            #     axis PLANE through the point cut by the face (Rafael's
+            #     window on the next wall, 2026-09-16, 02:20). Only on a
+            #     face — the bare ground is not a wall to run a line along.
+            if on_plane is not None:
+                ip = _in_plane_with_point_snap(
+                    acquired_point, candidate_world, on_plane, cx, cy,
+                    world_to_pixel, threshold_px, is_occluded,
+                )
+                if ip is not None:
+                    return ip
 
     # 9. Axis inference. A soft visual cue when the tool asks for nothing more.
     #    When ``magnetic_axis_deg`` is set (the Move tool), the inference is

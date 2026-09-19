@@ -604,6 +604,10 @@ class Viewport(QOpenGLWidget):
         "extension": "Extension",
         "intersection": "Intersection",
         "from_point": "From point",
+        # The axis PLANE through an encouraged point cut by the face under
+        # the cursor (rule 8e): "Level with point" when it is the horizontal
+        # one, see ``_draw_snap_indicator``.
+        "aligned": "In line with point",
         "through_point": "Through point",
         "perp_face": "Perpendicular to face",
         "center": "Center",
@@ -5403,7 +5407,8 @@ class Viewport(QOpenGLWidget):
             painter.setBrush(QColor.fromRgbF(r, g, b, 0.85))
             painter.drawEllipse(QPointF(px, py), 6.5, 6.5)
         elif snap.kind in ("endpoint", "origin", "component_origin", "on_edge",
-                           "on_line", "extension", "from_point", "tangent"):
+                           "on_line", "extension", "from_point", "aligned",
+                           "tangent"):
             rect = QRectF(px - 7, py - 7, 14, 14)
             painter.setPen(halo)
             painter.setBrush(Qt.NoBrush)
@@ -5441,6 +5446,8 @@ class Viewport(QOpenGLWidget):
 
         # Tooltip text next to the marker (SketchUp shows "On Edge", etc.).
         label = self._SNAP_LABELS.get(snap.kind)
+        if snap.kind == "aligned" and snap.axis == "z":
+            label = "Level with point"
         if label:
             label = tr(label)
             ctx_ = getattr(snap, "context", None)
