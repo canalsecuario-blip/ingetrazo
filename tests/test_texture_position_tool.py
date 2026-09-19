@@ -273,34 +273,27 @@ def _tile_angle(tool):
     return math.degrees(math.atan2(e.y(), e.x()))
 
 
-def test_near_the_protractor_the_sweep_snaps_to_the_15_degree_ticks(viewport):
-    """«En SketchUp te bloquea a los 0, a los 45 y a los 90» — the Rotate
-    tool's rule: within 1.25 disc radii of the pivot, the ticks."""
+def test_the_sweep_snaps_to_15_degree_steps_wherever_the_cursor_is(viewport):
+    """«En SketchUp te bloquea a los 0, a los 45 y a los 90» (Rafael) — the
+    protractor's 15° steps, which include them; and not only near the
+    disc: Marco's recording shows the steps with the cursor three radii
+    out, and SketchUp's own «Ctrl = Sin ajuste» says the snap is the
+    default everywhere."""
     face = _textured_square(viewport)
     tool = _begin(viewport, face)
-    near = (tool.DISC_PX * 1.0) / _px_per_metre(viewport)   # inside the disc
-    for wanted, off in ((90.0, 87.0), (45.0, 41.0), (0.0, -6.0), (135.0, 138.0)):
-        _green_to(viewport, tool, off, radius=near)
-        assert tool._sweep_deg == wanted and tool._on_tick, (wanted, off, tool._sweep_deg)
-        assert abs(_tile_angle(tool) - wanted) < 1e-6
-        assert tool.value_label()[0] == f"{wanted:+.1f}°"
-        tool.on_release(viewport)
-        assert tool._sweep_deg is None and tool.value_label() is None
-        tool.reset()
+    ppm = _px_per_metre(viewport)
+    for radius in (tool.DISC_PX / ppm, tool.DISC_PX * 4.0 / ppm):
+        for wanted, off in ((90.0, 87.0), (45.0, 41.0), (0.0, -6.0), (135.0, 138.0)):
+            _green_to(viewport, tool, off, radius=radius)
+            assert tool._sweep_deg == wanted and tool._on_tick, (wanted, off, tool._sweep_deg)
+            assert abs(_tile_angle(tool) - wanted) < 1e-6
+            assert tool.value_label()[0] == f"{wanted:+.1f}°"
+            tool.on_release(viewport)
+            assert tool._sweep_deg is None and tool.value_label() is None
+            tool.reset()
 
 
-def test_far_from_the_protractor_the_sweep_is_free_at_a_tenth_of_a_degree(viewport):
-    face = _textured_square(viewport)
-    tool = _begin(viewport, face)
-    far = (tool.DISC_PX * 3.0) / _px_per_metre(viewport)
-    _green_to(viewport, tool, 87.0, radius=far)
-    assert not tool._on_tick
-    assert abs(tool._sweep_deg - 87.0) < 0.11
-    assert abs(_tile_angle(tool) - 87.0) < 0.11
-    tool.on_release(viewport)
-
-
-def test_ctrl_keeps_the_sweep_free_even_near_the_protractor(viewport):
+def test_ctrl_keeps_the_sweep_free(viewport):
     face = _textured_square(viewport)
     tool = _begin(viewport, face)
     near = (tool.DISC_PX * 1.0) / _px_per_metre(viewport)

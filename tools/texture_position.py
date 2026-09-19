@@ -14,10 +14,10 @@ dotted tile grid and four pins on the corners of the tile under the cursor:
   poco a ojo»; Marco brought captures and a recording): a small disc of
   fixed screen size with the start arm across it, the wedge swept, a
   square on each arm, the current arm dashed through the green pin, and
-  the angle in the Measurements box. Near the disc the rotation snaps
-  to 15° steps from where the drag began; farther out it is free at
-  0.1°. Ctrl while dragging turns the snap off (SketchUp's «Ctrl = Sin
-  ajuste»);
+  the angle in the Measurements box. The rotation snaps to 15° steps
+  from where the drag began (0, 15, 30, 45… 90 — Rafael's 0/45/90 are
+  among them); Ctrl while dragging turns the snap off (SketchUp's «Ctrl
+  = Sin ajuste»);
 * **blue** — drag to SCALE vertically and SHEAR (red and green stay);
 * **yellow** — SketchUp's perspective distort. The engine maps textures
   with an affine map per face (what every exporter writes), so this pin is
@@ -171,9 +171,12 @@ class TexturePositionTool(Tool):
     #: Pin half-size, px.
     PIN_PX = 7.0
     #: SketchUp's small protractor on the red pin while the green one
-    #: drags: a disc of fixed SCREEN radius; within 1.25 radii of the pivot
-    #: the rotation snaps to 15° steps from the drag's start, farther out
-    #: it is free at 0.1° (the Rotate tool's rule).
+    #: drags: a disc of fixed SCREEN radius. The rotation snaps to 15°
+    #: steps from the drag's start WHEREVER the cursor is — Marco's
+    #: recording (2026-09-18) shows the texture jumping in steps with the
+    #: cursor three radii out, and the tool's own status line says «Ctrl
+    #: = Sin ajuste», the escape hatch that only makes sense if the snap
+    #: is the default everywhere. (Rotate's near/far rule does not apply.)
     DISC_PX = 30.0
     TICK_DEG = 15.0
 
@@ -484,14 +487,12 @@ class TexturePositionTool(Tool):
         return math.hypot(screen.x() - pr[0], screen.y() - pr[1])
 
     def _snap_rotation(self, theta: float) -> float:
-        """The Rotate tool's distance rule on the green pin: near the
-        protractor the sweep snaps to its 15° ticks (measured from where
-        the drag began), farther out it is free at 0.1°; Ctrl keeps it
-        free. ``_sweep_deg`` is what the Measurements box and the overlay
-        show."""
+        """SketchUp's green-pin rule: the sweep snaps to 15° steps measured
+        from where the drag began, wherever the cursor is; Ctrl keeps it
+        free at 0.1°. ``_sweep_deg`` is what the Measurements box and the
+        overlay show."""
         deg = math.degrees(theta)
-        near = self._pivot_px_dist <= self.DISC_PX * 1.25
-        if near and not self._snap_free:
+        if not self._snap_free:
             deg = round(deg / self.TICK_DEG) * self.TICK_DEG
             self._on_tick = True
         else:
@@ -804,6 +805,8 @@ class TexturePositionTool(Tool):
                 for a, b in disc["ring"]:
                     line(a, b, solid)
                 line(*disc["diameter"], solid)
+                # The two squares, joined (the chord between the arms).
+                line(*disc["squares"], QPen(blue, 1.0))
                 painter.setBrush(blue)
                 painter.setPen(QPen(blue, 1.0))
                 for q in disc["squares"]:

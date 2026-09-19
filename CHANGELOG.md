@@ -41,10 +41,10 @@ follow [SemVer](https://semver.org).
   rojo el pequeño transportador azul de SketchUp: el disco con el brazo
   de partida cruzándolo, la cuña del ángulo barrido, un cuadradito en
   cada brazo, la línea punteada del brazo actual que atraviesa el pin
-  verde y sigue, y el ángulo en la caja de medidas. Cerca del disco el
-  giro se pega a pasos de 15° desde donde empezó (0, 15, 30, 45… 90);
-  lejos, va libre a 0,1°. Ctrl mientras arrastras lo deja libre («Ctrl =
-  Sin ajuste», como allí).
+  verde y sigue, y el ángulo en la caja de medidas. El giro se pega a
+  pasos de 15° desde donde empezó (0, 15, 30, 45… 90: los 0/45/90 de
+  Rafael están entre ellos), esté el cursor donde esté; Ctrl mientras
+  arrastras lo deja libre («Ctrl = Sin ajuste», como allí).
 - **Texto 3D como en SketchUp: cada letra es un grupo, y el texto se
   edita.** El texto llega como un componente con un grupo por letra
   («que cada letra aparezca como grupo, como lo hace SketchUp»), así que
