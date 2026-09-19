@@ -554,7 +554,13 @@ class TexturePositionTool(Tool):
         steps = max(2, int(abs(self._sweep_deg or 0.0) / 5.0) + 1)
         wedge = [R, rim(0.0, 0.9)]
         wedge += [rim(sweep * k / steps, 0.9) for k in range(1, steps + 1)]
-        return ring, ticks, wedge, (R, u, v, r)
+        # SketchUp's guide lines: the start arm runs on through the pivot
+        # as a long dashed line (the reference you measure from), and the
+        # current arm from the pivot to the cursor, extended past the pin.
+        reach = r * 40.0
+        cur = u * math.cos(sweep) + v * math.sin(sweep)
+        guides = [(R - u * reach, R + u * reach), (R, R + cur * reach)]
+        return ring, ticks, wedge, guides, (R, u, v, r)
 
     def _scale_shear(self, m0: TextureMap, p: QVector3D) -> TextureMap:
         """The affine map that keeps the red and green pins and takes the
@@ -780,7 +786,7 @@ class TexturePositionTool(Tool):
                 # SketchUp's protractor on the pivot: rim and ticks in the
                 # axis colour of the face's normal (dark off-axis), the
                 # swept wedge filled, and the angle by the green pin.
-                ring, ticks, wedge, _frame = disc
+                ring, ticks, wedge, guides, _frame = disc
                 from core.snap import COLOR_AXIS_X, COLOR_AXIS_Y, COLOR_AXIS_Z
                 n = self._plane[1]
                 rgb = (0.24, 0.27, 0.32)
@@ -790,6 +796,15 @@ class TexturePositionTool(Tool):
                     if abs(QVector3D.dotProduct(n, ax)) > 0.999:
                         rgb = col
                 color = QColor.fromRgbF(rgb[0], rgb[1], rgb[2], 0.95)
+                # The guides first, under the instrument: the reference arm
+                # long and grey, the current arm in the disc's colour.
+                for (a, b), pen in ((guides[0], QPen(QColor(90, 90, 90, 190),
+                                                     1.0, Qt.DashLine)),
+                                    (guides[1], QPen(color, 1.2, Qt.DashLine))):
+                    pa, pb = to_px(a), to_px(b)
+                    if pa is not None and pb is not None:
+                        painter.setPen(pen)
+                        painter.drawLine(QPointF(*pa), QPointF(*pb))
                 painter.setPen(QPen(color, 1.2))
                 for a, b in ring + ticks:
                     pa, pb = to_px(a), to_px(b)

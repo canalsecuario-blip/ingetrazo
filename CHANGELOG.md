@@ -39,8 +39,9 @@ follow [SemVer](https://semver.org).
   no es un poco a ojo»; Marco trajo las dos capturas). Al arrastrar el
   pin verde aparece sobre el pin rojo el mismo transportador de Girar:
   disco de tamaño fijo en pantalla con marcas cada 15° desde donde
-  empezó el arrastre, la cuña del ángulo barrido, la guía punteada y el
-  ángulo en la caja de medidas. Cerca del disco el giro se pega a las
+  empezó el arrastre, la cuña del ángulo barrido, las dos líneas guía
+  (la de referencia, larga y gris a través del pivote; la del brazo
+  actual, punteada) y el ángulo en la caja de medidas. Cerca del disco el giro se pega a las
   marcas (0, 15, 30, 45… 90); lejos, va libre a 0,1°. Ctrl mientras
   arrastras lo deja libre («Ctrl = Sin ajuste», como allí).
 - **Texto 3D como en SketchUp: cada letra es un grupo, y el texto se
