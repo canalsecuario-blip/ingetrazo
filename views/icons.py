@@ -1325,78 +1325,98 @@ def _side_expand(p, ink):
     p.restore()
 
 
-def _figure(p, ink, x: float, y: float, walking: bool = False) -> None:
-    """A stick figure with its feet at (x, y) in 48-space — the person the
-    walkthrough tools put in the model."""
-    pen = QPen(ink, 3.0)
-    pen.setCapStyle(Qt.RoundCap)
-    pen.setJoinStyle(Qt.RoundJoin)
-    p.setPen(pen)
-    p.setBrush(Qt.NoBrush)
-    head_y = y - 27.0
-    p.setBrush(ink)
-    p.drawEllipse(QPointF(x, head_y), 3.6, 3.6)
-    p.setBrush(Qt.NoBrush)
-    p.drawLine(QPointF(x, head_y + 4.0), QPointF(x, y - 11.0))     # trunk
-    if walking:
-        p.drawLine(QPointF(x, y - 11.0), QPointF(x - 7.0, y))        # legs apart
-        p.drawLine(QPointF(x, y - 11.0), QPointF(x + 7.5, y - 1.0))
-        p.drawLine(QPointF(x, y - 20.0), QPointF(x - 7.0, y - 14.0))  # arms swing
-        p.drawLine(QPointF(x, y - 20.0), QPointF(x + 7.0, y - 24.0))
-    else:
-        p.drawLine(QPointF(x, y - 11.0), QPointF(x - 4.0, y))
-        p.drawLine(QPointF(x, y - 11.0), QPointF(x + 4.0, y))
-        p.drawLine(QPointF(x - 6.0, y - 14.0), QPointF(x + 6.0, y - 14.0))
+def _rpen(color, width: float) -> QPen:
+    q = QPen(color, width)
+    q.setCapStyle(Qt.RoundCap)
+    q.setJoinStyle(Qt.RoundJoin)
+    return q
+
+
+def _disc(cx: float, cy: float, r: float) -> QPainterPath:
+    path = QPainterPath()
+    path.addEllipse(QPointF(cx, cy), r, r)
+    return path
 
 
 def _position_camera(p, ink):
-    # SketchUp's Position Camera: a person set down on a crosshair — the
-    # eye goes 1.68 m above the point you click.
-    pen = QPen(_accent(), 2.4)
-    pen.setCapStyle(Qt.RoundCap)
-    p.setPen(pen)
-    p.drawLine(QPointF(6.0, 41.0), QPointF(42.0, 41.0))
-    p.drawLine(QPointF(24.0, 33.0), QPointF(24.0, 46.0))
+    # SketchUp's Position Camera: a camera on a tripod, drawn in line with
+    # an orange lens. Marco picked it over a figure on a crosshair
+    # (2026-09-19, from SketchUp's own toolbar).
+    p.setPen(_rpen(ink, 2.6))
+    p.drawLine(QPointF(24, 31), QPointF(12, 45))
+    p.drawLine(QPointF(24, 31), QPointF(36, 45))
+    p.drawLine(QPointF(24, 31), QPointF(24, 46))
+    body = QPainterPath()
+    body.addRoundedRect(QRectF(9, 13, 30, 19), 3.5, 3.5)
+    body.addRoundedRect(QRectF(15, 8, 12, 6), 2, 2)
+    p.setPen(_rpen(ink, 2.8))
     p.setBrush(Qt.NoBrush)
-    p.drawEllipse(QPointF(24.0, 41.0), 6.0, 3.0)
-    _figure(p, ink, 24.0, 40.0)
+    p.drawPath(body)
+    p.drawEllipse(QPointF(24, 22.5), 6.0, 6.0)
+    p.setPen(Qt.NoPen)
+    p.setBrush(_accent())
+    p.drawPath(_disc(24, 22.5, 2.8))
 
 
 def _walk(p, ink):
-    # SketchUp's Walk: the figure striding, with motion lines behind.
-    _figure(p, ink, 26.0, 42.0, walking=True)
-    pen = QPen(_accent(), 2.4)
-    pen.setCapStyle(Qt.RoundCap)
-    p.setPen(pen)
-    for yy in (18.0, 24.0, 30.0):
-        p.drawLine(QPointF(5.0, yy), QPointF(13.0, yy))
+    # SketchUp's Walk: a hiker mid-stride, solid, with an orange backpack
+    # and a walking stick (Marco's pick, 2026-09-19).
+    x, y = 22.0, 46.0
+    p.setPen(_rpen(ink, 4.0))
+    p.drawLine(QPointF(x - 1, y - 20), QPointF(x - 10, y - 2))    # back leg
+    p.drawLine(QPointF(x - 1, y - 20), QPointF(x + 6, y - 11))    # front leg
+    p.drawLine(QPointF(x + 6, y - 11), QPointF(x + 7, y))
+    p.setPen(Qt.NoPen)
+    p.setBrush(ink)
+    p.drawPolygon(QPolygonF([QPointF(x - 6, y - 32), QPointF(x + 4, y - 34),
+                             QPointF(x + 6, y - 20), QPointF(x - 4, y - 18)]))
+    p.drawPath(_disc(x + 2, y - 39, 4.2))                          # head
+    p.setPen(_rpen(ink, 3.4))
+    p.drawLine(QPointF(x - 2, y - 30), QPointF(x - 8, y - 22))    # back arm
+    p.drawLine(QPointF(x + 3, y - 30), QPointF(x + 12, y - 25))   # front arm
+    p.setPen(_rpen(_accent(), 2.2))
+    p.drawLine(QPointF(x + 13, y - 27), QPointF(x + 14, y + 1))   # the stick
+    pack = QPainterPath()
+    pack.addRoundedRect(QRectF(x - 12, y - 33, 7, 12), 3, 3)
+    p.setPen(Qt.NoPen)
+    p.setBrush(_accent())
+    p.drawPath(pack)
 
 
 def _look_around(p, ink):
-    # SketchUp's Look Around: an eye, with a little turn arrow — the head
-    # swivels, the feet stay.
-    pen = QPen(ink, 3.0)
-    pen.setCapStyle(Qt.RoundCap)
-    pen.setJoinStyle(Qt.RoundJoin)
-    p.setPen(pen)
+    # SketchUp's Look Around: an eye with lashes and a lid, orange iris.
+    # No white in the eyeball and a pupil that is always dark, so it reads
+    # the same on a dark toolbar (the white blob Marco saw, 2026-09-19).
+    cx, cy, w, h = 24.0, 26.0, 17.0, 10.0
+    outline = QPainterPath()
+    outline.moveTo(cx - w, cy)
+    outline.cubicTo(cx - w * 0.5, cy - h * 1.6, cx + w * 0.5, cy - h * 1.6, cx + w, cy)
+    outline.cubicTo(cx + w * 0.5, cy + h * 1.4, cx - w * 0.5, cy + h * 1.4, cx - w, cy)
+    p.setPen(_rpen(ink, 3.0))
     p.setBrush(Qt.NoBrush)
-    path = QPainterPath()
-    path.moveTo(6.0, 25.0)
-    path.cubicTo(14.0, 11.0, 34.0, 11.0, 42.0, 25.0)
-    path.cubicTo(34.0, 39.0, 14.0, 39.0, 6.0, 25.0)
-    p.drawPath(path)
-    p.setBrush(ink)
-    p.drawEllipse(QPointF(24.0, 25.0), 5.5, 5.5)
+    p.drawPath(outline)
+    p.save()
+    p.setClipPath(outline)
     p.setPen(Qt.NoPen)
     p.setBrush(_accent())
-    p.drawEllipse(QPointF(24.0, 25.0), 2.4, 2.4)
-    pen = QPen(_accent(), 2.4)
-    pen.setCapStyle(Qt.RoundCap)
-    p.setPen(pen)
-    p.setBrush(Qt.NoBrush)
-    p.drawArc(QRectF(12.0, 34.0, 24.0, 12.0), 200 * 16, 140 * 16)
-    p.drawLine(QPointF(35.0, 44.0), QPointF(37.5, 39.0))
-    p.drawLine(QPointF(35.0, 44.0), QPointF(30.0, 43.0))
+    p.drawPath(_disc(cx, cy, 7.0))
+    p.setBrush(QColor(30, 33, 40))
+    p.drawPath(_disc(cx, cy, 3.4))
+    p.setBrush(QColor(255, 255, 255, 230))
+    p.drawPath(_disc(cx - 2.4, cy - 2.6, 1.6))
+    p.restore()
+    lid = QPainterPath()
+    lid.moveTo(cx - w, cy)
+    lid.cubicTo(cx - w * 0.5, cy - h * 1.6, cx + w * 0.5, cy - h * 1.6, cx + w, cy)
+    lid.cubicTo(cx + w * 0.5, cy - h * 0.55, cx - w * 0.5, cy - h * 0.55, cx - w, cy)
+    p.setPen(Qt.NoPen)
+    p.setBrush(ink)
+    p.drawPath(lid)
+    p.setPen(_rpen(ink, 2.6))
+    for ax, ay, bx, by in ((cx - w - 1, cy - 2, cx - w - 7, cy - 4),
+                           (cx - w + 1, cy - 6, cx - w - 5, cy - 11),
+                           (cx - w + 5, cy - 9, cx - w, cy - 15)):
+        p.drawLine(QPointF(ax, ay), QPointF(bx, by))
 
 
 _DRAW = {
@@ -1497,9 +1517,9 @@ _CURSOR_HOTSPOTS = {
     "zoom": (21, 21),               # the magnifier's lens centre
     "zoom_window": (21, 22),
     "section": (24, 27),            # the plane's centre
-    "position_camera": (24, 41),    # the feet on the crosshair
+    "position_camera": (24, 44),    # the tripod's foot: where you stand
     "walk": (24, 24),
-    "look_around": (24, 25),        # the pupil
+    "look_around": (24, 26),        # the pupil
 }
 
 
