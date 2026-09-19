@@ -36,14 +36,15 @@ follow [SemVer](https://semver.org).
   existe se crea al asignarla.
 - **Posicionar textura: el transportador de SketchUp en el pin verde**
   (Rafael, 04:30: «en SketchUp te bloquea a los 0, a los 45 y a los 90… si
-  no es un poco a ojo»; Marco trajo las dos capturas). Al arrastrar el
-  pin verde aparece sobre el pin rojo el mismo transportador de Girar:
-  disco de tamaño fijo en pantalla con marcas cada 15° desde donde
-  empezó el arrastre, la cuña del ángulo barrido, las dos líneas guía
-  (la de referencia, larga y gris a través del pivote; la del brazo
-  actual, punteada) y el ángulo en la caja de medidas. Cerca del disco el giro se pega a las
-  marcas (0, 15, 30, 45… 90); lejos, va libre a 0,1°. Ctrl mientras
-  arrastras lo deja libre («Ctrl = Sin ajuste», como allí).
+  no es un poco a ojo»; Marco trajo capturas y una grabación, y se calcó
+  fotograma a fotograma). Al arrastrar el pin verde aparece sobre el pin
+  rojo el pequeño transportador azul de SketchUp: el disco con el brazo
+  de partida cruzándolo, la cuña del ángulo barrido, un cuadradito en
+  cada brazo, la línea punteada del brazo actual que atraviesa el pin
+  verde y sigue, y el ángulo en la caja de medidas. Cerca del disco el
+  giro se pega a pasos de 15° desde donde empezó (0, 15, 30, 45… 90);
+  lejos, va libre a 0,1°. Ctrl mientras arrastras lo deja libre («Ctrl =
+  Sin ajuste», como allí).
 - **Texto 3D como en SketchUp: cada letra es un grupo, y el texto se
   edita.** El texto llega como un componente con un grupo por letra
   («que cada letra aparezca como grupo, como lo hace SketchUp»), así que

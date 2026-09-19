@@ -11,12 +11,13 @@ dotted tile grid and four pins on the corners of the tile under the cursor:
 * **green** — drag to SCALE and ROTATE about the red pin. SketchUp's
   protractor appears on the red pin while you drag (Rafael, 2026-09-16:
   «en SketchUp te bloquea a los 0, a los 45 y a los 90… si no es como un
-  poco a ojo»; Marco brought the two captures): a fixed-screen-size disc
-  with ticks every 15° from where the drag began, a wedge for the angle
-  swept, a dashed guide from the pivot through the cursor, and the angle
-  in the Measurements box. Near the disc the rotation snaps to the ticks;
-  farther out it is free at 0.1°. Ctrl while dragging turns the snap off
-  (SketchUp's «Ctrl = Sin ajuste»);
+  poco a ojo»; Marco brought captures and a recording): a small disc of
+  fixed screen size with the start arm across it, the wedge swept, a
+  square on each arm, the current arm dashed through the green pin, and
+  the angle in the Measurements box. Near the disc the rotation snaps
+  to 15° steps from where the drag began; farther out it is free at
+  0.1°. Ctrl while dragging turns the snap off (SketchUp's «Ctrl = Sin
+  ajuste»);
 * **blue** — drag to SCALE vertically and SHEAR (red and green stay);
 * **yellow** — SketchUp's perspective distort. The engine maps textures
   with an affine map per face (what every exporter writes), so this pin is
@@ -169,11 +170,11 @@ class TexturePositionTool(Tool):
     CLICK_PX = 4.0
     #: Pin half-size, px.
     PIN_PX = 7.0
-    #: SketchUp's protractor on the red pin while the green one drags: a
-    #: disc of fixed SCREEN radius with ticks every 15° from the drag's
-    #: start; within 1.25 radii of the pivot the rotation snaps to the
-    #: ticks, farther out it is free at 0.1° (the Rotate tool's rule).
-    DISC_PX = 45.0
+    #: SketchUp's small protractor on the red pin while the green one
+    #: drags: a disc of fixed SCREEN radius; within 1.25 radii of the pivot
+    #: the rotation snaps to 15° steps from the drag's start, farther out
+    #: it is free at 0.1° (the Rotate tool's rule).
+    DISC_PX = 30.0
     TICK_DEG = 15.0
 
     def __init__(self) -> None:
@@ -512,10 +513,14 @@ class TexturePositionTool(Tool):
                 self.map.world(*self.pin_uv[PIN_SCALE_ROTATE]))
 
     def _protractor_segments(self, viewport):
-        """SketchUp's protractor on the red pin while the green one drags:
-        the rim, a tick every 15° from the drag's start arm (long at 90°),
-        the start arm, and the wedge's current arm — world segments, drawn
-        by the overlay. The disc keeps a fixed SCREEN radius."""
+        """SketchUp's protractor on the red pin while the green one drags,
+        read off Marco's recording of 2026-09-18 frame by frame: a small
+        disc of fixed SCREEN radius with the start arm drawn across it as
+        a diameter, the swept wedge filled, a small square on each arm at
+        the same reach (the start arm's stub dashed up to it), and the
+        current arm dashed from the pivot through the green pin and on
+        past it. No ticks, no angle text: the Measurements box says the
+        angle. ``None`` when the green pin is not dragging."""
         drag = self._drag
         if drag is None or drag[0] != "pin" or drag[1] != PIN_SCALE_ROTATE:
             return None
@@ -545,22 +550,21 @@ class TexturePositionTool(Tool):
         count = 48
         pts = [rim(2 * math.pi * k / count) for k in range(count)]
         ring = [(pts[k], pts[(k + 1) % count]) for k in range(count)]
-        ticks = []
-        for k in range(int(360 / self.TICK_DEG)):
-            t = math.radians(k * self.TICK_DEG)
-            inner = 0.75 if k * self.TICK_DEG % 90 == 0 else 0.86
-            ticks.append((rim(t, inner), rim(t)))
         sweep = math.radians(self._sweep_deg or 0.0)
         steps = max(2, int(abs(self._sweep_deg or 0.0) / 5.0) + 1)
-        wedge = [R, rim(0.0, 0.9)]
-        wedge += [rim(sweep * k / steps, 0.9) for k in range(1, steps + 1)]
-        # SketchUp's guide lines: the start arm runs on through the pivot
-        # as a long dashed line (the reference you measure from), and the
-        # current arm from the pivot to the cursor, extended past the pin.
-        reach = r * 40.0
+        wedge = [R] + [rim(sweep * k / steps) for k in range(steps + 1)]
         cur = u * math.cos(sweep) + v * math.sin(sweep)
-        guides = [(R - u * reach, R + u * reach), (R, R + cur * reach)]
-        return ring, ticks, wedge, guides, (R, u, v, r)
+        G = self.map.world(*self.pin_uv[PIN_SCALE_ROTATE])
+        reach = max((G - R).length() * 1.3, r * 1.7)
+        return {
+            "ring": ring,
+            "diameter": (R - u * r, R + u * r),
+            "wedge": wedge,
+            "base_stub": (R, R + u * r * 1.7),
+            "squares": (R + u * r * 1.7, R + cur * r * 1.7),
+            "current_arm": (R, R + cur * reach),
+            "frame": (R, u, v, r),
+        }
 
     def _scale_shear(self, m0: TextureMap, p: QVector3D) -> TextureMap:
         """The affine map that keeps the red and green pins and takes the
@@ -774,54 +778,39 @@ class TexturePositionTool(Tool):
             painter.drawLine(QPointF(*pa), QPointF(*pb))
         if self._drag is not None and self._drag[0] == "pin" \
                 and self._drag[1] == PIN_SCALE_ROTATE and self._moved:
-            # SketchUp's dashed guide from the pivot to the green pin.
-            R = self.map.world(*self.pin_uv[PIN_MOVE])
-            G = self.map.world(*self.pin_uv[PIN_SCALE_ROTATE])
-            pr, pg = to_px(R), to_px(G)
-            if pr is not None and pg is not None:
-                painter.setPen(QPen(QColor(40, 40, 40, 200), 1.0, Qt.DashLine))
-                painter.drawLine(QPointF(*pr), QPointF(*pg))
             disc = self._protractor_segments(viewport)
-            if disc is not None and pg is not None:
-                # SketchUp's protractor on the pivot: rim and ticks in the
-                # axis colour of the face's normal (dark off-axis), the
-                # swept wedge filled, and the angle by the green pin.
-                ring, ticks, wedge, guides, _frame = disc
-                from core.snap import COLOR_AXIS_X, COLOR_AXIS_Y, COLOR_AXIS_Z
-                n = self._plane[1]
-                rgb = (0.24, 0.27, 0.32)
-                for ax, col in ((QVector3D(1, 0, 0), COLOR_AXIS_X),
-                                (QVector3D(0, 1, 0), COLOR_AXIS_Y),
-                                (QVector3D(0, 0, 1), COLOR_AXIS_Z)):
-                    if abs(QVector3D.dotProduct(n, ax)) > 0.999:
-                        rgb = col
-                color = QColor.fromRgbF(rgb[0], rgb[1], rgb[2], 0.95)
-                # The guides first, under the instrument: the reference arm
-                # long and grey, the current arm in the disc's colour.
-                for (a, b), pen in ((guides[0], QPen(QColor(90, 90, 90, 190),
-                                                     1.0, Qt.DashLine)),
-                                    (guides[1], QPen(color, 1.2, Qt.DashLine))):
+            if disc is not None:
+                # SketchUp's instrument, in its UI blue whatever the face.
+                from PySide6.QtGui import QPolygonF
+                blue = QColor(60, 60, 225, 235)
+                R, u, v, r = disc["frame"]
+
+                def line(a, b, pen):
                     pa, pb = to_px(a), to_px(b)
                     if pa is not None and pb is not None:
                         painter.setPen(pen)
                         painter.drawLine(QPointF(*pa), QPointF(*pb))
-                painter.setPen(QPen(color, 1.2))
-                for a, b in ring + ticks:
-                    pa, pb = to_px(a), to_px(b)
-                    if pa is not None and pb is not None:
-                        painter.drawLine(QPointF(*pa), QPointF(*pb))
-                poly = [to_px(w) for w in wedge]
+
+                dashed = QPen(blue, 1.3, Qt.DashLine)
+                line(*disc["current_arm"], dashed)
+                line(*disc["base_stub"], dashed)
+                poly = [to_px(w) for w in disc["wedge"]]
                 if all(q is not None for q in poly):
-                    from PySide6.QtGui import QPolygonF
-                    painter.setPen(QPen(color, 1.0))
-                    painter.setBrush(QColor.fromRgbF(rgb[0], rgb[1], rgb[2],
-                                                     0.25))
+                    painter.setPen(QPen(blue, 1.0))
+                    painter.setBrush(QColor(60, 60, 225, 70))
                     painter.drawPolygon(QPolygonF([QPointF(*q) for q in poly]))
                     painter.setBrush(Qt.NoBrush)
-                if self._sweep_deg is not None:
-                    painter.setPen(QPen(QColor(30, 30, 30, 255), 1.0))
-                    painter.drawText(QPointF(pg[0] + 12, pg[1] - 10),
-                                     f"{self._sweep_deg:.1f}°")
+                solid = QPen(blue, 1.3)
+                for a, b in disc["ring"]:
+                    line(a, b, solid)
+                line(*disc["diameter"], solid)
+                painter.setBrush(blue)
+                painter.setPen(QPen(blue, 1.0))
+                for q in disc["squares"]:
+                    pq = to_px(q)
+                    if pq is not None:
+                        painter.drawRect(pq[0] - 2.5, pq[1] - 2.5, 5.0, 5.0)
+                painter.setBrush(Qt.NoBrush)
         half = self.PIN_PX
         for i, p in enumerate(self.pins()):
             q = to_px(p)

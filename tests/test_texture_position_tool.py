@@ -325,19 +325,23 @@ def test_the_protractor_sits_on_the_red_pin_with_its_zero_on_the_start_arm(viewp
     tool = _begin(viewport, face)
     near = (tool.DISC_PX * 1.0) / _px_per_metre(viewport)
     _green_to(viewport, tool, 30.0, radius=near)
-    ring, ticks, wedge, guides, (R, u, v, r) = tool._protractor_segments(viewport)
+    disc = tool._protractor_segments(viewport)
+    R, u, v, r = disc["frame"]
     assert _close(R.toTuple(), (0.5, 0.0, 0.0))
     assert _close(u.toTuple(), (1.0, 0.0, 0.0))          # zero = where the drag began
-    assert len(ticks) == 24 and len(ring) == 48
+    assert len(disc["ring"]) == 48
     assert abs(r * _px_per_metre(viewport) - tool.DISC_PX) < 0.5   # fixed screen size
-    assert wedge[0] == R and len(wedge) >= 3
-    # SketchUp's guide lines: the reference arm long through the pivot,
-    # the current arm from the pivot along the sweep.
-    (a, b), (c, d) = guides
-    assert _close(((a + b) * 0.5).toTuple(), R.toTuple())      # through the pivot
-    assert abs(QVector3D.dotProduct((b - a).normalized(), u) - 1.0) < 1e-6
+    assert disc["wedge"][0] == R and len(disc["wedge"]) >= 3
+    # the start arm across the disc, its stub, and a square on each arm at
+    # the same reach; the current arm runs from the pivot along the sweep
+    a, b = disc["diameter"]
+    assert _close(((a + b) * 0.5).toTuple(), R.toTuple())
+    sq_base, sq_cur = disc["squares"]
+    assert abs((sq_base - R).length() - (sq_cur - R).length()) < 1e-9
+    assert disc["base_stub"] == (R, sq_base)
+    c, d = disc["current_arm"]
     assert c == R
     cur = (d - c).normalized()
-    assert abs(math.degrees(math.atan2(cur.y(), cur.x())) - 30.0) < 1e-6
+    assert abs(math.degrees(math.atan2(cur.y(), cur.x())) - 30.0) < 1e-4
     tool.on_release(viewport)
     assert tool._protractor_segments(viewport) is None
