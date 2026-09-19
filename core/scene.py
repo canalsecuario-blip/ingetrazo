@@ -156,12 +156,32 @@ class Scene:
             return True, False
         return ly.visible, ly.locked
 
+    @staticmethod
+    def _object_hidden(entity) -> bool:
+        """SketchUp's Hide on an OBJECT (a group or component). Edges carry
+        a ``hidden`` of their own with older, narrower semantics (they stay
+        in the topology and the draw passes skip them themselves), so only
+        a group answers here."""
+        return bool(getattr(entity, "hidden", False)) \
+            and hasattr(entity, "children")
+
     def entity_visible(self, entity) -> bool:
+        # A hidden object is gone from every consumer that asks this —
+        # render, pick, snap, bounds, export — whatever its layer says.
+        if self._object_hidden(entity):
+            return False
         return self._layer_state(entity)[0]
 
     def entity_selectable(self, entity) -> bool:
+        if self._object_hidden(entity):
+            return False
         visible, locked = self._layer_state(entity)
         return visible and not locked
+
+    def groups_by_uid(self) -> dict:
+        """``uid → group`` over the whole tree (nested placements too)."""
+        from core.purge import iter_groups
+        return {g.uid: g for g in iter_groups(self.groups)}
 
     # ---- Sections (SketchUp section planes) ----------------------------------
     def active_section(self):

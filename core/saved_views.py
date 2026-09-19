@@ -22,7 +22,7 @@ class SavedView:
                  yaw: float = -0.7853981633974483, pitch: float = 0.5235987755982988,
                  fov_deg: float = 45.0, perspective: bool = True,
                  hidden_layers=None, style=None, section=None,
-                 georef=None, shadows=None) -> None:
+                 georef=None, shadows=None, hidden_objects=None) -> None:
         self.name = name
         self.target = tuple(target)
         self.distance = float(distance)
@@ -61,6 +61,12 @@ class SavedView:
         #: frame with shadows, one captured without renders without (Marco,
         #: 2026-09-14). ``None`` = a view from before this field, hands-off.
         self.shadows = dict(shadows) if shadows else None
+        #: The objects (group uids) hidden when the scene was saved —
+        #: SketchUp scenes remember "Hidden Objects" (Rafael, 2026-09-16:
+        #: «una escena en donde esto esté oculto»). ``None`` = a view from
+        #: before this field, hands-off; a list, even empty, is applied.
+        self.hidden_objects = (list(hidden_objects)
+                               if hidden_objects is not None else None)
 
     # ---- Snapshot / recall ---------------------------------------------------
     @classmethod
@@ -86,7 +92,9 @@ class SavedView:
                    georef=georef_state(scene),
                    shadows=(scene.shadows.to_dict()
                             if getattr(scene, "shadows", None) is not None
-                            else None))
+                            else None),
+                   hidden_objects=[uid for uid, g in
+                                   scene.groups_by_uid().items() if g.hidden])
 
     def recapture(self, scene, camera) -> None:
         """Update this view in place from the live state (keeps the name)."""
@@ -127,6 +135,10 @@ class SavedView:
                     obj.visible = bool(self.georef[key])
         if self.shadows is not None and getattr(scene, "shadows", None) is not None:
             apply_shadow_state(scene, self.shadows)
+        if self.hidden_objects is not None:
+            hidden = set(self.hidden_objects)
+            for uid, g in scene.groups_by_uid().items():
+                g.hidden = uid in hidden
 
     # ---- Serialisation (.igz) ------------------------------------------------
     def to_dict(self) -> dict:
@@ -151,6 +163,8 @@ class SavedView:
             entry["georef"] = dict(self.georef)
         if self.shadows is not None:
             entry["shadows"] = dict(self.shadows)
+        if self.hidden_objects is not None:
+            entry["hidden_objects"] = list(self.hidden_objects)
         return entry
 
     @classmethod
@@ -167,7 +181,8 @@ class SavedView:
                    style=raw.get("style"),
                    section=raw.get("section"),
                    georef=raw.get("georef"),
-                   shadows=raw.get("shadows"))
+                   shadows=raw.get("shadows"),
+                   hidden_objects=raw.get("hidden_objects"))
 
 
 def apply_shadow_state(scene, raw: dict) -> None:

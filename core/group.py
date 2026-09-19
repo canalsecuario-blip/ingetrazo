@@ -19,6 +19,13 @@ from core.mesh import Mesh
 _counter = itertools.count(1)
 
 
+def new_uid() -> str:
+    """A fresh group identity: random, so two documents merged (a ``.igz``
+    imported as a component) never collide."""
+    import uuid
+    return uuid.uuid4().hex[:16]
+
+
 def reserve_group_names(names) -> None:
     """Move the automatic "Group N" counter past every N in ``names`` — a
     document that comes back with its names must not hand a new group a
@@ -36,7 +43,7 @@ def reserve_group_names(names) -> None:
 
 class Group:
     __slots__ = ("mesh", "name", "layer", "ifc", "billboard", "xform",
-                 "children", "owner", "context", "text3d")
+                 "children", "owner", "context", "text3d", "hidden", "uid")
 
     def __init__(self, mesh: Mesh | None = None, name: str | None = None) -> None:
         self.mesh = mesh if mesh is not None else Mesh()
@@ -52,6 +59,16 @@ class Group:
         # generated from — text, font, height… — so it can be re-edited and
         # laid out again in place. ``None`` on every other group.
         self.text3d = None
+        # SketchUp's Hide: the object stays in the document but draws,
+        # picks, snaps and exports as if it were not there — until Unhide,
+        # or the scene that remembers it visible (Rafael, 2026-09-16: «una
+        # escena en donde esto esté oculto»). A hidden TAG hides by layer;
+        # this hides the one object.
+        self.hidden = False
+        # Stable identity that survives save/load — what a scene names when
+        # it remembers which objects it hides. Fresh per object; a copy gets
+        # its own (see ``copy_group``).
+        self.uid = new_uid()
         # Component instance (SketchUp): when set, ``mesh`` is a PROTOTYPE in
         # local coordinates SHARED with sibling instances, and ``xform`` maps
         # local -> world. ``None`` = classic group (mesh in world coords).
@@ -455,6 +472,7 @@ def copy_group(group, delta=None):
     g.ifc = dict(group.ifc) if group.ifc else None
     g.billboard = group.billboard
     g.text3d = dict(group.text3d) if group.text3d else None
+    g.hidden = group.hidden
     # Nested placements ride along untranslated: ``delta`` already moved the
     # parent, and a child's transform is relative to it.
     g.children = [copy_group(c) for c in (group.children or ())]

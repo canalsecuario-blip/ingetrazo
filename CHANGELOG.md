@@ -7,6 +7,17 @@ follow [SemVer](https://semver.org).
 ## [Sin publicar] — 0.4.6, lo del modelo de la revisión de Rafael
 
 ### Añadido
+- **Ocultar objetos** (Rafael, 38:40: «tiene ocultar aristas, pero no sé
+  si tenemos opción de ocultar un objeto en concreto»; no la había).
+  Edición ▸ **Ocultar** y el clic derecho ▸ Ocultar esconden los grupos y
+  componentes seleccionados (y las aristas, como antes): dejan de dibujarse,
+  de clicarse, de imantar y de exportarse, pero siguen en el documento.
+  Edición ▸ **Mostrar ▸ Lo último / Todo** los devuelve, con deshacer. Y
+  las **escenas los recuerdan**, que era lo que él quería —«una escena en
+  donde esto esté oculto»—: cada objeto lleva ahora una identidad estable
+  en el `.igz` y la escena guarda cuáles estaban ocultos; una escena
+  guardada antes de esta versión no toca nada. Las caras no se ocultan
+  (una cara oculta dentro de un grupo volvería al salir de él).
 - **Texto 3D como en SketchUp: cada letra es un grupo, y el texto se
   edita.** El texto llega como un componente con un grupo por letra
   («que cada letra aparezca como grupo, como lo hace SketchUp»), así que

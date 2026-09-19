@@ -2020,7 +2020,7 @@ class Viewport(QOpenGLWidget):
                       if m is not None and m is not loose else None)
             parts.append((id(g), id(m), serial,
                           tuple(xf.data()) if xf is not None else None,
-                          g.layer, bool(g.billboard)))
+                          g.layer, bool(g.billboard), bool(g.hidden)))
             for c in (g.children or ()):
                 walk(c)
         for g in sc.groups:
@@ -2086,7 +2086,7 @@ class Viewport(QOpenGLWidget):
 
         ctx = self.scene.edit_group
 
-        def walk(node, world, dentro=None):
+        def walk(node, world, dentro=None, hidden=False):
             """``dentro`` = the first-level child of the open context this
             subtree hangs from, or ``None`` outside it.
 
@@ -2115,6 +2115,9 @@ class Viewport(QOpenGLWidget):
                 # children are tagged.
                 proxy.layer = forced or child.layer or node.layer
                 proxy.billboard = child.billboard
+                # Hide on an object takes its whole subtree along, and a
+                # hidden child stays hidden inside a visible parent.
+                proxy.hidden = hidden or bool(child.hidden)
                 if child is ctx:
                     # The group being edited, reached as a nested placement:
                     # it is the SUBJECT, not surroundings. Comparing by
@@ -2131,9 +2134,10 @@ class Viewport(QOpenGLWidget):
                 out.append(proxy)
                 if child.children:
                     walk(child, m,
-                         child if (ctx is not None and node is ctx) else dentro)
+                         child if (ctx is not None and node is ctx) else dentro,
+                         proxy.hidden)
 
-        walk(group, getattr(group, "xform", None))
+        walk(group, getattr(group, "xform", None), hidden=bool(group.hidden))
         return out
 
     def _gather_instanced(self):

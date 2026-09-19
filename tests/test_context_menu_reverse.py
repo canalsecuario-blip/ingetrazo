@@ -77,7 +77,8 @@ def test_solo_con_aristas_no_aparece(ventana, monkeypatch):
     assert cara is not None
     textos = _entradas(ventana, monkeypatch, [arista])
     assert "Reverse Faces" not in textos
-    assert "Hide Edges" in textos, "y las aristas siguen con lo suyo"
+    # «Hide» since 2026-09-18: the one entry hides objects and edges alike.
+    assert "Hide" in textos, "y las aristas siguen con lo suyo"
 
 
 def test_invertir_desde_el_menu_da_la_vuelta_a_la_cara(ventana):

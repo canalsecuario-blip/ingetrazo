@@ -641,23 +641,38 @@ class FlipFacesCommand(Command):
         self._flip(scene)
 
 
-class HideEdgesCommand(Command):
-    """Hide (or unhide) a set of edges — SketchUp's Edit ▸ Hide on edges.
+class HideCommand(Command):
+    """Hide (or unhide) objects and edges — SketchUp's Edit ▸ Hide and
+    Edit ▸ Unhide.
 
-    A hidden edge stays in the topology (its faces keep their boundary) but
-    draws neither as a line nor as a profile/silhouette; render, picking and
-    the ``.igz`` already honour ``Edge.hidden``, this command is the missing
-    reversible way to set it. Previous per-edge flags are captured at ``do``
-    time, so a mixed selection (some already hidden) undoes exactly."""
+    An OBJECT (group or component, ``Group.hidden``) disappears from every
+    consumer that asks ``Scene.entity_visible``: render, pick, snap, bounds,
+    export; its nested placements go with it. A hidden EDGE stays in the
+    topology (its faces keep their boundary) but draws neither as a line
+    nor as a profile/silhouette; render, picking and the ``.igz`` already
+    honour ``Edge.hidden``. Previous per-entity flags are captured at
+    ``do`` time, so a mixed selection (some already hidden) undoes
+    exactly. Faces are not hidden here: a group's cached chunk draws every
+    face it holds, so a face hidden inside a group would come back the
+    moment you left it."""
 
-    def __init__(self, edges, hidden: bool = True) -> None:
-        self._edges = list(edges)
+    def __init__(self, entities, hidden: bool = True) -> None:
+        self._entities = [e for e in entities
+                          if hasattr(e, "hidden") and not hasattr(e, "attrs")]
         self._hidden = hidden
         self._prev: list[bool] = []
 
+    @property
+    def entities(self) -> list:
+        return list(self._entities)
+
+    @property
+    def hides(self) -> bool:
+        return self._hidden
+
     def do(self, scene) -> None:
-        self._prev = [bool(getattr(e, "hidden", False)) for e in self._edges]
-        for e in self._edges:
+        self._prev = [bool(getattr(e, "hidden", False)) for e in self._entities]
+        for e in self._entities:
             e.hidden = self._hidden
             if self._hidden:
                 # An invisible entity must not linger in the selection: every
@@ -668,10 +683,17 @@ class HideEdgesCommand(Command):
         scene.version += 1
 
     def undo(self, scene) -> None:
-        for e, prev in zip(self._edges, self._prev):
+        for e, prev in zip(self._entities, self._prev):
             e.hidden = prev
         _dirty_group_chunks(scene)
         scene.version += 1
+
+
+class HideEdgesCommand(HideCommand):
+    """The edges-only spelling, kept for callers that grew up with it."""
+
+    def __init__(self, edges, hidden: bool = True) -> None:
+        super().__init__(edges, hidden=hidden)
 
 
 class SetFaceColorCommand(Command):

@@ -613,13 +613,21 @@ class MainWindow(QMainWindow):
 
         edit_menu.addSeparator()
 
-        hide_edges_action = QAction(tr("Hide Edges"), self)
-        hide_edges_action.triggered.connect(self._on_hide_edges)
-        edit_menu.addAction(hide_edges_action)
+        # SketchUp's Edit ▸ Hide and Edit ▸ Unhide ▸ Last / All. Hide takes
+        # the selected OBJECTS (groups, components) and edges; there was
+        # only «Ocultar aristas» and Rafael looked for the object one and
+        # did not find it (2026-09-16, 38:40).
+        hide_action = QAction(tr("Hide"), self)
+        hide_action.triggered.connect(self._on_hide)
+        edit_menu.addAction(hide_action)
 
-        unhide_edges_action = QAction(tr("Unhide All Edges"), self)
-        unhide_edges_action.triggered.connect(self._on_unhide_all_edges)
-        edit_menu.addAction(unhide_edges_action)
+        unhide_menu = edit_menu.addMenu(tr("Unhide"))
+        unhide_last_action = QAction(tr("Last"), self)
+        unhide_last_action.triggered.connect(self._on_unhide_last)
+        unhide_menu.addAction(unhide_last_action)
+        unhide_all_action = QAction(tr("All"), self)
+        unhide_all_action.triggered.connect(self._on_unhide_all)
+        unhide_menu.addAction(unhide_all_action)
 
         reverse_action = QAction(tr("Reverse Faces"), self)
         reverse_action.triggered.connect(self._on_reverse_faces)
@@ -1877,8 +1885,8 @@ class MainWindow(QMainWindow):
                 texm = menu.addMenu(tr("Texture"))
                 texm.addAction(tr("Position"), self._on_texture_position)
                 texm.addAction(tr("Reset Position"), self._on_texture_reset)
-        if any(isinstance(e, Edge) for e in sel):
-            menu.addAction(tr("Hide Edges"), self._on_hide_edges)
+        if any(isinstance(e, (Edge, Group)) for e in sel):
+            menu.addAction(tr("Hide"), self._on_hide)
         if has_group:
             groups = [e for e in sel if isinstance(e, Group)]
             if len(groups) == 1:
@@ -1994,37 +2002,79 @@ class MainWindow(QMainWindow):
             TexturePositionTool.side_command(face, side, flat))
         self.viewport.update()
 
-    def _on_hide_edges(self) -> None:
-        """SketchUp's Edit ▸ Hide, scoped to edges: the selected edges stop
-        drawing (no line, no profile) but stay in the topology, so their
-        faces keep reading as one surface."""
-        from core.history import HideEdgesCommand
+    def _hideable(self, entities) -> list:
+        """The objects and edges in ``entities`` that Hide acts on: a group
+        picked inside an open container is the child itself; one picked at
+        the top level is the top-level object."""
         from core.mesh import Edge as MeshEdge
-        edges = [e for e in self.viewport.scene.selection
-                 if isinstance(e, MeshEdge) and not getattr(e, "hidden", False)]
-        if not edges:
-            self.statusBar().showMessage(
-                tr("Select one or more edges first."), 3000)
-            return
-        self.viewport.history.execute(HideEdgesCommand(edges, hidden=True))
-        self.viewport.update()
-        self.statusBar().showMessage(tr("Hid {n} edge(s).", n=len(edges)), 3000)
+        out = []
+        for e in entities:
+            if isinstance(e, MeshEdge) or isinstance(e, Group):
+                if not getattr(e, "hidden", False):
+                    out.append(e)
+        return out
 
-    def _on_unhide_all_edges(self) -> None:
-        """SketchUp's Edit ▸ Unhide ▸ All, scoped to the current editing
-        context: every hidden edge of the loose mesh — or of the group being
-        edited — becomes visible again. (Without a hidden-geometry view mode
-        a hidden edge can't be clicked, so "all" is the honest inverse.)"""
-        from core.history import HideEdgesCommand
-        edges = [e for e in self.viewport.scene.mesh.edges
-                 if getattr(e, "hidden", False)]
-        if not edges:
-            self.statusBar().showMessage(tr("No hidden edges here."), 3000)
+    def _on_hide(self) -> None:
+        """SketchUp's Edit ▸ Hide: the selected objects (groups, components)
+        and edges stop drawing, picking and exporting — they are still in
+        the document and come back with Unhide, or with a scene that
+        remembers them visible. Faces are not hidden (see HideCommand)."""
+        from core.history import HideCommand
+        targets = self._hideable(self.viewport.scene.selection)
+        if not targets:
+            self.statusBar().showMessage(
+                tr("Select an object or edges first."), 3000)
             return
-        self.viewport.history.execute(HideEdgesCommand(edges, hidden=False))
+        self.viewport.history.execute(HideCommand(targets, hidden=True))
+        self.viewport.update()
+        n_obj = sum(1 for e in targets if isinstance(e, Group))
+        n_edge = len(targets) - n_obj
+        self.statusBar().showMessage(
+            tr("Hid {objects} object(s) and {edges} edge(s) — Edit ▸ Unhide "
+               "brings them back", objects=n_obj, edges=n_edge), 4000)
+
+    def _on_unhide_last(self) -> None:
+        """SketchUp's Edit ▸ Unhide ▸ Last: the most recent Hide whose
+        entities are still hidden comes back, as its own undoable step."""
+        from core.history import HideCommand
+        for cmd in reversed(self.viewport.history.undo_stack):
+            if isinstance(cmd, HideCommand) and cmd.hides:
+                still = [e for e in cmd.entities if getattr(e, "hidden", False)]
+                if still:
+                    self.viewport.history.execute(HideCommand(still, hidden=False))
+                    self.viewport.update()
+                    self.statusBar().showMessage(
+                        tr("Unhid {n} entities.", n=len(still)), 3000)
+                    return
+        self.statusBar().showMessage(tr("Nothing to unhide."), 3000)
+
+    def _hidden_everywhere(self) -> list:
+        """Every hidden object in the document (nested ones too) plus the
+        hidden edges of the mesh being edited — what Unhide ▸ All restores.
+        Objects everywhere, because a hidden child inside a closed container
+        can only be reached by opening it, and the point of Unhide All is
+        not to have to hunt."""
+        from core.purge import iter_groups
+        scene = self.viewport.scene
+        out = [g for g in iter_groups(scene.groups) if g.hidden]
+        out += [e for e in scene.mesh.edges if getattr(e, "hidden", False)]
+        return out
+
+    def _on_unhide_all(self) -> None:
+        """SketchUp's Edit ▸ Unhide ▸ All."""
+        from core.history import HideCommand
+        targets = self._hidden_everywhere()
+        if not targets:
+            self.statusBar().showMessage(tr("Nothing is hidden."), 3000)
+            return
+        self.viewport.history.execute(HideCommand(targets, hidden=False))
         self.viewport.update()
         self.statusBar().showMessage(
-            tr("Unhid {n} edge(s).", n=len(edges)), 3000)
+            tr("Unhid {n} entities.", n=len(targets)), 3000)
+
+    # Older spellings, kept for callers that grew up with them.
+    _on_hide_edges = _on_hide
+    _on_unhide_all_edges = _on_unhide_all
 
     def _on_toggle_shadows(self, on: bool) -> None:
         """Camera ▸ Shadows: flip the scene's sun on/off (the tray panel

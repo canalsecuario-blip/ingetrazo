@@ -1799,5 +1799,14 @@
  "Edit Group": "Editar grupo",
  "Edit 3D Text…": "Editar texto 3D…",
  "Edit 3D Text… (letters edited by hand)": "Editar texto 3D… (letras editadas a mano)",
- "This text's letters were edited by hand, so it can no longer be regenerated as text.": "Las letras de este texto se editaron a mano, así que ya no se puede regenerar como texto."
+ "This text's letters were edited by hand, so it can no longer be regenerated as text.": "Las letras de este texto se editaron a mano, así que ya no se puede regenerar como texto.",
+ "Hide": "Ocultar",
+ "Unhide": "Mostrar",
+ "Last": "Lo último",
+ "All": "Todo",
+ "Select an object or edges first.": "Selecciona antes un objeto o aristas.",
+ "Hid {objects} object(s) and {edges} edge(s) — Edit ▸ Unhide brings them back": "Ocultados {objects} objeto(s) y {edges} arista(s) — Edición ▸ Mostrar los devuelve",
+ "Unhid {n} entities.": "Mostradas {n} entidades.",
+ "Nothing to unhide.": "No hay nada que mostrar.",
+ "Nothing is hidden.": "No hay nada oculto."
 }
