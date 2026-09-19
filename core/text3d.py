@@ -13,8 +13,9 @@ and export like anything drawn by hand.
 :func:`make_text_group` is what the app inserts: a container group with ONE
 NESTED GROUP PER LETTER (Rafael, 2026-09-16: «que cada letra aparezca como
 grupo, como en SketchUp»), carrying the parameters it was made from in
-``Group.text3d`` so the text stays EDITABLE — double-click reopens the
-dialog and :func:`rebuild_text_group` lays the letters out again in place.
+``Group.text3d`` so the text stays EDITABLE — the right-click's «Edit 3D
+Text…» reopens the dialog and :func:`rebuild_text_group` lays the letters
+out again in place (double-click keeps SketchUp's meaning: it enters).
 
 The text STANDS UP by default: width along +X, height along +Z (base at
 z=0), thickness along +Y — so placing it with the component-placement tool

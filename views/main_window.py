@@ -1883,9 +1883,8 @@ class MainWindow(QMainWindow):
             groups = [e for e in sel if isinstance(e, Group)]
             if len(groups) == 1:
                 # SketchUp's Edit Group / Edit Component: the double-click
-                # by another road — the only road into a 3D text, whose
-                # double-click reopens its dialog instead. (No parameters
-                # on the slot: ``triggered`` would hand its bool to one.)
+                # by another road. (No parameters on the slot:
+                # ``triggered`` would hand its bool to one.)
                 one = groups[0]
                 menu.addAction(tr("Edit Group"),
                                lambda: self.viewport.begin_group_edit(one))
@@ -2794,9 +2793,9 @@ class MainWindow(QMainWindow):
 
     def _on_insert_3d_text(self) -> None:
         """SketchUp's 3D Text: the dialog generates REAL extruded geometry —
-        a container group with ONE GROUP PER LETTER, editable later by
-        double-click — handed to the placement tool so it settles on the
-        ground (or onto a wall) like any component."""
+        a container group with ONE GROUP PER LETTER, editable later from
+        the right-click menu — handed to the placement tool so it settles
+        on the ground (or onto a wall) like any component."""
         from core.text3d import make_text_group
         params = self._text3d_dialog()
         if params is None:
@@ -2828,8 +2827,10 @@ class MainWindow(QMainWindow):
 
     def _on_edit_3d_text(self, group=None) -> None:
         """Reopen the 3D Text dialog on an existing text and lay the letters
-        out again in place (Rafael's double-click, 2026-09-16: «SketchUp
-        tampoco»). Letters pushed or painted by hand are regenerated."""
+        out again in place — the right-click's «Edit 3D Text…» (Rafael,
+        2026-09-16: «SketchUp tampoco»; double-click keeps SketchUp's
+        meaning and enters the group). Letters pushed or painted by hand
+        are regenerated."""
         from core.history import EditText3DCommand
         from core.text3d import make_text_group
         group = group if group is not None else self._selected_text3d()

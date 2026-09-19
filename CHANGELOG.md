@@ -10,17 +10,16 @@ follow [SemVer](https://semver.org).
 - **Texto 3D como en SketchUp: cada letra es un grupo, y el texto se
   edita.** El texto llega como un componente con un grupo por letra
   («que cada letra aparezca como grupo, como lo hace SketchUp»), así que
-  una letra se empuja, se pinta o se mueve sola (clic derecho ▸ Editar
-  grupo, y dentro, doble clic en la letra). Y el texto **sigue siendo
-  texto**: doble clic sobre él reabre el
-  cuadro con lo que se escribió —texto, fuente, negrita, cursiva, altura,
-  extrusión— y lo regenera en el mismo sitio, con el mismo giro y la misma
-  escala; también desde el clic derecho, «Editar texto 3D…». Deshacer lo
-  devuelve como estaba. El `.igz` guarda los parámetros, así que un texto
-  de hace un mes se reabre igual de editable. Rafael lo pidió sabiendo que
-  «SketchUp tampoco» lo hace.
+  una letra se empuja, se pinta o se mueve sola: doble clic entra al texto
+  como a cualquier grupo (lo de SketchUp), y dentro, doble clic en la
+  letra. Y el texto **sigue siendo texto**: clic derecho ▸ **Editar texto
+  3D…** reabre el cuadro con lo que se escribió —texto, fuente, negrita,
+  cursiva, altura, extrusión— y lo regenera en el mismo sitio, con el mismo
+  giro y la misma escala. Deshacer lo devuelve como estaba. El `.igz`
+  guarda los parámetros, así que un texto de hace un mes se reabre igual
+  de editable. Rafael lo pidió sabiendo que «SketchUp tampoco» lo hace.
 - **Editar grupo** en el menú contextual, la entrada de SketchUp: la misma
-  puerta que el doble clic, para cuando el doble clic hace otra cosa.
+  puerta que el doble clic.
 
 ### Arreglado
 - **El cuadro de Texto 3D no aceptaba «20» de extrusión** (Rafael): pedía

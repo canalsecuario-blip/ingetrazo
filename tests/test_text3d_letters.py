@@ -118,38 +118,53 @@ def test_rebuild_from_a_container_without_letters_uses_identity():
     assert kids[0].xform == QMatrix4x4()
 
 
-def test_select_double_click_on_a_text_reopens_its_dialog():
-    """Double-click = edit the text (Rafael); entering the group is Edit
-    Group's job. A plain group still opens for editing."""
+def test_select_double_click_on_a_text_enters_it_like_any_group():
+    """Double-click keeps SketchUp's meaning — it ENTERS the group, whose
+    children are the letters (Marco, 2026-09-18: «en SketchUp no hay opción
+    de editar texto»). Re-editing the text is the right-click's job."""
     from types import SimpleNamespace
     from tools.select import SelectTool
 
     scene = Scene()
     text = make_text_group(text_params("Ab", "Sans"))
-    plain = Group(name="caja")
     calls = []
     window = SimpleNamespace(_on_edit_3d_text=lambda g: calls.append(("edit", g)))
+    vp = SimpleNamespace(
+        scene=scene, history=History(scene),
+        pick_group=lambda x, y: text, pick_edge=lambda x, y: None,
+        pick_dimension=lambda x, y: None,
+        pick_text_label=lambda x, y, rect_only=False: None,
+        pick_geopath=lambda x, y: None, pick_face=lambda x, y: None,
+        pick_section_plane=lambda x, y: None,
+        pick_image_plane=lambda x, y: None,
+        pick_guide=lambda x, y: None,
+        begin_group_edit=lambda g: calls.append(("enter", g)),
+        window=lambda: window, update=lambda: None)
+    ctx = SimpleNamespace(viewport=vp,
+                          screen=SimpleNamespace(x=lambda: 0, y=lambda: 0),
+                          modifiers=0)
+    SelectTool().on_double_click(ctx)
+    assert calls == [("enter", text)]
 
-    def viewport_for(picked):
-        return SimpleNamespace(
-            scene=scene, history=History(scene),
-            pick_group=lambda x, y: picked, pick_edge=lambda x, y: None,
-            pick_dimension=lambda x, y: None,
-            pick_text_label=lambda x, y, rect_only=False: None,
-            pick_geopath=lambda x, y: None, pick_face=lambda x, y: None,
-            pick_section_plane=lambda x, y: None,
-            pick_image_plane=lambda x, y: None,
-            pick_guide=lambda x, y: None,
-            begin_group_edit=lambda g: calls.append(("enter", g)),
-            window=lambda: window, update=lambda: None)
 
-    for picked in (text, plain):
-        vp = viewport_for(picked)
-        ctx = SimpleNamespace(viewport=vp,
-                              screen=SimpleNamespace(x=lambda: 0, y=lambda: 0),
-                              modifiers=0)
-        SelectTool().on_double_click(ctx)
-    assert calls == [("edit", text), ("enter", plain)]
+def test_edit_3d_text_reaches_the_container_from_a_letter_inside():
+    """Right-click on a letter while inside the text offers to edit the
+    TEXT: the container is what carries the parameters."""
+    from types import SimpleNamespace
+    from views.main_window import MainWindow
+
+    scene = Scene()
+    text = make_text_group(text_params("Ab", "Sans"))
+    scene.groups.append(text)
+    scene.edit_group = text
+    scene.select([text.children[1]])
+    win = SimpleNamespace(viewport=SimpleNamespace(scene=scene))
+    assert MainWindow._selected_text3d(win) is text
+    scene.edit_group = None
+    scene.select([text])
+    assert MainWindow._selected_text3d(win) is text
+    scene.select([Group(name="caja")])
+    assert MainWindow._selected_text3d(win) is None
 
 
 def test_place_tool_previews_the_letter_outlines():
