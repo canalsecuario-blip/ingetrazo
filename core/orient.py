@@ -29,6 +29,8 @@ from typing import Optional
 
 from PySide6.QtGui import QVector3D
 
+from core.mesh import turn_face_over
+
 # Ray/triangle hit tolerance and the small offset used to lift the sample point
 # off the face it sits on.
 _EPS = 1e-7
@@ -471,8 +473,8 @@ def orient_outward(mesh, seed: int = 12345, only=None) -> list:
         # Flip in place: reversing the loops reverses the winding (so the normal
         # flips) while keeping the *same* Face object and its shared edges/
         # incidence. Identity is preserved — a freshly extruded box keeps its
-        # base face object, and snapshot undo stays valid.
-        f.loop.reverse()
-        for h in f.hole_loops:
-            h.reverse()
+        # base face object, and snapshot undo stays valid. Each geometric
+        # side keeps its own paint (``turn_face_over``): this pass corrects
+        # windings, it must not move a brick texture indoors.
+        turn_face_over(f)
     return to_flip

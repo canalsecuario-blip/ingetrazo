@@ -1528,6 +1528,42 @@ class Mesh:
         return merged_face
 
 
+def turn_face_over(face) -> None:
+    """Reverse ``face``'s winding for the automatic orientation passes —
+    which must not move paint from one side of a wall to the other.
+
+    Paint lives by side: the front's in ``attrs`` (``PAINT_KEYS``), the
+    back's own in ``attrs["back"]`` (a dict), or ``True`` when the back
+    mirrors the front. Reversing the loop alone moves "front" to the other
+    geometric side and takes its paint along. When the BACK has paint of
+    its own, the sides were painted deliberately — a house wall, brick
+    outside and plaster inside, wound the wrong way — and the two paints
+    trade places as the winding turns, so the street keeps its brick and
+    only the face now points the right way (Marco's question, 2026-09-18).
+
+    A face painted on ONE side keeps the old rule: the paint follows the
+    front. That is what a painted rectangle pulled into a box relies on —
+    the base, turned over to face down, must come out painted OUTSIDE, «a
+    painted box, not a box with one painted face» (Marco, 2026-08-27). The
+    two rules meet where they should: paint on both sides pins the sides;
+    paint on one side goes with the correction.
+
+    SketchUp's own Reverse Faces (``FlipFacesCommand``) swaps nothing, by
+    design: there the material follows the front, as in SketchUp."""
+    attrs = face.attrs if face.attrs is not None else {}
+    back = attrs.get("back")
+    if isinstance(back, dict):
+        front = {k: attrs.pop(k) for k in PAINT_KEYS if k in attrs}
+        attrs.pop("back", None)
+        attrs.update(back)
+        if front:
+            attrs["back"] = front
+        face.attrs = attrs
+    face.loop.reverse()
+    for h in face.hole_loops:
+        h.reverse()
+
+
 def _dominant_attrs(faces) -> dict:
     """The attrs of the largest-area face that carries any — the dominant
     contributor when a merge collapses several faces into one survivor."""

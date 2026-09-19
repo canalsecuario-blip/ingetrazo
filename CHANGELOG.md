@@ -36,6 +36,18 @@ follow [SemVer](https://semver.org).
   cara se quedaba y el hueco se formaba enterrado tras ella. Ahora lo
   decide la cámara: la base se esconde siempre que el barrido se aleja del
   ojo, esté la cara como esté.
+- **Orientar una cara ya no lleva la textura al otro lado del muro.**
+  Pregunta de Marco al ver una cara azul volverse blanca tras un empuje:
+  «si tengo una casa con paredes, texturas exteriores diferentes a las
+  interiores, hago push de adentro, ¿la textura cambiaría?». Cambiaba: la
+  pasada automática de orientación (la que corrige una cara al revés al
+  empujar, al cortar o al importar) invertía el sentido de la cara y la
+  pintura de cada lado se iba con él — el ladrillo de fuera acababa
+  dentro y el yeso de dentro, en la calle. Ahora una cara **pintada por
+  los dos lados** conserva cada pintura en su lado; una pintada por un
+  solo lado sigue la corrección, como hasta ahora (un rectángulo pintado
+  que se tira hacia arriba sigue saliendo caja pintada por abajo). El
+  «Invertir caras» del usuario no cambia: es el de SketchUp.
 - **El cuadro de Texto 3D no aceptaba «20» de extrusión** (Rafael): pedía
   metros con un tope de 10 m, y nadie extruye un rótulo veinte metros.
   Altura y extrusión se piden ahora en **centímetros**.
