@@ -34,12 +34,15 @@ follow [SemVer](https://semver.org).
   lo dice en vez de callar (es lo que le «funcionó a la segunda»). Los
   tres caminos pasan por un mismo comando con deshacer, y una capa que no
   existe se crea al asignarla.
-- **Posicionar textura: el giro se bloquea a 0°, 45° y 90°** (Rafael,
-  04:30: «en SketchUp te bloquea a los 0, a los 45 y a los 90… si no es un
-  poco a ojo»). Al arrastrar el pin verde, a menos de 4° de cualquier
-  múltiplo de 45° respecto a los ejes de la propia cara (0° = recta con
-  la pared, 90° = de pie) el giro cae exacto, una guía magenta atraviesa
-  el pin rojo y se lee el ángulo. Shift mientras arrastras lo deja libre.
+- **Posicionar textura: el transportador de SketchUp en el pin verde**
+  (Rafael, 04:30: «en SketchUp te bloquea a los 0, a los 45 y a los 90… si
+  no es un poco a ojo»; Marco trajo las dos capturas). Al arrastrar el
+  pin verde aparece sobre el pin rojo el mismo transportador de Girar:
+  disco de tamaño fijo en pantalla con marcas cada 15° desde donde
+  empezó el arrastre, la cuña del ángulo barrido, la guía punteada y el
+  ángulo en la caja de medidas. Cerca del disco el giro se pega a las
+  marcas (0, 15, 30, 45… 90); lejos, va libre a 0,1°. Ctrl mientras
+  arrastras lo deja libre («Ctrl = Sin ajuste», como allí).
 - **Texto 3D como en SketchUp: cada letra es un grupo, y el texto se
   edita.** El texto llega como un componente con un grupo por letra
   («que cada letra aparezca como grupo, como lo hace SketchUp»), así que

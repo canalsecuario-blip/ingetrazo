@@ -8,12 +8,15 @@ dotted tile grid and four pins on the corners of the tile under the cursor:
 
 * **red** — drag to MOVE the texture (dragging the texture itself does the
   same);
-* **green** — drag to SCALE and ROTATE about the red pin; the rotation
-  SNAPS at every 45° from the face's own axes (0° = straight with the
-  wall, 90° upright, 45° diagonal) with a guide line through the red pin,
-  so a texture lands square without eyeballing it — Rafael's review of
-  2026-09-16 («en SketchUp te bloquea a los 0, a los 45 y a los 90… si no
-  es como un poco a ojo»). Shift while dragging turns the snap off;
+* **green** — drag to SCALE and ROTATE about the red pin. SketchUp's
+  protractor appears on the red pin while you drag (Rafael, 2026-09-16:
+  «en SketchUp te bloquea a los 0, a los 45 y a los 90… si no es como un
+  poco a ojo»; Marco brought the two captures): a fixed-screen-size disc
+  with ticks every 15° from where the drag began, a wedge for the angle
+  swept, a dashed guide from the pivot through the cursor, and the angle
+  in the Measurements box. Near the disc the rotation snaps to the ticks;
+  farther out it is free at 0.1°. Ctrl while dragging turns the snap off
+  (SketchUp's «Ctrl = Sin ajuste»);
 * **blue** — drag to SCALE vertically and SHEAR (red and green stay);
 * **yellow** — SketchUp's perspective distort. The engine maps textures
   with an affine map per face (what every exporter writes), so this pin is
@@ -166,10 +169,12 @@ class TexturePositionTool(Tool):
     CLICK_PX = 4.0
     #: Pin half-size, px.
     PIN_PX = 7.0
-    #: The green pin's rotation snaps within this many degrees of every
-    #: multiple of SNAP_STEP_DEG, measured from the face's own axes.
-    SNAP_TOL_DEG = 4.0
-    SNAP_STEP_DEG = 45.0
+    #: SketchUp's protractor on the red pin while the green one drags: a
+    #: disc of fixed SCREEN radius with ticks every 15° from the drag's
+    #: start; within 1.25 radii of the pivot the rotation snaps to the
+    #: ticks, farther out it is free at 0.1° (the Rotate tool's rule).
+    DISC_PX = 45.0
+    TICK_DEG = 15.0
 
     def __init__(self) -> None:
         self.face = None
@@ -186,10 +191,14 @@ class TexturePositionTool(Tool):
         self._moved = False
         self._undo: list[tuple[TextureMap, list]] = []
         self._hover_pin: int | None = None
-        #: While the green pin drags: the angle (deg, from the face's own
-        #: axes) the rotation is snapped to, or None when free.
-        self._snap_deg: float | None = None
-        self._snap_free = False          # Shift held: no snapping
+        #: While the green pin drags: the rotation swept since the drag
+        #: began (deg, as the Measurements box shows it), None otherwise;
+        #: whether that value sits on a protractor tick; and the cursor's
+        #: distance from the pivot in pixels (the snap-or-free rule).
+        self._sweep_deg: float | None = None
+        self._on_tick = False
+        self._pivot_px_dist = 0.0
+        self._snap_free = False          # Ctrl held: no snapping
         self._cursor: QVector3D | None = None
         self._viewport = None
         self._esc_armed = False
@@ -240,11 +249,7 @@ class TexturePositionTool(Tool):
         n = face.normal()
         self._plane = (QVector3D(face.vertices[0]), n.normalized()
                        if n.lengthSquared() > 1e-18 else QVector3D(0, 0, 1))
-        # The face's own axes — what "straight with the wall" means: the
-        # default projection's U (horizontal along a wall) and V (up).
-        from core.texture import projection_axes
-        self._ref_axes = projection_axes(self._plane[1])
-        self._snap_deg = None
+        self._sweep_deg = None
         suppress = getattr(viewport, "set_suppressed_faces", None)
         if suppress is not None:
             suppress({face})
@@ -398,7 +403,8 @@ class TexturePositionTool(Tool):
             return
         if self._drag is not None and self._moved and p is not None \
                 and self._drag_start is not None:
-            self._snap_free = bool(ctx.modifiers & Qt.ShiftModifier)
+            self._snap_free = bool(ctx.modifiers & Qt.ControlModifier)
+            self._pivot_px_dist = self._px_from_pivot(vp, ctx.screen)
             self._apply_drag(p)
             vp.update()
             return
@@ -412,7 +418,7 @@ class TexturePositionTool(Tool):
         drag = self._drag
         self._drag = None
         self._press_px = None
-        self._snap_deg = None
+        self._sweep_deg = None
         if not self._moved:
             if drag[0] == "pin":
                 # A click on a pin lifts it (SketchUp): it floats with the
@@ -460,36 +466,95 @@ class TexturePositionTool(Tool):
         cos_t = max(-1.0, min(1.0, QVector3D.dotProduct(a, b) / (la * lb)))
         sin_t = QVector3D.dotProduct(n, QVector3D.crossProduct(a, b)) / (la * lb)
         theta = math.atan2(sin_t, cos_t)
-        theta = self._snap_rotation(m0, n, theta)
+        theta = self._snap_rotation(theta)
         e_u = _rotated(m0.e_u, n, theta) * s
         e_v = _rotated(m0.e_v, n, theta) * s
         m = TextureMap(R, self.pin_uv[PIN_MOVE], e_u, e_v)
         return m
 
-    def _tile_angle(self, e_u: QVector3D) -> float:
-        """Where the tile's U axis points, in degrees from the face's own
-        U axis, turning toward its V axis (0 = straight, 90 = upright)."""
-        u_ax, v_ax = self._ref_axes
-        return math.degrees(math.atan2(QVector3D.dotProduct(e_u, v_ax),
-                                       QVector3D.dotProduct(e_u, u_ax)))
+    def _px_from_pivot(self, viewport, screen) -> float:
+        """How far the cursor is from the red pin, on screen."""
+        to_px = getattr(viewport, "_world_to_pixel", None)
+        if to_px is None or screen is None or not self.active:
+            return 0.0
+        pr = to_px(self.map.world(*self.pin_uv[PIN_MOVE]))
+        if pr is None:
+            return 0.0
+        return math.hypot(screen.x() - pr[0], screen.y() - pr[1])
 
-    def _snap_rotation(self, m0: TextureMap, n: QVector3D,
-                       theta: float) -> float:
-        """SketchUp's sticky angles on the green pin: within SNAP_TOL_DEG of
-        a multiple of 45° from the face's axes, the rotation lands exactly
-        there and ``_snap_deg`` says so (the overlay draws the guide).
-        Shift keeps the rotation free."""
-        self._snap_deg = None
-        if self._snap_free:
-            return theta
-        angle = self._tile_angle(_rotated(m0.e_u, n, theta))
-        step = self.SNAP_STEP_DEG
-        target = round(angle / step) * step
-        diff = target - angle
-        if abs(diff) > self.SNAP_TOL_DEG:
-            return theta
-        self._snap_deg = target % 360.0
-        return theta + math.radians(diff)
+    def _snap_rotation(self, theta: float) -> float:
+        """The Rotate tool's distance rule on the green pin: near the
+        protractor the sweep snaps to its 15° ticks (measured from where
+        the drag began), farther out it is free at 0.1°; Ctrl keeps it
+        free. ``_sweep_deg`` is what the Measurements box and the overlay
+        show."""
+        deg = math.degrees(theta)
+        near = self._pivot_px_dist <= self.DISC_PX * 1.25
+        if near and not self._snap_free:
+            deg = round(deg / self.TICK_DEG) * self.TICK_DEG
+            self._on_tick = True
+        else:
+            deg = round(deg, 1)
+            self._on_tick = False
+        while deg <= -180.0:
+            deg += 360.0
+        while deg > 180.0:
+            deg -= 360.0
+        self._sweep_deg = deg
+        return math.radians(deg)
+
+    def value_label(self):
+        """``(text, anchor)`` while the green pin rotates — the angle swept,
+        as SketchUp's Measurements box shows it; ``None`` otherwise."""
+        if self._sweep_deg is None or not self.active:
+            return None
+        return (f"{self._sweep_deg:+.1f}°",
+                self.map.world(*self.pin_uv[PIN_SCALE_ROTATE]))
+
+    def _protractor_segments(self, viewport):
+        """SketchUp's protractor on the red pin while the green one drags:
+        the rim, a tick every 15° from the drag's start arm (long at 90°),
+        the start arm, and the wedge's current arm — world segments, drawn
+        by the overlay. The disc keeps a fixed SCREEN radius."""
+        drag = self._drag
+        if drag is None or drag[0] != "pin" or drag[1] != PIN_SCALE_ROTATE:
+            return None
+        m0 = drag[2]
+        R = m0.world(*self.pin_uv[PIN_MOVE])
+        G0 = m0.world(*self.pin_uv[PIN_SCALE_ROTATE])
+        base = G0 - R
+        if base.lengthSquared() < 1e-18:
+            return None
+        n = self._plane[1]
+        u = base.normalized()
+        v = QVector3D.crossProduct(n, u).normalized()
+        to_px = getattr(viewport, "_world_to_pixel", None)
+        if to_px is None:
+            return None
+        p0, p1 = to_px(R), to_px(R + u)
+        if p0 is None or p1 is None:
+            return None
+        px_per_unit = math.hypot(p1[0] - p0[0], p1[1] - p0[1])
+        if px_per_unit < 1e-6:
+            return None
+        r = self.DISC_PX / px_per_unit
+
+        def rim(t: float, k: float = 1.0):
+            return R + (u * math.cos(t) + v * math.sin(t)) * (r * k)
+
+        count = 48
+        pts = [rim(2 * math.pi * k / count) for k in range(count)]
+        ring = [(pts[k], pts[(k + 1) % count]) for k in range(count)]
+        ticks = []
+        for k in range(int(360 / self.TICK_DEG)):
+            t = math.radians(k * self.TICK_DEG)
+            inner = 0.75 if k * self.TICK_DEG % 90 == 0 else 0.86
+            ticks.append((rim(t, inner), rim(t)))
+        sweep = math.radians(self._sweep_deg or 0.0)
+        steps = max(2, int(abs(self._sweep_deg or 0.0) / 5.0) + 1)
+        wedge = [R, rim(0.0, 0.9)]
+        wedge += [rim(sweep * k / steps, 0.9) for k in range(1, steps + 1)]
+        return ring, ticks, wedge, (R, u, v, r)
 
     def _scale_shear(self, m0: TextureMap, p: QVector3D) -> TextureMap:
         """The affine map that keeps the red and green pins and takes the
@@ -710,20 +775,38 @@ class TexturePositionTool(Tool):
             if pr is not None and pg is not None:
                 painter.setPen(QPen(QColor(40, 40, 40, 200), 1.0, Qt.DashLine))
                 painter.drawLine(QPointF(*pr), QPointF(*pg))
-            if self._snap_deg is not None and pr is not None and pg is not None:
-                # Snapped: the guide runs on through the red pin both ways,
-                # in the inference magenta, and says the angle.
-                d = G - R
-                reach = max(d.length() * 4.0, 0.5)
-                d = d.normalized() * reach
-                pa, pb = to_px(R - d), to_px(R + d)
-                if pa is not None and pb is not None:
-                    painter.setPen(QPen(QColor(210, 40, 190, 220), 1.5,
-                                        Qt.DashLine))
-                    painter.drawLine(QPointF(*pa), QPointF(*pb))
-                painter.setPen(QPen(QColor(30, 30, 30, 255), 1.0))
-                painter.drawText(QPointF(pg[0] + 12, pg[1] - 10),
-                                 f"{self._snap_deg:g}°")
+            disc = self._protractor_segments(viewport)
+            if disc is not None and pg is not None:
+                # SketchUp's protractor on the pivot: rim and ticks in the
+                # axis colour of the face's normal (dark off-axis), the
+                # swept wedge filled, and the angle by the green pin.
+                ring, ticks, wedge, _frame = disc
+                from core.snap import COLOR_AXIS_X, COLOR_AXIS_Y, COLOR_AXIS_Z
+                n = self._plane[1]
+                rgb = (0.24, 0.27, 0.32)
+                for ax, col in ((QVector3D(1, 0, 0), COLOR_AXIS_X),
+                                (QVector3D(0, 1, 0), COLOR_AXIS_Y),
+                                (QVector3D(0, 0, 1), COLOR_AXIS_Z)):
+                    if abs(QVector3D.dotProduct(n, ax)) > 0.999:
+                        rgb = col
+                color = QColor.fromRgbF(rgb[0], rgb[1], rgb[2], 0.95)
+                painter.setPen(QPen(color, 1.2))
+                for a, b in ring + ticks:
+                    pa, pb = to_px(a), to_px(b)
+                    if pa is not None and pb is not None:
+                        painter.drawLine(QPointF(*pa), QPointF(*pb))
+                poly = [to_px(w) for w in wedge]
+                if all(q is not None for q in poly):
+                    from PySide6.QtGui import QPolygonF
+                    painter.setPen(QPen(color, 1.0))
+                    painter.setBrush(QColor.fromRgbF(rgb[0], rgb[1], rgb[2],
+                                                     0.25))
+                    painter.drawPolygon(QPolygonF([QPointF(*q) for q in poly]))
+                    painter.setBrush(Qt.NoBrush)
+                if self._sweep_deg is not None:
+                    painter.setPen(QPen(QColor(30, 30, 30, 255), 1.0))
+                    painter.drawText(QPointF(pg[0] + 12, pg[1] - 10),
+                                     f"{self._sweep_deg:.1f}°")
         half = self.PIN_PX
         for i, p in enumerate(self.pins()):
             q = to_px(p)

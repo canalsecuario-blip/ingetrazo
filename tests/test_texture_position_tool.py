@@ -250,11 +250,17 @@ def test_the_back_side_texture_is_positioned_and_stored_on_the_back(viewport):
     assert "uvw" not in face.attrs["back"]["texture"]
 
 
-# ---- The green pin's sticky angles (Rafael, 2026-09-16, 04:30–05:10) ----------
+# ---- SketchUp's protractor on the green pin (Rafael, 2026-09-16, 04:30) -------
 
-def _green_to(vp, tool, angle_deg, radius=1.0, modifiers=Qt.NoModifier):
+def _px_per_metre(vp, at=(0.5, 0.0, 0.0)):
+    a = vp._world_to_pixel(QVector3D(*at))
+    b = vp._world_to_pixel(QVector3D(at[0] + 1.0, at[1], at[2]))
+    return math.hypot(b[0] - a[0], b[1] - a[1])
+
+
+def _green_to(vp, tool, angle_deg, radius, modifiers=Qt.NoModifier):
     """Drag the green pin (at (1,0,0) after a fresh begin, red at (0.5,0,0))
-    to ``angle_deg`` about the red pin, ``radius`` away."""
+    to ``angle_deg`` about the red pin, ``radius`` metres away."""
     a = math.radians(angle_deg)
     end = (0.5 + radius * math.cos(a), radius * math.sin(a), 0.0)
     tool.on_click(_ctx(vp, (1.0, 0, 0)))
@@ -262,42 +268,68 @@ def _green_to(vp, tool, angle_deg, radius=1.0, modifiers=Qt.NoModifier):
     return end
 
 
-def test_the_rotation_snaps_to_every_45_degrees_from_the_face_axes(viewport):
-    """«En SketchUp te bloquea a los 0, a los 45 y a los 90»: 3° off a
-    multiple of 45° lands exactly on it, the guide says which."""
+def _tile_angle(tool):
+    e = tool.map.e_u
+    return math.degrees(math.atan2(e.y(), e.x()))
+
+
+def test_near_the_protractor_the_sweep_snaps_to_the_15_degree_ticks(viewport):
+    """«En SketchUp te bloquea a los 0, a los 45 y a los 90» — the Rotate
+    tool's rule: within 1.25 disc radii of the pivot, the ticks."""
     face = _textured_square(viewport)
     tool = _begin(viewport, face)
-    for wanted, off in ((90.0, 87.0), (45.0, 47.5), (0.0, -3.0), (135.0, 138.0)):
-        _green_to(viewport, tool, off)
-        assert tool._snap_deg == wanted % 360.0, (wanted, off, tool._snap_deg)
-        assert abs(tool._tile_angle(tool.map.e_u) - wanted) < 1e-6
+    near = (tool.DISC_PX * 1.0) / _px_per_metre(viewport)   # inside the disc
+    for wanted, off in ((90.0, 87.0), (45.0, 41.0), (0.0, -6.0), (135.0, 138.0)):
+        _green_to(viewport, tool, off, radius=near)
+        assert tool._sweep_deg == wanted and tool._on_tick, (wanted, off, tool._sweep_deg)
+        assert abs(_tile_angle(tool) - wanted) < 1e-6
+        assert tool.value_label()[0] == f"{wanted:+.1f}°"
         tool.on_release(viewport)
-        assert tool._snap_deg is None             # the guide goes with the drag
+        assert tool._sweep_deg is None and tool.value_label() is None
         tool.reset()
 
 
-def test_between_the_sticky_angles_the_rotation_is_free(viewport):
+def test_far_from_the_protractor_the_sweep_is_free_at_a_tenth_of_a_degree(viewport):
     face = _textured_square(viewport)
     tool = _begin(viewport, face)
-    _green_to(viewport, tool, 20.0)
-    assert tool._snap_deg is None
-    assert abs(tool._tile_angle(tool.map.e_u) - 20.0) < 0.05   # pixel round trip
+    far = (tool.DISC_PX * 3.0) / _px_per_metre(viewport)
+    _green_to(viewport, tool, 87.0, radius=far)
+    assert not tool._on_tick
+    assert abs(tool._sweep_deg - 87.0) < 0.11
+    assert abs(_tile_angle(tool) - 87.0) < 0.11
     tool.on_release(viewport)
 
 
-def test_shift_turns_the_snap_off(viewport):
+def test_ctrl_keeps_the_sweep_free_even_near_the_protractor(viewport):
     face = _textured_square(viewport)
     tool = _begin(viewport, face)
-    _green_to(viewport, tool, 87.0, modifiers=Qt.ShiftModifier)
-    assert tool._snap_deg is None
-    assert abs(tool._tile_angle(tool.map.e_u) - 87.0) < 0.05
+    near = (tool.DISC_PX * 1.0) / _px_per_metre(viewport)
+    _green_to(viewport, tool, 87.0, radius=near, modifiers=Qt.ControlModifier)
+    assert not tool._on_tick
+    assert abs(_tile_angle(tool) - 87.0) < 0.11
     tool.on_release(viewport)
 
 
 def test_the_snap_keeps_the_scale_the_cursor_asked_for(viewport):
     face = _textured_square(viewport)
     tool = _begin(viewport, face)
-    _green_to(viewport, tool, 88.0, radius=1.0)    # tile was 0.5 m: doubles
-    assert tool._snap_deg == 90.0
-    assert abs(tool.map.e_u.length() - 1.0) < 1e-6
+    near = (tool.DISC_PX * 1.0) / _px_per_metre(viewport)
+    _green_to(viewport, tool, 88.0, radius=near)
+    assert tool._sweep_deg == 90.0
+    assert abs(tool.map.e_u.length() - near) < 1e-3     # the tile = the radius
     tool.on_release(viewport)
+
+
+def test_the_protractor_sits_on_the_red_pin_with_its_zero_on_the_start_arm(viewport):
+    face = _textured_square(viewport)
+    tool = _begin(viewport, face)
+    near = (tool.DISC_PX * 1.0) / _px_per_metre(viewport)
+    _green_to(viewport, tool, 30.0, radius=near)
+    ring, ticks, wedge, (R, u, v, r) = tool._protractor_segments(viewport)
+    assert _close(R.toTuple(), (0.5, 0.0, 0.0))
+    assert _close(u.toTuple(), (1.0, 0.0, 0.0))          # zero = where the drag began
+    assert len(ticks) == 24 and len(ring) == 48
+    assert abs(r * _px_per_metre(viewport) - tool.DISC_PX) < 0.5   # fixed screen size
+    assert wedge[0] == R and len(wedge) >= 3
+    tool.on_release(viewport)
+    assert tool._protractor_segments(viewport) is None
