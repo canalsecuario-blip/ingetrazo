@@ -26,6 +26,16 @@ follow [SemVer](https://semver.org).
   puerta que el doble clic.
 
 ### Arreglado
+- **Empujar hacia dentro no se veía en vivo con la cara invertida** (Marco,
+  18-09): el empuje se hacía, pero durante el arrastre no aparecía nada. La
+  vista previa esconde la cara base para que se vea el hueco que se forma
+  detrás, y decidía «detrás» por el signo de la extrusión respecto a la
+  normal de la cara — correcto solo cuando la normal mira al que dibuja.
+  Mirando el reverso (una cara invertida, o un muro visto desde dentro de
+  la habitación), empujar alejándose de la cámara salía «hacia fuera», la
+  cara se quedaba y el hueco se formaba enterrado tras ella. Ahora lo
+  decide la cámara: la base se esconde siempre que el barrido se aleja del
+  ojo, esté la cara como esté.
 - **El cuadro de Texto 3D no aceptaba «20» de extrusión** (Rafael): pedía
   metros con un tope de 10 m, y nadie extruye un rótulo veinte metros.
   Altura y extrusión se piden ahora en **centímetros**.

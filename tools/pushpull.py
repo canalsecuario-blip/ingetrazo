@@ -545,19 +545,40 @@ class PushPullTool(Tool):
         preview upload."""
         self._revert_preview(viewport)
         self._light_faces = self._build_light_faces()
-        # Hiding the base face is what lets an INWARD drag read as a recess
-        # opening instead of a cap buried in the solid. Outward, the sweep
-        # covers the base anyway and the frame is identical either way — worth
-        # distinguishing, because suppression is the one expensive thing left
-        # in a drag frame: a group with a hidden face cannot use its cached
-        # chunk, so all of its faces are bucketed in Python (measured at
-        # 317 ms cold on the 3054-face barbecue, 13 ms once the triangulation
-        # memo is warm). A Ctrl-stack keeps its base, so it never hides it.
+        # Hiding the base face is what lets a drag AWAY FROM THE EYE read as
+        # a recess opening instead of a cap buried behind the base. Toward
+        # the eye, the sweep covers the base anyway and the frame is
+        # identical either way — worth distinguishing, because suppression
+        # is the one expensive thing left in a drag frame: a group with a
+        # hidden face cannot use its cached chunk, so all of its faces are
+        # bucketed in Python (measured at 317 ms cold on the 3054-face
+        # barbecue, 13 ms once the triangulation memo is warm). A Ctrl-stack
+        # keeps its base, so it never hides it.
+        #
+        # "Away from the eye" is the CAMERA's question, not the normal's.
+        # It used to be ``extrusion < 0`` — into the material along the
+        # outward normal — which is the same thing only while the normal
+        # points at the viewer. Looking at a face's BACK (an inverted face,
+        # or a wall seen from inside the room), a push away from the eye is
+        # positive, the base stayed, and the pocket formed invisibly behind
+        # it while the commit worked («no se ve cuando hago push para
+        # adentro cuando tengo la cara invertida», Marco, 2026-09-18).
         recessing = (self._light_faces and self.base_face is not None
                      and self._attached and not self._keep_base
-                     and self.extrusion < 0.0)
+                     and self._sweeps_away_from_eye(viewport))
         viewport.set_suppressed_faces({self.base_face} if recessing else set())
         viewport.update()
+
+    def _sweeps_away_from_eye(self, viewport) -> bool:
+        """Does the sweep move the cap away from the camera — behind the
+        base face, where the base would hide it? Without a camera to ask
+        (tests, the bridge) the normal's sign answers as it always did."""
+        cam = getattr(viewport, "camera", None)
+        eye_fn = getattr(cam, "eye", None)
+        if eye_fn is None or self._anchor is None or self._normal is None:
+            return self.extrusion < 0.0
+        off = self._normal * self.extrusion
+        return QVector3D.dotProduct(off, self._anchor - eye_fn()) > 0.0
 
     def _refuse_closed_group(self, viewport) -> None:
         """A face inside a group that has not been opened is not pushable.
