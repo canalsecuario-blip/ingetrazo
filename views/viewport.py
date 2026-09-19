@@ -7905,6 +7905,21 @@ class Viewport(QOpenGLWidget):
         self._pick_index_cache = (key, idx)
         return idx
 
+    def ray_distance(self, origin: QVector3D, direction: QVector3D):
+        """Distance along ``direction`` (unit) from ``origin`` to the nearest
+        VISIBLE face, or ``None`` when the ray meets nothing. What the
+        walkthrough tools ask — the floor under the eye, the wall ahead —
+        over the same index every pick uses (hidden objects and hidden
+        layers are not there to bump into)."""
+        idx = self._pick_index()
+        if idx is None or getattr(idx, "tri_v0", None) is None:
+            return None
+        t = self._ray_hits(idx, origin, direction, idx.ent_vis,
+                           reduce_global=True)
+        if t is None or t == float("inf"):
+            return None
+        return float(t)
+
     def _ray_hits(self, idx, origin, direction, ent_mask,
                   reduce_global: bool = False):
         """Per-entity nearest ray parameter over the index triangles whose

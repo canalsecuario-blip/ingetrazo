@@ -51,6 +51,51 @@ class OrbitCamera:
             self.distance * sp,
         )
 
+    def forward(self) -> QVector3D:
+        """Unit view direction, eye → target."""
+        d = self.target - self.eye()
+        return d.normalized() if d.lengthSquared() > 1e-18 else QVector3D(0, 1, 0)
+
+    # ---- First person (SketchUp's Position Camera / Look Around / Walk) -----
+    # The orbit model stays: a walkthrough only ever asks "the eye is HERE,
+    # looking THERE", and that is a target at ``distance`` along the look
+    # direction. Nothing else in the viewport has to learn a second camera.
+
+    def look_from(self, eye: QVector3D, direction: QVector3D) -> None:
+        """Put the eye at ``eye`` looking along ``direction`` (any length).
+        A near-vertical look keeps just off the pole, like ``orbit``."""
+        d = QVector3D(direction)
+        if d.lengthSquared() < 1e-18:
+            d = self.forward()
+        d = d.normalized()
+        # eye = target + distance·(cp·cy, cp·sy, sp): the eye sits BEHIND
+        # the target along -forward, so the spherical angles come from -d.
+        pitch = math.asin(max(-1.0, min(1.0, -d.z())))
+        pitch = max(min(pitch, math.radians(89.0)), math.radians(-89.0))
+        if abs(math.cos(pitch)) > 1e-9:
+            yaw = math.atan2(-d.y(), -d.x())
+        else:
+            yaw = self.yaw
+        self.yaw, self.pitch = yaw, pitch
+        self.target = eye + d * self.distance
+
+    def turn(self, d_yaw_deg: float, d_pitch_deg: float) -> None:
+        """Turn the head: the eye stays put, the look direction swings by
+        ``d_yaw_deg`` to the right (clockwise seen from above) and
+        ``d_pitch_deg`` upward."""
+        eye = self.eye()
+        d = self.forward()
+        yaw = math.atan2(d.y(), d.x()) - math.radians(d_yaw_deg)
+        pitch = math.asin(max(-1.0, min(1.0, d.z()))) + math.radians(d_pitch_deg)
+        pitch = max(min(pitch, math.radians(89.0)), math.radians(-89.0))
+        cp = math.cos(pitch)
+        self.look_from(eye, QVector3D(cp * math.cos(yaw), cp * math.sin(yaw),
+                                      math.sin(pitch)))
+
+    def move_eye(self, delta: QVector3D) -> None:
+        """Walk: eye and target move together, the look stays the same."""
+        self.target = self.target + delta
+
     def view_matrix(self) -> QMatrix4x4:
         m = QMatrix4x4()
         m.lookAt(self.eye(), self.target, self.up)

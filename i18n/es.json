@@ -1821,5 +1821,15 @@
  "Selected": "Seleccionado",
  "Select an object, faces or edges first.": "Selecciona antes un objeto, caras o aristas.",
  "Hid {objects} object(s), {faces} face(s) and {edges} edge(s) — Edit ▸ Unhide brings them back": "Ocultados {objects} objeto(s), {faces} cara(s) y {edges} arista(s) — Edición ▸ Mostrar los devuelve",
- "Nothing hidden in the selection — turn on Camera ▸ Hidden Objects / Geometry to select hidden things.": "No hay nada oculto en la selección — activa Cámara ▸ Objetos ocultos / Geometría oculta para poder seleccionar lo oculto."
+ "Nothing hidden in the selection — turn on Camera ▸ Hidden Objects / Geometry to select hidden things.": "No hay nada oculto en la selección — activa Cámara ▸ Objetos ocultos / Geometría oculta para poder seleccionar lo oculto.",
+ "Position Camera": "Situar cámara",
+ "Look Around": "Mirar alrededor",
+ "Walk": "Caminar",
+ "Walkthrough": "Paseo",
+ "Eye height": "Altura del ojo",
+ "Height offset": "Desplazamiento en altura",
+ "Eye placed {h:.2f} m above the point — drag to look around, Walk to move": "Ojo situado {h:.2f} m sobre el punto — arrastra para mirar alrededor, Caminar para moverte",
+ "Click where to stand, or drag toward what to look at. Type the eye height.": "Clic donde situarte, o arrastra hacia lo que quieres mirar. Teclea la altura del ojo.",
+ "Drag to turn the camera. Type the eye height.": "Arrastra en una dirección para girar la cámara. Teclea la altura del ojo.",
+ "Click and drag to walk. Ctrl = run, Shift = up/down or sideways, Alt = through walls.": "Clic y arrastra para caminar. Ctrl = correr, Mayús = vertical o de lado, Alt = atravesar paredes."
 }

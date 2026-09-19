@@ -7,6 +7,21 @@ follow [SemVer](https://semver.org).
 ## [Sin publicar] — 0.4.6, lo del modelo de la revisión de Rafael
 
 ### Añadido
+- **Cámara de paseo: Situar cámara, Caminar y Mirar alrededor**, las
+  tres de SketchUp (Rafael, 13:00: «pasitos» para mirar los interiores),
+  hechas a su documentación oficial y a la grabación de Marco de su barra
+  de estado. Menú Cámara y barra **Paseo**. **Situar cámara**: clic en un
+  punto y el ojo se pone 1,68 m encima mirando en horizontal (la caja de
+  medidas, «Desplazamiento en altura», admite otra altura); o clic y
+  arrastrar desde donde quieres estar hasta lo que quieres mirar; al
+  soltar pasa sola a Mirar alrededor. **Mirar alrededor**: arrastrar gira
+  la cabeza sin mover el ojo; «Altura del ojo» en la caja. **Caminar**:
+  clic y arrastrar con una cruz donde pulsas — cuanto más lejos, más
+  rápido; arriba/abajo avanza y retrocede, izquierda/derecha gira; el ojo
+  mantiene su altura sobre lo que pisa (sube y baja escalones) y las
+  paredes te paran. Ctrl = correr, Mayús = vertical o de lado, Alt =
+  atravesar paredes. Sin tocar el modelo de cámara ni el motor: el suelo y
+  las paredes salen del mismo índice de picking de siempre.
 - **Ocultar objetos** (Rafael, 38:40: «tiene ocultar aristas, pero no sé
   si tenemos opción de ocultar un objeto en concreto»; no la había).
   Edición ▸ **Ocultar** y el clic derecho ▸ Ocultar esconden los grupos y

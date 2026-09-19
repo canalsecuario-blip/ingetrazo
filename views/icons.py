@@ -1325,6 +1325,80 @@ def _side_expand(p, ink):
     p.restore()
 
 
+def _figure(p, ink, x: float, y: float, walking: bool = False) -> None:
+    """A stick figure with its feet at (x, y) in 48-space — the person the
+    walkthrough tools put in the model."""
+    pen = QPen(ink, 3.0)
+    pen.setCapStyle(Qt.RoundCap)
+    pen.setJoinStyle(Qt.RoundJoin)
+    p.setPen(pen)
+    p.setBrush(Qt.NoBrush)
+    head_y = y - 27.0
+    p.setBrush(ink)
+    p.drawEllipse(QPointF(x, head_y), 3.6, 3.6)
+    p.setBrush(Qt.NoBrush)
+    p.drawLine(QPointF(x, head_y + 4.0), QPointF(x, y - 11.0))     # trunk
+    if walking:
+        p.drawLine(QPointF(x, y - 11.0), QPointF(x - 7.0, y))        # legs apart
+        p.drawLine(QPointF(x, y - 11.0), QPointF(x + 7.5, y - 1.0))
+        p.drawLine(QPointF(x, y - 20.0), QPointF(x - 7.0, y - 14.0))  # arms swing
+        p.drawLine(QPointF(x, y - 20.0), QPointF(x + 7.0, y - 24.0))
+    else:
+        p.drawLine(QPointF(x, y - 11.0), QPointF(x - 4.0, y))
+        p.drawLine(QPointF(x, y - 11.0), QPointF(x + 4.0, y))
+        p.drawLine(QPointF(x - 6.0, y - 14.0), QPointF(x + 6.0, y - 14.0))
+
+
+def _position_camera(p, ink):
+    # SketchUp's Position Camera: a person set down on a crosshair — the
+    # eye goes 1.68 m above the point you click.
+    pen = QPen(_accent(), 2.4)
+    pen.setCapStyle(Qt.RoundCap)
+    p.setPen(pen)
+    p.drawLine(QPointF(6.0, 41.0), QPointF(42.0, 41.0))
+    p.drawLine(QPointF(24.0, 33.0), QPointF(24.0, 46.0))
+    p.setBrush(Qt.NoBrush)
+    p.drawEllipse(QPointF(24.0, 41.0), 6.0, 3.0)
+    _figure(p, ink, 24.0, 40.0)
+
+
+def _walk(p, ink):
+    # SketchUp's Walk: the figure striding, with motion lines behind.
+    _figure(p, ink, 26.0, 42.0, walking=True)
+    pen = QPen(_accent(), 2.4)
+    pen.setCapStyle(Qt.RoundCap)
+    p.setPen(pen)
+    for yy in (18.0, 24.0, 30.0):
+        p.drawLine(QPointF(5.0, yy), QPointF(13.0, yy))
+
+
+def _look_around(p, ink):
+    # SketchUp's Look Around: an eye, with a little turn arrow — the head
+    # swivels, the feet stay.
+    pen = QPen(ink, 3.0)
+    pen.setCapStyle(Qt.RoundCap)
+    pen.setJoinStyle(Qt.RoundJoin)
+    p.setPen(pen)
+    p.setBrush(Qt.NoBrush)
+    path = QPainterPath()
+    path.moveTo(6.0, 25.0)
+    path.cubicTo(14.0, 11.0, 34.0, 11.0, 42.0, 25.0)
+    path.cubicTo(34.0, 39.0, 14.0, 39.0, 6.0, 25.0)
+    p.drawPath(path)
+    p.setBrush(ink)
+    p.drawEllipse(QPointF(24.0, 25.0), 5.5, 5.5)
+    p.setPen(Qt.NoPen)
+    p.setBrush(_accent())
+    p.drawEllipse(QPointF(24.0, 25.0), 2.4, 2.4)
+    pen = QPen(_accent(), 2.4)
+    pen.setCapStyle(Qt.RoundCap)
+    p.setPen(pen)
+    p.setBrush(Qt.NoBrush)
+    p.drawArc(QRectF(12.0, 34.0, 24.0, 12.0), 200 * 16, 140 * 16)
+    p.drawLine(QPointF(35.0, 44.0), QPointF(37.5, 39.0))
+    p.drawLine(QPointF(35.0, 44.0), QPointF(30.0, 43.0))
+
+
 _DRAW = {
     "select": _select, "line": _line, "freehand": _freehand,
     "side_collapse": _side_collapse,
@@ -1359,6 +1433,8 @@ _DRAW = {
     "section_planes": _section_planes, "section_cuts": _section_cuts,
     "section_fill": _section_fill,
     "zoom": _zoom, "zoom_window": _zoom_window,
+    "position_camera": _position_camera, "walk": _walk,
+    "look_around": _look_around,
     "zoom_extents": _zoom_extents, "view_iso": _view_iso,
     # Standard views — a house drawn from each viewpoint (SketchUp-style).
     "view_top": _view_top,
@@ -1421,6 +1497,9 @@ _CURSOR_HOTSPOTS = {
     "zoom": (21, 21),               # the magnifier's lens centre
     "zoom_window": (21, 22),
     "section": (24, 27),            # the plane's centre
+    "position_camera": (24, 41),    # the feet on the crosshair
+    "walk": (24, 24),
+    "look_around": (24, 25),        # the pupil
 }
 
 

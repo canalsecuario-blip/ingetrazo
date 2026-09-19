@@ -60,6 +60,7 @@ from tools.followme import FollowMeTool
 from tools.rotated_rectangle import RotatedRectangleTool
 from tools.offset import OffsetTool
 from tools.texture_position import TexturePositionTool
+from tools.walkthrough import LookAroundTool, PositionCameraTool, WalkTool
 from tools.paint import PaintTool
 from tools.paste import PasteTool
 from tools.arc import PieTool
@@ -117,6 +118,11 @@ class MainWindow(QMainWindow):
             "geopath": GeoPathTool(),
             # SketchUp's Tools ▸ Section Plane (core/section.py).
             "section": SectionPlaneTool(),
+            # SketchUp's Camera ▸ Position Camera / Walk / Look Around
+            # (tools/walkthrough.py) — Rafael's «pasitos» for interiors.
+            "position_camera": PositionCameraTool(),
+            "walk": WalkTool(),
+            "look_around": LookAroundTool(),
         }
         # Tag each tool with its icon key so the viewport can turn the mouse
         # pointer into the tool's icon (SketchUp-style cursors).
@@ -385,6 +391,9 @@ class MainWindow(QMainWindow):
             ("modify", tr("Modify"), ["pushpull", "move", "rotate", "scale", "flip", "followme", "offset", "fillet"]),
             ("annotate", tr("Annotate"), ["tape", "protractor", "dimension", "text", "geopath"]),
             ("sections", tr("Sections"), ["section"]),
+            # SketchUp's Walkthrough toolbar, in its order.
+            ("walkthrough", tr("Walkthrough"),
+             ["position_camera", "walk", "look_around"]),
         ]
         for oname, title, keys in layout:
             tb = self._new_toolbar(title, oname)
@@ -752,6 +761,10 @@ class MainWindow(QMainWindow):
         camera_menu.addSeparator()
         for action in self._nav_actions.values():   # Orbit / Pan / Zoom / Zoom Window
             camera_menu.addAction(action)
+        # SketchUp's Camera ▸ Position Camera / Walk / Look Around.
+        camera_menu.addSeparator()
+        for key in ("position_camera", "walk", "look_around"):
+            camera_menu.addAction(self._tool_actions[key])
 
         # Draw menu (SketchUp: the drawing tools, grouped by family)
         draw_menu = menubar.addMenu(tr("Draw"))

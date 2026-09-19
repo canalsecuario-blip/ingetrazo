@@ -77,6 +77,11 @@ HINTS: dict = {
     "image": "Click the first corner of the image, then the opposite one. Shift frees the aspect.",
     "paste": "Click where the copy goes. Arrows lock an axis.",
     "place_group": "Click where the component goes.",
+    # SketchUp's walkthrough, its own words read off its status bar
+    # (Marco's recording, 2026-09-18), trimmed to the bar's budget.
+    "position_camera": "Click where to stand, or drag toward what to look at. Type the eye height.",
+    "look_around": "Drag to turn the camera. Type the eye height.",
+    "walk": "Click and drag to walk. Ctrl = run, Shift = up/down or sideways, Alt = through walls.",
 }
 
 NAV_HINTS: dict = {
