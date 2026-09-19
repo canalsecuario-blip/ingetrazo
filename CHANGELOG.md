@@ -26,6 +26,19 @@ follow [SemVer](https://semver.org).
   puerta que el doble clic.
 
 ### Arreglado
+- **Tirar de una caja con la cámara a ras de suelo: se frenaba en el
+  horizonte y el clic sobre la cara superior no fijaba la altura**
+  (Rafael, 0:40: «te bloquea aquí… hago clic aquí para que quede fijado y
+  no me deja, tengo que venirme al lateral»). Las dos cosas eran una: el
+  visor convierte cada píxel en un punto del mundo cortando un plano —a
+  medio empuje, el suelo— y cuando el rayo no lo corta (por encima del
+  horizonte, o rasante con la cámara baja) la herramienta no se entera de
+  nada: ni del movimiento (la caja se congela) ni del clic (la tapa está
+  donde está el cursor, así que ese clic se perdía; el lateral queda bajo
+  el horizonte, por eso ese sí llegaba). Empujar/Tirar solo necesitaba el
+  píxel, así que ahora le da al visor un plano que contiene su eje y mira
+  a la cámara: el rayo siempre lo corta, la tirada sigue al cursor hasta
+  donde llegue y el clic sobre la tapa comete.
 - **Empujar hacia dentro no se veía en vivo con la cara invertida** (Marco,
   18-09): el empuje se hacía, pero durante el arrastre no aparecía nada. La
   vista previa esconde la cara base para que se vea el hueco que se forma

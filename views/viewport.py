@@ -6392,6 +6392,15 @@ class Viewport(QOpenGLWidget):
         ``start_point`` > face under cursor (face-plane inference) > ground.
         """
         tool = self.active_tool
+        if tool is not None:
+            # A tool mid-operation may know better than any plane below —
+            # Push/Pull reads the cursor along its normal and must keep
+            # hearing hovers and clicks above the horizon (see
+            # ``Tool.drag_plane``).
+            own_plane = getattr(tool, "drag_plane", None)
+            own = own_plane(self) if own_plane is not None else None
+            if own is not None:
+                return own
         captured = getattr(tool, "work_plane", None) if tool is not None else None
         if captured is not None:
             # SketchUp's escape hatch: orbiting down to the horizon means "I

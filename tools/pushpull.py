@@ -298,6 +298,30 @@ class PushPullTool(Tool):
         self._reset()
 
     # ---- Spatial input ------------------------------------------------------
+    def drag_plane(self, viewport):
+        """Mid-drag, the plane through the anchor that CONTAINS the push
+        axis and faces the camera — the cursor ray always hits it, so the
+        viewport keeps delivering hovers and clicks wherever the cursor
+        goes. The ground it used otherwise stops answering above the
+        horizon (or when the ray merely grazes it), and then the box froze
+        mid-pull and the click on its top was lost: «hago clic aquí para que
+        quede fijado… no me deja, tengo que venirme al lateral» (Rafael,
+        2026-09-16, camera at ground level). The distance itself is still
+        read off the pixel (``_project_to_lock_line``); the plane only has
+        to exist. Looking straight along the axis, where no plane contains
+        it face-on, the base plane answers as before."""
+        if not self.dragging or self._anchor is None or self._normal is None:
+            return None
+        cam = getattr(viewport, "camera", None)
+        if cam is None:
+            return None
+        forward = cam.target - cam.eye()
+        n = self._normal
+        side = forward - n * QVector3D.dotProduct(forward, n)
+        if side.length() < 1e-6:
+            return None
+        return QVector3D(self._anchor), side.normalized()
+
     def on_hover(self, ctx: ToolContext) -> None:
         viewport = ctx.viewport
         if not self.dragging:

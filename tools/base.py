@@ -348,6 +348,22 @@ class Tool(ABC):
         spelling, kept for tools that only know it. Only tools with
         ``box_select = True`` receive this."""
 
+    def drag_plane(self, viewport):
+        """``(point, normal)`` of the plane the cursor should be read on
+        while this tool is mid-operation, or ``None`` to leave the choice
+        to the viewport (captured face, start point, ground).
+
+        The viewport turns every pixel into a world point by hitting a
+        plane, and hands the tool NOTHING — no hover, no click — when the
+        ray misses it. A tool whose operation runs along a LINE (Push/Pull
+        along its normal) only ever needs the pixel, and the ground stops
+        answering the moment the cursor crosses the horizon: Rafael pulled
+        a box up with the camera at ground level, the box froze at the
+        horizon, and the click on its top never arrived (2026-09-16). Such a
+        tool answers with a plane that contains its line and faces the
+        camera, which the ray always hits."""
+        return None
+
     def on_cancel(self, viewport) -> None:
         """Esc pressed — abandon any in-progress operation."""
 
