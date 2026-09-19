@@ -2749,6 +2749,33 @@ class InsertGroupCommand(Command):
         scene.version += 1
 
 
+class EditText3DCommand(Command):
+    """Re-edit a 3D text (core/text3d.py): the container keeps its identity,
+    pose and own mesh; its letter children are laid out again from the new
+    parameters where the old ones stood, and the name follows the text.
+    Undo puts the old letters and parameters back."""
+
+    def __init__(self, group, params: dict) -> None:
+        self.group = group
+        self.params = dict(params)
+        self._old: Optional[tuple] = None
+
+    def do(self, scene) -> None:
+        from core.text3d import rebuild_text_group
+        g = self.group
+        if self._old is None:
+            self._old = (g.children, g.text3d, g.name)
+        g.children = rebuild_text_group(g, self.params)
+        g.text3d = dict(self.params)
+        g.name = self.params["text"].strip()[:24] or g.name
+        scene.version += 1
+
+    def undo(self, scene) -> None:
+        g = self.group
+        g.children, g.text3d, g.name = self._old
+        scene.version += 1
+
+
 class MakeNestedGroupCommand(Command):
     """SketchUp's Make Group when the selection already holds groups.
 

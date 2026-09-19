@@ -294,6 +294,10 @@ def save_scene(scene, path: Path) -> dict:
                 # True = legacy textured-quad face-me; "mesh" = imported
                 # silhouette whose real geometry turns toward the camera.
                 entry["billboard"] = g.billboard
+            if getattr(g, "text3d", None):
+                # A 3D text keeps what it was made from, so it reopens
+                # editable. Older readers ignore the key.
+                entry["text3d"] = dict(g.text3d)
             kids = getattr(g, "children", None)
             if kids:
                 entry["children"] = [_entry(c) for c in kids]
@@ -580,6 +584,8 @@ def _load_into_inner(scene, path: Path) -> None:
             group.ifc = dict(raw["ifc"])
         if raw.get("billboard"):
             group.billboard = raw["billboard"]   # True | "mesh"
+        if isinstance(raw.get("text3d"), dict):
+            group.text3d = dict(raw["text3d"])
         if depth < 32:              # a corrupt document must not spin
             group.adopt(_group_from(c, depth + 1)
                         for c in raw.get("children", []) or [])

@@ -313,6 +313,13 @@ class SelectTool(Tool):
         viewport = ctx.viewport
         entity = self._pick(viewport, ctx.screen.x(), ctx.screen.y())
         if isinstance(entity, Group):
+            if getattr(entity, "text3d", None):
+                # A 3D text reopens its dialog (Rafael, 2026-09-16); the
+                # letters inside are reached through Edit Group instead.
+                window = viewport.window()
+                if hasattr(window, "_on_edit_3d_text"):
+                    window._on_edit_3d_text(entity)
+                    return
             viewport.begin_group_edit(entity)
             return
         if isinstance(entity, SectionPlane):

@@ -1880,6 +1880,19 @@ class MainWindow(QMainWindow):
         if any(isinstance(e, Edge) for e in sel):
             menu.addAction(tr("Hide Edges"), self._on_hide_edges)
         if has_group:
+            groups = [e for e in sel if isinstance(e, Group)]
+            if len(groups) == 1:
+                # SketchUp's Edit Group / Edit Component: the double-click
+                # by another road — the only road into a 3D text, whose
+                # double-click reopens its dialog instead. (No parameters
+                # on the slot: ``triggered`` would hand its bool to one.)
+                one = groups[0]
+                menu.addAction(tr("Edit Group"),
+                               lambda: self.viewport.begin_group_edit(one))
+            text = self._selected_text3d()
+            if text is not None:
+                menu.addAction(tr("Edit 3D Text…"),
+                               lambda: self._on_edit_3d_text(text))
             if any(isinstance(e, Group) and getattr(e, "xform", None) is None
                    and not getattr(e, "billboard", False) for e in sel):
                 # Convert a classic group into a component IN PLACE (free —
@@ -2719,38 +2732,49 @@ class MainWindow(QMainWindow):
         from views.library_dialog import LibraryDialog
         LibraryDialog(self).exec()
 
-    def _on_insert_3d_text(self) -> None:
-        """SketchUp's 3D Text: a small dialog (text, font, bold, height,
-        thickness) generates REAL extruded geometry as a Group, handed to the
-        placement tool so it settles on the ground like any component."""
+    def _text3d_dialog(self, params=None):
+        """SketchUp's 3D Text dialog (text, font, bold, italic, height,
+        thickness) → the parameters dict, or ``None`` when cancelled or
+        blank. ``params`` pre-fills it (editing an existing text).
+
+        Height and thickness read in CENTIMETRES: Rafael typed «20» for the
+        extrusion and the field, in metres with a 10 m ceiling, refused it
+        (2026-09-16, f000845) — nobody extrudes a sign twenty metres."""
         from PySide6.QtWidgets import (QCheckBox, QDialog, QDialogButtonBox,
                                        QDoubleSpinBox, QFontComboBox,
                                        QFormLayout, QLineEdit)
-        from core.group import Group
-        from core.text3d import build_text_mesh
+        from PySide6.QtGui import QFont
+        from core.text3d import text_params
+        params = params or {}
         dlg = QDialog(self)
         dlg.setWindowTitle(tr("3D Text"))
         form = QFormLayout(dlg)
-        text_edit = QLineEdit(tr("IngeTrazo"))
+        text_edit = QLineEdit(params.get("text") or tr("IngeTrazo"))
+        text_edit.selectAll()
         form.addRow(tr("Text:"), text_edit)
         font_box = QFontComboBox()
+        if params.get("font"):
+            font_box.setCurrentFont(QFont(params["font"]))
         form.addRow(tr("Font:"), font_box)
         bold_check = QCheckBox()
-        bold_check.setChecked(True)
+        bold_check.setChecked(bool(params.get("bold", True)))
         form.addRow(tr("Bold:"), bold_check)
+        italic_check = QCheckBox()
+        italic_check.setChecked(bool(params.get("italic", False)))
+        form.addRow(tr("Italic:"), italic_check)
         height_spin = QDoubleSpinBox()
-        height_spin.setRange(0.01, 100.0)
-        height_spin.setDecimals(2)
-        height_spin.setSingleStep(0.05)
-        height_spin.setValue(0.25)
-        height_spin.setSuffix(" m")
+        height_spin.setRange(0.1, 100000.0)
+        height_spin.setDecimals(1)
+        height_spin.setSingleStep(5.0)
+        height_spin.setValue(float(params.get("height", 0.25)) * 100.0)
+        height_spin.setSuffix(" cm")
         form.addRow(tr("Height:"), height_spin)
         depth_spin = QDoubleSpinBox()
-        depth_spin.setRange(0.0, 10.0)
-        depth_spin.setDecimals(3)
-        depth_spin.setSingleStep(0.01)
-        depth_spin.setValue(0.05)
-        depth_spin.setSuffix(" m")
+        depth_spin.setRange(0.0, 100000.0)
+        depth_spin.setDecimals(1)
+        depth_spin.setSingleStep(1.0)
+        depth_spin.setValue(float(params.get("thickness", 0.05)) * 100.0)
+        depth_spin.setSuffix(" cm")
         depth_spin.setToolTip(tr("0 leaves flat faces (no extrusion)"))
         form.addRow(tr("Extruded:"), depth_spin)
         buttons = QDialogButtonBox(QDialogButtonBox.Ok
@@ -2759,20 +2783,70 @@ class MainWindow(QMainWindow):
         buttons.rejected.connect(dlg.reject)
         form.addRow(buttons)
         if dlg.exec() != QDialog.Accepted:
-            return
+            return None
         text = text_edit.text().strip()
         if not text:
+            return None
+        return text_params(
+            text, font_box.currentFont().family(), bold_check.isChecked(),
+            italic_check.isChecked(), height_spin.value() / 100.0,
+            depth_spin.value() / 100.0)
+
+    def _on_insert_3d_text(self) -> None:
+        """SketchUp's 3D Text: the dialog generates REAL extruded geometry —
+        a container group with ONE GROUP PER LETTER, editable later by
+        double-click — handed to the placement tool so it settles on the
+        ground (or onto a wall) like any component."""
+        from core.text3d import make_text_group
+        params = self._text3d_dialog()
+        if params is None:
             return
         self.viewport.end_group_edit()
-        mesh = build_text_mesh(
-            text, font_box.currentFont().family(), bold_check.isChecked(),
-            False, height_spin.value(), depth_spin.value())
-        if not mesh.faces:
+        group = make_text_group(params)
+        if group is None:
             QMessageBox.warning(self, tr("3D Text"),
                                 tr("Could not build geometry for that text."))
             return
-        self._start_place(Group(mesh, name=text[:24]),
-                          align_to_face=True)
+        self._start_place(group, align_to_face=True)
+
+    def _selected_text3d(self):
+        """The one selected 3D-text container (a letter picked inside the
+        open container counts, through its owner), else ``None``."""
+        from core.group import Group
+        sel = [e for e in self.viewport.scene.selection if isinstance(e, Group)]
+        if len(sel) != 1:
+            return None
+        g = sel[0]
+        if getattr(g, "text3d", None):
+            return g
+        ctx = self.viewport.scene.edit_group
+        if ctx is not None and getattr(ctx, "text3d", None):
+            kids = ctx.children or ()
+            if g in kids or getattr(g, "owner", None) in kids:
+                return ctx
+        return None
+
+    def _on_edit_3d_text(self, group=None) -> None:
+        """Reopen the 3D Text dialog on an existing text and lay the letters
+        out again in place (Rafael's double-click, 2026-09-16: «SketchUp
+        tampoco»). Letters pushed or painted by hand are regenerated."""
+        from core.history import EditText3DCommand
+        from core.text3d import make_text_group
+        group = group if group is not None else self._selected_text3d()
+        if group is None or not getattr(group, "text3d", None):
+            return
+        params = self._text3d_dialog(group.text3d)
+        if params is None or params == group.text3d:
+            return
+        if make_text_group(params) is None:
+            QMessageBox.warning(self, tr("3D Text"),
+                                tr("Could not build geometry for that text."))
+            return
+        if self.viewport.scene.edit_group is group:
+            self.viewport.end_group_edit()
+        self.viewport.history.execute(EditText3DCommand(group, params))
+        self.viewport.scene.select([group])
+        self.viewport.update()
 
     def _start_place(self, group, align_to_face: bool = False,
                      anchor=None) -> None:

@@ -1794,5 +1794,8 @@
  "{axis} axis locked": "eje {axis} bloqueado",
  "Linear inferences: OFF (Alt)": "Inferencias lineales: OFF (Alt)",
  "Inferences: parallel / perpendicular only (Alt)": "Inferencias: solo paralela / perpendicular (Alt)",
- "That corner is off the drawing plane, so the rectangle has no width. Press {arrow} for the {plane} plane.": "Esa esquina está fuera del plano de dibujo, así que el rectángulo sale sin ancho. Pulsa {arrow} para el plano {plane}."
+ "That corner is off the drawing plane, so the rectangle has no width. Press {arrow} for the {plane} plane.": "Esa esquina está fuera del plano de dibujo, así que el rectángulo sale sin ancho. Pulsa {arrow} para el plano {plane}.",
+ "Italic:": "Cursiva:",
+ "Edit Group": "Editar grupo",
+ "Edit 3D Text…": "Editar texto 3D…"
 }

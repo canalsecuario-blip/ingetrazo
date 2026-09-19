@@ -1,0 +1,162 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
+"""3D Text as SketchUp does it: one group per letter, and the text stays
+editable afterwards (Rafael's review, 2026-09-16)."""
+from __future__ import annotations
+
+import os
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+from PySide6.QtGui import QGuiApplication, QMatrix4x4, QVector3D
+
+_app = QGuiApplication.instance() or QGuiApplication([])
+
+from core.group import Group, copy_group, iter_placements
+from core.history import EditText3DCommand, History
+from core.scene import Scene
+from core.text3d import (build_text_letters, build_text_mesh,
+                         make_text_group, rebuild_text_group, text_params)
+from formats import igz
+
+
+def _extent(meshes):
+    pts = [v.position for m in meshes for v in m.vertices]
+    return (min(p.x() for p in pts), max(p.x() for p in pts),
+            min(p.z() for p in pts), max(p.z() for p in pts))
+
+
+def test_letters_lay_out_exactly_like_the_one_piece_text():
+    """Splitting into letters changes the STRUCTURE, never the geometry:
+    same faces, same block extent, same baseline."""
+    whole = build_text_mesh("IngeTrazo", "Sans", True, False, 0.25, 0.05)
+    letters = build_text_letters("IngeTrazo", "Sans", True, False, 0.25, 0.05)
+    assert [c for c, _m in letters] == list("IngeTrazo")
+    assert sum(len(m.faces) for _c, m in letters) == len(whole.faces)
+    a = _extent([whole])
+    b = _extent([m for _c, m in letters])
+    assert all(abs(x - y) < 1e-6 for x, y in zip(a, b))
+    # letters sit in reading order, each to the right of the previous
+    lefts = [min(v.position.x() for v in m.vertices) for _c, m in letters]
+    assert lefts == sorted(lefts)
+
+
+def test_spaces_make_no_letter_group():
+    letters = build_text_letters("Ab c", "Sans")
+    assert [c for c, _m in letters] == ["A", "b", "c"]
+
+
+def test_text_group_is_a_container_of_letter_groups():
+    g = make_text_group(text_params("Plaza", "Sans", height=0.4))
+    assert g is not None
+    assert g.is_instance()                    # a container is always one
+    assert not g.mesh.faces                   # geometry lives in the letters
+    assert [k.name for k in g.children] == list("Plaza")
+    assert all(k.is_instance() and k.mesh.faces for k in g.children)
+    assert g.text3d["text"] == "Plaza" and g.text3d["height"] == 0.4
+    assert make_text_group(text_params("   ", "Sans")) is None
+
+
+def test_text_group_round_trips_through_igz(tmp_path):
+    scene = Scene()
+    scene.groups.append(make_text_group(text_params("Yanque", "Sans")))
+    p = tmp_path / "texto3d.igz"
+    igz.save_scene(scene, p)
+    scene2 = Scene()
+    igz.load_into(scene2, p)
+    g = scene2.groups[0]
+    assert g.text3d == scene.groups[0].text3d
+    assert [k.name for k in g.children] == list("Yanque")
+
+
+def test_copy_group_keeps_the_text_parameters():
+    g = make_text_group(text_params("Ab", "Sans"))
+    c = copy_group(g)
+    assert c.text3d == g.text3d and c.text3d is not g.text3d
+
+
+def test_edit_command_relays_the_letters_where_the_text_stands():
+    """Editing keeps the pose: the new letters take the frame the old ones
+    shared (the container's matrix gets pushed down into the children when
+    the group is entered, so the frame is read off the letters)."""
+    scene = Scene()
+    history = History(scene)
+    g = make_text_group(text_params("Ab", "Sans"))
+    pose = QMatrix4x4()
+    pose.translate(QVector3D(10.0, 5.0, 0.0))
+    pose.rotate(90.0, QVector3D(0, 0, 1))
+    for k in g.children:                      # as begin_group_edit leaves them
+        k.xform = pose * k.xform
+    scene.groups.append(g)
+    old_children = g.children
+
+    history.execute(EditText3DCommand(g, text_params("Hola", "Sans")))
+    assert [k.name for k in g.children] == list("Hola")
+    assert g.name == "Hola" and g.text3d["text"] == "Hola"
+    for k in g.children:
+        assert k.xform == pose
+    # ...so the new text stands at the same spot: rotated 90° about Z, its
+    # thickness (+Y local) runs along -X and its width along +Y (the left
+    # bearing of the "H" at 25 cm tall is under 5 cm).
+    pts = [m.map(v.position) if m is not None else v.position
+           for gg, m in iter_placements(g) for v in gg.mesh.vertices]
+    assert abs(min(p.x() for p in pts) - (10.0 - 0.05)) < 1e-6
+    assert abs(min(p.y() for p in pts) - 5.0) < 0.05
+
+    history.undo()
+    assert g.children is old_children
+    assert g.text3d["text"] == "Ab" and g.name == "Ab"
+    history.redo()
+    assert [k.name for k in g.children] == list("Hola")
+
+
+def test_rebuild_from_a_container_without_letters_uses_identity():
+    g = make_text_group(text_params("A", "Sans"))
+    g.children = []
+    kids = rebuild_text_group(g, text_params("B", "Sans"))
+    assert [k.name for k in kids] == ["B"]
+    assert kids[0].xform == QMatrix4x4()
+
+
+def test_select_double_click_on_a_text_reopens_its_dialog():
+    """Double-click = edit the text (Rafael); entering the group is Edit
+    Group's job. A plain group still opens for editing."""
+    from types import SimpleNamespace
+    from tools.select import SelectTool
+
+    scene = Scene()
+    text = make_text_group(text_params("Ab", "Sans"))
+    plain = Group(name="caja")
+    calls = []
+    window = SimpleNamespace(_on_edit_3d_text=lambda g: calls.append(("edit", g)))
+
+    def viewport_for(picked):
+        return SimpleNamespace(
+            scene=scene, history=History(scene),
+            pick_group=lambda x, y: picked, pick_edge=lambda x, y: None,
+            pick_dimension=lambda x, y: None,
+            pick_text_label=lambda x, y, rect_only=False: None,
+            pick_geopath=lambda x, y: None, pick_face=lambda x, y: None,
+            pick_section_plane=lambda x, y: None,
+            pick_image_plane=lambda x, y: None,
+            pick_guide=lambda x, y: None,
+            begin_group_edit=lambda g: calls.append(("enter", g)),
+            window=lambda: window, update=lambda: None)
+
+    for picked in (text, plain):
+        vp = viewport_for(picked)
+        ctx = SimpleNamespace(viewport=vp,
+                              screen=SimpleNamespace(x=lambda: 0, y=lambda: 0),
+                              modifiers=0)
+        SelectTool().on_double_click(ctx)
+    assert calls == [("edit", text), ("enter", plain)]
+
+
+def test_place_tool_previews_the_letter_outlines():
+    """A 3D text is a container, but its outlines are what the cursor should
+    carry — not the box that big imported documents fall back to."""
+    from tools.place_group import PlaceGroupTool
+    g = make_text_group(text_params("Ab", "Sans"))
+    tool = PlaceGroupTool(g, align_to_face=True)
+    edges = sum(len(k.mesh.edges) for k in g.children)
+    assert len(tool._segments) == edges and edges > 12

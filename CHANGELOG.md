@@ -4,6 +4,29 @@ All notable changes to IngeTrazo are documented here.
 Format inspired by [Keep a Changelog](https://keepachangelog.com); versions
 follow [SemVer](https://semver.org).
 
+## [Sin publicar] — 0.4.6, lo del modelo de la revisión de Rafael
+
+### Añadido
+- **Texto 3D como en SketchUp: cada letra es un grupo, y el texto se
+  edita.** El texto llega como un componente con un grupo por letra
+  («que cada letra aparezca como grupo, como lo hace SketchUp»), así que
+  una letra se empuja, se pinta o se mueve sola (clic derecho ▸ Editar
+  grupo, y dentro, doble clic en la letra). Y el texto **sigue siendo
+  texto**: doble clic sobre él reabre el
+  cuadro con lo que se escribió —texto, fuente, negrita, cursiva, altura,
+  extrusión— y lo regenera en el mismo sitio, con el mismo giro y la misma
+  escala; también desde el clic derecho, «Editar texto 3D…». Deshacer lo
+  devuelve como estaba. El `.igz` guarda los parámetros, así que un texto
+  de hace un mes se reabre igual de editable. Rafael lo pidió sabiendo que
+  «SketchUp tampoco» lo hace.
+- **Editar grupo** en el menú contextual, la entrada de SketchUp: la misma
+  puerta que el doble clic, para cuando el doble clic hace otra cosa.
+
+### Arreglado
+- **El cuadro de Texto 3D no aceptaba «20» de extrusión** (Rafael): pedía
+  metros con un tope de 10 m, y nadie extruye un rótulo veinte metros.
+  Altura y extrusión se piden ahora en **centímetros**.
+
 ## [0.4.5] — 2026-09-18
 
 **Cuarenta y ocho minutos.** Eso tardó @pacaeiro en descargar la 0.4.4,

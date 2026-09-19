@@ -36,7 +36,7 @@ def reserve_group_names(names) -> None:
 
 class Group:
     __slots__ = ("mesh", "name", "layer", "ifc", "billboard", "xform",
-                 "children", "owner", "context")
+                 "children", "owner", "context", "text3d")
 
     def __init__(self, mesh: Mesh | None = None, name: str | None = None) -> None:
         self.mesh = mesh if mesh is not None else Mesh()
@@ -48,6 +48,10 @@ class Group:
         # Face-me billboard (SketchUp): the group's textured quad rotates
         # around its vertical anchor axis to face the camera every frame.
         self.billboard = False
+        # 3D text (core/text3d.py): the parameters this container was
+        # generated from — text, font, height… — so it can be re-edited and
+        # laid out again in place. ``None`` on every other group.
+        self.text3d = None
         # Component instance (SketchUp): when set, ``mesh`` is a PROTOTYPE in
         # local coordinates SHARED with sibling instances, and ``xform`` maps
         # local -> world. ``None`` = classic group (mesh in world coords).
@@ -450,6 +454,7 @@ def copy_group(group, delta=None):
     g.layer = group.layer
     g.ifc = dict(group.ifc) if group.ifc else None
     g.billboard = group.billboard
+    g.text3d = dict(group.text3d) if group.text3d else None
     # Nested placements ride along untranslated: ``delta`` already moved the
     # parent, and a child's transform is relative to it.
     g.children = [copy_group(c) for c in (group.children or ())]

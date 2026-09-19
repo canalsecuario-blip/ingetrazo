@@ -50,13 +50,35 @@ class PlaceGroupTool(Tool):
         self._face_normal: QVector3D | None = None
         # Local preview segments, relative to the anchor (computed once).
         # A container's own mesh is usually empty and its children can be
-        # anything: the box of the whole placement is the honest preview.
-        self._segments = ([] if getattr(group, "children", None) else [
-            (QVector3D(e.a) - self._anchor, QVector3D(e.b) - self._anchor)
-            for e in group.mesh.edges[:_MAX_PREVIEW_EDGES]
-        ])
+        # anything: a SMALL placement tree (a 3D text, one group per
+        # letter) previews its real outlines; a big one (an imported
+        # document) gets the box of the whole placement, the honest
+        # preview that costs nothing.
+        if getattr(group, "children", None):
+            self._segments = self._placement_segments(group)
+        else:
+            self._segments = [
+                (QVector3D(e.a) - self._anchor, QVector3D(e.b) - self._anchor)
+                for e in group.mesh.edges[:_MAX_PREVIEW_EDGES]]
         if not self._segments:
             self._segments = self._bbox_segments(group)
+
+    def _placement_segments(self, group) -> list:
+        """Edges of the group and its nested placements in world space,
+        relative to the anchor — empty when the tree holds more edges than
+        the preview cap, so the caller falls back to the box."""
+        from core.group import iter_placements
+        placements = list(iter_placements(group))
+        if sum(len(g.mesh.edges) for g, _m in placements) > _MAX_PREVIEW_EDGES:
+            return []
+        out = []
+        for g, m in placements:
+            for e in g.mesh.edges:
+                a, b = QVector3D(e.a), QVector3D(e.b)
+                if m is not None:
+                    a, b = m.map(a), m.map(b)
+                out.append((a - self._anchor, b - self._anchor))
+        return out
 
     @staticmethod
     def _world_points(group):
