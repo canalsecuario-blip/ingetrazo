@@ -18,6 +18,10 @@ follow [SemVer](https://semver.org).
   giro y la misma escala. Deshacer lo devuelve como estaba. El `.igz`
   guarda los parámetros, así que un texto de hace un mes se reabre igual
   de editable. Rafael lo pidió sabiendo que «SketchUp tampoco» lo hace.
+  Y una salvaguarda: **si tocas una letra a mano** —la empujas, la pintas,
+  la borras, la mueves sola— el texto pasa a ser geometría y «Editar texto
+  3D…» se apaga con el motivo; regenerarlo habría tirado ese trabajo.
+  Mover o girar el texto entero no cuenta.
 - **Editar grupo** en el menú contextual, la entrada de SketchUp: la misma
   puerta que el doble clic.
 

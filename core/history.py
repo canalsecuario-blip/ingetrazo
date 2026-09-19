@@ -2761,12 +2761,12 @@ class EditText3DCommand(Command):
         self._old: Optional[tuple] = None
 
     def do(self, scene) -> None:
-        from core.text3d import rebuild_text_group
+        from core.text3d import rebuild_text_group, text_state
         g = self.group
         if self._old is None:
             self._old = (g.children, g.text3d, g.name)
         g.children = rebuild_text_group(g, self.params)
-        g.text3d = dict(self.params)
+        g.text3d = text_state(self.params, g.children)
         g.name = self.params["text"].strip()[:24] or g.name
         scene.version += 1
 

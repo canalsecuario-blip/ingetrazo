@@ -1797,5 +1797,7 @@
  "That corner is off the drawing plane, so the rectangle has no width. Press {arrow} for the {plane} plane.": "Esa esquina está fuera del plano de dibujo, así que el rectángulo sale sin ancho. Pulsa {arrow} para el plano {plane}.",
  "Italic:": "Cursiva:",
  "Edit Group": "Editar grupo",
- "Edit 3D Text…": "Editar texto 3D…"
+ "Edit 3D Text…": "Editar texto 3D…",
+ "Edit 3D Text… (letters edited by hand)": "Editar texto 3D… (letras editadas a mano)",
+ "This text's letters were edited by hand, so it can no longer be regenerated as text.": "Las letras de este texto se editaron a mano, así que ya no se puede regenerar como texto."
 }

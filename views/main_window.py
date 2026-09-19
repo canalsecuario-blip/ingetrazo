@@ -1890,8 +1890,17 @@ class MainWindow(QMainWindow):
                                lambda: self.viewport.begin_group_edit(one))
             text = self._selected_text3d()
             if text is not None:
-                menu.addAction(tr("Edit 3D Text…"),
-                               lambda: self._on_edit_3d_text(text))
+                from core.text3d import text_is_pristine
+                if text_is_pristine(text):
+                    menu.addAction(tr("Edit 3D Text…"),
+                                   lambda: self._on_edit_3d_text(text))
+                else:
+                    # A letter touched by hand would be thrown away by a
+                    # regeneration, so the text is plain geometry now:
+                    # the entry stays, greyed, saying why.
+                    off = menu.addAction(
+                        tr("Edit 3D Text… (letters edited by hand)"))
+                    off.setEnabled(False)
             if any(isinstance(e, Group) and getattr(e, "xform", None) is None
                    and not getattr(e, "billboard", False) for e in sel):
                 # Convert a classic group into a component IN PLACE (free —
@@ -2832,12 +2841,18 @@ class MainWindow(QMainWindow):
         meaning and enters the group). Letters pushed or painted by hand
         are regenerated."""
         from core.history import EditText3DCommand
-        from core.text3d import make_text_group
+        from core.text3d import make_text_group, text_is_pristine
         group = group if group is not None else self._selected_text3d()
         if group is None or not getattr(group, "text3d", None):
             return
+        if not text_is_pristine(group):
+            self.viewport.flash_status(tr(
+                "This text's letters were edited by hand, so it can no "
+                "longer be regenerated as text."), 5000)
+            return
+        from core.text3d import TEXT_KEYS
         params = self._text3d_dialog(group.text3d)
-        if params is None or params == group.text3d:
+        if params is None or params == {k: group.text3d.get(k) for k in TEXT_KEYS}:
             return
         if make_text_group(params) is None:
             QMessageBox.warning(self, tr("3D Text"),

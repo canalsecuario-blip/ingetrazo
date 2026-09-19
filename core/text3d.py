@@ -242,6 +242,61 @@ def _letter_groups(params: dict, xform=None) -> list:
     return kids
 
 
+def letters_fingerprint(children) -> str:
+    """What the letters ARE, as a short digest: names in order, the vertex
+    cloud of each (local coordinates, 0.1 mm), face and edge counts, and
+    the paint on each face. Stored in ``text3d["hash"]`` at generation so
+    a text can tell later whether its letters were touched by hand —
+    pushed, painted, erased. Local coordinates and rounding make it blind
+    to the pose and to float noise from a save or an edit session, and
+    storing it (instead of regenerating and comparing) makes it blind to
+    the font rendering differently on another machine."""
+    import hashlib
+    import json
+    parts: list = []
+    for k in children:
+        m = k.mesh
+        cloud = sorted((round(v.position.x(), 4), round(v.position.y(), 4),
+                        round(v.position.z(), 4)) for v in m.vertices)
+        paint = sorted(json.dumps({
+            "color": [round(float(c), 3) for c in f.attrs["color"]]
+            if f.attrs.get("color") is not None else None,
+            "mat": f.attrs.get("mat"),
+            "texture": f.attrs.get("texture") is not None,
+            "back": f.attrs.get("back") is not None,
+        }, sort_keys=True) for f in m.faces)
+        parts.append([k.name, len(m.faces), len(m.edges), cloud, paint])
+    return hashlib.sha1(json.dumps(parts).encode()).hexdigest()[:16]
+
+
+def text_state(params: dict, children) -> dict:
+    """The ``text3d`` record for a text made of ``children``: the
+    parameters plus the letters' fingerprint."""
+    state = {k: params[k] for k in TEXT_KEYS if k in params}
+    state["hash"] = letters_fingerprint(children)
+    return state
+
+
+def text_is_pristine(group) -> bool:
+    """True while the letters are exactly what the dialog generated — so
+    re-editing the text can regenerate them without destroying anything.
+    A letter pushed, painted, erased or moved on its own makes the text
+    plain geometry from then on (Marco, 2026-09-18: «cuando edite una
+    letra, esa opción de editar texto deje de hacerlo»). A record without
+    a fingerprint (older documents) is trusted."""
+    state = getattr(group, "text3d", None) or {}
+    kids = getattr(group, "children", None) or []
+    if not state.get("hash"):
+        return True
+    if letters_fingerprint(kids) != state["hash"]:
+        return False
+    # A letter moved by itself: its matrix no longer matches its siblings'.
+    from PySide6.QtGui import QMatrix4x4
+    first = text_frame(group)
+    return all((k.xform if k.xform is not None else QMatrix4x4()) == first
+               for k in kids)
+
+
 def make_text_group(params: dict):
     """The 3D text as the app inserts it: a container (instance at
     identity, empty mesh of its own) whose children are the letters. Its
@@ -254,7 +309,7 @@ def make_text_group(params: dict):
         return None
     g = Group(name=params["text"].strip()[:24])
     g.adopt(kids)
-    g.text3d = dict(params)
+    g.text3d = text_state(params, kids)
     return g
 
 

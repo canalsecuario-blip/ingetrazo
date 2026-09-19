@@ -175,3 +175,89 @@ def test_place_tool_previews_the_letter_outlines():
     tool = PlaceGroupTool(g, align_to_face=True)
     edges = sum(len(k.mesh.edges) for k in g.children)
     assert len(tool._segments) == edges and edges > 12
+
+
+# ---- Letters touched by hand -------------------------------------------------
+
+def _touch_vertex(letter):
+    v = letter.mesh.vertices[0]
+    letter.mesh.move_vertex(v, QVector3D(0.0, 0.0, 0.01))
+
+
+def test_a_fresh_text_is_pristine_and_stays_so_through_igz(tmp_path):
+    from core.text3d import text_is_pristine
+    scene = Scene()
+    g = make_text_group(text_params("Yanque", "Sans"))
+    scene.groups.append(g)
+    assert g.text3d["hash"] and text_is_pristine(g)
+    p = tmp_path / "t.igz"
+    igz.save_scene(scene, p)
+    scene2 = Scene()
+    igz.load_into(scene2, p)
+    assert text_is_pristine(scene2.groups[0])
+
+
+def test_a_letter_pushed_painted_erased_or_moved_makes_the_text_plain():
+    """Marco, 2026-09-18: once a letter is edited by hand, «Edit 3D Text…»
+    must stop regenerating — it would throw the hand work away."""
+    from core.text3d import text_is_pristine
+
+    g = make_text_group(text_params("Ab", "Sans"))
+    _touch_vertex(g.children[0])                       # pushed / reshaped
+    assert not text_is_pristine(g)
+
+    g = make_text_group(text_params("Ab", "Sans"))
+    g.children[1].mesh.faces[0].attrs["color"] = [1.0, 0.0, 0.0]   # painted
+    assert not text_is_pristine(g)
+
+    g = make_text_group(text_params("Ab", "Sans"))
+    g.children.pop()                                   # a letter erased
+    assert not text_is_pristine(g)
+
+    g = make_text_group(text_params("Ab", "Sans"))
+    g.children[0].xform.translate(QVector3D(0.3, 0, 0))   # moved alone
+    assert not text_is_pristine(g)
+
+    # ...but moving/rotating the WHOLE text (the container's matrix pushed
+    # down into every letter alike) keeps it text.
+    g = make_text_group(text_params("Ab", "Sans"))
+    pose = QMatrix4x4()
+    pose.rotate(30.0, QVector3D(0, 0, 1))
+    pose.translate(QVector3D(5, 5, 0))
+    for k in g.children:
+        k.xform = pose * k.xform
+    assert text_is_pristine(g)
+
+
+def test_an_edit_command_leaves_the_new_letters_pristine():
+    from core.text3d import text_is_pristine
+    scene = Scene()
+    history = History(scene)
+    g = make_text_group(text_params("Ab", "Sans"))
+    scene.groups.append(g)
+    history.execute(EditText3DCommand(g, text_params("Hola", "Sans")))
+    assert text_is_pristine(g)
+    _touch_vertex(g.children[0])
+    assert not text_is_pristine(g)
+    history.undo()
+    assert text_is_pristine(g)                # the old letters come back intact
+
+
+def test_edit_3d_text_refuses_a_text_edited_by_hand():
+    from types import SimpleNamespace
+    from views.main_window import MainWindow
+
+    scene = Scene()
+    g = make_text_group(text_params("Ab", "Sans"))
+    scene.groups.append(g)
+    _touch_vertex(g.children[0])
+    flashed = []
+    opened = []
+    win = SimpleNamespace(
+        viewport=SimpleNamespace(
+            scene=scene, history=History(scene),
+            flash_status=lambda msg, ms=0: flashed.append(msg)),
+        _selected_text3d=lambda: g,
+        _text3d_dialog=lambda params=None: opened.append(params) or None)
+    MainWindow._on_edit_3d_text(win, g)
+    assert flashed and not opened
