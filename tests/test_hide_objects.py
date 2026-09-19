@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import os
 
+import pytest
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtGui import QGuiApplication, QMatrix4x4, QVector3D
@@ -178,6 +180,10 @@ def test_ghost_pass_draws_and_unhide_selected_brings_them_back():
         vp.scene.select([g, face])
         win._on_hide()
         assert g.hidden and face.attrs.get("hidden")
+        if getattr(vp, "_gl", None) is None or not vp.isValid():
+            # The ghost pass builds GL buffers; the release runner has no
+            # context (the second thing the v0.4.6 AppImage job fell on).
+            pytest.skip("no OpenGL context on this platform")
         assert not vp._sync_hidden_ghosts()             # view off: nothing
         win._act_hidden_objects.setChecked(True)
         win._act_hidden_geometry.setChecked(True)
