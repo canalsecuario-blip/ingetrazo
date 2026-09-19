@@ -16,8 +16,14 @@ follow [SemVer](https://semver.org).
   las **escenas los recuerdan**, que era lo que él quería —«una escena en
   donde esto esté oculto»—: cada objeto lleva ahora una identidad estable
   en el `.igz` y la escena guarda cuáles estaban ocultos; una escena
-  guardada antes de esta versión no toca nada. Las caras no se ocultan
-  (una cara oculta dentro de un grupo volvería al salir de él).
+  guardada antes de esta versión no toca nada. Las **caras** también se
+  ocultan (Marco: «en SketchUp también puedes ocultar caras»); sus
+  aristas se quedan, como allí.
+- **Cámara ▸ Objetos ocultos / Geometría oculta**, los dos interruptores
+  de SketchUp: lo oculto se dibuja como una **rejilla transparente** (las
+  aristas, punteadas) y vuelve a poder seleccionarse, que es el camino a
+  **Edición ▸ Mostrar ▸ Seleccionado** y al «Mostrar» del clic derecho.
+  Los dos interruptores viajan en el documento y en las escenas.
 - **Cambiar de capa donde se busca** (Rafael, 39:00: «no sé cómo cambiar
   el objeto de capa… las propiedades… botón derecho… no lo veo»). **Info
   de entidad** tiene ahora el campo **Capa** de SketchUp: muestra la de la

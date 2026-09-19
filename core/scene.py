@@ -93,6 +93,13 @@ class Scene:
     # SketchUp's View ▸ Section Planes / Section Cuts toggles.
     section_planes: list = field(default_factory=list)
     show_section_planes: bool = True
+    # SketchUp's View ▸ Hidden Objects / Hidden Geometry: hidden objects
+    # (groups, components) and hidden geometry (faces, edges) are drawn
+    # as a see-through grid and become selectable — the way back to
+    # Unhide ▸ Selected. Never drawn normally: ``entity_visible`` stays
+    # False for hidden things; the ghost pass draws them.
+    show_hidden_objects: bool = False
+    show_hidden_geometry: bool = False
     show_section_cuts: bool = True
     # Georeferencing anchor (Track G). ``None`` until the user sets a datum;
     # once set, geodetic ↔ local-metre conversion goes through it. Terrain and
@@ -165,15 +172,30 @@ class Scene:
         return bool(getattr(entity, "hidden", False)) \
             and hasattr(entity, "children")
 
+    @staticmethod
+    def _face_hidden(entity) -> bool:
+        """SketchUp's Hide on a face: ``attrs["hidden"]``."""
+        attrs = getattr(entity, "attrs", None)
+        return bool(attrs and attrs.get("hidden"))
+
+    def entity_hidden(self, entity) -> bool:
+        """Hidden by Hide (object or face) — regardless of the layer, and of
+        whether the hidden-things view is on."""
+        return self._object_hidden(entity) or self._face_hidden(entity)
+
     def entity_visible(self, entity) -> bool:
-        # A hidden object is gone from every consumer that asks this —
+        # A hidden thing is gone from every consumer that asks this —
         # render, pick, snap, bounds, export — whatever its layer says.
-        if self._object_hidden(entity):
+        # The hidden-things view does NOT change that: it draws them as a
+        # ghost in its own pass and only makes them selectable.
+        if self.entity_hidden(entity):
             return False
         return self._layer_state(entity)[0]
 
     def entity_selectable(self, entity) -> bool:
-        if self._object_hidden(entity):
+        if self._object_hidden(entity) and not self.show_hidden_objects:
+            return False
+        if self._face_hidden(entity) and not self.show_hidden_geometry:
             return False
         visible, locked = self._layer_state(entity)
         return visible and not locked
@@ -460,6 +482,8 @@ class Scene:
             self.section_planes.clear()
             self.show_section_planes = True
             self.show_section_cuts = True
+            self.show_hidden_objects = False
+            self.show_hidden_geometry = False
             self.version += 1
 
     # ---- Queries ------------------------------------------------------------

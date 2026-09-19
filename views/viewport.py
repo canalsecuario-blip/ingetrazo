@@ -927,6 +927,7 @@ class Viewport(QOpenGLWidget):
         self._loc_sun_dir = self._program.uniformLocation("u_sun_dir")
         self._loc_shadow_overlay = self._program.uniformLocation(
             "u_shadow_overlay")
+        self._loc_stipple = self._program.uniformLocation("u_stipple")
         self._depth_program = self._compile_depth_program()
         self._loc_d_mvp = self._depth_program.uniformLocation("u_mvp")
         self._loc_d_clip_plane = self._depth_program.uniformLocation(
@@ -1148,6 +1149,7 @@ class Viewport(QOpenGLWidget):
             self._gl.glVertexAttrib4f(li[3], 0.0, 0.0, 0.0, 1.0)
         # Solid-colour by default; the textured-face pass flips this on.
         self._program.setUniformValue(self._loc_use_tex, 0)
+        self._program.setUniformValue(self._loc_stipple, 0)
         self._program.setUniformValue(self._loc_tex, 0)  # sampler → unit 0
         self._program.setUniformValue(self._loc_use_vcolor, 0)
         self._program.setUniformValue1f(self._loc_opacity, 1.0)
@@ -1614,6 +1616,7 @@ class Viewport(QOpenGLWidget):
         self._set_section_clip(False)
         self._draw_preview_faces()
         self._draw_groups_preview(mvp)
+        self._draw_hidden_ghosts(mvp)
 
         # Axes — long solid positive + evenly-dashed negative per axis (SketchUp).
         # Dash spacing scales with the camera distance so the on-screen density
@@ -3756,6 +3759,135 @@ class Viewport(QOpenGLWidget):
             self._gl.glDrawArrays(GL_LINES, 0, n)
             self._pv_edges_vao.release()
         self._program.setUniformValue(self._loc_mvp, mvp)
+
+    # ---- Hidden things shown (View ▸ Hidden Objects / Geometry) ------------
+    def _sync_hidden_ghosts(self) -> bool:
+        """Scratch VBOs of the hidden things the view shows — the hidden
+        OBJECTS' chunk arrays and the hidden FACES / EDGES of the mesh being
+        edited — rebuilt only when the placements or the mesh change.
+        Returns False when there is nothing to draw."""
+        sc = self.scene
+        objects = bool(getattr(sc, "show_hidden_objects", False))
+        geometry = bool(getattr(sc, "show_hidden_geometry", False))
+        if not objects and not geometry:
+            self._ghost_key = None
+            return False
+        key = (self._placements_epoch(), _cache_ver(self), id(sc.mesh),
+               objects, geometry)
+        if getattr(self, "_ghost_key", None) == key:
+            return bool(self._ghost_counts[0] or self._ghost_counts[1]
+                        or self._ghost_tex_runs)
+        if getattr(self, "_ghost_edges_vao", None) is None:
+            self._ghost_edges_vao, self._ghost_edges_vbo = self._create_dynamic()
+            self._ghost_vcol_vao, self._ghost_vcol_vbo = \
+                self._create_dynamic_vcol()
+            self._ghost_tex_vao, self._ghost_tex_vbo = self._create_dynamic_uv()
+        edge_parts: list = []
+        vcol_parts: list = []
+        tex_parts: dict = {}
+        if objects:
+            for g in self._placements():
+                if not getattr(g, "hidden", False) \
+                        or getattr(g, "billboard", False):
+                    continue
+                if not sc._layer_state(g)[0]:
+                    continue                  # a hidden LAYER stays hidden
+                ch = self._group_chunk(g)
+                if ch["edges"]:
+                    edge_parts.append(ch["edges"])
+                if ch["vcol"]:
+                    vcol_parts.append(ch["vcol"])
+                for path, raw in ch["by_texture"].items():
+                    tex_parts.setdefault(path, []).append(raw)
+        if geometry:
+            data = array("f")
+            for f in sc.mesh.faces:
+                if not f.attrs.get("hidden") or not sc._layer_state(f)[0]:
+                    continue
+                color = f.attrs.get("color") or self.DEFAULT_FACE_COLOR
+                r, gg, b = self._shaded_color(tuple(color[:3]),
+                                              self._normal_of(f))
+                for t0, t1, t2 in self._tris_of(f):
+                    data.extend([t0.x(), t0.y(), t0.z(), r, gg, b,
+                                 t1.x(), t1.y(), t1.z(), r, gg, b,
+                                 t2.x(), t2.y(), t2.z(), r, gg, b])
+            if data:
+                vcol_parts.append(data.tobytes())
+            edata = array("f")
+            for e in sc.mesh.edges:
+                if getattr(e, "hidden", False) and sc._layer_state(e)[0]:
+                    edata.extend([e.a.x(), e.a.y(), e.a.z(),
+                                  e.b.x(), e.b.y(), e.b.z()])
+            if edata:
+                edge_parts.append(edata.tobytes())
+        raw = b"".join(edge_parts)
+        self._ghost_edges_vbo.bind()
+        self._ghost_edges_vbo.allocate(raw or b"\0" * 24, max(len(raw), 24))
+        self._ghost_edges_vbo.release()
+        n_edges = len(raw) // 12
+        raw = b"".join(vcol_parts)
+        self._ghost_vcol_vbo.bind()
+        self._ghost_vcol_vbo.allocate(raw or b"\0" * 24, max(len(raw), 24))
+        self._ghost_vcol_vbo.release()
+        n_vcol = len(raw) // 24
+        runs: list = []
+        blobs: list = []
+        off = 0
+        for path, parts in tex_parts.items():
+            blob = b"".join(parts)
+            runs.append((path, off // 20, len(blob) // 20))
+            blobs.append(blob)
+            off += len(blob)
+        raw = b"".join(blobs)
+        self._ghost_tex_vbo.bind()
+        self._ghost_tex_vbo.allocate(raw or b"\0" * 24, max(len(raw), 24))
+        self._ghost_tex_vbo.release()
+        self._ghost_tex_runs = runs
+        self._ghost_counts = (n_vcol, n_edges)
+        self._ghost_key = key
+        return bool(n_vcol or n_edges or runs)
+
+    def _draw_hidden_ghosts(self, mvp) -> None:
+        """SketchUp's View ▸ Hidden Objects / Hidden Geometry: what Hide put
+        away is drawn as a see-through grid (faces) and dotted lines
+        (edges) — its own pass over scratch VBOs, so the normal passes and
+        their caches never learn about it. Depth-tested, so it sits where
+        it is in the model and still lets everything show through the
+        weave; and selectable through the pick index, which is the road
+        back to Unhide ▸ Selected."""
+        if not self._sync_hidden_ghosts():
+            return
+        n_vcol, n_edges = self._ghost_counts
+        self._program.setUniformValue(self._loc_mvp, mvp)
+        self._gl.glEnable(GL_POLYGON_OFFSET_FILL)
+        self._gl.glPolygonOffset(1.0, 1.0)
+        self._program.setUniformValue(self._loc_stipple, 1)
+        if n_vcol:
+            self._program.setUniformValue(self._loc_use_vcolor, 1)
+            self._ghost_vcol_vao.bind()
+            self._gl.glDrawArrays(GL_TRIANGLES, 0, n_vcol)
+            self._ghost_vcol_vao.release()
+            self._program.setUniformValue(self._loc_use_vcolor, 0)
+        if self._ghost_tex_runs:
+            # A textured face reads as a plain grey weave: the grid is the
+            # message, not the picture.
+            self._set_color(0.62, 0.62, 0.62, 1.0)
+            self._program.setUniformValue(self._loc_back_color,
+                                          QVector4D(0.62, 0.62, 0.62, 1.0))
+            self._ghost_tex_vao.bind()
+            for _path, start, count in self._ghost_tex_runs:
+                self._gl.glDrawArrays(GL_TRIANGLES, start, count)
+            self._ghost_tex_vao.release()
+            self._set_back_face_color()
+        self._gl.glDisable(GL_POLYGON_OFFSET_FILL)
+        if n_edges:
+            self._program.setUniformValue(self._loc_stipple, 2)
+            ec = self._effective_style().edge_color
+            self._set_color(ec[0], ec[1], ec[2], 1.0)
+            self._ghost_edges_vao.bind()
+            self._gl.glDrawArrays(GL_LINES, 0, n_edges)
+            self._ghost_edges_vao.release()
+        self._program.setUniformValue(self._loc_stipple, 0)
 
     def _newell_of(self, face):
         """The face's raw Newell vector, memoised per scene version — ONE
@@ -6623,7 +6755,8 @@ class Viewport(QOpenGLWidget):
                                                tuple(t.get("uvw") or ())),
                            f.attrs.get("layer"),
                            f.attrs.get("opacity"),
-                           repr(back) if back else None))
+                           repr(back) if back else None,
+                           bool(f.attrs.get("hidden"))))
         soft = 0
         hid = 0
         for i, e in enumerate(mesh.edges):
@@ -7108,6 +7241,10 @@ class Viewport(QOpenGLWidget):
         tri_ent: list = []
         from core.materials import back_is_default
         for f in mesh.faces:
+            if f.attrs.get("hidden"):
+                # SketchUp's Hide on a face: out of the chunk entirely — not
+                # drawn, not picked, not snapped. Its edges stay (below).
+                continue
             i = len(faces)
             faces.append(f)
             if len(f.loop) < 3:
@@ -7334,6 +7471,10 @@ class Viewport(QOpenGLWidget):
                                     tuple(t.get("uvw") or ())),
                 a.get("opacity"), repr(a.get("back")) if a.get("back")
                 else None, a.get("layer"))).encode())
+            if a.get("hidden"):
+                # Only when hidden, so meshes without one keep their
+                # pre-existing digests (same reason as the edge term).
+                h.update(repr(("fhidden", i)).encode())
         return h.hexdigest()
 
     _CHUNK_CACHE_FIELDS = (

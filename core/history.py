@@ -680,24 +680,40 @@ class AssignLayerCommand(Command):
         scene.version += 1
 
 
-class HideCommand(Command):
-    """Hide (or unhide) objects and edges — SketchUp's Edit ▸ Hide and
-    Edit ▸ Unhide.
+def _is_hidden(entity) -> bool:
+    attrs = getattr(entity, "attrs", None)
+    if attrs is not None:                          # Face
+        return bool(attrs.get("hidden"))
+    return bool(getattr(entity, "hidden", False))
 
-    An OBJECT (group or component, ``Group.hidden``) disappears from every
-    consumer that asks ``Scene.entity_visible``: render, pick, snap, bounds,
-    export; its nested placements go with it. A hidden EDGE stays in the
-    topology (its faces keep their boundary) but draws neither as a line
-    nor as a profile/silhouette; render, picking and the ``.igz`` already
-    honour ``Edge.hidden``. Previous per-entity flags are captured at
-    ``do`` time, so a mixed selection (some already hidden) undoes
-    exactly. Faces are not hidden here: a group's cached chunk draws every
-    face it holds, so a face hidden inside a group would come back the
-    moment you left it."""
+
+def _set_hidden(entity, hidden: bool) -> None:
+    attrs = getattr(entity, "attrs", None)
+    if attrs is not None:                          # Face
+        if hidden:
+            attrs["hidden"] = True
+        else:
+            attrs.pop("hidden", None)
+    else:
+        entity.hidden = hidden
+
+
+class HideCommand(Command):
+    """Hide (or unhide) objects, faces and edges — SketchUp's Edit ▸ Hide
+    and Edit ▸ Unhide.
+
+    An OBJECT (group or component, ``Group.hidden``) and a FACE
+    (``attrs["hidden"]``) disappear from every consumer that asks
+    ``Scene.entity_visible``: render, pick, snap, bounds, export; an
+    object's nested placements go with it, and a group's chunk leaves its
+    hidden faces out. A hidden EDGE stays in the topology (its faces keep
+    their boundary) but draws neither as a line nor as a profile /
+    silhouette. Previous per-entity flags are captured at ``do`` time, so
+    a mixed selection (some already hidden) undoes exactly."""
 
     def __init__(self, entities, hidden: bool = True) -> None:
         self._entities = [e for e in entities
-                          if hasattr(e, "hidden") and not hasattr(e, "attrs")]
+                          if hasattr(e, "hidden") or hasattr(e, "attrs")]
         self._hidden = hidden
         self._prev: list[bool] = []
 
@@ -710,9 +726,9 @@ class HideCommand(Command):
         return self._hidden
 
     def do(self, scene) -> None:
-        self._prev = [bool(getattr(e, "hidden", False)) for e in self._entities]
+        self._prev = [_is_hidden(e) for e in self._entities]
         for e in self._entities:
-            e.hidden = self._hidden
+            _set_hidden(e, self._hidden)
             if self._hidden:
                 # An invisible entity must not linger in the selection: every
                 # selection consumer (move, delete, paint) assumes it can see
@@ -723,7 +739,7 @@ class HideCommand(Command):
 
     def undo(self, scene) -> None:
         for e, prev in zip(self._entities, self._prev):
-            e.hidden = prev
+            _set_hidden(e, prev)
         _dirty_group_chunks(scene)
         scene.version += 1
 

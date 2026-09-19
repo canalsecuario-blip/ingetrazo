@@ -60,7 +60,9 @@ def test_hide_command_takes_the_object_out_of_sight_and_undo_brings_it_back():
     assert g.hidden
 
 
-def test_hide_command_also_hides_edges_and_ignores_faces():
+def test_hide_command_also_hides_faces_and_edges():
+    """SketchUp hides faces too (Marco, 2026-09-18: «en SketchUp también
+    puedes ocultar caras»)."""
     scene = Scene()
     history = History(scene)
     _box(scene.mesh)
@@ -68,10 +70,120 @@ def test_hide_command_also_hides_edges_and_ignores_faces():
     face = scene.mesh.faces[0]
     history.execute(HideCommand([edge, face]))
     assert edge.hidden
-    assert "hidden" not in face.attrs          # faces are not this command's
+    assert face.attrs["hidden"] is True
+    assert not scene.entity_visible(face) and not scene.entity_selectable(face)
+    assert scene.entity_hidden(face)
+    history.undo()
+    assert "hidden" not in face.attrs and not edge.hidden
     # the edges-only spelling still works (the Eraser uses it)
-    history.execute(HideEdgesCommand([edge], hidden=False))
-    assert not edge.hidden
+    history.execute(HideEdgesCommand([edge], hidden=True))
+    assert edge.hidden
+
+
+def test_a_hidden_face_round_trips_through_igz(tmp_path):
+    scene = Scene()
+    _box(scene.mesh)
+    scene.mesh.faces[2].attrs["hidden"] = True
+    p = tmp_path / "cara.igz"
+    igz.save_scene(scene, p)
+    scene2 = Scene()
+    igz.load_into(scene2, p)
+    assert sum(1 for f in scene2.mesh.faces if f.attrs.get("hidden")) == 1
+
+
+def test_hidden_faces_leave_a_groups_chunk_but_keep_their_edges():
+    from views.main_window import MainWindow
+    win = MainWindow()
+    win.show()
+    _app.processEvents()
+    vp = win.viewport
+    try:
+        g = _group("caja")
+        vp.scene.groups.append(g)
+        vp.scene.version += 1
+        before = vp._group_chunk(g)
+        assert len(before["faces"]) == 6
+        vp.history.execute(HideCommand([g.mesh.faces[0]]))
+        after = vp._group_chunk(g)
+        assert len(after["faces"]) == 5             # rebuilt without it
+        assert after["edges"] == before["edges"]    # its edges stay drawn
+        vp.history.undo()
+        assert len(vp._group_chunk(g)["faces"]) == 6
+    finally:
+        win._saved_version = vp.scene.version
+        win.close()
+
+
+def test_the_hidden_view_makes_hidden_things_selectable_but_never_visible():
+    """View ▸ Hidden Objects / Geometry: the ghost pass draws them and the
+    pick index takes them; the normal passes and occlusion never do."""
+    scene = Scene()
+    g = _group()
+    scene.groups.append(g)
+    _box(scene.mesh, x0=5.0)
+    face = scene.mesh.faces[0]
+    g.hidden = True
+    face.attrs["hidden"] = True
+    assert not scene.entity_selectable(g) and not scene.entity_selectable(face)
+    scene.show_hidden_objects = True
+    assert scene.entity_selectable(g) and not scene.entity_visible(g)
+    assert not scene.entity_selectable(face)
+    scene.show_hidden_geometry = True
+    assert scene.entity_selectable(face) and not scene.entity_visible(face)
+
+
+def test_hidden_view_flags_travel_in_the_document_and_in_scenes(tmp_path):
+    from types import SimpleNamespace
+    scene = Scene()
+    scene.show_hidden_objects = True
+    p = tmp_path / "vista.igz"
+    igz.save_scene(scene, p)
+    scene2 = Scene()
+    igz.load_into(scene2, p)
+    assert scene2.show_hidden_objects and not scene2.show_hidden_geometry
+
+    cam = SimpleNamespace(target=QVector3D(0, 0, 0), distance=10.0, yaw=0.5,
+                          pitch=0.4, fov_deg=45.0, perspective=True)
+    view = SavedView.capture("fantasmas", scene, cam)
+    assert view.hidden_shown == {"objects": True, "geometry": False}
+    scene.show_hidden_objects = False
+    SavedView.from_dict(view.to_dict()).apply(scene, cam)
+    assert scene.show_hidden_objects
+
+
+def test_ghost_pass_draws_and_unhide_selected_brings_them_back():
+    from views.main_window import MainWindow
+    win = MainWindow()
+    win.show()
+    _app.processEvents()
+    vp = win.viewport
+    try:
+        g = _group("caja")
+        vp.scene.groups.append(g)
+        _box(vp.scene.mesh, x0=5.0)
+        face = vp.scene.mesh.faces[0]
+        vp.scene.version += 1
+        vp.scene.select([g, face])
+        win._on_hide()
+        assert g.hidden and face.attrs.get("hidden")
+        assert not vp._sync_hidden_ghosts()             # view off: nothing
+        win._act_hidden_objects.setChecked(True)
+        win._act_hidden_geometry.setChecked(True)
+        assert vp.scene.show_hidden_objects and vp.scene.show_hidden_geometry
+        assert vp._sync_hidden_ghosts()
+        n_vcol, n_edges = vp._ghost_counts
+        assert n_vcol == 6 * 2 * 3 + 2 * 3          # the box's faces + one face
+        assert n_edges == 12 * 2                     # the object's edges, dotted
+        img = vp.render_image(160, 120, overlays=False)
+        assert img is not None and not img.isNull()
+        # selectable again → Unhide ▸ Selected
+        vp.scene.select([g, face])
+        win._on_unhide_selected()
+        assert not g.hidden and not face.attrs.get("hidden")
+        assert not vp._sync_hidden_ghosts()
+    finally:
+        win._saved_version = vp.scene.version
+        win.close()
 
 
 def test_hidden_flag_and_uid_round_trip_through_igz(tmp_path):

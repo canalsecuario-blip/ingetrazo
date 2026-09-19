@@ -1804,8 +1804,6 @@
  "Unhide": "Mostrar",
  "Last": "Lo último",
  "All": "Todo",
- "Select an object or edges first.": "Selecciona antes un objeto o aristas.",
- "Hid {objects} object(s) and {edges} edge(s) — Edit ▸ Unhide brings them back": "Ocultados {objects} objeto(s) y {edges} arista(s) — Edición ▸ Mostrar los devuelve",
  "Unhid {n} entities.": "Mostradas {n} entidades.",
  "Nothing to unhide.": "No hay nada que mostrar.",
  "Nothing is hidden.": "No hay nada oculto.",
@@ -1817,5 +1815,11 @@
  "Select something in the model first, then Assign.": "Selecciona antes algo en el modelo y luego Asignar.",
  "New layer…": "Capa nueva…",
  "New layer": "Capa nueva",
- "Layer name:": "Nombre de la capa:"
+ "Layer name:": "Nombre de la capa:",
+ "Hidden Objects": "Objetos ocultos",
+ "Hidden Geometry": "Geometría oculta",
+ "Selected": "Seleccionado",
+ "Select an object, faces or edges first.": "Selecciona antes un objeto, caras o aristas.",
+ "Hid {objects} object(s), {faces} face(s) and {edges} edge(s) — Edit ▸ Unhide brings them back": "Ocultados {objects} objeto(s), {faces} cara(s) y {edges} arista(s) — Edición ▸ Mostrar los devuelve",
+ "Nothing hidden in the selection — turn on Camera ▸ Hidden Objects / Geometry to select hidden things.": "No hay nada oculto en la selección — activa Cámara ▸ Objetos ocultos / Geometría oculta para poder seleccionar lo oculto."
 }

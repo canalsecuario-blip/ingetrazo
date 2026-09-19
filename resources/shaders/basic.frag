@@ -42,6 +42,11 @@ uniform vec3 u_sun_dir;
 // it is fully transparent, so the plane has no visible shape or edges
 // (SketchUp's on-ground shadows are these same floating dark stains).
 uniform int u_shadow_overlay;
+// SketchUp's View ▸ Hidden Objects / Hidden Geometry: hidden things are
+// drawn as a see-through screen-space GRID (1 = faces: a 1 px line every
+// 4 px each way) or DOTTED (2 = edges). Fragments off the pattern are
+// discarded, so what lies behind shows through the weave. 0 = off.
+uniform int u_stipple;
 
 in vec2 v_uv;
 in vec3 v_color;
@@ -108,6 +113,12 @@ const float BAYER[16] = float[16](
     15.5/16.0,  7.5/16.0, 13.5/16.0,  5.5/16.0);
 
 void main() {
+    if (u_stipple == 1) {
+        if (mod(gl_FragCoord.x, 4.0) >= 1.0 && mod(gl_FragCoord.y, 4.0) >= 1.0)
+            discard;
+    } else if (u_stipple == 2) {
+        if (mod(gl_FragCoord.x + gl_FragCoord.y, 6.0) >= 3.0) discard;
+    }
     vec4 c;
     if (u_use_texture == 1) {
         vec4 texel = texture(u_tex, v_uv);

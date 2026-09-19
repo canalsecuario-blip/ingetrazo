@@ -213,6 +213,8 @@ def _face_json(f) -> dict:
     opacity = getattr(f, "attrs", {}).get("opacity")
     if opacity is not None:
         entry["opacity"] = float(opacity)
+    if getattr(f, "attrs", {}).get("hidden"):
+        entry["hidden"] = True          # SketchUp's Hide on a face
     # Material identity (core.materials): the registry name this face was
     # painted with. Written only when present; older readers ignore it.
     mat = getattr(f, "attrs", {}).get("mat")
@@ -353,6 +355,13 @@ def save_scene(scene, path: Path) -> dict:
             vis["cuts_hidden"] = True
         if vis:
             payload["section_view"] = vis
+    shown = {}
+    if getattr(scene, "show_hidden_objects", False):
+        shown["objects"] = True
+    if getattr(scene, "show_hidden_geometry", False):
+        shown["geometry"] = True
+    if shown:
+        payload["hidden_view"] = shown       # View ▸ Hidden Objects / Geometry
     dstyle = getattr(scene, "display_style", None)
     if dstyle is not None:
         from core.style import Style
@@ -652,6 +661,10 @@ def _load_into_inner(scene, path: Path) -> None:
     if isinstance(vis, dict):
         scene.show_section_planes = not vis.get("planes_hidden", False)
         scene.show_section_cuts = not vis.get("cuts_hidden", False)
+    shown = payload.get("hidden_view")
+    if isinstance(shown, dict):
+        scene.show_hidden_objects = bool(shown.get("objects", False))
+        scene.show_hidden_geometry = bool(shown.get("geometry", False))
 
     georef = payload.get("georef")
     if isinstance(georef, dict) and isinstance(georef.get("datum"), dict):
@@ -695,6 +708,8 @@ def _face_attrs_from_json(raw) -> dict | None:
         attrs["ifc"] = dict(raw["ifc"])
     if raw.get("opacity") is not None:
         attrs["opacity"] = float(raw["opacity"])
+    if raw.get("hidden"):
+        attrs["hidden"] = True
     if raw.get("mat"):
         attrs["mat"] = raw["mat"]
     back = raw.get("back")

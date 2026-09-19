@@ -622,6 +622,9 @@ class MainWindow(QMainWindow):
         edit_menu.addAction(hide_action)
 
         unhide_menu = edit_menu.addMenu(tr("Unhide"))
+        unhide_selected_action = QAction(tr("Selected"), self)
+        unhide_selected_action.triggered.connect(self._on_unhide_selected)
+        unhide_menu.addAction(unhide_selected_action)
         unhide_last_action = QAction(tr("Last"), self)
         unhide_last_action.triggered.connect(self._on_unhide_last)
         unhide_menu.addAction(unhide_last_action)
@@ -730,6 +733,21 @@ class MainWindow(QMainWindow):
         camera_menu.addAction(self._act_show_splanes)
         camera_menu.addAction(self._act_show_scuts)
         camera_menu.addAction(self._act_section_fill)
+
+        # SketchUp's View ▸ Hidden Objects / Hidden Geometry: what Hide put
+        # away comes back as a see-through grid and can be selected again
+        # (Marco, 2026-09-18, with the two SketchUp captures).
+        camera_menu.addSeparator()
+        self._act_hidden_objects = QAction(tr("Hidden Objects"), self)
+        self._act_hidden_objects.setCheckable(True)
+        self._act_hidden_objects.toggled.connect(
+            lambda on: self._set_hidden_view("show_hidden_objects", on))
+        camera_menu.addAction(self._act_hidden_objects)
+        self._act_hidden_geometry = QAction(tr("Hidden Geometry"), self)
+        self._act_hidden_geometry.setCheckable(True)
+        self._act_hidden_geometry.toggled.connect(
+            lambda on: self._set_hidden_view("show_hidden_geometry", on))
+        camera_menu.addAction(self._act_hidden_geometry)
 
         camera_menu.addSeparator()
         for action in self._nav_actions.values():   # Orbit / Pan / Zoom / Zoom Window
@@ -1605,10 +1623,27 @@ class MainWindow(QMainWindow):
                 (self._act_show_splanes,
                  getattr(scene, "show_section_planes", True)),
                 (self._act_show_scuts,
-                 getattr(scene, "show_section_cuts", True))):
+                 getattr(scene, "show_section_cuts", True)),
+                (getattr(self, "_act_hidden_objects", None),
+                 getattr(scene, "show_hidden_objects", False)),
+                (getattr(self, "_act_hidden_geometry", None),
+                 getattr(scene, "show_hidden_geometry", False))):
+            if act is None:
+                continue
             act.blockSignals(True)
             act.setChecked(value)
             act.blockSignals(False)
+
+    def _set_hidden_view(self, attr: str, on: bool) -> None:
+        """View ▸ Hidden Objects / Geometry: a scene flag (it travels in the
+        document and in scenes), a version bump so the pick index learns
+        what became selectable, and a repaint."""
+        scene = self.viewport.scene
+        if bool(getattr(scene, attr, False)) == bool(on):
+            return
+        setattr(scene, attr, bool(on))
+        scene.version += 1
+        self.viewport.update()
 
     def prompt_section_name(self, plane) -> None:
         """SketchUp's post-placement prompt: name + symbol (cancel keeps
@@ -1885,8 +1920,12 @@ class MainWindow(QMainWindow):
                 texm = menu.addMenu(tr("Texture"))
                 texm.addAction(tr("Position"), self._on_texture_position)
                 texm.addAction(tr("Reset Position"), self._on_texture_reset)
-        if any(isinstance(e, (Edge, Group)) for e in sel):
+        if self._hideable(sel):
             menu.addAction(tr("Hide"), self._on_hide)
+        if any(self.viewport.scene.entity_hidden(e)
+               or (isinstance(e, Edge) and getattr(e, "hidden", False))
+               for e in sel):
+            menu.addAction(tr("Unhide"), self._on_unhide_selected)
         self._add_layer_submenu(menu, sel)
         if has_group:
             groups = [e for e in sel if isinstance(e, Group)]
@@ -2063,35 +2102,51 @@ class MainWindow(QMainWindow):
             self._assign_layer(name)
 
     def _hideable(self, entities) -> list:
-        """The objects and edges in ``entities`` that Hide acts on: a group
-        picked inside an open container is the child itself; one picked at
-        the top level is the top-level object."""
-        from core.mesh import Edge as MeshEdge
-        out = []
-        for e in entities:
-            if isinstance(e, MeshEdge) or isinstance(e, Group):
-                if not getattr(e, "hidden", False):
-                    out.append(e)
-        return out
+        """The objects, faces and edges in ``entities`` that Hide acts on
+        (the ones not hidden already): a group picked inside an open
+        container is the child itself; one picked at the top level is the
+        top-level object."""
+        from core.history import _is_hidden
+        return [e for e in entities
+                if isinstance(e, (Edge, Face, Group)) and not _is_hidden(e)]
 
     def _on_hide(self) -> None:
-        """SketchUp's Edit ▸ Hide: the selected objects (groups, components)
-        and edges stop drawing, picking and exporting — they are still in
-        the document and come back with Unhide, or with a scene that
-        remembers them visible. Faces are not hidden (see HideCommand)."""
+        """SketchUp's Edit ▸ Hide: the selected objects (groups,
+        components), faces and edges stop drawing, picking and exporting —
+        they are still in the document and come back with Unhide, with
+        View ▸ Hidden Objects / Geometry, or with a scene that remembers
+        them visible."""
         from core.history import HideCommand
         targets = self._hideable(self.viewport.scene.selection)
         if not targets:
             self.statusBar().showMessage(
-                tr("Select an object or edges first."), 3000)
+                tr("Select an object, faces or edges first."), 3000)
             return
         self.viewport.history.execute(HideCommand(targets, hidden=True))
         self.viewport.update()
         n_obj = sum(1 for e in targets if isinstance(e, Group))
-        n_edge = len(targets) - n_obj
+        n_face = sum(1 for e in targets if isinstance(e, Face))
+        n_edge = len(targets) - n_obj - n_face
         self.statusBar().showMessage(
-            tr("Hid {objects} object(s) and {edges} edge(s) — Edit ▸ Unhide "
-               "brings them back", objects=n_obj, edges=n_edge), 4000)
+            tr("Hid {objects} object(s), {faces} face(s) and {edges} "
+               "edge(s) — Edit ▸ Unhide brings them back",
+               objects=n_obj, faces=n_face, edges=n_edge), 4000)
+
+    def _on_unhide_selected(self) -> None:
+        """SketchUp's Edit ▸ Unhide ▸ Selected — reachable once View ▸
+        Hidden Objects / Geometry lets hidden things be selected."""
+        from core.history import HideCommand, _is_hidden
+        targets = [e for e in self.viewport.scene.selection
+                   if isinstance(e, (Edge, Face, Group)) and _is_hidden(e)]
+        if not targets:
+            self.statusBar().showMessage(
+                tr("Nothing hidden in the selection — turn on Camera ▸ "
+                   "Hidden Objects / Geometry to select hidden things."), 4000)
+            return
+        self.viewport.history.execute(HideCommand(targets, hidden=False))
+        self.viewport.update()
+        self.statusBar().showMessage(
+            tr("Unhid {n} entities.", n=len(targets)), 3000)
 
     def _on_unhide_last(self) -> None:
         """SketchUp's Edit ▸ Unhide ▸ Last: the most recent Hide whose
@@ -2110,13 +2165,15 @@ class MainWindow(QMainWindow):
 
     def _hidden_everywhere(self) -> list:
         """Every hidden object in the document (nested ones too) plus the
-        hidden edges of the mesh being edited — what Unhide ▸ All restores.
+        hidden faces and edges of the mesh being edited — what Unhide ▸ All
+        restores.
         Objects everywhere, because a hidden child inside a closed container
         can only be reached by opening it, and the point of Unhide All is
         not to have to hunt."""
         from core.purge import iter_groups
         scene = self.viewport.scene
         out = [g for g in iter_groups(scene.groups) if g.hidden]
+        out += [f for f in scene.mesh.faces if f.attrs.get("hidden")]
         out += [e for e in scene.mesh.edges if getattr(e, "hidden", False)]
         return out
 
