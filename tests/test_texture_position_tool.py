@@ -248,3 +248,56 @@ def test_the_back_side_texture_is_positioned_and_stored_on_the_back(viewport):
         face, "back", {k: v for k, v in back["texture"].items() if k != "uvw"})
     viewport.history.execute(cmd)
     assert "uvw" not in face.attrs["back"]["texture"]
+
+
+# ---- The green pin's sticky angles (Rafael, 2026-09-16, 04:30–05:10) ----------
+
+def _green_to(vp, tool, angle_deg, radius=1.0, modifiers=Qt.NoModifier):
+    """Drag the green pin (at (1,0,0) after a fresh begin, red at (0.5,0,0))
+    to ``angle_deg`` about the red pin, ``radius`` away."""
+    a = math.radians(angle_deg)
+    end = (0.5 + radius * math.cos(a), radius * math.sin(a), 0.0)
+    tool.on_click(_ctx(vp, (1.0, 0, 0)))
+    tool.on_hover(_ctx(vp, end, modifiers))
+    return end
+
+
+def test_the_rotation_snaps_to_every_45_degrees_from_the_face_axes(viewport):
+    """«En SketchUp te bloquea a los 0, a los 45 y a los 90»: 3° off a
+    multiple of 45° lands exactly on it, the guide says which."""
+    face = _textured_square(viewport)
+    tool = _begin(viewport, face)
+    for wanted, off in ((90.0, 87.0), (45.0, 47.5), (0.0, -3.0), (135.0, 138.0)):
+        _green_to(viewport, tool, off)
+        assert tool._snap_deg == wanted % 360.0, (wanted, off, tool._snap_deg)
+        assert abs(tool._tile_angle(tool.map.e_u) - wanted) < 1e-6
+        tool.on_release(viewport)
+        assert tool._snap_deg is None             # the guide goes with the drag
+        tool.reset()
+
+
+def test_between_the_sticky_angles_the_rotation_is_free(viewport):
+    face = _textured_square(viewport)
+    tool = _begin(viewport, face)
+    _green_to(viewport, tool, 20.0)
+    assert tool._snap_deg is None
+    assert abs(tool._tile_angle(tool.map.e_u) - 20.0) < 0.05   # pixel round trip
+    tool.on_release(viewport)
+
+
+def test_shift_turns_the_snap_off(viewport):
+    face = _textured_square(viewport)
+    tool = _begin(viewport, face)
+    _green_to(viewport, tool, 87.0, modifiers=Qt.ShiftModifier)
+    assert tool._snap_deg is None
+    assert abs(tool._tile_angle(tool.map.e_u) - 87.0) < 0.05
+    tool.on_release(viewport)
+
+
+def test_the_snap_keeps_the_scale_the_cursor_asked_for(viewport):
+    face = _textured_square(viewport)
+    tool = _begin(viewport, face)
+    _green_to(viewport, tool, 88.0, radius=1.0)    # tile was 0.5 m: doubles
+    assert tool._snap_deg == 90.0
+    assert abs(tool.map.e_u.length() - 1.0) < 1e-6
+    tool.on_release(viewport)
