@@ -1887,6 +1887,7 @@ class MainWindow(QMainWindow):
                 texm.addAction(tr("Reset Position"), self._on_texture_reset)
         if any(isinstance(e, (Edge, Group)) for e in sel):
             menu.addAction(tr("Hide"), self._on_hide)
+        self._add_layer_submenu(menu, sel)
         if has_group:
             groups = [e for e in sel if isinstance(e, Group)]
             if len(groups) == 1:
@@ -2001,6 +2002,65 @@ class MainWindow(QMainWindow):
         self.viewport.history.execute(
             TexturePositionTool.side_command(face, side, flat))
         self.viewport.update()
+
+    def _add_layer_submenu(self, menu, sel) -> None:
+        """Right-click ▸ Layer ▸ the document's layers, the selection's own
+        one ticked, plus «New layer…». Not SketchUp's (its road is Entity
+        Info), but it is where Rafael looked — «botón derecho… no lo veo
+        tampoco» (2026-09-16, 39:30) — and it costs nothing to be there."""
+        from core.dimension import Dimension
+        from core.layers import layer_of
+        from core.textlabel import TextLabel
+        targets = [e for e in sel
+                   if isinstance(e, (Face, Edge, Group, Dimension, TextLabel))]
+        if not targets:
+            return
+        current = {layer_of(e) for e in targets}
+        # Parented explicitly: built in a helper, a submenu returned by
+        # ``addMenu(str)`` can be collected with this frame's locals before
+        # the menu ever opens.
+        from PySide6.QtWidgets import QMenu
+        sub = QMenu(tr("Layer"), menu)
+        menu.addMenu(sub)
+        for ly in self.viewport.scene.layers:
+            act = sub.addAction(ly.name)
+            act.setCheckable(True)
+            act.setChecked(len(current) == 1 and ly.name in current)
+            act.triggered.connect(
+                lambda _c=False, name=ly.name: self._assign_layer(name))
+        sub.addSeparator()
+        sub.addAction(tr("New layer…"), self._assign_new_layer)
+
+    def _assign_layer(self, name: str) -> None:
+        """Move the selection's taggable entities onto ``name`` (created if
+        new), undoable."""
+        from core.dimension import Dimension
+        from core.history import AssignLayerCommand
+        from core.layers import layer_of
+        from core.textlabel import TextLabel
+        targets = [e for e in self.viewport.scene.selection
+                   if isinstance(e, (Face, Edge, Group, Dimension, TextLabel))
+                   and layer_of(e) != name]
+        if not targets:
+            return
+        self.viewport.history.execute(AssignLayerCommand(targets, name))
+        self.viewport.update()
+        self.statusBar().showMessage(
+            tr("{n} entities moved to '{layer}'", n=len(targets), layer=name),
+            2500)
+
+    def _assign_new_layer(self) -> None:
+        from PySide6.QtWidgets import QInputDialog
+        scene = self.viewport.scene
+        base = tr("Layer")
+        n = 1
+        while scene.layer(f"{base} {n}") is not None:
+            n += 1
+        name, ok = QInputDialog.getText(
+            self, tr("New layer"), tr("Layer name:"), text=f"{base} {n}")
+        name = (name or "").strip()
+        if ok and name:
+            self._assign_layer(name)
 
     def _hideable(self, entities) -> list:
         """The objects and edges in ``entities`` that Hide acts on: a group

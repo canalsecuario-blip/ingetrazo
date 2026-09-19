@@ -18,6 +18,16 @@ follow [SemVer](https://semver.org).
   en el `.igz` y la escena guarda cuáles estaban ocultos; una escena
   guardada antes de esta versión no toca nada. Las caras no se ocultan
   (una cara oculta dentro de un grupo volvería al salir de él).
+- **Cambiar de capa donde se busca** (Rafael, 39:00: «no sé cómo cambiar
+  el objeto de capa… las propiedades… botón derecho… no lo veo»). **Info
+  de entidad** tiene ahora el campo **Capa** de SketchUp: muestra la de la
+  selección («(varias)» si mezcla) y elegir otra la mueve. El **clic
+  derecho** gana un submenú **Capa** con las del documento, la actual
+  marcada, y «Capa nueva…». El botón **Asignar selección** del panel de
+  capas hace lo mismo y, cuando no hay capa marcada o nada seleccionado,
+  lo dice en vez de callar (es lo que le «funcionó a la segunda»). Los
+  tres caminos pasan por un mismo comando con deshacer, y una capa que no
+  existe se crea al asignarla.
 - **Texto 3D como en SketchUp: cada letra es un grupo, y el texto se
   edita.** El texto llega como un componente con un grupo por letra
   («que cada letra aparezca como grupo, como lo hace SketchUp»), así que

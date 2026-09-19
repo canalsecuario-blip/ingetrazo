@@ -1808,5 +1808,14 @@
  "Hid {objects} object(s) and {edges} edge(s) — Edit ▸ Unhide brings them back": "Ocultados {objects} objeto(s) y {edges} arista(s) — Edición ▸ Mostrar los devuelve",
  "Unhid {n} entities.": "Mostradas {n} entidades.",
  "Nothing to unhide.": "No hay nada que mostrar.",
- "Nothing is hidden.": "No hay nada oculto."
+ "Nothing is hidden.": "No hay nada oculto.",
+ "Layer:": "Capa:",
+ "The layer the selection is on — pick another to move it": "La capa en la que está la selección — elige otra para moverla",
+ "(several)": "(varias)",
+ "Move the selected entities onto the layer highlighted in the list (also: Entity info ▸ Layer, or right-click ▸ Layer)": "Mueve las entidades seleccionadas a la capa resaltada en la lista (también: Info de entidad ▸ Capa, o clic derecho ▸ Capa)",
+ "Click a layer in the list first, then Assign.": "Marca antes una capa en la lista y luego Asignar.",
+ "Select something in the model first, then Assign.": "Selecciona antes algo en el modelo y luego Asignar.",
+ "New layer…": "Capa nueva…",
+ "New layer": "Capa nueva",
+ "Layer name:": "Nombre de la capa:"
 }

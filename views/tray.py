@@ -2194,12 +2194,24 @@ class ShadowsPanel(QWidget):
         self._window.viewport.update()
 
 
+#: What a layer can be assigned to (SketchUp tags faces, edges, objects
+#: and annotations alike).
+_TAGGABLE = (Face, Edge, Group, Dimension, TextLabel)
+
+
 class EntityInfoPanel(QWidget):
-    """Read-only facts about the current selection."""
+    """Facts about the current selection, plus the one thing SketchUp's
+    Entity Info lets you CHANGE here: the layer (its Tag field). Rafael
+    went looking for it exactly here — «debo de tener que ir a las
+    propiedades del objeto… no sé cómo cambiarlo de aquí» (2026-09-16,
+    39:00) — and found only the Layers panel's button, which he did not
+    understand."""
 
     def __init__(self, window) -> None:
         super().__init__()
+        from PySide6.QtWidgets import QComboBox, QHBoxLayout
         self._window = window
+        self._updating = False
         lay = QVBoxLayout(self)
         lay.setContentsMargins(8, 6, 8, 8)
         self._label = QLabel(tr("Nothing selected"))
@@ -2207,10 +2219,70 @@ class EntityInfoPanel(QWidget):
         self._label.setTextFormat(Qt.RichText)
         self._label.setStyleSheet("font-size: 12px;")
         lay.addWidget(self._label)
+        row = QHBoxLayout()
+        self._layer_caption = QLabel(tr("Layer:"))
+        self._layer_box = QComboBox()
+        self._layer_box.setToolTip(
+            tr("The layer the selection is on — pick another to move it"))
+        self._layer_box.currentIndexChanged.connect(self._on_layer_picked)
+        row.addWidget(self._layer_caption)
+        row.addWidget(self._layer_box, 1)
+        lay.addLayout(row)
+        self._layer_caption.hide()
+        self._layer_box.hide()
 
     def refresh(self) -> None:
         sel = list(self._window.viewport.scene.selection)
         self._label.setText(self._describe(sel))
+        self._refresh_layer(sel)
+
+    # ---- Layer field --------------------------------------------------------
+    def _refresh_layer(self, sel: list) -> None:
+        from core.layers import layer_of
+        tagged = [e for e in sel if isinstance(e, _TAGGABLE)]
+        show = bool(tagged)
+        self._layer_caption.setVisible(show)
+        self._layer_box.setVisible(show)
+        if not show:
+            return
+        scene = self._window.viewport.scene
+        names = [ly.name for ly in scene.layers]
+        current = {layer_of(e) for e in tagged}
+        self._updating = True
+        try:
+            self._layer_box.clear()
+            if len(current) > 1:
+                # A mixed selection reads as such; picking a layer moves
+                # everything onto it.
+                self._layer_box.addItem(tr("(several)"), None)
+            for name in names:
+                self._layer_box.addItem(name, name)
+            if len(current) == 1:
+                idx = self._layer_box.findData(next(iter(current)))
+                self._layer_box.setCurrentIndex(max(idx, 0))
+            else:
+                self._layer_box.setCurrentIndex(0)
+        finally:
+            self._updating = False
+
+    def _on_layer_picked(self, _index: int) -> None:
+        if self._updating:
+            return
+        name = self._layer_box.currentData()
+        if not name:
+            return
+        from core.history import AssignLayerCommand
+        from core.layers import layer_of
+        scene = self._window.viewport.scene
+        targets = [e for e in scene.selection
+                   if isinstance(e, _TAGGABLE) and layer_of(e) != name]
+        if not targets:
+            return
+        self._window.viewport.history.execute(AssignLayerCommand(targets, name))
+        self._window.viewport.update()
+        self._window.statusBar().showMessage(
+            tr("{n} entities moved to '{layer}'", n=len(targets), layer=name),
+            2500)
 
     def _describe(self, sel: list) -> str:
         if not sel:
@@ -2334,7 +2406,9 @@ class LayersPanel(QWidget):
                                 "(a layer a scene hides is kept)"))
         purge_btn.clicked.connect(self._on_purge)
         assign_btn = QPushButton(tr("Assign selection"))
-        assign_btn.setToolTip(tr("Move the selected entities to this layer"))
+        assign_btn.setToolTip(tr("Move the selected entities onto the layer "
+                                 "highlighted in the list (also: Entity "
+                                 "info ▸ Layer, or right-click ▸ Layer)"))
         assign_btn.clicked.connect(self._on_assign)
         row.addWidget(add_btn)
         row.addWidget(del_btn)
@@ -2476,24 +2550,31 @@ class LayersPanel(QWidget):
             tr("{n} unused layers purged", n=n_layers), 3000)
 
     def _on_assign(self) -> None:
-        from core.layers import assign_layer
+        """Move the selection onto the HIGHLIGHTED layer — and say so when
+        there is nothing to move or no layer picked: the button used to do
+        nothing in silence, which is how it read as broken («Asignar
+        selección funcionó a la segunda», Rafael, 2026-09-16)."""
+        from core.history import AssignLayerCommand
         scene = self._scene()
         item = self.tree.currentItem()
         if item is None:
+            self._window.statusBar().showMessage(
+                tr("Click a layer in the list first, then Assign."), 3000)
             return
         name = item.data(0, Qt.UserRole)
-        moved = 0
         # Annotations are tagged too (SketchUp): a "Anotaciones" layer a
         # scene hides gives a clean plan without duplicating the model.
-        for ent in scene.selection:
-            if isinstance(ent, (Face, Edge, Group, Dimension, TextLabel)):
-                assign_layer(ent, name)
-                moved += 1
-        if moved:
-            self._touch()
+        targets = [ent for ent in scene.selection
+                   if isinstance(ent, (Face, Edge, Group, Dimension, TextLabel))]
+        if not targets:
             self._window.statusBar().showMessage(
-                tr("{n} entities moved to '{layer}'", n=moved, layer=name),
-                2500)
+                tr("Select something in the model first, then Assign."), 3000)
+            return
+        self._window.viewport.history.execute(AssignLayerCommand(targets, name))
+        self._window.viewport.update()
+        self._window.statusBar().showMessage(
+            tr("{n} entities moved to '{layer}'", n=len(targets), layer=name),
+            2500)
 
     def _touch(self) -> None:
         scene = self._scene()

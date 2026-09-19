@@ -641,6 +641,45 @@ class FlipFacesCommand(Command):
         self._flip(scene)
 
 
+class AssignLayerCommand(Command):
+    """Move entities onto a layer — SketchUp's Tag field in Entity Info.
+
+    Faces, edges, groups and annotations alike (``core.layers.assign_layer``
+    knows where each one keeps its label). Previous labels are captured at
+    ``do`` time, so a mixed selection undoes exactly. A layer that does not
+    exist yet is created (Rafael's «no sé cómo cambiar el objeto de capa»,
+    2026-09-16 — the panel's button was the only road and it was not
+    understood; this is what Entity Info and the right-click go through)."""
+
+    def __init__(self, entities, layer: str) -> None:
+        self._entities = list(entities)
+        self._layer = layer
+        self._prev: list = []
+        self._created = False
+
+    def do(self, scene) -> None:
+        from core.layers import Layer, assign_layer, layer_of
+        if scene.layer(self._layer) is None:
+            scene.layers.append(Layer(self._layer))
+            self._created = True
+        self._prev = [layer_of(e) for e in self._entities]
+        for e in self._entities:
+            assign_layer(e, self._layer)
+        _dirty_group_chunks(scene)
+        scene.version += 1
+
+    def undo(self, scene) -> None:
+        from core.layers import assign_layer
+        for e, prev in zip(self._entities, self._prev):
+            assign_layer(e, prev)
+        if self._created:
+            ly = scene.layer(self._layer)
+            if ly is not None:
+                scene.layers.remove(ly)
+        _dirty_group_chunks(scene)
+        scene.version += 1
+
+
 class HideCommand(Command):
     """Hide (or unhide) objects and edges — SketchUp's Edit ▸ Hide and
     Edit ▸ Unhide.
