@@ -77,6 +77,37 @@
   <url type="vcs-browser">https://github.com/ingelibre/ingetrazo</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.4.6" date="2026-09-19">
+      <description>
+        <p>The model half of Rafael's second review, complete. His one-hour
+        video on 0.4.x was split in two releases: this is the MODEL one —
+        the three bugs and the five requests — and the next will be the
+        sheets. The big pieces: a walkthrough camera (Position Camera, Look
+        Around and Walk, as SketchUp does them) to see interiors; hiding
+        objects, and layers you can actually use; 3D text that stays
+        editable, one group per letter; and an inference SketchUp does not
+        have — a window on the next wall level with the first one, the
+        horizontal plane through the corner cut by the wall the cursor is
+        on. Also @pacaeiro's issue #34 on snapping under a lock: references
+        are fetched on both sides of the start, level ones too, Shift over
+        the soft axis cue has snaps, and pressing the tool's key again
+        resets it.</p>
+        <p xml:lang="es">Lo del modelo de la segunda revisión de Rafael,
+        entero. Su vídeo de una hora sobre la 0.4.x se repartió en dos
+        releases: esta es la del MODELO —los tres bugs y los cinco pedidos—
+        y la siguiente será la de las láminas. Lo grande: la cámara de
+        paseo (Situar cámara, Mirar alrededor y Caminar, como en SketchUp)
+        para mirar los interiores; ocultar objetos y capas que se usan de
+        verdad; texto 3D que sigue siendo editable, con un grupo por letra;
+        y una inferencia que SketchUp no tiene: la ventana de la pared de al
+        lado a la altura de la primera, el plano horizontal por la esquina
+        cortado con la pared a la que apuntas. Y la issue #34 de @pacaeiro
+        sobre los snaps bajo bloqueo: las referencias se pescan a los dos
+        lados del inicio, las que están a nivel también, Shift sobre el eje
+        suave tiene snaps, y pulsar de nuevo la tecla de la herramienta la
+        reinicia.</p>
+      </description>
+    </release>
     <release version="0.4.5" date="2026-09-18">
       <description>
         <p>Forty-eight minutes: that is how long it took @pacaeiro to

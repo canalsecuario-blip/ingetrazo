@@ -4,7 +4,18 @@ All notable changes to IngeTrazo are documented here.
 Format inspired by [Keep a Changelog](https://keepachangelog.com); versions
 follow [SemVer](https://semver.org).
 
-## [Sin publicar] — 0.4.6, lo del modelo de la revisión de Rafael
+## [0.4.6] — 2026-09-19
+
+**Lo del modelo de la segunda revisión de Rafael, entero.** Su vídeo de una
+hora sobre la 0.4.x (Rafael 3D, 16-09) se repartió en dos releases: esta es
+la del **modelo** —los tres bugs y los cinco pedidos— y la siguiente será la
+de las **láminas**. Lo grande aquí es la **cámara de paseo** para mirar los
+interiores, **ocultar objetos** y capas que se usan de verdad, el **texto 3D
+editable** letra a letra, y una inferencia que SketchUp no tiene: la
+ventana de la pared de al lado **a la altura** de la primera. Y de propina,
+la issue #34 de @pacaeiro sobre los snaps bajo bloqueo, cazada el mismo día
+con el arnés recién ampliado — sexto punto ciego que le encuentra a esa red.
+Marco probó cada fase en vivo antes de cerrarla («me encanta»).
 
 ### Añadido
 - **Cámara de paseo: Situar cámara, Caminar y Mirar alrededor**, las
