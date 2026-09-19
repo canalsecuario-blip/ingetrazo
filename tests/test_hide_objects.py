@@ -36,6 +36,18 @@ def _box(mesh, x0=0.0, y0=0.0, s=1.0, h=1.0):
     return mesh
 
 
+def _paints(vp) -> None:
+    """The viewport renders an image where a GL context exists. Where the
+    offscreen platform has none — the release runner: «QOpenGLWidget:
+    Failed to create context», and the AppImage job of v0.4.6 fell on
+    exactly this line — the model-side assertions around it are what
+    the test is for, so it just does not paint."""
+    if getattr(vp, "_gl", None) is None or not vp.isValid():
+        return
+    img = vp.render_image(160, 120, overlays=False)
+    assert img is not None and not img.isNull()
+
+
 def _group(name="caja", x0=0.0):
     return Group(_box(Mesh(), x0=x0), name=name)
 
@@ -174,8 +186,7 @@ def test_ghost_pass_draws_and_unhide_selected_brings_them_back():
         n_vcol, n_edges = vp._ghost_counts
         assert n_vcol == 6 * 2 * 3 + 2 * 3          # the box's faces + one face
         assert n_edges == 12 * 2                     # the object's edges, dotted
-        img = vp.render_image(160, 120, overlays=False)
-        assert img is not None and not img.isNull()
+        _paints(vp)
         # selectable again → Unhide ▸ Selected
         vp.scene.select([g, face])
         win._on_unhide_selected()
@@ -267,8 +278,7 @@ def test_hiding_a_container_hides_its_nested_placements_in_the_viewport():
         proxies = [g for g in vp._placements() if g.owner is container]
         assert proxies and all(p.hidden for p in proxies)
         assert all(not vp.scene.entity_visible(p) for p in proxies)
-        img = vp.render_image(160, 120, overlays=False)   # still paints
-        assert img is not None and not img.isNull()
+        _paints(vp)                                       # still paints
 
         # a child hidden on its own stays hidden inside a visible parent
         vp.history.undo()
