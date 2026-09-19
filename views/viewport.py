@@ -9232,6 +9232,20 @@ class Viewport(QOpenGLWidget):
     # ---- Tool management ----------------------------------------------------
     def set_active_tool(self, tool: Optional[Tool]) -> None:
         if self.active_tool is tool and self.nav_mode is None:
+            # Picking the tool you already hold starts it over, as SketchUp
+            # does: the first point is released, the locks let go. Issue
+            # #34 (@pacaeiro): «If I'm drawing a line and have the first
+            # point defined… if I press (L) again, the command should
+            # reset». It used to be a no-op.
+            if tool is not None:
+                tool.on_cancel(self)
+            self.axis_lock = None
+            self._shift_lock = None
+            self.reference_edge = None
+            self.reference_mode = None
+            self.linear_inference_mode = "all"
+            self.last_snap = None
+            self._refresh_snap()
             return
         # Picking a drawing tool always leaves camera-navigation mode.
         self.nav_mode = None

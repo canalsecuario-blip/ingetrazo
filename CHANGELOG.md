@@ -96,6 +96,34 @@ follow [SemVer](https://semver.org).
   que en la propia pared de la esquina no cambia nada.
 
 ### Arreglado
+- **Bajo un bloqueo de eje, las referencias se pescan a los DOS lados del
+  inicio, y las que están a nivel también** (issue #34, @pacaeiro:
+  «not all of them are detected… Origin not always detected, I think it
+  is if the position of the Origin is negative from the other point… a
+  point at the same level: no points are detected»). Medido con seis
+  trazos alrededor del inicio y cinco cámaras, el cursor encima de cada
+  uno: con el eje rojo fijado cada cámara perdía un trazo distinto; con
+  el azul, los tres a la altura del inicio no salían nunca. La recta del
+  bloqueo va en los dos sentidos, pero el lado permitido lo decidía dónde
+  cortaba el RAYO del cursor a la recta, y con el cursor sobre una
+  referencia lejos de la recta eso cae en cualquier parte. Ya no hay
+  lado prohibido bajo bloqueo; y una referencia al nivel del inicio
+  muestra su guía con el pie en el propio inicio («está a nivel»), y el
+  clic ahí no dibuja nada (antes iba al historial como arista nula y
+  volvía como deshacer ruidoso).
+- **Shift sobre el eje suave también tiene snaps** (issue #34, punto 4:
+  «suelto Shift para orbitar con el botón central, lo vuelvo a pulsar y la
+  mitad de los puntos no se detectan»). Cuando la pulsación de Shift no
+  encuentra nada que capturar y el cursor se alinea después con un eje,
+  entra un tercer bloqueo —Shift sostenido sobre la inferencia suave—
+  que no tenía NINGÚN snap: la #27 se los dio a las flechas y la #31 al
+  Shift capturado. Los tres bloqueos comparten ahora un mismo cuerpo
+  (`_lock_line_snaps`: cerrar la figura, vértice sobre la recta, cruce con
+  otra arista, «desde el punto»). El arnés ganó la dimensión de bloqueos
+  (flechas X/Z y Shift; 570 240 celdas).
+- **Pulsar de nuevo la tecla de la herramienta la reinicia** (issue #34,
+  punto 5): con una línea a medias, `L` suelta el primer punto y los
+  bloqueos, como en SketchUp. Antes no hacía nada.
 - **«Desde el punto» ya no se sale de la cara.** Con una esquina
   memorizada y el cursor sobre una cara, la línea del eje que pasaba por
   la esquina *por el aire* —paralela a esa cara, o atravesándola en

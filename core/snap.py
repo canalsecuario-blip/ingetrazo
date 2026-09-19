@@ -815,8 +815,18 @@ def _from_point_snap(
         if len(entry) > 3 and best is not None:
             continue                      # the edge body yields to any point
         s = QVector3D.dotProduct(ref - start_point, adir)
-        if s <= 1e-6:
+        if not hovered_refs and s <= 1e-6:
             continue  # at or behind the start along the draw
+        # Under a lock (``hovered_refs``) the line runs BOTH ways and the
+        # reference itself is a target, so no side is "behind" — and a
+        # reference level with the start (s = 0) is worth showing: its foot
+        # is the start, the guide says «level with it», and a click there
+        # draws nothing. The side used to be decided by where the cursor
+        # RAY met the lock line, which with the cursor ON a reference far
+        # from the line is anywhere: measured with six dashes and five
+        # cameras, each camera lost a different dash (issue #34,
+        # @pacaeiro: «not all of them are detected… Origin not always
+        # detected… if the position of the Origin is negative»).
         foot = start_point + adir * s
         if (foot - ref).length() < 1e-4:
             continue  # ref already on the draw line (collinear, not a crossing)
@@ -960,6 +970,74 @@ def _intersection_snap(
     return SnapResult(best[1], "intersection", COLOR_ENDPOINT)
 
 
+def _lock_line_snaps(
+    scene, start_point, line_dir, cx, cy, world_to_pixel, threshold_px,
+    is_occluded, acquired_point, chain_first_point=None,
+) -> Optional[SnapResult]:
+    """What a directional lock still lets you fetch, in order: the chain's
+    own first point (closing), a vertex sitting ON the lock line, the
+    crossing of the lock line with another edge, and a corner, midpoint or
+    origin — hovered, or projected onto the line. Issue #27 gave these to
+    the arrow lock, #31 to the Shift lock, and #34 found the third lock —
+    Shift held over a soft axis cue, when the press had nothing to capture
+    — with none of them: «release Shift to reposition the camera and
+    reactivate it: half of the Snap points are not detected». One body
+    now, three callers. ``line_dir`` must already point at the cursor."""
+    # The chain's own first point closes the polyline, lock or no lock.
+    # Without this the lock TRAPS you in the chain: the rule returns
+    # before the close rule is ever reached, so the click that should
+    # have closed the figure came back as a plain lock and the Line tool
+    # went on chaining (Marco, 2026-09-18: «se cerró la figura … sigue
+    # apareciendo el eje X bloqueado» — it LOOKED closed). Only when the
+    # point really is on the lock line, so closing never quietly breaks
+    # the lock the user asked for.
+    if chain_first_point is not None and _vertex_on_line(
+            chain_first_point, start_point, line_dir):
+        fp_px = world_to_pixel(chain_first_point)
+        if fp_px is not None and math.hypot(
+                fp_px[0] - cx, fp_px[1] - cy) <= threshold_px:
+            return SnapResult(QVector3D(chain_first_point), "close", COLOR_CLOSE)
+    # A vertex that sits on the lock line → endpoint snap, so you can land
+    # exactly on a corner without leaving the lock.
+    for edge in scene.edges:
+        for vertex in (edge.a, edge.b):
+            if not _vertex_on_line(vertex, start_point, line_dir):
+                continue
+            vp = world_to_pixel(vertex)
+            if vp is None:
+                continue
+            if math.hypot(vp[0] - cx, vp[1] - cy) <= threshold_px:
+                return SnapResult(vertex, "endpoint", COLOR_ENDPOINT)
+    # Where the lock line crosses another edge → intersection (green
+    # point), so a locked line landing on a crossing wall offers the exact
+    # junction without breaking the lock.
+    best_hit: Optional[tuple[float, QVector3D]] = None
+    for edge in scene.edges:
+        hit = _line_segment_intersection(start_point, line_dir, edge.a, edge.b)
+        if hit is None:
+            continue
+        hp = world_to_pixel(hit)
+        if hp is None:
+            continue
+        dh = math.hypot(hp[0] - cx, hp[1] - cy)
+        if dh > threshold_px:
+            continue
+        if is_occluded is not None and is_occluded(hit):
+            continue
+        if best_hit is None or dh < best_hit[0]:
+            best_hit = (dh, hit)
+    if best_hit is not None:
+        return SnapResult(best_hit[1], "intersection", COLOR_ENDPOINT,
+                          guide=(start_point, best_hit[1]))
+    # 'From point' along the lock line: line up with a corner (green) or
+    # midpoint (cyan) projected onto the locked axis — or hover it.
+    return _from_point_snap(
+        scene, start_point, line_dir, cx, cy, world_to_pixel,
+        threshold_px, is_occluded, extra_point=acquired_point,
+        hovered_refs=True,
+    )
+
+
 def compute_snap(
     candidate_world: QVector3D,
     candidate_pixel: tuple[float, float],
@@ -1013,70 +1091,14 @@ def compute_snap(
         # line and do not care about the sign.
         if QVector3D.dotProduct(locked - start_point, axis_dir) < 0:
             axis_dir = -axis_dir
-        # 1-close. The chain's own first point closes the polyline, lock or
-        #     no lock. Without this the arrow lock TRAPS you in the chain:
-        #     rule 1 returns before rule 4 is ever reached, so the click that
-        #     should have closed the figure came back as a plain "axis" and
-        #     the Line tool went on chaining. Marco, testing 2026-09-18:
-        #     «se cerró la figura … sigue apareciendo el eje X bloqueado» —
-        #     it LOOKED closed, because the point does land where it should,
-        #     and the axis lock never lifted because the operation had not
-        #     actually ended. Same shape as issue #27, where this early
-        #     return also hid the origin.
-        #
-        #     Held to the same standard as 1a below: only when the point
-        #     really is on the lock line, so closing never quietly breaks
-        #     the lock the user asked for.
-        if chain_first_point is not None and _vertex_on_line(
-                chain_first_point, start_point, axis_dir):
-            fp_px = world_to_pixel(chain_first_point)
-            if fp_px is not None and math.hypot(
-                    fp_px[0] - cx, fp_px[1] - cy) <= threshold_px:
-                return SnapResult(QVector3D(chain_first_point), "close",
-                                  COLOR_CLOSE)
-        # 1a. Existing vertices that sit on the lock line → endpoint snap, so
-        #     you can land exactly on a corner without leaving the lock.
-        for edge in scene.edges:
-            for vertex in (edge.a, edge.b):
-                if not _vertex_on_line(vertex, start_point, axis_dir):
-                    continue
-                vp = world_to_pixel(vertex)
-                if vp is None:
-                    continue
-                if math.hypot(vp[0] - cx, vp[1] - cy) <= threshold_px:
-                    return SnapResult(
-                        vertex, "endpoint", COLOR_ENDPOINT
-                    )
-        # 1b. Where the lock line crosses another edge → intersection snap
-        #     (green point), so a locked line landing on a crossing wall offers
-        #     the exact junction without breaking the lock.
-        best_hit: Optional[tuple[float, QVector3D]] = None
-        for edge in scene.edges:
-            hit = _line_segment_intersection(start_point, axis_dir, edge.a, edge.b)
-            if hit is None:
-                continue
-            hp = world_to_pixel(hit)
-            if hp is None:
-                continue
-            dh = math.hypot(hp[0] - cx, hp[1] - cy)
-            if dh > threshold_px:
-                continue
-            if is_occluded is not None and is_occluded(hit):
-                continue
-            if best_hit is None or dh < best_hit[0]:
-                best_hit = (dh, hit)
-        if best_hit is not None:
-            return SnapResult(best_hit[1], "intersection", COLOR_ENDPOINT,
-                              guide=(start_point, best_hit[1]))
-        # 1c. 'From point' along the lock line: line up with a corner (green) or
-        #     midpoint (cyan) projected onto the locked axis.
-        fp = _from_point_snap(
+        # 1a–1d: closing, a vertex on the line, a crossing, 'from point'
+        #        (``_lock_line_snaps``; issues #27, #34).
+        hit = _lock_line_snaps(
             scene, start_point, axis_dir, cx, cy, world_to_pixel,
-            threshold_px, is_occluded, extra_point=acquired_point,
-            hovered_refs=True,
+            threshold_px, is_occluded, acquired_point, chain_first_point,
         )
-        if fp is not None:
-            return fp
+        if hit is not None:
+            return hit
         return SnapResult(locked, "axis", AXIS_COLORS[axis_lock], axis=axis_lock)
 
     # 1.5 Sticky inference lock (Shift captured an active inference): hold that
@@ -1101,39 +1123,13 @@ def compute_snap(
         # Snaps working». He is right, and he also says why it matters: Shift
         # is the lock you use precisely to go and fetch a point from another
         # object. Held to a direction with no points to fetch, it is half a
-        # tool. Same three sub-rules, same order.
-        for edge in scene.edges:
-            for vertex in (edge.a, edge.b):
-                if not _vertex_on_line(vertex, start_point, lock_dir):
-                    continue
-                vp = world_to_pixel(vertex)
-                if vp is not None and math.hypot(vp[0] - cx, vp[1] - cy) <= threshold_px:
-                    return SnapResult(vertex, "endpoint", COLOR_ENDPOINT)
-        best_hit: Optional[tuple[float, QVector3D]] = None
-        for edge in scene.edges:
-            hit = _line_segment_intersection(start_point, lock_dir, edge.a, edge.b)
-            if hit is None:
-                continue
-            hp = world_to_pixel(hit)
-            if hp is None:
-                continue
-            dh = math.hypot(hp[0] - cx, hp[1] - cy)
-            if dh > threshold_px:
-                continue
-            if is_occluded is not None and is_occluded(hit):
-                continue
-            if best_hit is None or dh < best_hit[0]:
-                best_hit = (dh, hit)
-        if best_hit is not None:
-            return SnapResult(best_hit[1], "intersection", COLOR_ENDPOINT,
-                              guide=(start_point, best_hit[1]))
-        fp = _from_point_snap(
+        # tool. Same sub-rules, same order (``_lock_line_snaps``).
+        hit = _lock_line_snaps(
             scene, start_point, lock_dir, cx, cy, world_to_pixel,
-            threshold_px, is_occluded, extra_point=acquired_point,
-            hovered_refs=True,
+            threshold_px, is_occluded, acquired_point, chain_first_point,
         )
-        if fp is not None:
-            return fp
+        if hit is not None:
+            return hit
         color = shift_lock_color if shift_lock_color is not None else COLOR_REFERENCE
         return SnapResult(locked, "reference", color)
 
@@ -1150,13 +1146,28 @@ def compute_snap(
             locked = project_onto_line(start_point, direction)
             return SnapResult(locked, "reference", COLOR_REFERENCE)
 
-    # 3. Shift held + auto axis inference → lock to that axis.
+    # 3. Shift held + auto axis inference → lock to that axis. This is the
+    #    lock you get when the Shift press found nothing to capture (after
+    #    orbiting away, say) and the cursor then lines up with an axis. It
+    #    had NO snaps — the third such lock (issue #34, @pacaeiro: «release
+    #    Shift to reposition the camera… reactivate the Shift, half of the
+    #    Snap points are not detected»). Same sub-rules as the other two.
     if allow_axis and shift_held and start_point is not None and project_onto_line is not None:
         inferred = _detect_axis_alignment(
             start_point, candidate_world, inference_angle_deg
         )
         if inferred is not None:
-            locked = project_onto_line(start_point, _AXIS_VECTORS[inferred])
+            axis_dir = QVector3D(_AXIS_VECTORS[inferred])
+            locked = project_onto_line(start_point, axis_dir)
+            if QVector3D.dotProduct(locked - start_point, axis_dir) < 0:
+                axis_dir = -axis_dir
+            cx3, cy3 = candidate_pixel
+            hit = _lock_line_snaps(
+                scene, start_point, axis_dir, cx3, cy3, world_to_pixel,
+                threshold_px, is_occluded, acquired_point, chain_first_point,
+            )
+            if hit is not None:
+                return hit
             return SnapResult(locked, "axis", AXIS_COLORS[inferred], axis=inferred)
 
     cx, cy = candidate_pixel

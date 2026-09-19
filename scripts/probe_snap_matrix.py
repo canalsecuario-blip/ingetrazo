@@ -103,6 +103,16 @@ ACQUIRED = (None, (2.0, 1.0, 0.0), (0.5, -1.5, 1.2))
 #: running while a hand measurement showed 0.65 cm moving to 0.00.
 STARTED = (True, False)
 
+#: The directional locks, with an operation under way (they need a start
+#: point, so the first-click cells skip them). Added 2026-09-19 for issue
+#: #34 (@pacaeiro: references not always found under a lock): rules 1 and
+#: 1.5 of the engine — the arrow-key lock and the Shift lock — had never
+#: been in a single cell, because ``_reset_tool`` clears both. The Shift
+#: lock is set the way ``_capture_shift_lock`` leaves it, along +X.
+#: (Rule 3, Shift held over a soft axis cue, reads the keyboard and stays
+#: out of reach here; its tests cover it.)
+LOCKS = (None, "x", "z", "shift-x")
+
 
 def _round(v: float) -> float:
     """Six decimals: enough to catch a real move, coarse enough that the
@@ -171,7 +181,8 @@ def _reset_tool(vp, start: QVector3D | None) -> object | None:
 
 def run(out_path: str, radii=RADII_PX, directions: int = 16,
         cameras=CAMERAS, tools=TOOLS, scenes=SCENES,
-        alt_modes=ALT_MODES, acquired=ACQUIRED, started=STARTED) -> int:
+        alt_modes=ALT_MODES, acquired=ACQUIRED, started=STARTED,
+        locks=LOCKS) -> int:
     app = QApplication.instance() or QApplication([])
     from views.main_window import MainWindow
 
@@ -203,6 +214,7 @@ def run(out_path: str, radii=RADII_PX, directions: int = 16,
                     if vp.active_tool is None:
                         continue
                     for empezado in started:
+                      for lock in (locks if empezado else (None,)):
                         for acq in acquired:
                           for mode in alt_modes:
                               for radius in radii:
@@ -216,6 +228,12 @@ def run(out_path: str, radii=RADII_PX, directions: int = 16,
                                       if acq is not None:
                                           vp._acquired_point = QVector3D(*acq)
                                           vp._encouraged = [QVector3D(*acq)]
+                                      if lock == "shift-x":
+                                          from core.snap import COLOR_AXIS_X
+                                          vp._shift_lock = (QVector3D(1.0, 0.0, 0.0),
+                                                            COLOR_AXIS_X)
+                                      elif lock is not None:
+                                          vp.axis_lock = lock
                                       vp.linear_inference_mode = mode
                                       vp._last_mouse_pos = QPointF(px, py)
                                       try:
@@ -236,7 +254,12 @@ def run(out_path: str, radii=RADII_PX, directions: int = 16,
                                           "scene": scene_kind, "cam": cam_name,
                                           "tool": tool_key, "alt": mode,
                                           "r": radius, "dir": i,
-                                          "acq": "on" if acq else "off",
+                                          # Which one, not just whether: two
+                                          # points both spelt "on" collided
+                                          # in a keyed diff (2026-09-19).
+                                          "acq": ("off" if acq is None
+                                                  else "%g,%g,%g" % acq),
+                                          "lock": lock or "none",
                                       "fase": "curso" if empezado else "1er-clic",
                                           **answer,
                                       }, sort_keys=True, ensure_ascii=False) + "\n")

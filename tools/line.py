@@ -93,6 +93,13 @@ class LineTool(Tool):
             self.chain_vertices = [clicked]
             return
 
+        if (clicked - self.start_point).length() < 1e-9:
+            # The start itself: nothing to draw. Reachable on purpose since
+            # issue #34 — under a lock, a reference level with the start
+            # shows its guide and lands here — and it used to go to the
+            # history as a degenerate edge and come back as a noisy
+            # rollback.
+            return
         cmd = self._commit_edge(ctx.viewport, self.start_point, clicked)
         ctx.viewport.history.execute(cmd)
         if ctx.snap.kind == "close":
