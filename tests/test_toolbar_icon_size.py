@@ -282,3 +282,47 @@ def test_the_overflow_button_wears_the_program_chevron(settings_file, monkeypatc
     finally:
         win._saved_version = win.viewport.scene.version
         win.close()
+
+
+def test_the_walkthrough_toolbar_stands_left_under_annotate(settings_file, monkeypatch):
+    """Fresh install: the factory blob puts Walkthrough at the left, right
+    under Annotate (below 3D Text — Marco, 2026-09-19). A profile whose
+    saved layout predates the toolbar gets the same placement once."""
+    from PySide6.QtCore import Qt
+    from views.main_window import MainWindow
+    win = MainWindow()
+    try:
+        win.show()
+        tb, above = win.toolbars["walkthrough"], win.toolbars["annotate"]
+        assert win.toolBarArea(tb) == Qt.LeftToolBarArea
+        assert win.toolBarArea(above) == Qt.LeftToolBarArea
+        assert tb.geometry().top() >= above.geometry().bottom() - 1
+        # A layout saved before the toolbar existed leaves it where Qt
+        # created it — the top. Stand in for that with a state that has
+        # it at the top.
+        win.removeToolBar(tb)
+        win.addToolBar(Qt.TopToolBarArea, tb)
+        tb.show()
+        top_state = bytes(win.saveState())
+    finally:
+        win._saved_version = win.viewport.scene.version
+        win.close()
+    from PySide6.QtCore import QSettings
+    st = QSettings()
+    st.remove("ui/placed/walkthrough")
+    st.setValue("ui/window_state", top_state)
+    win = MainWindow()
+    try:
+        assert win.toolBarArea(win.toolbars["walkthrough"]) == Qt.LeftToolBarArea
+        assert QSettings().value("ui/placed/walkthrough") is not None
+    finally:
+        win._saved_version = win.viewport.scene.version
+        win.close()
+    # …and once placed, the user's own arrangement is respected.
+    st.setValue("ui/window_state", top_state)
+    win = MainWindow()
+    try:
+        assert win.toolBarArea(win.toolbars["walkthrough"]) == Qt.TopToolBarArea
+    finally:
+        win._saved_version = win.viewport.scene.version
+        win.close()

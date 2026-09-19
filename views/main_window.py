@@ -170,6 +170,7 @@ class MainWindow(QMainWindow):
                 state = factory.read_bytes()
         if state:
             self.restoreState(state)
+        self._place_new_toolbars(st)
         geo = st.value("ui/window_geometry")
         if geo:
             self.restoreGeometry(geo)
@@ -183,6 +184,25 @@ class MainWindow(QMainWindow):
         if autosave.pending(None):
             from PySide6.QtCore import QTimer
             QTimer.singleShot(0, self._offer_untitled_recovery)
+
+    def _place_new_toolbars(self, st) -> None:
+        """A toolbar born after a profile saved its layout is unknown to
+        that saved state, so Qt leaves it wherever it was created (the
+        top). Put it where the factory layout has it, ONCE, and remember
+        that: Marco's own arrangement keeps it from then on.
+
+        Walkthrough (2026-09-19) goes at the left, under Annotate — below
+        the 3D Text button, where Marco asked for it."""
+        from PySide6.QtCore import Qt
+        key = "ui/placed/walkthrough"
+        tb = self.toolbars.get("walkthrough")
+        if tb is None or st.value(key) is not None:
+            return
+        if self.toolBarArea(tb) != Qt.LeftToolBarArea:
+            self.removeToolBar(tb)
+            self.addToolBar(Qt.LeftToolBarArea, tb)
+            tb.show()
+        st.setValue(key, 1)
 
     # ---- Auto-save (Preferences ▸ General) ----------------------------------
     def _setup_autosave(self) -> None:
