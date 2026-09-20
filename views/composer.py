@@ -4411,11 +4411,47 @@ class ComposerCanvasView(QGraphicsView):
     def _run_step_mm(self) -> float:
         """How far out the next baseline cota stacks: a row of text plus
         clearance, the same step the chain's total uses, so the two read
-        as one family."""
+        as one family.
+
+        Measured off the run's FIRST cota, not off the tallest so far:
+        taking the maximum made the step grow halfway through a run, so
+        the rows came out unevenly spaced.
+        """
         cotas = self._chain_cotas
-        text_mm = max((float(getattr(c, "text_mm", 2.8)) for c in cotas),
-                      default=2.8)
+        text_mm = float(getattr(cotas[0], "text_mm", 2.8)) if cotas else 2.8
         return text_mm * 2.0 + 2.5
+
+    def _seed_run_from(self, cota) -> bool:
+        """Start a chain / baseline run OFF AN EXISTING COTA, the way
+        AutoCAD does: DIMCONTINUE and DIMBASELINE do not ask for two
+        points and an offset again, they carry on from a dimension that is
+        already there — the chain from its second extension line, the
+        baseline from its first — keeping its line, its offset and whether
+        it was forced straight (Marco, 2026-09-19: «la forma de acotar
+        debería ser igual a AutoCAD»).
+
+        Here the dimension is the SELECTED one, which is also AutoCAD's
+        «select base dimension». With nothing selected the run starts from
+        scratch, as it did. Returns whether it took."""
+        if cota is None:
+            return False
+        a = QPointF(cota.x_mm, cota.y_mm)
+        b = QPointF(cota.x_mm + cota.dx_mm, cota.y_mm + cota.dy_mm)
+        self._chain_pts = [(a, None), (b, None)]
+        self._chain_sep = float(cota.sep_mm)
+        self._chain_axis = getattr(cota, "axis", "") or ""
+        self._chain_cotas = [cota]          # it counts for the stack and the total
+        return True
+
+    def _selected_cota(self):
+        """The one cota selected on the canvas, or None."""
+        if self.scene() is None:
+            return None
+        picked = [it for it in self.scene().selectedItems()
+                  if isinstance(it, CotaCanvasItem)]
+        if len(picked) != 1 or getattr(picked[0].model, "locked", False):
+            return None
+        return picked[0].model
 
     def _chain_click(self, pos, hit) -> None:
         """One click of the chain / baseline tools: the first two points,
@@ -4424,6 +4460,9 @@ class ComposerCanvasView(QGraphicsView):
         one a row further out (baseline). A click on the last point, Esc,
         or switching tools ends the run; a chain stacks its total."""
         pts = self._chain_pts
+        if not pts and self._seed_run_from(self._selected_cota()):
+            pts = self._chain_pts           # carrying on from a cota: this
+            # click is already the next point, so fall through to the tail
         thr = 4.0 / max(self.transform().m11(), 1e-6)
         if pts and (abs(pos.x() - pts[-1][0].x())
                     + abs(pos.y() - pts[-1][0].y())) < thr:
@@ -4737,7 +4776,7 @@ class ComposerCanvasView(QGraphicsView):
             return
         if event.key() == Qt.Key_Escape and (
                 self._drag_start is not None or self._ang_pts
-                or self._chain_pts):
+                or self._chain_pts or self._rad_centre is not None):
             self.cancel_placement()
             event.accept()
             return
@@ -4992,16 +5031,17 @@ class ComposerWindow(QMainWindow):
          "forces it straight (horizontal or vertical) WITHOUT moving "
          "the points, so it keeps what it snapped to", True),
         ("cota_base", "dimension_baseline",
-         "Baseline dimensions, the way AutoCAD does: the first point is "
-         "the BASE and every cota measures from it, each one stacked a row "
-         "further out; click the last point or press Esc to end. Shift "
+         "Baseline dimensions, the way AutoCAD does: every cota measures "
+         "from the SAME first point, each one stacked a row further out. "
+         "Select a cota first and it carries on from that one; otherwise "
+         "give it two points and the offset. Esc ends the run, Shift "
          "forces them all straight", False),
         ("cota_cadena", "dimension_chain",
-         "Chain dimensions the way AutoCAD does: two points and the "
-         "line's offset place the first, then every click adds the "
-         "next from the last point on the same line; click the last "
-         "point or press Esc to end (the total is stacked above). "
-         "Shift forces the whole chain straight", False),
+         "Chain dimensions the way AutoCAD does: every click adds the "
+         "next cota from the last point, on the same line. Select a cota "
+         "first and it carries on from that one; otherwise give it two "
+         "points and the offset. Click the last point or Esc to end (the "
+         "total is stacked above); Shift forces the chain straight", False),
         ("cota_ang", "dimension_angular",
          "Draw an angular dimension (vertex, two points, then the arc). "
          "Shift puts an arm on an exact multiple of 15\u00b0 — the second "

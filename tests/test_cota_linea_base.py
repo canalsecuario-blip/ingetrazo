@@ -242,3 +242,123 @@ def test_a_baseline_run_can_be_forced_straight(monkeypatch):
             comp.close()
         win._saved_version = win.viewport.scene.version
         win.close()
+
+
+# ---- AutoCAD's flow: a run carries on from a dimension already there ----
+
+def _armed(comp, tool):
+    comp.tool_mode = tool
+    return comp._view
+
+
+def test_a_chain_carries_on_from_the_selected_cota(monkeypatch):
+    """DIMCONTINUE does not ask for two points and an offset again: it
+    picks up from a dimension that is already there, at its line and its
+    offset (Marco, 2026-09-19: «la forma de acotar debería ser igual a
+    AutoCAD»)."""
+    from views.composer import ComposerWindow, CotaCanvasItem
+    from views.main_window import MainWindow
+    monkeypatch.setattr(ComposerWindow, "render_frame", lambda self, f: None)
+    win = MainWindow()
+    comp = None
+    try:
+        comp = ComposerWindow(win)
+        first = CotaItem(x_mm=20.0, y_mm=100.0, dx_mm=25.0, dy_mm=0.0,
+                         sep_mm=20.0, scale_n=100.0)
+        comp.comp.cotas.append(first)
+        comp._rebuild_canvas()
+        next(it for it in comp.canvas.items()
+             if isinstance(it, CotaCanvasItem)).setSelected(True)
+
+        view = _armed(comp, "cota_cadena")
+        view._chain_click(QPointF(70.0, 100.0), None)      # ONE click
+        assert len(view._chain_cotas) == 2                 # the old one + a new
+        added = view._chain_cotas[-1]
+        assert (added.x_mm, added.y_mm) == pytest.approx((45.0, 100.0))
+        assert added.dx_mm == pytest.approx(25.0)
+        # on the SAME dimension line as the one it carries on from
+        assert (added.y_mm + added.line_points()[0][1]
+                == pytest.approx(first.y_mm + first.line_points()[0][1]))
+    finally:
+        if comp is not None:
+            comp.close()
+        win._saved_version = win.viewport.scene.version
+        win.close()
+
+
+def test_a_baseline_carries_on_from_its_FIRST_point(monkeypatch):
+    from views.composer import ComposerWindow, CotaCanvasItem
+    from views.main_window import MainWindow
+    monkeypatch.setattr(ComposerWindow, "render_frame", lambda self, f: None)
+    win = MainWindow()
+    comp = None
+    try:
+        comp = ComposerWindow(win)
+        first = CotaItem(x_mm=20.0, y_mm=100.0, dx_mm=25.0, dy_mm=0.0,
+                         sep_mm=20.0, scale_n=100.0, text_mm=2.5)
+        comp.comp.cotas.append(first)
+        comp._rebuild_canvas()
+        next(it for it in comp.canvas.items()
+             if isinstance(it, CotaCanvasItem)).setSelected(True)
+
+        view = _armed(comp, "cota_base")
+        view._chain_click(QPointF(70.0, 100.0), None)
+        added = view._chain_cotas[-1]
+        assert (added.x_mm, added.y_mm) == pytest.approx((20.0, 100.0))
+        assert added.dx_mm == pytest.approx(50.0)          # from the BASE
+        # and a row further out than the one it carries on from
+        step = view._run_step_mm()
+        assert (added.y_mm + added.line_points()[0][1]
+                == pytest.approx(first.y_mm + first.line_points()[0][1] + step))
+    finally:
+        if comp is not None:
+            comp.close()
+        win._saved_version = win.viewport.scene.version
+        win.close()
+
+
+def test_a_forced_cota_hands_its_axis_to_the_run(monkeypatch):
+    from views.composer import ComposerWindow, CotaCanvasItem
+    from views.main_window import MainWindow
+    monkeypatch.setattr(ComposerWindow, "render_frame", lambda self, f: None)
+    win = MainWindow()
+    comp = None
+    try:
+        comp = ComposerWindow(win)
+        first = CotaItem(x_mm=20.0, y_mm=100.0, dx_mm=25.0, dy_mm=4.0,
+                         sep_mm=20.0, scale_n=100.0, axis="h")
+        comp.comp.cotas.append(first)
+        comp._rebuild_canvas()
+        next(it for it in comp.canvas.items()
+             if isinstance(it, CotaCanvasItem)).setSelected(True)
+        view = _armed(comp, "cota_cadena")
+        view._chain_click(QPointF(70.0, 97.0), None)
+        assert view._chain_cotas[-1].axis == "h"
+    finally:
+        if comp is not None:
+            comp.close()
+        win._saved_version = win.viewport.scene.version
+        win.close()
+
+
+def test_with_nothing_selected_a_run_still_starts_from_scratch(monkeypatch):
+    """Two points and an offset, as before — nothing is hijacked."""
+    from views.composer import ComposerWindow
+    from views.main_window import MainWindow
+    monkeypatch.setattr(ComposerWindow, "render_frame", lambda self, f: None)
+    win = MainWindow()
+    comp = None
+    try:
+        comp = ComposerWindow(win)
+        comp.comp.cotas.append(CotaItem(x_mm=20.0, y_mm=100.0, dx_mm=25.0))
+        comp._rebuild_canvas()
+        comp.canvas.clearSelection()
+        view = _armed(comp, "cota_cadena")
+        view._chain_click(QPointF(200.0, 60.0), None)
+        assert view._chain_cotas == []          # still collecting points
+        assert len(view._chain_pts) == 1
+    finally:
+        if comp is not None:
+            comp.close()
+        win._saved_version = win.viewport.scene.version
+        win.close()
