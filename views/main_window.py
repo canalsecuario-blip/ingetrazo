@@ -1545,6 +1545,16 @@ class MainWindow(QMainWindow):
         faces = [f for f in sel if isinstance(f, Face)]
         edges = [e for e in sel if isinstance(e, Edge)]
         groups = [g for g in sel if isinstance(g, Group)]
+        if len(groups) == 1 and not (faces or edges):
+            # One group (or component) alone: wrapping it in a container of
+            # itself is a Russian doll with nothing inside (@pacaeiro,
+            # issue #35: «a group inside of a group that is equal to
+            # itself… shouldn't be possible»). Grouping needs a second
+            # thing — another group, or loose geometry.
+            self.viewport.flash_status(tr(
+                "That is already a group — select something else with it "
+                "to group them together"), 4000)
+            return
         if groups:
             # A group can hold groups now (2026-09-11): the container adopts
             # them and the loose part of the selection becomes its own mesh,
@@ -1933,6 +1943,8 @@ class MainWindow(QMainWindow):
         has_geopath = any(isinstance(e, GeoPath) for e in sel)
         has_group = any(isinstance(e, Group) for e in sel)
         has_mesh = any(isinstance(e, (Edge, Face)) for e in sel)
+        # a single group alone has nothing to be grouped WITH (issue #35)
+        lone_group = (len(sel) == 1 and has_group)
         sec_planes = [e for e in sel if isinstance(e, SectionPlane)]
         menu = QMenu(self)
 
@@ -1983,11 +1995,12 @@ class MainWindow(QMainWindow):
             menu.addAction(tr("Convert Path to Geometry"), self._on_convert_geopath)
             menu.addAction(tr("Open / Close path"), self._on_toggle_path_closed)
             menu.addSeparator()
-        if has_mesh or has_group:
+        if (has_mesh or has_group) and not lone_group:
             # Groups too, since 2026-09-11: a group can hold groups, so the
             # entry has to be there when the selection is nothing but groups
             # — which is exactly when you want it («seleccioné cuatro grupos
-            # y solo me sale crear componente y unir grupos», Marco).
+            # y solo me sale crear componente y unir grupos», Marco). Not
+            # for ONE group on its own (issue #35).
             menu.addAction(tr("Make Group"), self._on_make_group)
         if has_mesh:
             menu.addAction(tr("Make Component…"), self._on_make_component)

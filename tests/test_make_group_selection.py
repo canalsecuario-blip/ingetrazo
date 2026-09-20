@@ -150,7 +150,8 @@ def test_anidar_se_deshace_en_UN_paso(win):
 
 
 def test_un_grupo_con_hijos_se_anida_sin_perderlos(win):
-    """Anidar un contenedor dentro de otro: el árbol crece, no se aplana."""
+    """Anidar un contenedor dentro de otro: el árbol crece, no se aplana.
+    (Junto a otro grupo: uno solo ya no se agrupa consigo mismo, #35.)"""
     from PySide6.QtGui import QMatrix4x4
     scene = win.viewport.scene
     hondo = Mesh()
@@ -160,14 +161,16 @@ def test_un_grupo_con_hijos_se_anida_sin_perderlos(win):
     padre = Group(Mesh(), name="Banca")
     _quad(padre.mesh, 20.0)
     padre.adopt([hijo])
-    scene.groups.append(padre)
-    scene.select([padre])
+    otro = Group(Mesh(), name="Pérgola")
+    _quad(otro.mesh, 40.0)
+    scene.groups += [padre, otro]
+    scene.select([padre, otro])
     previos = list(scene.groups)
     win._on_make_group()
     nuevo = _new_groups(scene, previos)
     assert len(nuevo) == 1
     abuelo = nuevo[0]
-    assert abuelo.children == [padre]
+    assert abuelo.children == [padre, otro]
     assert padre.children == [hijo], "el nieto sigue ahí"
     assert len(hijo.mesh.faces) == 1
 
@@ -199,3 +202,46 @@ def test_el_menu_del_boton_derecho_ofrece_crear_grupo_con_solo_grupos(win, monke
     textos = [a.text() for a in _Menu.abiertos[0].actions()]
     assert "Make Group" in textos
     assert "Merge Groups" in textos          # la de siempre sigue
+
+
+def test_un_grupo_solo_no_se_agrupa_consigo_mismo(win):
+    """@pacaeiro, issue #35: «RMB click on the group and select > create
+    group (shouldn't be possible); result, a group inside of a group that
+    is equal to itself». Uno solo, sin nada más: no hay con qué agruparlo
+    — y se dice, en vez de fabricar la muñeca rusa. Con otro grupo, o con
+    geometría suelta, sigue agrupando (los tests de arriba)."""
+    scene = win.viewport.scene
+    g = Group(Mesh(), name="Banca")
+    _quad(g.mesh, 10.0)
+    scene.groups.append(g)
+    scene.select([g])
+    win.statusBar().clearMessage()
+    previos = list(scene.groups)
+    win._on_make_group()
+    assert scene.groups == previos and not g.children
+    assert win.statusBar().currentMessage()
+
+
+def test_el_menu_no_ofrece_agrupar_a_un_grupo_solo(win, monkeypatch):
+    """La entrada del clic derecho sigue la misma regla: uno solo no la
+    tiene; dos grupos, o un grupo con geometría suelta, sí."""
+    from PySide6.QtCore import QPoint
+    from tests.test_context_menu_reverse import _MenuSinModal
+    import views.main_window as mw
+    monkeypatch.setattr(mw, "QMenu", _MenuSinModal)
+    scene = win.viewport.scene
+    g1 = Group(Mesh(), name="Banca")
+    _quad(g1.mesh, 10.0)
+    g2 = Group(Mesh(), name="Pérgola")
+    _quad(g2.mesh, 14.0)
+    scene.groups += [g1, g2]
+
+    def entradas(sel):
+        _MenuSinModal.abiertos.clear()
+        scene.select(sel)
+        win.show_viewport_context_menu(QPoint(0, 0))
+        return [a.text() for a in _MenuSinModal.abiertos[0].actions()]
+    assert "Make Group" not in entradas([g1])
+    assert "Make Group" in entradas([g1, g2])
+    f = _quad(scene.mesh)
+    assert "Make Group" in entradas([g1, f])

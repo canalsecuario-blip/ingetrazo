@@ -1876,5 +1876,7 @@
  "Aligned to the line (ISO)": "Alineado con la línea (ISO)",
  "Horizontal (outside the standard)": "Horizontal (fuera de norma)",
  "Zoom: drag up to zoom in, down to zoom out, around the point you pressed (Ctrl+wheel does the same with any tool)": "Zoom: arrastra hacia arriba para acercar y hacia abajo para alejar, alrededor del punto donde pulsaste (Ctrl+rueda hace lo mismo con cualquier herramienta)",
- "Zoom window: drag a box and the view fills with it (a click zooms in on the point)": "Zoom ventana: arrastra un recuadro y la vista se llena con él (un clic acerca sobre el punto)"
+ "Zoom window: drag a box and the view fills with it (a click zooms in on the point)": "Zoom ventana: arrastra un recuadro y la vista se llena con él (un clic acerca sobre el punto)",
+ "That is already a group — select something else with it to group them together": "Eso ya es un grupo — selecciona algo más junto con él para agruparlos",
+ "Radius {r} m needs {d} m of edge on each side of the corner; the shorter one is {e} m": "Un radio de {r} m necesita {d} m de arista a cada lado de la esquina; la más corta mide {e} m"
 }
