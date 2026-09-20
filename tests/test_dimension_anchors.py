@@ -142,6 +142,49 @@ def test_a_dimension_on_a_group_made_from_geometry_follows_the_scale_tool():
     assert d.value() == pytest.approx(4.0)
 
 
+def test_a_dimension_grouped_with_its_geometry_follows_the_group():
+    """Marco, 2026-09-20: «hice un cubo, lo acoté, y todo en su conjunto
+    hasta la cota hice como grupo; escalo, la cota no sigue». The
+    dimension had been holding the LOOSE vertices; Make Group replaced
+    them with new ones in the group's mesh at the same spots, and the
+    hold died. A dead hold looks again where the endpoint last was and
+    takes the vertex standing there — the group's — so scaling the group
+    takes the dimension along; undoing the group hands it back to the
+    loose vertices."""
+    from core.edits import build_add_edges
+    from core.history import MakeGroupCommand
+    from tools.scale import ScaleTool
+    scene = Scene()
+    vp = _Vp(scene)
+    sq = [V(2, 0), V(6, 0), V(6, 2), V(2, 2)]
+    vp.history.execute(build_add_edges(
+        scene, [(sq[i], sq[(i + 1) % 4]) for i in range(4)]))
+    d = Dimension(V(2, 0), V(6, 0), V(0, -1))
+    vp.history.execute(AddDimensionCommand(d))       # holds the loose vertices
+    assert d.anchored and d.anchor_a.chain == ()
+    vp.history.execute(MakeGroupCommand(list(scene.mesh.faces),
+                                        list(scene.mesh.edges)))
+    g = scene.groups[0]
+    assert d.a == V(2, 0)                            # re-bound on the read
+    assert d.anchor_a is not None and d.anchor_a.chain == (g,)
+    scene.selection.clear()
+    scene.selection.add(g)
+    t = ScaleTool()
+    t.on_activate(vp)
+    grip = next(gr for gr in t._grips if gr.params == (1.0, 1.0, 0.5))
+    t._grab(vp, grip, (0.0, 0.0))
+    t._commit(vp, (1.5, 1.5, 1.0))
+    assert d.value() == pytest.approx(6.0)
+    vp.history.undo()                                # the scale
+    assert d.value() == pytest.approx(4.0)
+    vp.history.undo()                                # the group itself
+    assert not scene.groups
+    assert d.value() == pytest.approx(4.0)
+    assert d.anchor_a is not None and d.anchor_a.chain == ()   # loose again
+    scene.mesh.move_vertex(scene.mesh.vertex_at(V(6, 0)), V(1, 0, 0))
+    assert d.value() == pytest.approx(5.0)           # and still following
+
+
 def test_far_out_coordinates_still_bind_through_a_placement():
     """A point that came through a placement's float32 matrix and back is
     off by a micron or so at hundreds of metres; the old 1e-6 tolerance

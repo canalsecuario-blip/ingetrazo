@@ -142,6 +142,19 @@ class History:
         cmd._history_mesh = self.scene.mesh
         self.undo_stack.append(cmd)
         self.redo_stack.clear()
+        self._rebind_dimensions()
+
+    def _rebind_dimensions(self) -> None:
+        """After every command, undo and redo: a dimension whose vertex
+        changed meshes (Make Group, Explode, a component conversion) takes
+        the vertex now standing where its endpoint was — BEFORE anything
+        else moves it. Leaving it to the next read was too late when a
+        scale followed in the same breath. Cheap: a hold that is alive is
+        a dictionary lookup and an identity test."""
+        for dim in getattr(self.scene, "dimensions", None) or ():
+            refresh = getattr(dim, "refresh_anchors", None)
+            if refresh is not None:
+                refresh(self.scene)
 
     def _log_failure(self, cmd: Command, exc: Exception) -> None:
         import datetime
@@ -171,6 +184,7 @@ class History:
         cmd = self.undo_stack.pop()
         self._in_command_mesh(cmd, lambda: cmd.undo(self.scene))
         self.redo_stack.append(cmd)
+        self._rebind_dimensions()
         return True
 
     def redo(self) -> bool:
@@ -179,6 +193,7 @@ class History:
         cmd = self.redo_stack.pop()
         self._in_command_mesh(cmd, lambda: cmd.do(self.scene))
         self.undo_stack.append(cmd)
+        self._rebind_dimensions()
         return True
 
     def _in_command_mesh(self, cmd, fn) -> None:

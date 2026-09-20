@@ -33,7 +33,11 @@ follow [SemVer](https://semver.org).
   fantasmas, que no se mueven. Un vértice al que nada hace referencia
   ya no vale de ancla, y la tolerancia del enganche es la de soldadura
   de la malla (0,1 mm), así que una cota sobre un componente a cientos
-  de metros del origen también se agarra.
+  de metros del origen también se agarra. Y **si agrupas el dibujo junto
+  con su cota** (Marco: «hice un cubo, lo acoté y todo en su conjunto lo
+  hice grupo; escalo y la cota no sigue»), la cota cambia de manos con
+  los vértices: tras cada orden —agrupar, explotar, deshacer— vuelve a
+  agarrarse a lo que hay en su sitio, antes de que nada lo mueva.
 - **Mover / Copiar no enganchaba los ejes X e Y** (issue #42, @pacaeiro:
   «aligns well with the Z axis» pero X e Y nunca). Mover arrastra sobre
   un plano vertical de cara a la cámara, que contiene Z y la horizontal

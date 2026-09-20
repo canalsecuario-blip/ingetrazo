@@ -50,17 +50,31 @@ class VertexAnchor:
             m = QMatrix4x4(x) if m is None else m * x
         return m
 
-    def position(self):
-        """The vertex's world position now — ``None`` once the mesh no
-        longer registers this very vertex (erased, or welded into another
-        one) or nothing references it any more, which is the anchor's cue
-        to let go."""
+    def alive(self, scene=None) -> bool:
+        """Whether the hold still means something: the mesh registers this
+        very vertex (not erased, not welded into another one), something
+        references it, and — given the scene — the mesh is still part of
+        the model: the loose mesh, or a group the scene still lists. A
+        group exploded, or grouped into another, leaves its old mesh
+        behind with the vertex in it, positions frozen for ever."""
         v = self.vertex
         try:
             if self.mesh.vertex_at(v.position) is not v or not v.edges:
-                return None
+                return False
         except Exception:  # noqa: BLE001 — a mesh that cannot answer
+            return False
+        if scene is None:
+            return True
+        if not self.chain:
+            return self.mesh is getattr(scene, "loose_mesh", scene.mesh)
+        return self.chain[0] in (getattr(scene, "groups", None) or ())
+
+    def position(self, scene=None):
+        """The vertex's world position now — ``None`` once the hold is no
+        longer :meth:`alive`, which is the anchor's cue to let go."""
+        if not self.alive(scene):
             return None
+        v = self.vertex
         m = self.matrix()
         return m.map(QVector3D(v.position)) if m is not None \
             else QVector3D(v.position)
@@ -144,17 +158,35 @@ class Dimension:
         self.text = text
         self.anchor_a: VertexAnchor | None = None
         self.anchor_b: VertexAnchor | None = None
+        self._scene = None                   # set by bind(); re-binding
 
     # ---- endpoints ----------------------------------------------------------
     def _live(self, which: str) -> QVector3D:
         anchor = getattr(self, "anchor_" + which)
-        if anchor is not None:
-            p = anchor.position()
-            if p is None:                    # the vertex is gone: freeze
+        if anchor is None:
+            return getattr(self, "_" + which)
+        scene = self._scene
+        p = anchor.position(scene)
+        if p is None:
+            # The hold is gone — but the geometry may just have changed
+            # hands: Make Group puts new vertices in the group's mesh at
+            # the very spots the loose ones stood, Explode the other way
+            # round (Marco, 2026-09-20: a cube dimensioned, then cube AND
+            # dimension grouped, then scaled — «la cota no sigue»). Look
+            # again where the endpoint last was; freeze only when nothing
+            # stands there any more.
+            frozen = getattr(self, "_" + which)
+            again = (resolve_vertex_anchor(scene, frozen)
+                     if scene is not None else None)
+            setattr(self, "anchor_" + which, again)
+            if again is None:
+                return frozen
+            p = again.position(scene)
+            if p is None:
                 setattr(self, "anchor_" + which, None)
-            else:
-                setattr(self, "_" + which, p)
-        return getattr(self, "_" + which)
+                return frozen
+        setattr(self, "_" + which, p)
+        return p
 
     @property
     def a(self) -> QVector3D:
@@ -177,8 +209,22 @@ class Dimension:
         at placement, and again when a document is opened (the .igz keeps
         positions, and the vertex at that very position is the one the
         drafter snapped to)."""
+        self._scene = scene
         self.anchor_a = resolve_vertex_anchor(scene, self._a)
         self.anchor_b = resolve_vertex_anchor(scene, self._b)
+
+    def refresh_anchors(self, scene) -> None:
+        """Re-take a hold that died — the vertex changed meshes — from the
+        vertex now standing at the endpoint; the history calls this after
+        every command, so a group made and scaled in one breath still
+        carries its dimension. An endpoint never anchored stays static."""
+        self._scene = scene
+        for which in ("a", "b"):
+            anchor = getattr(self, "anchor_" + which)
+            if anchor is None or anchor.alive(scene):
+                continue
+            setattr(self, "anchor_" + which,
+                    resolve_vertex_anchor(scene, getattr(self, "_" + which)))
 
     @property
     def anchored(self) -> bool:
