@@ -4,6 +4,157 @@ All notable changes to IngeTrazo are documented here.
 Format inspired by [Keep a Changelog](https://keepachangelog.com); versions
 follow [SemVer](https://semver.org).
 
+## [0.4.7] — 2026-09-20
+
+**Las láminas de la segunda revisión de Rafael, y la acotación a norma.**
+La otra mitad de su vídeo de una hora (la 0.4.6 fue la del modelo) más su
+vídeo sobre **normativa de acotación**, que Marco revisó punto por punto
+antes de cerrar esta versión. Lo grande: **la sección tapa** (el poché ya
+no se ve a través), **cotas a la norma ISO** —el texto encima y centrado, se
+lee girando la cabeza a la izquierda, la línea se prolonga bajo el texto,
+flechas por defecto—, **radio y diámetro** con un clic sobre el arco, la
+**angular** que por fin engancha, la **cota forzada recta** y la **línea
+base** de AutoCAD, y en el modelo **cotas que siguen a la geometría** —
+escalas el dibujo y la cota se redimensiona y vuelve a medir—, lo primero
+que echó en falta un usuario del vídeo de DriveMeca. De propina, la vista
+previa de impresión que en el Flatpak no hacía nada, la #38 de @pacaeiro y
+las barras de herramientas que dejaban a Paseo al fondo de la columna.
+
+### Añadido
+- **La sección tapa.** Lo que Rafael más repitió (46:00–49:30): al cortar,
+  las líneas de lo que queda detrás se veían a través del achurado y el
+  relleno «Sólido» tampoco lo tapaba. Ahora los anillos que el compositor
+  rellena **ocluyen** con la misma regla par-impar y desde el mismo dato:
+  lo que está detrás del plano y dentro de la región rellena está dentro
+  de material macizo. El contorno del corte sobrevive siempre (y con la
+  pluma de corte, más gruesa), un muro hueco conserva su hueco, y tapar ya
+  no depende del relleno («Ninguno» también tapa). Snap y DXF dicen lo
+  mismo que el PDF.
+- **Cotas a la norma ISO**, según el vídeo de normativa de Rafael y la
+  decisión de Marco («hagamos las ISO por ahora»). El **texto va encima
+  de la línea de cota y centrado** en ella; una cota vertical se lee de
+  abajo arriba, esté trazada hacia arriba o hacia abajo —la regla que él
+  más repite, «girando la cabeza a la izquierda, nunca a la derecha»—;
+  cuando el texto va fuera de un extremo **la línea se prolonga hasta
+  cubrirlo** («si el texto crece, la línea crece»); y una cota nueva nace
+  como la lámina de referencia de Rafael: **flechas** y el número sobre el
+  centro. La posición del texto a lo largo de la línea es de cada cota, ya
+  no se hereda de la última editada (una cota con el texto llevado al
+  final enseñaba a todas las siguientes). La norma alemana/japonesa (línea
+  partida, texto en medio) queda fuera del menú hasta otra versión; una
+  lámina que ya la lleve se ve igual.
+- **Cota de radio y de diámetro** (Rafael, 42:40, y su lámina de normas
+  caso por caso): **un clic sobre el círculo o el arco** y la cota toma el
+  centro y el radio por sí sola —como en AutoCAD, no hace falta buscar un
+  centro que el plano no marca—; el punto del clic decide por qué lado
+  sale la línea, y al pasar el cursor por el arco se ve en punteado la
+  cota que va a colocar. **Ctrl** = diámetro. Reconoce los círculos y
+  arcos que el marco ve de frente. La línea **siempre llega al centro**,
+  el símbolo `R` / `Ø` acompaña al valor, el texto va encima y nunca
+  cabeza abajo; si cabe, dentro con las flechas hacia el arco; si no, la
+  línea se prolonga fuera y las flechas apuntan al centro. El número de un
+  diámetro se pone en la **mitad derecha** de la línea, nunca sobre el
+  centro, que es de los ejes («se cruzaría con otras líneas que salen del
+  radio»). Un arco se acota igual que un círculo.
+- **Cota angular con snaps y ángulos redondos** (Rafael, 29:20: «no
+  engancha a nada, no hay manera de poner 90°»). Los tres primeros clics
+  enganchan a la geometría del marco, y con **Mayús** el brazo cae en un
+  múltiplo exacto de 15°: el primero desde la horizontal de la hoja y el
+  segundo desde el primer brazo, así que el ángulo medido sale redondo.
+- **Cota forzada recta**, la lineal de AutoCAD (DIMLINEAR). Rafael pedía
+  «que me cogiera el punto final» con Shift y que no saliera inclinada por
+  soltarlo antes de tiempo: ahora **Shift no mueve el punto, endereza la
+  cota** —los dos puntos se quedan donde engancharon, mide solo su
+  separación horizontal o vertical, con líneas de referencia de distinta
+  longitud llegando a cada punto real— y **se queda pegado** hasta colocar
+  la cota. El desplegable **Dirección** del panel endereza una cota **ya
+  dibujada**. La cadena lo hereda entera. Shift sigue moviendo el punto
+  en Línea, Flecha y Terreno, donde no hay nada que proyectar.
+- **Cotas desde línea base** (DIMBASELINE): todas miden desde el primer
+  punto y se apilan una fila más afuera; **Escalón de línea base** en
+  Estilo de cota (8 mm por defecto, el DIMDLI de AutoCAD), viaja en el
+  documento. Y **cadena y línea base continúan desde una cota ya puesta**,
+  como DIMCONTINUE / DIMBASELINE: selecciona una cota, arma Cadena o Línea
+  base y la serie arranca de ella —su línea, su separación y si iba
+  forzada recta— a un clic por punto. Sin nada seleccionado, como antes.
+- **Las cotas del modelo siguen a la geometría.** Cada extremo puesto
+  sobre un vértice **se agarra a él**: si luego escalas, mueves o estiras
+  el dibujo, la cota se va con él y **vuelve a medir**, también dentro de
+  un componente. Si el vértice desaparece, el extremo se queda donde
+  estaba; un extremo en un punto medio o sobre una arista se queda fijo.
+  Con **Mover** sobre una cota, la **línea de cota se desplaza** y las
+  líneas de referencia se estiran desde sus vértices, como en SketchUp.
+  Y **Extremos** en Estilo de cota: flechas (lo que trae un documento
+  nuevo), trazos oblicuos o ninguno; un documento anterior conserva sus
+  trazos. Las tres cosas que echó en falta el primer usuario del vídeo de
+  DriveMeca.
+- **El nivel se lee solo**: en una elevación o una sección, la cota de
+  nivel toma la altura del modelo sin necesidad de un punto de snap (le
+  salía 0.00 clicando donde no había punto); en una planta no inventa.
+- **Secciones por LETRA** (A-A, B-B…), como piden los planos, en vez de
+  «1 … 1»; y **Nombre y símbolo…** en el clic derecho del plano de sección,
+  que era donde Rafael no encontraba dónde cambiarlo.
+- **Escalas de ampliación** (10:1, 5:1, 2:1) en la lista de escalas del
+  marco, y la lámina, el rótulo de vista y `{escala}` escriben «10:1».
+- **La N del norte** va en una banda despejada encima de la rosa, que
+  sobre la aguja era ilegible.
+- **Una imagen engancha al dibujo**: al arrastrarla, su esquina más
+  cercana se imanta a un punto dibujado de la vista.
+- **Iconos de radio y angular** redibujados con la clave de IngeCAD: el
+  sujeto en acento y la cota encima en tinta (la angular usaba el icono
+  del transportador, que es otra herramienta). Y la pista de la barra de
+  estado dice que **Alt = paso fino** al mover con las flechas (existía
+  desde siempre y no había forma de saberlo).
+
+### Arreglado
+- **La vista previa de impresión no hacía nada — en el Flatpak.** Está
+  implementada y funciona en todas partes menos en el paquete que Rafael
+  usa: la receta del Flatpak recorta PySide6 a los módulos que el programa
+  usa y el de impresión estaba en la lista de recorte, mientras que
+  exportar PDF, que va por otro camino, le funcionaba (eso explica las dos
+  mitades de su reporte). El módulo vuelve al paquete, y si algún día
+  falta, el programa lo dice y señala Exportar PDF.
+- **Parpadeos en vectorial al mover una vista** (Rafael, y Marco lo leyó
+  bien: «cuando pones vectorial la gráfica trabaja más»). Un marco
+  vectorial entintaba cada arista visible en cada repintado, y arrastrar
+  repintaba todo eso por movimiento (350 ms con 60 000 segmentos). Mientras
+  se arrastra, el marco dibuja su silueta —cortes, perfiles y las aristas
+  que quepan— y el dibujo exacto al soltar: de 660 a 120 ms por ocho
+  movimientos, y el coste deja de depender del modelo.
+- **Un `10:1` tecleado se convertía en `1:1` en silencio** sobre un plano
+  técnico: la casilla leía solo lo que sigue a los dos puntos.
+- **Un marco nuevo salía vestido con la vista de una escena borrada**
+  (Rafael, 33:40: «pongo una ventana y me muestra ese previo que yo ya no
+  tengo»): las cachés iban por la dirección del objeto y nada las soltaba
+  nunca; ahora se barren tras cada cambio.
+- **El texto de una cota del modelo proyectada a la lámina se leía con la
+  cabeza a la derecha**: la regla de lectura estaba copiada en cinco
+  sitios con dos convenciones contradictorias, y la que proyectaba las
+  cotas del modelo giraba toda vertical al revés. Una sola regla para
+  todas, y la zona de clic de una cota vertical vuelve a caer sobre su
+  rótulo.
+- **La cota angular no enganchaba a nada**: la herramienta pedía un punto
+  enganchado y nunca estuvo en la lista de las que lo reciben.
+- **La lámina se quedaba desplazándose sola** con el puño cerrado cuando
+  la suelta del botón central no llegaba (una captura de pantalla, un
+  cambio de escritorio, un diálogo: en Wayland es rutina): el arrastre
+  termina en cuanto no hay botón pulsado, y el cursor vuelve al de la
+  herramienta armada.
+- **Ctrl+A seleccionaba sin que el programa se enterara** (issue #38,
+  @pacaeiro): la barra contaba, el visor no pintaba la selección e Info de
+  entidad decía «nada seleccionado». Construía el conjunto a mano, por
+  detrás de la selección normal, que es quien avisa a todos.
+- **Esc no sabía de una cota de radio a medias**: con el centro clicado,
+  el primer Esc soltaba la herramienta en vez de la colocación.
+- **Las filas de una línea base salían a distinta separación**: el
+  escalón se tomaba de la cota más alta hasta el momento y crecía a mitad
+  de serie.
+- **Paseo (cámara, caminar, mirar) al fondo de la columna izquierda con
+  un hueco encima** — en el vídeo de DriveMeca y en la máquina de Marco.
+  El diseño de ventana guardado lleva la longitud de cada barra y se
+  aplicaba tenga la barra lo que tenga hoy; ahora las barras se compactan
+  al abrir, en su mismo orden.
+
 ## [0.4.6] — 2026-09-19
 
 **Lo del modelo de la segunda revisión de Rafael, entero.** Su vídeo de una

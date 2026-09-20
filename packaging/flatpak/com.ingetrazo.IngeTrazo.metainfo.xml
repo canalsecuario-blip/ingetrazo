@@ -77,6 +77,43 @@
   <url type="vcs-browser">https://github.com/ingelibre/ingetrazo</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.4.7" date="2026-09-20">
+      <description>
+        <p>The sheets half of Rafael's second review, and dimensions to
+        the standard. The other half of his one-hour video (0.4.6 was the
+        model) plus his video on drafting standards, which Marco checked
+        point by point. The big pieces: the section cut COVERS (the poché
+        is no longer see-through); dimensions to ISO — text above and
+        centred, read head to the left, the line runs on under the text,
+        arrows by default; radius and diameter with one click on the arc;
+        the angular dimension finally snaps; the forced-straight and the
+        baseline dimensions of AutoCAD; and, in the model, dimensions that
+        hold their vertices — scale the drawing and the dimension resizes
+        and re-measures — the first thing a user of DriveMeca's video
+        missed, with Move sliding the line and the ends a choice. Also the
+        print preview that did nothing in the Flatpak, the vector flicker
+        while moving a view, a typed 10:1 silently turned into 1:1, a new
+        frame wearing a deleted view, @pacaeiro's #38 on Ctrl+A, and the
+        toolbars that left Walkthrough at the bottom of the column.</p>
+        <p xml:lang="es">Las láminas de la segunda revisión de Rafael, y la
+        acotación a norma. La otra mitad de su vídeo de una hora (la 0.4.6
+        fue la del modelo) más su vídeo de normativa de acotación, que
+        Marco revisó punto por punto. Lo grande: la sección TAPA (el poché
+        ya no se ve a través); cotas a la norma ISO —texto encima y
+        centrado, se lee girando la cabeza a la izquierda, la línea se
+        prolonga bajo el texto, flechas por defecto—; radio y diámetro con
+        un clic sobre el arco; la angular que por fin engancha; la cota
+        forzada recta y la línea base de AutoCAD; y en el modelo, cotas
+        que siguen a la geometría —escalas el dibujo y la cota se
+        redimensiona y vuelve a medir—, lo primero que echó en falta un
+        usuario del vídeo de DriveMeca, con Mover desplazando la línea y
+        los extremos a elegir. Además la vista previa de impresión que en
+        el Flatpak no hacía nada, el parpadeo vectorial al mover una vista,
+        un 10:1 tecleado que salía 1:1 en silencio, un marco nuevo vestido
+        con una escena borrada, la #38 de @pacaeiro sobre Ctrl+A, y las
+        barras que dejaban a Paseo al fondo de la columna.</p>
+      </description>
+    </release>
     <release version="0.4.6" date="2026-09-19">
       <description>
         <p>The model half of Rafael's second review, complete. His one-hour
