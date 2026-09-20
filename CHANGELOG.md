@@ -7,6 +7,17 @@ follow [SemVer](https://semver.org).
 ## [Sin publicar]
 
 ### Cambiado
+- **El número de la cota, a la distancia de la norma.** Marco puso su
+  lámina junto a la de Rafael: «todavía no se ve como la norma». Dos
+  cosas: la **separación** entre la línea de cota y el número se mide
+  ahora hasta la **base de las cifras** (antes sumaba la altura de la
+  fuente, y salía el doble de lo que se ve en la lámina de Rafael) y una
+  cota nueva nace con 0,5 mm, un cuarto de la altura del texto; y el
+  texto de una cota nueva **siempre va alineado con la línea** (una
+  vertical se lee de abajo arriba, a la izquierda), aunque la última que
+  editaste fuera horizontal — la orientación ya no se hereda. «Horizontal»
+  sigue en el menú, marcada como fuera de norma, para devolver a la
+  norma una cota que la lleve. Las cotas ya dibujadas no se mueven.
 - **Texto 3D: altura y extrusión en metros**, la unidad del modelo en
   todo lo demás (Marco). La 0.4.6 las había pasado a centímetros porque
   Rafael tecleó «20» de extrusión y el campo, con tope de 10 m, lo

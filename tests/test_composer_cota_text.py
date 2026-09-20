@@ -184,3 +184,35 @@ def test_text_along_puts_the_label_outside_an_end_and_the_drag_moves_only_it():
     comp.cotas = [m]
     again = Composicion.from_dict(comp.to_dict()).cotas[0]
     assert (again.text_along, again.text_dx_mm, again.text_dy_mm) == ("end", 5.0, 7.0)
+
+
+def test_the_label_baseline_sits_offset_mm_above_the_line():
+    """Rafael's «distancia texto–línea» is the gap between the line and the
+    bottom of the digits — about a quarter of their height on his sheet.
+    It used to be that plus a font's ascent (Marco, 2026-09-20, holding
+    his sheet against Rafael's: «todavía no se ve como la norma»). Now the
+    number's baseline lands exactly ``offset_mm`` over the line."""
+    from PySide6.QtGui import QImage, QPainter
+    from views.composer import paint_cota_mm
+    PX = 20
+    ct = CotaItem(dx_mm=60.0, dy_mm=0.0, sep_mm=0.0, text="88", text_mm=5.0,
+                  offset_mm=1.0, ends="none", text_pos="above")
+    img = QImage(100 * PX, 40 * PX, QImage.Format_RGB32)
+    img.fill(0xFFFFFFFF)
+    p = QPainter(img)
+    p.scale(PX, PX)
+    p.translate(20.0, 30.0)
+    paint_cota_mm(p, ct)
+    p.end()
+    line_y = 30.0 * PX
+    # the lowest inked row of the glyphs, scanning the label's column
+    # (avoid the line itself: stop one mm above it)
+    x0, x1 = int(45 * PX), int(55 * PX)
+    lowest = None
+    for y in range(int(line_y) - PX, 0, -1):
+        if any((img.pixel(x, y) & 0xFF) < 128 for x in range(x0, x1)):
+            lowest = y
+            break
+    assert lowest is not None
+    gap_mm = (line_y - lowest) / PX
+    assert 0.9 <= gap_mm <= 1.3, gap_mm           # ≈ offset, not offset + ascent

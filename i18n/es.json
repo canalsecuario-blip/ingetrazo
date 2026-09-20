@@ -1872,5 +1872,7 @@
  "Drag to turn the camera. Type the eye height.": "Arrastra en una dirección para girar la cámara. Teclea la altura del ojo.",
  "Click and drag to walk. Ctrl = run, Shift = up/down or sideways, Alt = through walls.": "Clic y arrastra para caminar. Ctrl = correr, Mayús = vertical o de lado, Alt = atravesar paredes.",
  "Draw a radius dimension: click ON a circle or arc of the drawing and it takes the centre and the radius by itself (the click picks the side the line leaves by). Elsewhere, click the centre, then a point on the arc. Ctrl makes it a diameter. The line always reaches the centre and the symbol (R / Ø) goes with the value, as the standard asks": "Dibuja una cota de radio: haz clic SOBRE un círculo o arco del dibujo y toma el centro y el radio por sí sola (el clic elige por qué lado sale la línea). En otro sitio, clic en el centro y luego en un punto del arco. Ctrl la hace de diámetro. La línea siempre llega al centro y el símbolo (R / Ø) acompaña al valor, como pide la norma",
- "Ends:": "Extremos:"
+ "Ends:": "Extremos:",
+ "Aligned to the line (ISO)": "Alineado con la línea (ISO)",
+ "Horizontal (outside the standard)": "Horizontal (fuera de norma)"
 }

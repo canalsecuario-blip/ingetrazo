@@ -88,6 +88,24 @@ def _draw_text_mm(painter: QPainter, rect: QRectF, text: str, size_mm: float,
     painter.restore()
 
 
+def text_baseline_rect_mm(size_mm: float, baseline_y: float,
+                          width: float = 80.0, bold: bool = False,
+                          family: str = "Sans Serif") -> QRectF:
+    """A rect for :func:`_draw_text_mm` (top-aligned) whose BASELINE lands
+    exactly on ``baseline_y`` (mm), centred on x = 0. The gap between a
+    dimension line and its number is measured to the baseline — that is
+    what «distancia texto–línea» means on Rafael's sheet — so the offset a
+    drafter sets is the gap he sees, not the gap plus a font's ascent."""
+    from PySide6.QtGui import QFontMetricsF
+    font = QFont(family or "Sans Serif")
+    font.setPixelSize(100)
+    font.setBold(bold)
+    fm = QFontMetricsF(font)
+    s = size_mm / 100.0 * 0.75              # the scale _draw_text_mm applies
+    asc, desc = fm.ascent() * s, fm.descent() * s
+    return QRectF(-width / 2, baseline_y - asc, width, asc + desc)
+
+
 def _fit_text_size_mm(text: str, rect: QRectF, base_size_mm: float,
                       bold: bool = False,
                       family: str = "Sans Serif") -> float:
@@ -1302,7 +1320,7 @@ def paint_cota_mm(painter: QPainter, ct: CotaItem) -> None:
             rect = QRectF(-40, -ct.text_mm * 0.65, 80, ct.text_mm * 1.3)
             align = Qt.AlignHCenter | Qt.AlignVCenter
         else:
-            rect = QRectF(-40, -ct.offset_mm - ct.text_mm, 80, ct.text_mm * 1.3)
+            rect = text_baseline_rect_mm(ct.text_mm, -ct.offset_mm)
             align = Qt.AlignHCenter | Qt.AlignTop
     bg = getattr(ct, "text_bg", "") or ""
     if bg and label:
@@ -1768,7 +1786,7 @@ def paint_cota_radial_mm(painter: QPainter, cr) -> None:
     painter.save()
     painter.translate(lx, ly)
     painter.rotate(readable_deg(ux, uy))       # rule 13, for free
-    rect = QRectF(-40, -cr.offset_mm - cr.text_mm, 80, cr.text_mm * 1.3)
+    rect = text_baseline_rect_mm(cr.text_mm, -cr.offset_mm)
     bg = getattr(cr, "text_bg", "") or ""
     if bg and label:
         tw = cr.label_width_mm()
@@ -5403,7 +5421,16 @@ class ComposerWindow(QMainWindow):
         DIMLINEAR) instead of measuring the segment itself."""
         n = self.comp.frames[0].scale_n if self.comp.frames else 100.0
         style = dict(getattr(self, "_last_cota_style", None) or {})
-        style.setdefault("offset_mm", 0.8)
+        # The gap line → baseline. Rafael's sheet shows about a quarter of
+        # the text height (AutoCAD's DIMGAP); 0.5 mm reads like it at the
+        # 2.5 mm text a new cota takes.
+        style.setdefault("offset_mm", 0.5)
+        # The text runs ALONG the line (ISO's first method, the one on
+        # Rafael's sheet: a vertical cota reads bottom-to-top at the left
+        # of its line); the horizontal orientation straddled the line and
+        # is off the menu (Marco, 2026-09-20, holding his sheet against
+        # Rafael's: «todavía no se ve como la norma»).
+        style["text_align"] = "aligned"
         # Rule 1: the text goes ABOVE the line — «el texto ahí abajo es
         # impensable» (Rafael, 06:00). ISO is the only standard on offer
         # for now (Marco, 2026-09-20: «hagamos las ISO por ahora, la
@@ -6477,9 +6504,14 @@ class ComposerWindow(QMainWindow):
             "grab it by its text. This returns it to its automatic spot."))
         self.cota_text_reset.clicked.connect(self._on_cota_text_reset)
         form.addRow("", self.cota_text_reset)
+        # Aligned is ISO's first method, the one on Rafael's sheet, and
+        # what every new cota is born with. Horizontal stays on the menu,
+        # named for what it is, so a cota that carries it can be brought
+        # back to the standard from here (2026-09-20).
         self.cota_text_align = QComboBox()
-        for label, key in ((tr("Aligned to the line"), "aligned"),
-                           (tr("Horizontal"), "horizontal")):
+        for label, key in ((tr("Aligned to the line (ISO)"), "aligned"),
+                           (tr("Horizontal (outside the standard)"),
+                            "horizontal")):
             self.cota_text_align.addItem(label, key)
         self.cota_text_align.currentIndexChanged.connect(self._on_cota_props)
         form.addRow(tr("Text orientation"), self.cota_text_align)
@@ -8522,7 +8554,7 @@ class ComposerWindow(QMainWindow):
     #: The look of each item kind — never its geometry or content.
     STYLE_FIELDS = {
         CotaItem: ("text_mm", "decimals", "units", "ends", "stroke_mm", "color",
-                   "offset_mm", "text_align",
+                   "offset_mm",
                    "text_color", "text_bg", "text_bg_opacity"),
         TextoItem: ("size_pt", "bold", "italic", "underline", "family",
                     "color", "align", "bg_color", "bg_opacity"),
@@ -10331,17 +10363,25 @@ class ComposerWindow(QMainWindow):
     #: draws new dimensions with the current style settings).
     _COTA_STYLE_FIELDS = ("text_mm", "decimals", "ends", "stroke_mm",
                           "color", "offset_mm",
-                          "text_align", "text_color", "text_bg",
+                          "text_color", "text_bg",
                           "text_bg_opacity", "units")
 
-    #: QSettings key of the remembered cota style. The «2» is the ISO-only
-    #: decision of 2026-09-20: a style saved under the old key carries the
-    #: ends and the text placement of before (Marco's own held «tick» and
-    #: «end»), which would keep beating the new factory defaults for ever.
-    #: It is read once, minus those, and saved here.
-    _COTA_STYLE_KEY = "composer/default_cota_style_2"
-    _COTA_STYLE_KEY_OLD = "composer/default_cota_style"
-    _COTA_STYLE_NOT_MIGRATED = ("ends", "text_along", "text_pos")
+    #: QSettings key of the remembered cota style. Each bump is a decision
+    #: that changed what a field means or what a new cota should be born
+    #: with, and a style saved before it would keep beating the new
+    #: factory defaults for ever — so the older key is read once, minus
+    #: the fields the decision covers, and saved under the new one. «2»
+    #: (2026-09-20): ISO only — a remembered «tick» / «end» / «centered»
+    #: no longer travels. «3» (same day): the gap is measured to the
+    #: baseline and born at 0.5 mm — a remembered 0.8 meant the old,
+    #: larger gap.
+    _COTA_STYLE_KEY = "composer/default_cota_style_3"
+    _COTA_STYLE_KEYS_OLD = (
+        ("composer/default_cota_style_2", ("offset_mm",)),
+        ("composer/default_cota_style",
+         ("ends", "text_along", "text_pos", "offset_mm")),
+    )
+    _COTA_STYLE_KEY_OLD = _COTA_STYLE_KEYS_OLD[-1][0]
 
     def _remember_cota_style(self, model) -> None:
         """The last edited cota's look becomes the sheet's default for new
@@ -10370,9 +10410,10 @@ class ComposerWindow(QMainWindow):
             return dict(style) if isinstance(style, dict) else {}
 
         style = read(self._COTA_STYLE_KEY)
-        if not style:
-            style = {k: v for k, v in read(self._COTA_STYLE_KEY_OLD).items()
-                     if k not in self._COTA_STYLE_NOT_MIGRATED}
+        for key, dropped in self._COTA_STYLE_KEYS_OLD:
+            if style:
+                break
+            style = {k: v for k, v in read(key).items() if k not in dropped}
         probe = CotaItem()
         self._last_cota_style = {
             k: v for k, v in style.items()

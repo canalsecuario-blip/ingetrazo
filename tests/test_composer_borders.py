@@ -39,7 +39,9 @@ def test_background_opacity_blends_with_the_page():
     p.translate(20, 50)
     paint_cota_mm(p, ct)
     p.end()
-    px = _rgb(img, int(60 * 2), int((50 - 5 - 0.2) * 2))
+    from views.composer import text_baseline_rect_mm
+    top = 50 + text_baseline_rect_mm(4.0, -1.0).top()   # the label box's top
+    px = _rgb(img, int(60 * 2), int((top - 0.2) * 2))
     assert px not in (0xFF0000, 0xFFFFFF)
 
 

@@ -1113,7 +1113,7 @@ class CotaRadialItem:
     text_mm: float = 2.8
     decimals: int = 2
     units: str = "m"
-    offset_mm: float = 0.8       # text gap above the line
+    offset_mm: float = 0.5       # line → text baseline gap
     ends: str = "arrow"          # arrow | tick | none
     stroke_mm: float = 0.25
     color: str = "#1e242c"

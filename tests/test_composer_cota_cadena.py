@@ -169,12 +169,37 @@ def test_a_new_cota_is_born_like_rafaels_sheet_and_the_old_memory_is_migrated():
         assert (ct.ends, ct.text_pos, ct.text_along) == (
             "arrow", "above", "middle")
         assert ct.text_bg == "#ffffff" and ct.text_mm == 2.5   # the look stays
+        assert ct.offset_mm == 0.5             # the gap a new cota is born with
         # …and once the drafter edits a cota, its placement still does not
         # travel to the next one, while its ends (a look) do.
-        sample = CotaItem(ends="tick", text_along="end", text_mm=3.0)
+        sample = CotaItem(ends="tick", text_along="end", text_mm=3.0,
+                          text_align="horizontal")
         composer._remember_cota_style(sample)
         nxt = composer._new_cota((0, 0), (30, 0), 5.0)
         assert (nxt.ends, nxt.text_along, nxt.text_mm) == ("tick", "middle", 3.0)
+        assert nxt.text_align == "aligned"      # orientation is not a look
+        assert nxt.offset_mm == sample.offset_mm    # the gap is
     finally:
         QSettings().remove(ComposerWindow._COTA_STYLE_KEY)
         QSettings().remove(ComposerWindow._COTA_STYLE_KEY_OLD)
+
+
+def test_the_second_key_comes_across_without_its_gap():
+    """The «2» style of the same morning held the old 0.8 mm, which under
+    the baseline rule is a wider gap than it was: it is dropped, the rest
+    (Marco's white background, his units) stays."""
+    for key, _dropped in ComposerWindow._COTA_STYLE_KEYS_OLD:
+        QSettings().remove(key)
+    QSettings().remove(ComposerWindow._COTA_STYLE_KEY)
+    QSettings().setValue(ComposerWindow._COTA_STYLE_KEYS_OLD[0][0], json.dumps({
+        "text_mm": 2.5, "ends": "arrow", "offset_mm": 0.8,
+        "text_bg": "#ffffff", "text_bg_opacity": 0.7, "units": "m"}))
+    try:
+        composer, _host = _composer()
+        ct = composer._new_cota((0, 0), (30, 0), 5.0)
+        assert ct.offset_mm == 0.5 and ct.text_bg == "#ffffff"
+        assert ct.ends == "arrow" and ct.units == "m"
+    finally:
+        for key, _dropped in ComposerWindow._COTA_STYLE_KEYS_OLD:
+            QSettings().remove(key)
+        QSettings().remove(ComposerWindow._COTA_STYLE_KEY)
