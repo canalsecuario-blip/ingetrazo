@@ -63,7 +63,11 @@ def test_zoom_drags_up_to_zoom_in_about_the_press_point(composer):
     _mouse(view, QEvent.MouseButtonPress, press)
     _mouse(view, QEvent.MouseMove, QPoint(400, 200))       # 100 px up
     assert composer.zoom_percent() > before * 1.5
-    assert (view.mapToScene(press) - under).manhattanLength() < 0.5  # anchored
+    # anchored: within the scroll bars' integer rounding (two pixels' worth
+    # of paper at the zoom reached — 0.57 mm on the CI runner's smaller
+    # screen, where a fixed 0.5 mm failed)
+    slack = 2.0 / view.transform().m11()
+    assert (view.mapToScene(press) - under).manhattanLength() < slack
     _mouse(view, QEvent.MouseMove, QPoint(400, 400))       # 200 px down
     assert composer.zoom_percent() < before
     _mouse(view, QEvent.MouseButtonRelease, QPoint(400, 400))
