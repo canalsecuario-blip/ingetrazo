@@ -625,6 +625,39 @@ def _dimension_chain(p, ink):
         _dot(p, x, 37, 2.6)
 
 
+def _dimension_radius(p, ink):
+    # A circle with the radius dimension inside it, the way the reference
+    # sheet draws it: the line starts AT the centre (the little cross),
+    # the arrow touches the arc, and «R» rides above the line.
+    from PySide6.QtGui import QPolygonF as _Poly
+    cx, cy, R = 20.0, 28.0, 15.0
+    p.drawEllipse(QPointF(cx, cy), R, R)
+    p.drawLine(QPointF(cx - 3, cy), QPointF(cx + 3, cy))     # centre mark
+    p.drawLine(QPointF(cx, cy - 3), QPointF(cx, cy + 3))
+    import math as _m
+    a = _m.radians(-38.0)
+    ex, ey = cx + R * _m.cos(a), cy + R * _m.sin(a)
+    p.drawLine(QPointF(cx, cy), QPointF(ex, ey))
+    p.save()                                                 # the arrow head
+    p.setBrush(ink)
+    p.setPen(Qt.NoPen)
+    back = a + _m.pi
+    w = _m.radians(15.0)
+    p.drawPolygon(_Poly([
+        QPointF(ex, ey),
+        QPointF(ex + 6.5 * _m.cos(back + w), ey + 6.5 * _m.sin(back + w)),
+        QPointF(ex + 6.5 * _m.cos(back - w), ey + 6.5 * _m.sin(back - w))]))
+    p.restore()
+    f = p.font()
+    f.setPixelSize(12)
+    f.setBold(True)
+    p.save()
+    p.setFont(f)
+    p.setPen(ink)
+    p.drawText(QRectF(24.0, 9.0, 16.0, 13.0), Qt.AlignCenter, "R")
+    p.restore()
+
+
 def _geopath(p, ink):
     pen = p.pen()
     pen.setStyle(Qt.DashLine)
@@ -1444,6 +1477,7 @@ _DRAW = {
     "rotate": _rotate, "scale": _scale, "flip": _flip, "followme": _followme, "pushpull": _pushpull, "offset": _offset, "fillet": _fillet,
     "move": _move, "paint": _paint, "eyedropper": _eyedropper,
     "dimension": _dimension, "dimension_chain": _dimension_chain,
+    "dimension_radius": _dimension_radius,
     "dimension_style": _dimension_style,
     "geopath": _geopath, "orbit": _orbit, "pan": _pan,
     "text": _text, "text3d": _text3d,

@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox,
 from core.composition import (COMMON_SCALES, NEW_FRAME_STYLE, PAPER_SIZES_MM, RENDER_DPI,
                               AddItemCommand, BarraEscala, Cajetin,
                               ComposerHistory, Composicion, CompoundCommand, CotaAngularItem, CotaItem,
+                              CotaRadialItem,
                               EditItemCommand, EtiquetaItem, expand_fields, set_field_context, FlechaNorte, FormaItem, LlamadaItem, NivelItem,
                               ImagenItem, Leyenda, MarcoVista,
                               PerfilTerreno, RemoveItemCommand, TextoItem,
@@ -1670,6 +1671,82 @@ def paint_cota_angular_mm(painter: QPainter, ca: CotaAngularItem) -> None:
                   align=Qt.AlignHCenter | Qt.AlignVCenter, color=tcol)
 
 
+def paint_cota_radial_mm(painter: QPainter, cr) -> None:
+    """Radius / diameter dimension, to Rafael's reference sheet.
+
+    The line always reaches the centre (rules 8, 12, 15). It fits → the
+    words ride above its middle and the arrows point outward at the arc
+    (rule 9). It does not → the line is prolonged past the arc, the words
+    sit on that prolongation and the arrows point back AT the centre
+    (rules 10, 14). The text never reads upside down, whatever quadrant it
+    is in, because it turns by :func:`readable_deg` (rule 13)."""
+    import math as _math
+    from PySide6.QtGui import QBrush, QPolygonF
+    color = QColor(cr.color)
+    pen = QPen(color)
+    pen.setWidthF(cr.stroke_mm)
+    pen.setCapStyle(Qt.RoundCap)
+    painter.setPen(pen)
+    painter.setBrush(Qt.NoBrush)
+    (ax, ay), (bx, by) = cr.line_points()
+    tx, ty = cr.tail_end()
+    out = cr.outside()
+    painter.drawLine(QPointF(ax, ay), QPointF(bx, by))
+    if out:                                   # «la línea se prolonga»
+        painter.drawLine(QPointF(bx, by), QPointF(tx, ty))
+    if cr.centre_mark:                        # the centre it measures from
+        m = max(1.0, cr.text_mm * 0.45)
+        painter.drawLine(QPointF(-m, 0.0), QPointF(m, 0.0))
+        painter.drawLine(QPointF(0.0, -m), QPointF(0.0, m))
+    ux, uy = cr.heading()
+    # (tip, heading) per arrow: outward at the arc when the words are
+    # inside, back toward the centre when they are out.
+    tips = [((bx, by), (-ux, -uy) if out else (ux, uy))]
+    if cr.kind == "diameter":
+        tips.append(((ax, ay), (ux, uy) if out else (-ux, -uy)))
+    if cr.ends == "arrow":
+        L = max(1.8, cr.stroke_mm * 6)
+        base = _math.radians(12)
+        painter.save()
+        painter.setBrush(QBrush(color))
+        painter.setPen(Qt.NoPen)
+        for (px, py), (hx, hy) in tips:
+            head = _math.atan2(hy, hx) + _math.pi   # the wings trail behind
+            tip = QPointF(px, py)
+            painter.drawPolygon(QPolygonF([
+                tip,
+                QPointF(tip.x() + L * _math.cos(head + base),
+                        tip.y() + L * _math.sin(head + base)),
+                QPointF(tip.x() + L * _math.cos(head - base),
+                        tip.y() + L * _math.sin(head - base))]))
+        painter.restore()
+    elif cr.ends != "none":
+        t = 1.6
+        ang = _math.atan2(uy, ux) + _math.radians(45)
+        for (px, py), _h in tips:
+            painter.drawLine(
+                QPointF(px - t * _math.cos(ang), py - t * _math.sin(ang)),
+                QPointF(px + t * _math.cos(ang), py + t * _math.sin(ang)))
+    lx, ly = cr.text_anchor()
+    label = cr.label()
+    tcol = QColor(cr.text_color) if cr.text_color else color
+    painter.save()
+    painter.translate(lx, ly)
+    painter.rotate(readable_deg(ux, uy))       # rule 13, for free
+    rect = QRectF(-40, -cr.offset_mm - cr.text_mm, 80, cr.text_mm * 1.3)
+    bg = getattr(cr, "text_bg", "") or ""
+    if bg and label:
+        tw = cr.label_width_mm()
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QBrush(_with_opacity(
+            bg, getattr(cr, "text_bg_opacity", 1.0))))
+        painter.drawRect(QRectF(-tw / 2, rect.top() - 0.4, tw,
+                                rect.height() + 0.8))
+    _draw_text_mm(painter, rect, label, cr.text_mm,
+                  align=Qt.AlignHCenter | Qt.AlignTop, color=tcol)
+    painter.restore()
+
+
 #: Margin of a text / label background around the inked words. 1 mm read
 #: as a wide slab around a one-word label at plan scale (Marco, 2026-09-14:
 #: «sigue viéndose ancho»); 0.5 mm is a hair of paper, enough to lift the
@@ -3247,6 +3324,112 @@ class CotaAngularCanvasItem(_SheetItem):
         self._paint_selection(painter)
 
 
+class CotaRadialCanvasItem(_SheetItem):
+    """A radius / diameter dimension on the canvas: the CENTRE is the
+    item's position, and dragging the arc end turns it and resizes it —
+    the two things a drafter adjusts, since the value follows the arc."""
+
+    def size_mm(self):
+        return (self.model.w_mm, self.model.h_mm)
+
+    def _arc_end(self) -> tuple[float, float]:
+        ux, uy = self.model.heading()
+        r = self.model.radius_mm
+        return (ux * r, uy * r)
+
+    def boundingRect(self) -> QRectF:
+        m = self.model
+        tx, ty = m.tail_end()
+        reach = max(m.radius_mm, abs(tx), abs(ty)) + m.text_mm * 2.0 + 4.0
+        return QRectF(-reach, -reach, 2 * reach, 2 * reach)
+
+    def shape(self):
+        import math as _math
+        from PySide6.QtGui import QPainterPath, QPainterPathStroker
+        m = self.model
+        (ax, ay), (bx, by) = m.line_points()
+        tx, ty = m.tail_end()
+        lines = QPainterPath()
+        lines.moveTo(ax, ay)
+        lines.lineTo(bx, by)
+        lines.lineTo(tx, ty)
+        stroker = QPainterPathStroker()
+        stroker.setWidth(2.0 * _HANDLE_MM)
+        path = stroker.createStroke(lines)
+        lx, ly = m.text_anchor()
+        w = m.label_width_mm()
+        deg = readable_deg(*m.heading())
+        box = QPainterPath()
+        box.addRect(QRectF(-w / 2, -m.offset_mm - m.text_mm * 1.4,
+                           w, m.text_mm * 1.7))
+        path.addPath(QTransform().translate(lx, ly).rotate(deg).map(box))
+        return path
+
+    def _on_resize_handle(self, pos: QPointF) -> bool:
+        return False
+
+    def _on_arc_handle(self, pos: QPointF) -> bool:
+        ex, ey = self._arc_end()
+        return (abs(pos.x() - ex) <= _HANDLE_MM
+                and abs(pos.y() - ey) <= _HANDLE_MM)
+
+    def hoverMoveEvent(self, event) -> None:
+        if not getattr(self.model, "locked", False) and \
+                self._on_arc_handle(event.pos()):
+            self.setCursor(Qt.SizeAllCursor)
+        else:
+            self.unsetCursor()
+        super(_SheetItem, self).hoverMoveEvent(event)
+
+    def mousePressEvent(self, event) -> None:
+        note = getattr(self.composer, "note_drag_start", None)
+        if note is not None:
+            note()
+        self._press_state = {k: getattr(self.model, k)
+                             for k in ("x_mm", "y_mm", "radius_mm",
+                                       "angle_deg")}
+        self._arc_drag = (not getattr(self.model, "locked", False)
+                          and self._on_arc_handle(event.pos()))
+        if self._arc_drag:
+            event.accept()
+            self.setSelected(True)
+            return
+        QGraphicsItem.mousePressEvent(self, event)
+
+    def mouseMoveEvent(self, event) -> None:
+        if getattr(self, "_arc_drag", False):
+            import math as _math
+            self.prepareGeometryChange()
+            x, y = event.pos().x(), event.pos().y()
+            self.model.radius_mm = max(1.0, _math.hypot(x, y))
+            self.model.angle_deg = _math.degrees(_math.atan2(y, x))
+            self.update()
+            return
+        QGraphicsItem.mouseMoveEvent(self, event)
+
+    def mouseReleaseEvent(self, event) -> None:
+        was = getattr(self, "_arc_drag", False)
+        self._arc_drag = False
+        QGraphicsItem.mouseReleaseEvent(self, event)
+        if self._press_state is None:
+            return
+        current = {k: getattr(self.model, k) for k in self._press_state}
+        if current != self._press_state:
+            self.composer.push_geometry_edit(self.model, current,
+                                             self._press_state)
+        self._press_state = None
+        if was:
+            self.composer.on_item_geometry(self, final=True)
+
+    def mouseDoubleClickEvent(self, event) -> None:
+        self.composer.edit_cota_text(self)
+        event.accept()
+
+    def paint(self, painter, option, widget=None) -> None:
+        paint_cota_radial_mm(painter, self.model)
+        self._paint_selection(painter)
+
+
 class CotaCanvasItem(_SheetItem):
     def mouseDoubleClickEvent(self, event) -> None:
         # LayOut: double-click a dimension to edit its text.
@@ -3472,6 +3655,7 @@ class ComposerCanvasView(QGraphicsView):
         #: it afterwards, so there is nothing to gain by forgetting it.
         self._cota_axis = ""
         self._chain_axis = ""
+        self._rad_centre = None        # radius / diameter: the centre clicked
         self._snap_marker = None       # green dot over a frame vertex/edge
         self._last_hit = None          # richest snap hit of the last _snapped
         self._hit_a = None             # snap hits of the two measured points
@@ -3495,8 +3679,8 @@ class ComposerCanvasView(QGraphicsView):
     #: Frames, text blocks, images etc. place freely — computing the snap
     #: set for them froze the composer on photogrammetry-scale models.
     _GEOM_SNAP_TOOLS = frozenset(
-        ("cota", "cota_cadena", "linea", "flecha", "terreno", "rect",
-         "elipse", "poligono", "etiqueta", "nivel"))
+        ("cota", "cota_cadena", "cota_ang", "cota_radio", "linea", "flecha",
+         "terreno", "rect", "elipse", "poligono", "etiqueta", "nivel"))
 
     #: Tools whose second point Shift locks to the horizontal or the
     #: vertical through the first (Marco, 2026-09-08: «cuando acote para
@@ -3705,8 +3889,24 @@ class ComposerCanvasView(QGraphicsView):
             self._chain_click(pos, self._last_hit)
             event.accept()
             return
+        if mode == "cota_radio" and event.button() == Qt.LeftButton:
+            pos, _ = self._snapped(self.mapToScene(event.position().toPoint()))
+            if self._rad_centre is None:
+                self._rad_centre = QPointF(pos)
+                self._update_radial_preview(pos)
+            else:
+                c = self._rad_centre
+                kind = ("diameter"
+                        if event.modifiers() & Qt.ControlModifier
+                        else "radius")
+                self.cancel_placement()
+                self.composer.place_radial((c.x(), c.y()),
+                                           (pos.x(), pos.y()), kind)
+            event.accept()
+            return
         if mode == "cota_ang" and event.button() == Qt.LeftButton:
             pos, _ = self._snapped(self.mapToScene(event.position().toPoint()))
+            pos = self._ang_step(pos, event.modifiers())
             if len(self._ang_pts) < 3:
                 self._ang_pts.append((pos.x(), pos.y()))
                 self._update_angular_preview(pos)
@@ -3943,8 +4143,11 @@ class ComposerCanvasView(QGraphicsView):
         if self._chain_pts:
             self._update_chain_preview(pos)
             return True
+        if self._rad_centre is not None:
+            self._update_radial_preview(pos)
+            return True
         if self._ang_pts:
-            self._update_angular_preview(pos)
+            self._update_angular_preview(self._ang_step(pos, mods))
             return True
         if self._second_pt is not None:
             self._update_sep_preview(pos)
@@ -4009,6 +4212,57 @@ class ComposerCanvasView(QGraphicsView):
             path.lineTo(p2)
         path.moveTo(a2)
         path.lineTo(b2)
+        self._preview.setPath(path)
+
+    ANG_STEP_DEG = 15.0
+
+    def _ang_step(self, pos, mods):
+        """Shift while placing an arm of an angular dimension puts it on an
+        exact multiple of 15°: the first arm from the page horizontal, the
+        second from the FIRST one — so the sweep itself is 90°, 45°, 30°.
+
+        Rafael, 29:20: «no engancha a nada, no hay manera de poner 90°».
+        The snapping to the drawing does most of it (a square corner reads
+        90.0° by itself now that this tool snaps at all); this is the
+        guarantee when the geometry is not square, or not there."""
+        import math as _math
+        if not (mods & Qt.ShiftModifier) or not self._ang_pts:
+            return pos
+        v = self._ang_pts[0]
+        dx, dy = pos.x() - v[0], pos.y() - v[1]
+        r = _math.hypot(dx, dy)
+        if r < 1e-9:
+            return pos
+        base = 0.0
+        if len(self._ang_pts) >= 2:          # the second arm: off the first
+            a = self._ang_pts[1]
+            base = _math.degrees(_math.atan2(a[1] - v[1], a[0] - v[0]))
+        deg = _math.degrees(_math.atan2(dy, dx)) - base
+        deg = round(deg / self.ANG_STEP_DEG) * self.ANG_STEP_DEG + base
+        rad = _math.radians(deg)
+        return QPointF(v[0] + r * _math.cos(rad), v[1] + r * _math.sin(rad))
+
+    def _update_radial_preview(self, pos) -> None:
+        """Rubber band of a radius / diameter: the circle the second click
+        is tracing, and the line out from the centre."""
+        import math as _math
+        from PySide6.QtGui import QPainterPath
+        from PySide6.QtWidgets import QGraphicsPathItem
+        if self._preview is None or not isinstance(
+                self._preview, QGraphicsPathItem):
+            if self._preview is not None:
+                self.scene().removeItem(self._preview)
+            pen = QPen(QColor(58, 110, 165), 0.3, Qt.DashLine)
+            self._preview = QGraphicsPathItem()
+            self._preview.setPen(pen)
+            self._preview.setZValue(100000)
+            self.scene().addItem(self._preview)
+        c = self._rad_centre
+        r = max(0.5, _math.hypot(pos.x() - c.x(), pos.y() - c.y()))
+        path = QPainterPath()
+        path.addEllipse(c, r, r)
+        path.moveTo(c)
+        path.lineTo(pos)
         self._preview.setPath(path)
 
     def _update_angular_preview(self, pos) -> None:
@@ -4299,6 +4553,7 @@ class ComposerCanvasView(QGraphicsView):
         self._drag_start = None
         self._second_pt = None
         self._ang_pts = []
+        self._rad_centre = None
         self._press_vp = None
         self._ignore_release = False
         self._hit_a = self._hit_b = None
@@ -4365,6 +4620,9 @@ class ComposerCanvasView(QGraphicsView):
                 and not self._chain_pts
                 and hasattr(self.composer, "nudge_selected")):
             # QGIS: arrows nudge the selection 1 mm, Shift 10 mm, Alt 0.1.
+            # «Pega unos saltos un poco grandes las flechitas» (Rafael,
+            # 23:00) — the fine step was already there, he had no way of
+            # knowing: the hint in the status bar says so now.
             mods = event.modifiers()
             step = (10.0 if mods & Qt.ShiftModifier
                     else 0.1 if mods & Qt.AltModifier else 1.0)
@@ -4554,7 +4812,9 @@ class ComposerWindow(QMainWindow):
     #: extent, click tools place at the click point.
     TOOLS = (
         ("select", "select",
-         "Select / move items (Ctrl+Alt+click, or the right-click menu, picks the item underneath)", False),
+         "Select / move items. Arrow keys nudge 1 mm, Shift 10 mm, Alt 0.1 mm "
+         "(Ctrl+Alt+click, or the right-click menu, picks the item underneath)",
+         False),
         ("pan", "pan", "Pan the sheet (or drag with the middle button "
                        "anywhere)", False),
         ("estilo", "eyedropper",
@@ -4600,6 +4860,11 @@ class ComposerWindow(QMainWindow):
          "Shift forces the whole chain straight", False),
         ("cota_ang", "protractor",
          "Draw an angular dimension (vertex, two points, then the arc)", False),
+        ("cota_radio", "dimension_radius",
+         "Draw a radius dimension: click the CENTRE, then a point on the "
+         "arc. Ctrl on that second click makes it a diameter instead. The "
+         "line always reaches the centre and the symbol (R / \u00d8) goes "
+         "with the value, as the standard asks", False),
     )
 
     def set_toolbar_icon_size(self, px: int) -> None:
@@ -4613,7 +4878,7 @@ class ComposerWindow(QMainWindow):
     #: ones vanished behind the overflow chevron (Marco, 2026-09-14). The
     #: sheet-item tools (14) stay at the left, as in LayOut.
     DRAW_TOOLS = ("linea", "flecha", "terreno", "rect", "elipse", "poligono",
-                  "cota", "cota_cadena", "cota_ang")
+                  "cota", "cota_cadena", "cota_ang", "cota_radio")
 
     def _build_tools_toolbar(self) -> None:
         from PySide6.QtGui import QAction, QActionGroup
@@ -4675,7 +4940,7 @@ class ComposerWindow(QMainWindow):
     #: hands back to Select after one item — the same afternoon, having
     #: tried it on all of them: «creo que fue mala idea repetir el
     #: comando, tal vez eso solo para lo que es acotar».
-    STICKY_TOOLS = frozenset(("cota", "cota_ang"))
+    STICKY_TOOLS = frozenset(("cota", "cota_ang", "cota_radio"))
 
     def _after_place(self) -> None:
         """The tool just placed something: keep it armed if it is one of
@@ -4755,6 +5020,15 @@ class ComposerWindow(QMainWindow):
         elif mode == "nivel":
             style = dict(getattr(self, "_last_nivel_style", None) or {})
             item = NivelItem(x_mm=x0, y_mm=y0, **style)
+            # An elevation's page rows ARE the model's heights, so even a
+            # click that snapped to nothing knows its own level.
+            host = self.frame_at_page(x0, y0)
+            if host is not None:
+                z = self.frame_level_at(host, x0, y0)
+                if z is not None:
+                    item.z_m = z
+                if host.view_key == "std:top":
+                    item.symbol = "circle"
             if hit_a is not None and hit_a[3] is not None:
                 frame = hit_a[3]
                 if not frame.uid:
@@ -4902,6 +5176,33 @@ class ComposerWindow(QMainWindow):
         self._pending_sel = item
         self.history.execute(AddItemCommand(self.comp, item))
         return item
+
+    def place_radial(self, centre, arc_point, kind: str = "radius") -> None:
+        """The radius / diameter tool's two clicks landed: the centre and a
+        point on the arc. The scale comes from the frame the centre fell
+        in, so the value reads in model units like every other cota."""
+        import math as _math
+        r = _math.hypot(arc_point[0] - centre[0], arc_point[1] - centre[1])
+        if r < 0.5:
+            return
+        host = self.frame_at_page(centre[0], centre[1])
+        n = (host.scale_n if host is not None
+             else (self.comp.frames[0].scale_n if self.comp.frames else 100.0))
+        style = dict(getattr(self, "_last_cota_style", None) or {})
+        keep = {k: v for k, v in style.items()
+                if k in ("text_mm", "decimals", "units", "stroke_mm",
+                         "color", "text_color", "ends", "text_bg",
+                         "text_bg_opacity", "offset_mm")}
+        item = CotaRadialItem(
+            x_mm=centre[0], y_mm=centre[1], radius_mm=r, scale_n=n,
+            kind=("diameter" if kind == "diameter" else "radius"),
+            angle_deg=_math.degrees(_math.atan2(arc_point[1] - centre[1],
+                                                arc_point[0] - centre[0])),
+            **keep)
+        item.z = self._next_z()
+        self._pending_sel = item
+        self.history.execute(AddItemCommand(self.comp, item))
+        self._after_place()
 
     def place_angular(self, vertex, a, b, radius_mm: float) -> None:
         """The angular tool's four clicks landed: vertex, a point on each
@@ -5145,6 +5446,7 @@ class ComposerWindow(QMainWindow):
         self.props.addWidget(_top_aligned(self._page_perfil()))    # 12
         self.props.addWidget(_top_aligned(self._page_nivel()))     # 13
         self.props.addWidget(_top_aligned(self._page_llamada()))   # 14
+        self.props.addWidget(_top_aligned(self._page_cota_rad()))  # 15
         self._tabs.addTab(self.props, tr("Item properties"))
 
         # Save / update / export live on the sheet toolbar at the top
@@ -6071,6 +6373,99 @@ class ComposerWindow(QMainWindow):
         form.addRow(tr("Background opacity"), self.et_bg_opacity)
         return w
 
+    def _page_cota_rad(self) -> QWidget:
+        w = QWidget()
+        form = QFormLayout(w)
+        self.crad_kind = QComboBox()
+        for label, key in ((tr("Radius (R)"), "radius"),
+                           (tr("Diameter (\u00d8)"), "diameter")):
+            self.crad_kind.addItem(label, key)
+        self.crad_kind.currentIndexChanged.connect(self._on_cota_rad_props)
+        form.addRow(tr("Type"), self.crad_kind)
+        self.crad_text = QLineEdit()
+        self.crad_text.setPlaceholderText(tr("(automatic)"))
+        self.crad_text.editingFinished.connect(self._on_cota_rad_props)
+        form.addRow(tr("Label"), self.crad_text)
+        self.crad_radius = QDoubleSpinBox()
+        self.crad_radius.setRange(0.5, 600.0)
+        self.crad_radius.setSingleStep(0.5)
+        self.crad_radius.setSuffix(" mm")
+        self.crad_radius.valueChanged.connect(self._on_cota_rad_props)
+        form.addRow(tr("Radius on paper"), self.crad_radius)
+        self.crad_angle = QDoubleSpinBox()
+        self.crad_angle.setRange(-180.0, 180.0)
+        self.crad_angle.setSingleStep(5.0)
+        self.crad_angle.setSuffix("\u00b0")
+        self.crad_angle.valueChanged.connect(self._on_cota_rad_props)
+        form.addRow(tr("Direction"), self.crad_angle)
+        self.crad_place = QComboBox()
+        for label, key in ((tr("Automatic"), "auto"),
+                           (tr("Inside"), "in"),
+                           (tr("Outside"), "out")):
+            self.crad_place.addItem(label, key)
+        self.crad_place.setToolTip(tr(
+            "Where the words and the arrows go. Automatic puts them inside "
+            "while they fit and takes them out when they do not, which is "
+            "what the standard asks."))
+        self.crad_place.currentIndexChanged.connect(self._on_cota_rad_props)
+        form.addRow(tr("Text placement"), self.crad_place)
+        self.crad_centre = QCheckBox(tr("Centre mark"))
+        self.crad_centre.toggled.connect(self._on_cota_rad_props)
+        form.addRow("", self.crad_centre)
+        self.crad_text_mm = QDoubleSpinBox()
+        self.crad_text_mm.setRange(1.0, 10.0)
+        self.crad_text_mm.setSingleStep(0.2)
+        self.crad_text_mm.setSuffix(" mm")
+        self.crad_text_mm.valueChanged.connect(self._on_cota_rad_props)
+        form.addRow(tr("Text height"), self.crad_text_mm)
+        self.crad_decimals = QDoubleSpinBox()
+        self.crad_decimals.setRange(0, 4)
+        self.crad_decimals.setDecimals(0)
+        self.crad_decimals.valueChanged.connect(self._on_cota_rad_props)
+        form.addRow(tr("Decimals"), self.crad_decimals)
+        self.crad_units = QComboBox()
+        from core.units import UNIT_CHOICES
+        self.crad_units.addItems(list(UNIT_CHOICES))
+        self.crad_units.currentTextChanged.connect(self._on_cota_rad_props)
+        form.addRow(tr("Units"), self.crad_units)
+        self.crad_ends = QComboBox()
+        for label, key in ((tr("Arrows"), "arrow"),
+                           (tr("Oblique ticks"), "tick"),
+                           (tr("None"), "none")):
+            self.crad_ends.addItem(label, key)
+        self.crad_ends.currentIndexChanged.connect(self._on_cota_rad_props)
+        form.addRow(tr("Ends"), self.crad_ends)
+        self.crad_stroke = QDoubleSpinBox()
+        self.crad_stroke.setRange(0.1, 1.5)
+        self.crad_stroke.setSingleStep(0.05)
+        self.crad_stroke.setSuffix(" mm")
+        self.crad_stroke.valueChanged.connect(self._on_cota_rad_props)
+        form.addRow(tr("Line width"), self.crad_stroke)
+        self.crad_color_btn = QPushButton()
+        self.crad_color_btn.setFixedHeight(22)
+        self.crad_color_btn.clicked.connect(
+            lambda: self._pick_item_color("color", self.crad_color_btn))
+        form.addRow(tr("Colour"), self.crad_color_btn)
+        return w
+
+    def _on_cota_rad_props(self, *_a) -> None:
+        item = self._single_selected()
+        if self._updating or not isinstance(item, CotaRadialCanvasItem):
+            return
+        item.prepareGeometryChange()
+        self._panel_edit(item, {
+            "kind": self.crad_kind.currentData() or "radius",
+            "text": self.crad_text.text(),
+            "radius_mm": self.crad_radius.value(),
+            "angle_deg": self.crad_angle.value(),
+            "placement": self.crad_place.currentData() or "auto",
+            "centre_mark": self.crad_centre.isChecked(),
+            "text_mm": self.crad_text_mm.value(),
+            "decimals": int(self.crad_decimals.value()),
+            "units": self.crad_units.currentText() or "m",
+            "ends": self.crad_ends.currentData() or "arrow",
+            "stroke_mm": self.crad_stroke.value()})
+
     def _page_cota_ang(self) -> QWidget:
         w = QWidget()
         form = QFormLayout(w)
@@ -6689,6 +7084,8 @@ class ComposerWindow(QMainWindow):
             self.canvas.addItem(CotaCanvasItem(self, ct))
         for ca in getattr(self.comp, "cotas_ang", []) or []:
             self.canvas.addItem(CotaAngularCanvasItem(self, ca))
+        for cr in getattr(self.comp, "cotas_rad", []) or []:
+            self.canvas.addItem(CotaRadialCanvasItem(self, cr))
         for et in getattr(self.comp, "etiquetas", []) or []:
             self.canvas.addItem(EtiquetaCanvasItem(self, et))
         for pf in getattr(self.comp, "perfiles", []) or []:
@@ -7054,6 +7451,26 @@ class ComposerWindow(QMainWindow):
                 self.pf_w.setValue(float(m.w_mm))
                 self.pf_h.setValue(float(m.h_mm))
                 self.props.setCurrentIndex(12)
+            elif isinstance(item, CotaRadialCanvasItem):
+                m = item.model
+                kidx = self.crad_kind.findData(m.kind)
+                self.crad_kind.setCurrentIndex(max(kidx, 0))
+                self.crad_text.setText(m.text)
+                self.crad_radius.setValue(m.radius_mm)
+                self.crad_angle.setValue(m.angle_deg)
+                pidx = self.crad_place.findData(
+                    getattr(m, "placement", "auto") or "auto")
+                self.crad_place.setCurrentIndex(max(pidx, 0))
+                self.crad_centre.setChecked(bool(m.centre_mark))
+                self.crad_text_mm.setValue(m.text_mm)
+                self.crad_decimals.setValue(m.decimals)
+                self.crad_units.setCurrentText(
+                    getattr(m, "units", "m") or "m")
+                eidx = self.crad_ends.findData(m.ends)
+                self.crad_ends.setCurrentIndex(max(eidx, 0))
+                self.crad_stroke.setValue(m.stroke_mm)
+                self.crad_color_btn.setStyleSheet(f"background: {m.color};")
+                self.props.setCurrentIndex(15)
             elif isinstance(item, CotaAngularCanvasItem):
                 m = item.model
                 self.cang_text.setText(m.text)
@@ -7794,6 +8211,9 @@ class ComposerWindow(QMainWindow):
                      "pen_cut_mm", "pen_profile_mm", "pen_edge_mm",
                      "profiles", "cut_fill", "cut_fill_color",
                      "cut_hatch_mm"),
+        CotaRadialItem: ("text_mm", "decimals", "units", "ends",
+                         "stroke_mm", "color", "text_color", "offset_mm",
+                         "text_bg", "text_bg_opacity", "centre_mark"),
         CotaAngularItem: ("text_mm", "decimals", "ends", "stroke_mm",
                           "color", "offset_mm", "text_color", "text_bg",
                           "text_bg_opacity"),
@@ -9632,6 +10052,8 @@ class ComposerWindow(QMainWindow):
             return tr("Label") + ": " + first
         if isinstance(model, CotaAngularItem):
             return tr("Angle") + " " + model.label()
+        if isinstance(model, CotaRadialItem):
+            return model.label()
         if isinstance(model, NivelItem):
             return tr("Level") + " " + model.label()
         if isinstance(model, LlamadaItem):
@@ -9885,6 +10307,45 @@ class ComposerWindow(QMainWindow):
             self.render_frame(f)
         # anchored cotas follow the refreshed drawing (rebuild reprojects)
         self._rebuild_canvas()
+
+    def frame_level_at(self, frame: MarcoVista, page_x: float,
+                       page_y: float):
+        """The model height (metres) a page point stands at inside *frame*,
+        or ``None`` when the view cannot tell.
+
+        In an elevation or a horizontal section the page's vertical axis IS
+        the model's Z, so a click anywhere in the frame knows its own
+        height — no geometry needed, no snap to miss. Rafael, 21:20: «¿sería
+        posible que detectase la altura? Sería un puntazo para no tener tú
+        que anotarlo». A plan looks down and an axonometric looks across, so
+        neither can say: there the level still comes from a snapped point or
+        from the typed value.
+        """
+        if getattr(frame, "perspective", False) or frame.h_mm <= 0:
+            return None
+        from core.composition import model_height_for_frame
+        from core.hlr import camera_basis
+
+        def run():
+            eye, right, up, fwd = camera_basis(self._window.viewport.camera)
+            if abs(float(fwd[2])) > 1e-3:        # not a horizontal view
+                return None
+            half_h = model_height_for_frame(frame.h_mm, frame.scale_n) / 2.0
+            if half_h <= 1e-9:
+                return None
+            k = frame.h_mm / (2.0 * half_h)
+            half_w = half_h * (frame.w_mm / frame.h_mm)
+            cx = (page_x - frame.x_mm) / k - half_w
+            cy = half_h - (page_y - frame.y_mm) / k
+            return float(eye[2] + right[2] * cx + up[2] * cy)
+
+        return self._with_frame_camera(frame, run)
+
+    def frame_at_page(self, page_x: float, page_y: float):
+        """The topmost frame the page point falls in, or ``None``."""
+        return next((f for f in reversed(self.comp.frames)
+                     if f.x_mm <= page_x <= f.x_mm + f.w_mm
+                     and f.y_mm <= page_y <= f.y_mm + f.h_mm), None)
 
     def _with_frame_camera(self, frame: MarcoVista, fn):
         """Run ``fn()`` with the live camera pointed at *frame* (exact
@@ -10572,6 +11033,8 @@ class ComposerWindow(QMainWindow):
                 paint_cota_mm(painter, m)
             elif isinstance(m, CotaAngularItem):
                 paint_cota_angular_mm(painter, m)
+            elif isinstance(m, CotaRadialItem):
+                paint_cota_radial_mm(painter, m)
             elif isinstance(m, EtiquetaItem):
                 paint_etiqueta_mm(painter, m)
             elif isinstance(m, NivelItem):

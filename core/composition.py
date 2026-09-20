@@ -987,6 +987,142 @@ class CotaItem:
 
 
 @dataclass
+class CotaRadialItem:
+    """A radius or diameter dimension (AutoCAD's DIMRADIUS / DIMDIAMETER).
+
+    Rafael asked for the radius after we shipped Fillet — «ya que pusisteis
+    el redondeo, pues sería lo suyo» (revisión 2, 42:40) — and his video on
+    drafting standards adds the diameter and the rules both obey, drawn
+    case by case on his AutoCAD reference sheet (`rafael-cotas/f1230.jpg`):
+
+    * the line ALWAYS reaches the centre — a radius starts there (rule 12)
+      and a diameter passes through it (rule 8); a leader that stops short
+      of the centre is out of standard (rule 15);
+    * the symbol goes with the value, ``R`` or ``Ø`` (rules 8, 12);
+    * the text sits ABOVE the line, and changing quadrant must not leave it
+      upside down (rule 13) — that falls out of :func:`readable_deg`;
+    * it all fits inside → inside, arrows pointing outward at the arc
+      (rule 9); it does not → the line is prolonged outside and the arrows
+      point back AT the centre (rules 10, 14, 15);
+    * an arc is dimensioned exactly like a circle (rule 16).
+    """
+
+    x_mm: float = 0.0            # the CENTRE, page mm
+    y_mm: float = 0.0
+    radius_mm: float = 15.0      # the circle's radius ON PAPER
+    angle_deg: float = -30.0     # heading the dimension line leaves by
+    kind: str = "radius"         # radius | diameter
+    scale_n: float = 100.0
+    text: str = ""               # "" = automatic; <> stands for the value
+    text_mm: float = 2.8
+    decimals: int = 2
+    units: str = "m"
+    offset_mm: float = 0.8       # text gap above the line
+    ends: str = "arrow"          # arrow | tick | none
+    stroke_mm: float = 0.25
+    color: str = "#1e242c"
+    text_color: str = ""
+    text_bg: str = ""
+    text_bg_opacity: float = 1.0
+    #: ``auto`` decides by whether the words fit; ``in`` / ``out`` force it.
+    placement: str = "auto"      # auto | in | out
+    centre_mark: bool = True     # the little cross at the centre
+    uid: str = ""
+    z: float = 0.0
+    locked: bool = False
+    group_id: str = ""
+
+    @property
+    def w_mm(self) -> float:
+        return max(2.0 * self.radius_mm, 2.0)
+
+    @property
+    def h_mm(self) -> float:
+        return max(2.0 * self.radius_mm, 2.0)
+
+    def symbol(self) -> str:
+        return "\u00d8" if self.kind == "diameter" else "R"
+
+    def measured_mm(self) -> float:
+        """Paper length of what the label reports."""
+        r = abs(float(self.radius_mm))
+        return 2.0 * r if self.kind == "diameter" else r
+
+    def real_distance_m(self) -> float:
+        return self.measured_mm() * self.scale_n / 1000.0
+
+    def heading(self) -> tuple[float, float]:
+        a = math.radians(self.angle_deg)
+        return math.cos(a), math.sin(a)
+
+    def line_points(self) -> tuple[tuple, tuple]:
+        """The dimension LINE's two ends in item space (origin = centre): a
+        radius runs from the centre out to the arc, a diameter right across
+        it. Rule 15: neither ever stops short of the centre."""
+        ux, uy = self.heading()
+        r = float(self.radius_mm)
+        if self.kind == "diameter":
+            return (-ux * r, -uy * r), (ux * r, uy * r)
+        return (0.0, 0.0), (ux * r, uy * r)
+
+    def label_width_mm(self) -> float:
+        return len(self.label()) * self.text_mm * 0.62 + 2.0
+
+    def outside(self) -> bool:
+        """Whether the words go beyond the arc. ``auto`` measures: they go
+        inside while they fit on the line with a little air (rule 9), and
+        out when they do not (rules 10, 14)."""
+        if self.placement in ("in", "out"):
+            return self.placement == "out"
+        (ax, ay), (bx, by) = self.line_points()
+        room = math.hypot(bx - ax, by - ay)
+        arrow = max(1.8, self.stroke_mm * 6) * (
+            2 if self.kind == "diameter" else 1)
+        return self.label_width_mm() + arrow + 1.0 > room
+
+    def text_anchor(self) -> tuple[float, float]:
+        """Where the words sit, in item space: over the middle of the line
+        when they fit, past its end when they do not.
+
+        A DIAMETER's middle is the centre itself, and the centre belongs to
+        the axes — «un número encima de un eje se lee mal, sobre todo la
+        coma» (rule 3). So it rides the middle of the outer half instead,
+        which is where the Ø41,96 of the reference sheet sits."""
+        ux, uy = self.heading()
+        if not self.outside():
+            if self.kind == "diameter":
+                h = float(self.radius_mm) / 2.0
+                return (ux * h, uy * h)
+            (ax, ay), (bx, by) = self.line_points()
+            return ((ax + bx) / 2.0, (ay + by) / 2.0)
+        reach = float(self.radius_mm) + self.label_width_mm() / 2.0 + 2.0
+        return (ux * reach, uy * reach)
+
+    def tail_end(self) -> tuple[float, float]:
+        """The far end of the line once it is prolonged to carry the words
+        outside (rule 10: «la línea se prolonga»); the arc end otherwise."""
+        ux, uy = self.heading()
+        if not self.outside():
+            return (ux * self.radius_mm, uy * self.radius_mm)
+        reach = float(self.radius_mm) + self.label_width_mm() + 2.5
+        return (ux * reach, uy * reach)
+
+    def auto_label(self) -> str:
+        from core.units import format_length
+        d = self.real_distance_m()
+        n = max(0, min(int(self.decimals), 6))
+        units = getattr(self, "units", "m") or "m"
+        if units == "m" and d >= 1000:
+            return self.symbol() + f"{d / 1000:.3f} km"
+        return self.symbol() + format_length(d, units, n)
+
+    def label(self) -> str:
+        if self.text:
+            return self.text.replace("<>", self.auto_label())
+        return self.auto_label()
+
+
+@dataclass
 class Composicion:
     """One sheet: a page plus its items."""
 
@@ -1003,6 +1139,7 @@ class Composicion:
     shapes: list = field(default_factory=list)
     cotas: list = field(default_factory=list)
     cotas_ang: list = field(default_factory=list)
+    cotas_rad: list = field(default_factory=list)
     etiquetas: list = field(default_factory=list)
     perfiles: list = field(default_factory=list)
     niveles: list = field(default_factory=list)
@@ -1046,7 +1183,8 @@ class Composicion:
         out = (list(self.frames) + list(self.texts) + list(self.images)
                + list(self.scalebars) + list(self.nortes)
                + list(self.leyendas) + list(self.shapes) + list(self.cotas)
-               + list(self.cotas_ang) + list(self.etiquetas)
+               + list(self.cotas_ang) + list(self.cotas_rad)
+               + list(self.etiquetas)
                + list(self.perfiles) + list(self.niveles)
                + list(self.llamadas))
         if self.cajetin is not None:
@@ -1073,6 +1211,7 @@ class Composicion:
         for key, lst in (("nortes", self.nortes), ("leyendas", self.leyendas),
                          ("shapes", self.shapes), ("cotas", self.cotas),
                          ("cotas_ang", self.cotas_ang),
+                         ("cotas_rad", self.cotas_rad),
                          ("etiquetas", self.etiquetas),
                          ("perfiles", self.perfiles),
                          ("niveles", self.niveles),
@@ -1110,6 +1249,7 @@ class Composicion:
         c.leyendas = _items(Leyenda, d.get("leyendas"))
         c.shapes = _items(FormaItem, d.get("shapes"))
         c.cotas_ang = _items(CotaAngularItem, d.get("cotas_ang"))
+        c.cotas_rad = _items(CotaRadialItem, d.get("cotas_rad"))
         c.etiquetas = _items(EtiquetaItem, d.get("etiquetas"))
         c.perfiles = _items(PerfilTerreno, d.get("perfiles"))
         c.niveles = _items(NivelItem, d.get("niveles"))
@@ -1309,6 +1449,8 @@ class AddItemCommand(ComposerCommand):
             return self.comp.cotas
         if isinstance(self.item, CotaAngularItem):
             return self.comp.cotas_ang
+        if isinstance(self.item, CotaRadialItem):
+            return self.comp.cotas_rad
         if isinstance(self.item, EtiquetaItem):
             return self.comp.etiquetas
         if isinstance(self.item, PerfilTerreno):
@@ -1359,6 +1501,8 @@ class RemoveItemCommand(ComposerCommand):
             return self.comp.cotas
         if isinstance(self.item, CotaAngularItem):
             return self.comp.cotas_ang
+        if isinstance(self.item, CotaRadialItem):
+            return self.comp.cotas_rad
         if isinstance(self.item, EtiquetaItem):
             return self.comp.etiquetas
         if isinstance(self.item, PerfilTerreno):
