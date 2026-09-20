@@ -11,22 +11,29 @@ erases its whole contour, curves being single entities. Guides, dimensions and
 georef paths are erased too. Esc cancels the in-progress stroke.
 
 Shift held at press starts a HIDE stroke instead (SketchUp's Shift+eraser):
-the swept edges are hidden, not erased — still one undo step. Only edges can
-hide, so a hide stroke ignores guides/dimensions/paths rather than deleting
-what the gesture promised to keep.
+the swept edges are hidden, not erased — still one undo step. Only edges and
+objects can hide, so a hide stroke ignores guides/dimensions/paths rather
+than deleting what the gesture promised to keep.
+
+A group or component under the cursor is erased WHOLE, as SketchUp does
+(@pacaeiro, issue #46: «ERASE tool cannot erase Groups nor Components,
+only raw edges and faces»); its box marks the stroke, and Shift hides it.
 """
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
 
 from core.dimension import Dimension
+from core.group import Group
 from core.guide import Guide
 from core.history import (
     CompoundCommand,
     DeleteDimensionsCommand,
     DeleteGeoPathsCommand,
+    DeleteGroupCommand,
     DeleteGuidesCommand,
     EraseSelectionCommand,
+    HideCommand,
     HideEdgesCommand,
 )
 from core.mesh import Edge
@@ -82,10 +89,18 @@ class EraserTool(Tool):
             viewport.update()
             return
         edges = [m for m in marked if isinstance(m, Edge)]
+        groups = [m for m in marked if isinstance(m, Group)]
         if self._hide:
             edges = [e for e in edges if not getattr(e, "hidden", False)]
+            groups = [g for g in groups if not getattr(g, "hidden", False)]
+            cmds = []
             if edges:
-                viewport.history.execute(HideEdgesCommand(edges, hidden=True))
+                cmds.append(HideEdgesCommand(edges, hidden=True))
+            if groups:
+                cmds.append(HideCommand(groups, hidden=True))
+            if cmds:
+                viewport.history.execute(
+                    cmds[0] if len(cmds) == 1 else CompoundCommand(cmds))
             viewport.update()
             return
         guides = [m for m in marked if isinstance(m, Guide)]
@@ -94,6 +109,7 @@ class EraserTool(Tool):
         cmds = []
         if edges:
             cmds.append(EraseSelectionCommand(edges, []))
+        cmds.extend(DeleteGroupCommand(g) for g in groups)
         if guides:
             cmds.append(DeleteGuidesCommand(guides))
         if dims:
@@ -116,6 +132,8 @@ class EraserTool(Tool):
         for m in self.marked:
             if isinstance(m, Edge):
                 segs.append((m.a, m.b))
+            elif isinstance(m, Group):
+                segs.extend(self._group_box_segments(m))
             elif isinstance(m, Guide):
                 segs.append(m.segment())
             elif isinstance(m, Dimension):
@@ -125,15 +143,42 @@ class EraserTool(Tool):
         return segs
 
     # ---- Internals ----------------------------------------------------------
+    def _group_box_segments(self, group) -> list:
+        """The twelve edges of the group's oriented box — its stroke mark,
+        the same box Select draws around it."""
+        vp = getattr(self, "_viewport", None)
+        obb = getattr(vp, "_group_obb", None)
+        if obb is None:
+            return []
+        from core.group import oriented_box_corners
+        try:
+            c = oriented_box_corners(*obb(group))
+        except Exception:  # noqa: BLE001 — a box that cannot be built
+            return []
+        if len(c) != 8:
+            return []
+        pairs = ((0, 1), (1, 3), (3, 2), (2, 0), (4, 5), (5, 7), (7, 6),
+                 (6, 4), (0, 4), (1, 5), (2, 6), (3, 7))
+        return [(c[i], c[j]) for i, j in pairs]
+
     def _mark(self, viewport, sx: float, sy: float) -> None:
+        self._viewport = viewport
         edge = viewport.pick_edge(sx, sy)
         if edge is not None:
             # A curve is one entity: marking a segment marks its contour.
             for e in viewport.scene.mesh.curve_edges(edge):
                 self.marked.add(e)
             return
+        # A group or component is one entity too: the eraser takes it whole
+        # (issue #46). From inside a group, its own content is the loose
+        # part and pick_group answers None, so nothing changes there.
+        pick_group = getattr(viewport, "pick_group", None)
+        group = pick_group(sx, sy) if pick_group is not None else None
+        if group is not None:
+            self.marked.add(group)
+            return
         if self._hide:
-            return          # only edges can hide: don't mark what won't act
+            return          # only edges and objects can hide
         guide = viewport.pick_guide(sx, sy)
         if guide is not None:
             self.marked.add(guide)
@@ -150,3 +195,4 @@ class EraserTool(Tool):
         self._stroke = False
         self._hide = False
         self.marked = set()
+        self._viewport = None

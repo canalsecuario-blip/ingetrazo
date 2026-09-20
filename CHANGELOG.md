@@ -4,6 +4,22 @@ All notable changes to IngeTrazo are documented here.
 Format inspired by [Keep a Changelog](https://keepachangelog.com); versions
 follow [SemVer](https://semver.org).
 
+## [Sin publicar]
+
+### Arreglado
+- **Las vistas Superior e Inferior en proyección paralela no eran
+  rectas** (issue #45, @pacaeiro: «camera not perpendicular to view»).
+  Estaban a 89° para esquivar el caso degenerado de la cámara, y en
+  paralela ese grado se ve: cada arista vertical salía como un trazo
+  corto y la planta, un pelo oblicua. Ahora son exactamente verticales
+  —también las plantas de los marcos de lámina— y la orientación en
+  pantalla es la misma de siempre (norte arriba en Superior).
+- **El Borrador borra grupos y componentes** (issue #46, @pacaeiro: «only
+  raw edges and faces»). Un objeto bajo el cursor se marca entero (su
+  caja) y se borra al soltar, en el mismo trazo que las aristas; con
+  Mayús se oculta en vez de borrarse. Dentro de un grupo abierto, su
+  contenido sigue siendo geometría suelta, como antes.
+
 ## [0.4.8] — 2026-09-20
 
 **La tanda de @pacaeiro sobre la 0.4.7, y lo que salió de comprobar la

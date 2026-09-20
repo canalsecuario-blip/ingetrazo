@@ -113,3 +113,74 @@ def test_eraser_release_erases_guides():
     tool.marked = {g}
     tool.on_release(vp)
     assert scene.guides == []
+
+
+# ---- @pacaeiro, issue #46: the eraser takes groups and components whole
+
+class _GroupPickingViewport(_FakeViewport):
+    """The fake viewport with pickers: nothing loose under the cursor, a
+    group there instead."""
+
+    def __init__(self, scene, group):
+        super().__init__(scene)
+        self._group = group
+
+    def pick_edge(self, x, y):
+        return None
+
+    def pick_group(self, x, y):
+        return self._group
+
+    def pick_guide(self, x, y):
+        return None
+
+    def pick_dimension(self, x, y):
+        return None
+
+    def pick_geopath(self, x, y):
+        return None
+
+
+def _grouped_square(scene):
+    from PySide6.QtGui import QVector3D
+    from core.group import Group
+    from core.mesh import Mesh
+    g = Group(Mesh(), name="caja")
+    g.mesh.add_face([QVector3D(0, 0, 0), QVector3D(2, 0, 0),
+                     QVector3D(2, 2, 0), QVector3D(0, 2, 0)])
+    scene.groups.append(g)
+    return g
+
+
+def test_the_eraser_marks_the_group_under_the_cursor_and_erases_it_whole():
+    """«ERASE tool cannot erase Groups nor Components, only raw edges and
+    faces». A press over a group marks the group; the release deletes it
+    in one undo step, and undo brings it back."""
+    from tools.eraser import EraserTool
+    scene = Scene()
+    g = _grouped_square(scene)
+    vp = _GroupPickingViewport(scene, g)
+    tool = EraserTool()
+    tool._stroke = True
+    tool._mark(vp, 10.0, 10.0)
+    assert tool.marked == {g}
+    tool.on_release(vp)
+    assert g not in scene.groups
+    vp.history.undo()
+    assert g in scene.groups
+
+
+def test_shift_stroke_hides_the_group_instead():
+    from tools.eraser import EraserTool
+    scene = Scene()
+    g = _grouped_square(scene)
+    vp = _GroupPickingViewport(scene, g)
+    tool = EraserTool()
+    tool._stroke = True
+    tool._hide = True
+    tool._mark(vp, 10.0, 10.0)
+    assert tool.marked == {g}
+    tool.on_release(vp)
+    assert g in scene.groups and getattr(g, "hidden", False) is True
+    vp.history.undo()
+    assert getattr(g, "hidden", False) is False
