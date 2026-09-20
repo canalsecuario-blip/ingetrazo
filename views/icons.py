@@ -626,36 +626,80 @@ def _dimension_chain(p, ink):
 
 
 def _dimension_radius(p, ink):
-    # A circle with the radius dimension inside it, the way the reference
-    # sheet draws it: the line starts AT the centre (the little cross),
-    # the arrow touches the arc, and «R» rides above the line.
-    from PySide6.QtGui import QPolygonF as _Poly
-    cx, cy, R = 20.0, 28.0, 15.0
-    p.drawEllipse(QPointF(cx, cy), R, R)
-    p.drawLine(QPointF(cx - 3, cy), QPointF(cx + 3, cy))     # centre mark
-    p.drawLine(QPointF(cx, cy - 3), QPointF(cx, cy + 3))
+    """Radius dimension, in IngeCAD's key for its DIM icons (Marco's pick,
+    2026-09-19): the SUBJECT in the accent, heavier — the circle — and the
+    DIMENSION over it in ink, a leader out of the centre with its arrow on
+    the arc. No letter: at 24 px an «R» was noise."""
     import math as _m
-    a = _m.radians(-38.0)
-    ex, ey = cx + R * _m.cos(a), cy + R * _m.sin(a)
-    p.drawLine(QPointF(cx, cy), QPointF(ex, ey))
-    p.save()                                                 # the arrow head
-    p.setBrush(ink)
-    p.setPen(Qt.NoPen)
-    back = a + _m.pi
-    w = _m.radians(15.0)
-    p.drawPolygon(_Poly([
-        QPointF(ex, ey),
-        QPointF(ex + 6.5 * _m.cos(back + w), ey + 6.5 * _m.sin(back + w)),
-        QPointF(ex + 6.5 * _m.cos(back - w), ey + 6.5 * _m.sin(back - w))]))
-    p.restore()
-    f = p.font()
-    f.setPixelSize(12)
-    f.setBold(True)
+    cx, cy, R = 21.0, 26.0, 14.0
     p.save()
-    p.setFont(f)
-    p.setPen(ink)
-    p.drawText(QRectF(24.0, 9.0, 16.0, 13.0), Qt.AlignCenter, "R")
+    p.setPen(QPen(_accent(), 3.2))
+    p.setBrush(Qt.NoBrush)
+    p.drawEllipse(QPointF(cx, cy), R, R)
     p.restore()
+    a = _m.radians(-40.0)
+    ex, ey = cx + R * _m.cos(a), cy + R * _m.sin(a)
+    _solid_arrow(p, ink, cx, cy, ex, ey, w=2.2, head=6.5)
+    _dot(p, cx, cy, 2.6, ink)                       # the centre it measures from
+
+
+def _dimension_diameter(p, ink):
+    """Its twin: the line crosses the centre and has an arrow at each end."""
+    import math as _m
+    cx, cy, R = 24.0, 24.0, 14.0
+    p.save()
+    p.setPen(QPen(_accent(), 3.2))
+    p.setBrush(Qt.NoBrush)
+    p.drawEllipse(QPointF(cx, cy), R, R)
+    p.restore()
+    a = _m.radians(-40.0)
+    dx, dy = R * _m.cos(a), R * _m.sin(a)
+    _solid_arrow(p, ink, cx, cy, cx + dx, cy + dy, w=2.2, head=6.5)
+    _solid_arrow(p, ink, cx, cy, cx - dx, cy - dy, w=2.2, head=6.5)
+
+
+def _dimension_angular(p, ink):
+    """Angular dimension, same key: the two LEGS in the accent, and the
+    dimension arc between them in ink with an arrow at each end. It used
+    to borrow the Protractor's icon, which is a different tool."""
+    import math as _m
+    vx, vy = 11.0, 35.0
+    a0, a1 = _m.radians(0.0), _m.radians(-58.0)      # the two legs, page y down
+    L = 28.0
+    p.save()
+    p.setPen(QPen(_accent(), 3.2))
+    for a in (a0, a1):
+        p.drawLine(QPointF(vx, vy),
+                   QPointF(vx + L * _m.cos(a), vy + L * _m.sin(a)))
+    p.restore()
+    R = 17.0
+    rect = QRectF(vx - R, vy - R, 2 * R, 2 * R)
+    p.save()
+    p.setPen(QPen(ink, 2.0))
+    p.setBrush(Qt.NoBrush)
+    p.drawArc(rect, 0, 58 * 16)                      # QPainter angles: y up
+    p.restore()
+    for a, side in ((a0, 1.0), (a1, -1.0)):
+        ax, ay = vx + R * _m.cos(a), vy + R * _m.sin(a)
+        t = a - side * _m.radians(90.0)              # along the arc
+        _solid_arrow(p, ink, ax - 7.0 * _m.cos(t), ay - 7.0 * _m.sin(t),
+                     ax, ay, w=1.8, head=5.5)
+
+
+def _dimension_baseline(p, ink):
+    """Baseline dimensions: three lines that all start at the SAME left
+    edge and stack upward, each one longer than the last — AutoCAD's
+    DIMBASELINE. Its twin, Chain, puts them end to end on one line."""
+    x0 = 9.0
+    _guide(p, ink, (x0, 40.0), (x0, 8.0))                 # the base extension
+    for i, (x1, y) in enumerate(((22.0, 34.0), (31.0, 25.0), (40.0, 16.0))):
+        _guide(p, ink, (x1, 40.0), (x1, y - 3.0))
+        p.drawLine(QPointF(x0, y), QPointF(x1, y))
+        _dim_tick(p, ink, x0, y, 3.0)
+        _dim_tick(p, ink, x1, y, 3.0)
+    _dot(p, x0, 40.0, 2.6)                                # the base point
+    for x in (22.0, 31.0, 40.0):
+        _dot(p, x, 40.0, 2.2)
 
 
 def _geopath(p, ink):
@@ -1478,6 +1522,9 @@ _DRAW = {
     "move": _move, "paint": _paint, "eyedropper": _eyedropper,
     "dimension": _dimension, "dimension_chain": _dimension_chain,
     "dimension_radius": _dimension_radius,
+    "dimension_baseline": _dimension_baseline,
+    "dimension_diameter": _dimension_diameter,
+    "dimension_angular": _dimension_angular,
     "dimension_style": _dimension_style,
     "geopath": _geopath, "orbit": _orbit, "pan": _pan,
     "text": _text, "text3d": _text3d,

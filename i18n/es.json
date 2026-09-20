@@ -1555,6 +1555,8 @@
  "Drawing plane locked: perpendicular to the edge": "Plano de dibujo fijado: perpendicular a la arista",
  "Drawing plane locked: parallel to the face": "Plano de dibujo fijado: paralelo a la cara",
  "Beside the line": "Al costado de la línea",
+ "Baseline dimensions, the way AutoCAD does: the first point is the BASE and every cota measures from it, each one stacked a row further out; click the last point or press Esc to end. Shift forces them all straight": "Acotación desde línea base, como en AutoCAD: el primer punto es la BASE y todas las cotas miden desde él, cada una apilada una fila más afuera; clic en el último punto o Esc para terminar. Shift las fuerza rectas a todas",
+ "Draw an angular dimension (vertex, two points, then the arc). Shift puts an arm on an exact multiple of 15° — the second one measured from the first, so the angle comes out round": "Dibujar cota angular (vértice, dos puntos y el arco). Shift pone el brazo en un múltiplo exacto de 15° — el segundo medido desde el primero, así que el ángulo sale redondo",
  "Above the compass": "Encima de la rosa",
  "Over the needle": "Sobre la aguja",
  "The N": "La N",

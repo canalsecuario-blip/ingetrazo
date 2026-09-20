@@ -226,8 +226,8 @@ def test_the_composer_toolbars_are_movable_and_their_arrangement_is_remembered(s
                      key=lambda tb: tb.x())
         assert [tb.objectName() for tb in top] == [
             "sheet_toolbar", "composer_draw", "arrange_toolbar"]
-        # 10 on the draw bar since the radius dimension joined it
-        assert len(tools.actions()) == 14 and len(draw.actions()) == 10
+        # 11 on the draw bar: the radius and the baseline dimensions
+        assert len(tools.actions()) == 14 and len(draw.actions()) == 11
         assert comp._tool_actions["cota"] in draw.actions()
         assert comp._tool_actions["vista"] in tools.actions()
         comp._tool_actions["cota"].trigger()          # one exclusive group

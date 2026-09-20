@@ -108,25 +108,20 @@ def test_the_plane_can_be_renamed_after_it_is_placed():
 
 # ---- 3. the N of the north arrow ----------------------------------------
 
-def test_the_N_sits_above_the_compass_by_default():
-    """«La N de norte quizás por aquí arriba estaría mejor, porque ahí se
-    ve mal» (33:20) — it was drawn over the black-and-white needle."""
+def test_the_north_arrow_keeps_its_box():
+    """The letter moved, nothing else: a sheet's north arrow stays put."""
     from core.composition import FlechaNorte
-    assert FlechaNorte().label_pos == "top"
+    a = FlechaNorte(size_mm=20.0)
+    assert (a.w_mm, a.h_mm) == (20.0, 20.0)
     old = Composicion.from_dict({"nortes": [{"x_mm": 1.0, "size_mm": 20.0}]})
-    assert old.nortes[0].label_pos == "top"
+    assert (old.nortes[0].w_mm, old.nortes[0].h_mm) == (20.0, 20.0)
 
 
-def test_the_north_arrow_keeps_its_box_either_way():
-    from core.composition import FlechaNorte
-    a, b = FlechaNorte(size_mm=20.0), FlechaNorte(size_mm=20.0,
-                                                  label_pos="centre")
-    assert (a.w_mm, a.h_mm) == (b.w_mm, b.h_mm) == (20.0, 20.0)
-
-
-def test_the_N_really_moves_up_the_page():
-    """Painted: with the N on top, the letter's ink is in the upper band
-    and the compass circle is not."""
+def test_the_N_is_drawn_clear_of_the_needle():
+    """«La N de norte quizás por aquí arriba estaría mejor, porque ahí se
+    ve mal» (Rafael, 33:20), and rendered side by side the needle simply
+    swallowed it (Marco, 2026-09-19), so there is no option to put it back
+    — there is one north arrow and it reads."""
     from PySide6.QtGui import QColor, QImage, QPainter
     from core.composition import FlechaNorte
     from views.composer import paint_norte_mm
@@ -146,16 +141,12 @@ def test_the_N_really_moves_up_the_page():
                 if img.pixelColor(x, y) != QColor(255, 255, 255)}
 
     sz, px = 20.0, 8
-    top = ink_rows(FlechaNorte(size_mm=sz))
-    # with the N on top the compass starts well down the box, and the only
-    # ink above it is the letter
-    circle_top = int((0.60 - 0.38 * 0.92) * sz * px)          # ≈ row 40
-    assert min(top) < circle_top - px                          # the N, clear
-    centre = ink_rows(FlechaNorte(size_mm=sz, label_pos="centre"))
-    # the old look has nothing above the circle at all: its topmost ink IS
-    # the circle, and the letter sits down on the needle
-    old_circle_top = int(0.5 * (1.0 - 0.92) * sz * px)         # ≈ row 6
-    assert min(centre) <= old_circle_top + px
+    rows = ink_rows(FlechaNorte(size_mm=sz))
+    circle_top = int((0.60 - 0.38 * 0.92) * sz * px)           # ≈ row 40
+    band = int(0.24 * sz * px)                                 # the N's band
+    assert min(rows) < band                    # the letter is up in its band
+    assert not any(band <= y < circle_top - px for y in rows)  # clear air
+    assert any(y >= circle_top for y in rows)                  # the compass
 
 
 # ---- 4. an image magnetises to the drawing under it ---------------------

@@ -555,17 +555,21 @@ class BarraEscala:
 
 @dataclass
 class FlechaNorte:
-    """A north arrow: circle, needle and N, rotatable to the project north."""
+    """A north arrow: circle, needle and N, rotatable to the project north.
+
+    The N goes in a band ABOVE the compass, where nothing else is drawn.
+    It used to sit at the middle, on top of the black-and-white needle,
+    which is what Rafael saw — «la N de norte quizás por aquí arriba
+    estaría mejor, porque ahí se ve mal» (33:20). Keeping that as an
+    option was a bad idea of mine: rendered side by side, the needle
+    simply swallows the letter (Marco, 2026-09-19). There is one north
+    arrow, and it reads.
+    """
 
     x_mm: float = 20.0
     y_mm: float = 20.0
     size_mm: float = 18.0
     angle_deg: float = 0.0
-    #: Where the N sits. ``top`` puts it in a band ABOVE the compass, which
-    #: is how a north arrow is normally drawn; ``centre`` is the old look,
-    #: with the letter over the needle — «la N de norte quizás por aquí
-    #: arriba estaría mejor, porque ahí se ve mal» (Rafael, 33:20).
-    label_pos: str = "top"       # top | centre
     z: float = 0.0            # stacking order on the page (higher = on top)
     locked: bool = False         # locked: shown but not movable/resizable
     group_id: str = ""            # sheet group (Ctrl+G); "" = ungrouped
@@ -1004,6 +1008,45 @@ class CotaItem:
         nx, ny = self.normal()
         s = self.sep_mm
         return (nx * s, ny * s), (self.dx_mm + nx * s, self.dy_mm + ny * s)
+
+    def label_extent_mm(self) -> float:
+        """How much room the words take ALONG the dimension line — their
+        width when they follow it, the shadow of their box when they are
+        kept horizontal on a slanted or vertical cota."""
+        tw = len(self.label()) * self.text_mm * 0.62 + 2.0
+        if (getattr(self, "text_align", "aligned") or "aligned") != "horizontal":
+            return tw
+        d = math.radians(cota_line_deg(self))
+        th = self.text_mm * 1.3 + 0.8
+        return tw * abs(math.cos(d)) + th * abs(math.sin(d))
+
+    def text_tail(self):
+        """Rule 4: when the words sit OUTSIDE an end, the dimension line
+        runs on under them — «la línea de cota se prolonga hasta cubrir
+        todo el texto; si el texto crece, la línea crece» (Rafael, 08:00).
+        A line that stops short and leaves the number floating is also
+        rule 6's «prohibido».
+
+        Returns the EXTRA segment, in item space, or ``None`` when the
+        words are over the line or the drafter has dragged them away by
+        hand — then the line stays where he put it, as LayOut does.
+        """
+        along = getattr(self, "text_along", "middle") or "middle"
+        if along not in ("start", "end"):
+            return None
+        if (abs(float(getattr(self, "text_dx_mm", 0.0) or 0.0)) > 1e-9
+                or abs(float(getattr(self, "text_dy_mm", 0.0) or 0.0)) > 1e-9):
+            return None
+        (ax, ay), (bx, by) = self.line_points()
+        dx, dy = bx - ax, by - ay
+        ln = math.hypot(dx, dy)
+        if ln < 1e-9:
+            return None
+        ux, uy = dx / ln, dy / ln
+        reach = self.label_extent_mm() + 1.8
+        if along == "start":
+            return ((ax, ay), (ax - ux * reach, ay - uy * reach))
+        return ((bx, by), (bx + ux * reach, by + uy * reach))
 
     def measured_mm(self) -> float:
         """Paper length the label reports: the whole segment, or only its
