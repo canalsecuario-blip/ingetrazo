@@ -38,6 +38,14 @@ follow [SemVer](https://semver.org).
   hice grupo; escalo y la cota no sigue»), la cota cambia de manos con
   los vértices: tras cada orden —agrupar, explotar, deshacer— vuelve a
   agarrarse a lo que hay en su sitio, antes de que nada lo mueva.
+- **En vista paralela se detectaba la cara de atrás** (issue #37,
+  @pacaeiro: «face detection is identifying the face that is behind the
+  one in front… in CAMERA orthogonal mode»). El rayo de la cámara
+  paralela nace en el plano lejano, 10 km atrás, y la tolerancia con la
+  que dos caras cuentan como «a la misma profundidad» era proporcional a
+  esa distancia: un metro entero, así que una cara más pequeña 30 cm por
+  detrás ganaba el desempate. Ahora se mide desde el ojo y vuelve a ser
+  una fracción de milímetro; en perspectiva no cambia nada.
 - **Mover / Copiar no enganchaba los ejes X e Y** (issue #42, @pacaeiro:
   «aligns well with the Z axis» pero X e Y nunca). Mover arrastra sobre
   un plano vertical de cara a la cámara, que contiene Z y la horizontal

@@ -6469,6 +6469,24 @@ class Viewport(QOpenGLWidget):
             return None, None
         return p_near, direction.normalized()
 
+    def _coplanar_eps(self, origin: QVector3D, direction: QVector3D,
+                      best_t: float) -> float:
+        """How much deeper than the nearest hit a face may sit and still
+        count as "the same depth" (coplanar faces, a hole's rim on its
+        slab): a ten-thousandth of the distance from the EYE, never less
+        than 0.1 mm. It used to be a ten-thousandth of the ray parameter —
+        fine in perspective, where the ray starts at the eye, but the
+        parallel camera's ray starts a far plane behind it, 10 km back, so
+        the tolerance came out a full metre and a smaller face 30 cm
+        BEHIND the one under the cursor won the coplanar tiebreak
+        (@pacaeiro, issue #37: «face detection is identifying the face
+        that is behind the one in front… in CAMERA orthogonal mode»)."""
+        cam = getattr(self, "camera", None)
+        if cam is None:                     # a bare stand-in (tests)
+            return max(1e-4, best_t * 1e-4)
+        t_eye = QVector3D.dotProduct(cam.eye() - origin, direction)
+        return max(1e-4, abs(best_t - t_eye) * 1e-4)
+
     def _world_from_pixel(self, x: int, y: int) -> Optional[QVector3D]:
         """Pixel → world hit on the *current* work plane.
 
@@ -9095,7 +9113,7 @@ class Viewport(QOpenGLWidget):
         best_t = face_t.min()
         if not np.isfinite(best_t):
             return None
-        eps = max(1e-4, best_t * 1e-4)
+        eps = self._coplanar_eps(origin, direction, float(best_t))
         cand = np.where(face_t <= best_t + eps)[0]
         if len(cand) == 1:
             return idx.entities[int(cand[0])][0]
@@ -9133,7 +9151,7 @@ class Viewport(QOpenGLWidget):
             if face_t is not None:
                 best_t = face_t.min()
                 if np.isfinite(best_t):
-                    eps = max(1e-4, best_t * 1e-4)
+                    eps = self._coplanar_eps(origin, direction, float(best_t))
                     cand = np.where(face_t <= best_t + eps)[0]
                     if len(cand) == 1:
                         chosen = int(cand[0])
