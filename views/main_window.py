@@ -171,6 +171,9 @@ class MainWindow(QMainWindow):
         if state:
             self.restoreState(state)
         self._place_new_toolbars(st)
+        # Packed on the first show (see showEvent): the toolbars have no
+        # geometry to read their order from until the window is laid out.
+        self._toolbars_packed = False
         geo = st.value("ui/window_geometry")
         if geo:
             self.restoreGeometry(geo)
@@ -184,6 +187,48 @@ class MainWindow(QMainWindow):
         if autosave.pending(None):
             from PySide6.QtCore import QTimer
             QTimer.singleShot(0, self._offer_untitled_recovery)
+
+    def showEvent(self, event) -> None:  # noqa: N802 — Qt override
+        super().showEvent(event)
+        if not getattr(self, "_toolbars_packed", True):
+            from PySide6.QtCore import QTimer
+            self._toolbars_packed = True
+            QTimer.singleShot(0, self._pack_toolbars)
+
+    def _pack_toolbars(self) -> None:
+        """Re-seat every docked toolbar so each takes exactly the length of
+        what it holds, in the area, order and rows it already has.
+
+        A saved layout (the factory blob or the user's own) stores each
+        toolbar's LENGTH along its line, and ``restoreState`` applies it
+        whatever the toolbar holds today: the Annotate bar came back 100 px
+        longer than its six buttons (saved with bigger icons) and left a
+        hole before Walkthrough — the youtuber's fresh install showed the
+        walk icons stranded at the bottom of the column, and Marco's too
+        (2026-09-20). Removing and adding a toolbar back drops the stored
+        length for its size hint, which is all we ever want; nothing here
+        lets a toolbar be stretched on purpose."""
+        from PySide6.QtCore import Qt
+        areas = (Qt.LeftToolBarArea, Qt.RightToolBarArea,
+                 Qt.TopToolBarArea, Qt.BottomToolBarArea)
+        for area in areas:
+            vertical = area in (Qt.LeftToolBarArea, Qt.RightToolBarArea)
+            bars = [tb for tb in self.findChildren(QToolBar)
+                    if not tb.isFloating() and self.toolBarArea(tb) == area]
+            if len(bars) < 2:
+                continue
+            # rows first, then along the row — so breaks come back in place
+            bars.sort(key=(lambda tb: (tb.geometry().x(), tb.geometry().y()))
+                      if vertical else
+                      (lambda tb: (tb.geometry().y(), tb.geometry().x())))
+            seats = [(tb, self.toolBarBreak(tb), tb.isVisibleTo(self))
+                     for tb in bars]
+            for tb, brk, shown in seats:
+                self.removeToolBar(tb)
+                if brk:
+                    self.addToolBarBreak(area)
+                self.addToolBar(area, tb)
+                tb.setVisible(shown)
 
     def _place_new_toolbars(self, st) -> None:
         """A toolbar born after a profile saved its layout is unknown to
