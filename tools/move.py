@@ -161,6 +161,16 @@ class MoveTool(Tool):
     # onto the axis line. Keeps a move rigid and axis-aligned (a 3 m ridge stays
     # 3 m and level) without holding Shift; arrow-key locks still override it.
     magnetic_axis_deg = 15.0
+    #: …and the two axes that plane can NEVER hold. The drag plane above is
+    #: vertical and faces the camera, so it contains Z and one horizontal
+    #: direction — the camera's own, which is X or Y only when the view is
+    #: square to the model. From any oblique view the world detector saw
+    #: X and Y at the camera's yaw and never fired: «MOVE/COPY cannot
+    #: detect X, Y soft magnetic snaps, but it aligns well with the Z axis»
+    #: (@pacaeiro, issue #42). The screen detector the Line tool got for
+    #: issue #31 finds them by where the cursor points and projects onto
+    #: the world axis, so the move goes along X or Y exactly.
+    screen_axis_px = 9.0
     accepts_array = True  # VCB "3x" / "/3" after a copy (SketchUp arrays)
 
     def __init__(self) -> None:

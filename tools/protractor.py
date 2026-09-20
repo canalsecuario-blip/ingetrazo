@@ -58,6 +58,12 @@ _OFF_AXIS_RGBA = (0.24, 0.27, 0.32, 1.0)
 class ProtractorBase(Tool):
     """Shared protractor state + behaviour (see module docstring)."""
 
+    #: The Line tool's axis magnet for the arms (@pacaeiro, issue #41): a
+    #: base arm within 3° of an axis that lies in the disc's plane lands
+    #: on it. Only the world half — the screen detector would hand back a
+    #: point on an axis OUTSIDE the disc's plane, which an arm cannot be.
+    magnetic_axis_deg = 3.0
+
     def __init__(self) -> None:
         self.start_point: QVector3D | None = None   # the protractor centre
         self.ref_point: QVector3D | None = None     # base (0°) direction

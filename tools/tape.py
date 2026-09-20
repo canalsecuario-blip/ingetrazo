@@ -31,6 +31,13 @@ class TapeMeasureTool(Tool):
     name = "Tape Measure"
     shortcut = "T"
     vcb_label = "Distance"
+    #: The Line tool's axis magnet, both halves (@pacaeiro, issue #41:
+    #: «TAPE and PROTRACTOR should have the soft magnetic snap of X, Y,
+    #: Z, just like the line tool»): a measurement within 3° of an axis
+    #: lands ON it, and the axis the work plane cannot hold is found on
+    #: screen. Measuring along an axis is the everyday case.
+    magnetic_axis_deg = 3.0
+    screen_axis_px = 9.0
 
     def __init__(self) -> None:
         self.start_point: QVector3D | None = None

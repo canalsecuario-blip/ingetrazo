@@ -145,11 +145,48 @@ def test_the_threshold_is_in_pixels_so_it_widens_as_you_draw_short():
         START, far, _top_view(far), _top_view, 9.0) == "x"
 
 
-def test_the_line_tool_asks_for_it_and_nobody_else_yet():
+def test_the_tools_that_ask_for_it():
+    """Line (issue #31), then Move and the tape (issues #42 and #41,
+    2026-09-20). The protractor does not: its arms live in the disc's
+    plane, and a screen-found axis outside it is no arm. Nor does the
+    rectangle, a planar shape."""
     from tools.line import LineTool
+    from tools.move import MoveTool
+    from tools.protractor import ProtractorBase
     from tools.rectangle import RectangleTool
+    from tools.tape import TapeMeasureTool
     assert LineTool.screen_axis_px == 9.0
+    assert MoveTool.screen_axis_px == 9.0
+    assert TapeMeasureTool.screen_axis_px == 9.0
+    assert getattr(ProtractorBase, "screen_axis_px", None) is None
     assert getattr(RectangleTool, "screen_axis_px", None) is None
+
+
+def test_move_finds_x_and_y_from_an_oblique_view_through_the_screen():
+    """Issue #42: Move drags on a vertical, camera-facing plane, which holds
+    Z and the camera's own horizontal — from an oblique view neither X nor
+    Y, so the world detector never fired for them. The screen detector
+    does, from where the cursor points, and the lock lands on the world
+    axis."""
+    from types import SimpleNamespace
+    from core.snap import compute_snap
+    from tools.move import MoveTool
+    # the camera-facing vertical plane through the origin, seen from _iso:
+    # a cursor "along X on screen" lands in that plane OFF the X axis
+    start = V(0, 0, 0)
+    cand = V(1.9, -0.4, 0.05)              # in the drag plane, not on X
+    px = _iso(V(2.0, 0.0, 0.0))            # …but the cursor points along X
+
+    def project(s, d):
+        return s + d * QVector3D.dotProduct(cand - s, d)
+    r = compute_snap(candidate_world=cand, candidate_pixel=px,
+                     scene=SimpleNamespace(edges=[]), world_to_pixel=_iso,
+                     threshold_px=9.0, edge_threshold_px=14.0,
+                     start_point=start, project_onto_line=project,
+                     magnetic_axis_deg=MoveTool.magnetic_axis_deg,
+                     screen_axis_px=MoveTool.screen_axis_px)
+    assert r.kind == "axis" and r.axis == "x"
+    assert abs(r.point.y()) < 1e-6 and abs(r.point.z()) < 1e-6
 
 def test_the_point_may_not_run_to_the_other_side_of_the_county():
     """Marco's first live test, 2026-09-18, and the reason for the cap.
