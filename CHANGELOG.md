@@ -15,6 +15,10 @@ follow [SemVer](https://semver.org).
   como Desplazar. Ctrl+rueda sigue funcionando con cualquier herramienta.
 
 ### Cambiado
+- **Las pistas largas de los iconos salen en un cuadro**, no en una tira
+  a lo ancho de la ventana (Marco). Qt solo pliega un texto de pista
+  cuando no cabe en la pantalla, por eso unas salían en una línea y otras
+  en un bloque; ahora todas se pliegan a un ancho cómodo.
 - **La N del norte gira con la aguja** (Marco: «cuando giro la N de norte
   debería la N girar también»): va en la punta de la aguja, fuera del
   círculo, y da la vuelta con ella; a 0° queda donde estaba, encima. El

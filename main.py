@@ -294,6 +294,10 @@ def main() -> int:
     app.setDesktopFileName(_os.environ.get("FLATPAK_ID") or "ingetrazo")
     _apply_dark_theme(app)
     _init_language()
+    # Long hints wrap into a box instead of a strip across the window.
+    from views.tooltips import WrappingToolTips
+    tooltips = WrappingToolTips(app)
+    app.installEventFilter(tooltips)
     window = MainWindow()
 
     # Single instance: if IngeTrazo is already running, hand the document to
