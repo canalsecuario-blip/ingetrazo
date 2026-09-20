@@ -1874,5 +1874,7 @@
  "Draw a radius dimension: click ON a circle or arc of the drawing and it takes the centre and the radius by itself (the click picks the side the line leaves by). Elsewhere, click the centre, then a point on the arc. Ctrl makes it a diameter. The line always reaches the centre and the symbol (R / Ø) goes with the value, as the standard asks": "Dibuja una cota de radio: haz clic SOBRE un círculo o arco del dibujo y toma el centro y el radio por sí sola (el clic elige por qué lado sale la línea). En otro sitio, clic en el centro y luego en un punto del arco. Ctrl la hace de diámetro. La línea siempre llega al centro y el símbolo (R / Ø) acompaña al valor, como pide la norma",
  "Ends:": "Extremos:",
  "Aligned to the line (ISO)": "Alineado con la línea (ISO)",
- "Horizontal (outside the standard)": "Horizontal (fuera de norma)"
+ "Horizontal (outside the standard)": "Horizontal (fuera de norma)",
+ "Zoom: drag up to zoom in, down to zoom out, around the point you pressed (Ctrl+wheel does the same with any tool)": "Zoom: arrastra hacia arriba para acercar y hacia abajo para alejar, alrededor del punto donde pulsaste (Ctrl+rueda hace lo mismo con cualquier herramienta)",
+ "Zoom window: drag a box and the view fills with it (a click zooms in on the point)": "Zoom ventana: arrastra un recuadro y la vista se llena con él (un clic acerca sobre el punto)"
 }

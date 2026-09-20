@@ -3808,6 +3808,9 @@ class ComposerCanvasView(QGraphicsView):
         self._band_vp = None           #   …and its viewport px (click vs box)
         self._band_item = None         #   the rubber band drawn while dragging
         self._band_mods = Qt.NoModifier
+        self._band_zoom = False        #   the band belongs to Zoom Window
+        self._zoom_last = None         # viewport px while the Zoom tool drags
+        self._zoom_anchor_vp = None    #   …and where it pressed
         # Tools that define a segment/rectangle take EITHER a drag or two
         # clicks (click the first vertex, move, click the second) — the
         # click-click habit of the model's dimension tool must work here too.
@@ -4090,6 +4093,23 @@ class ComposerCanvasView(QGraphicsView):
             self.setCursor(Qt.ClosedHandCursor)
             event.accept()
             return
+        if mode == "zoom" and event.button() == Qt.LeftButton:
+            # The model's Zoom tool: drag up / down, about the press point
+            # (Marco, 2026-09-20: «en composición de láminas deberíamos
+            # colocar un icono de zoom y zoom ventana»).
+            self._zoom_last = event.position().toPoint()
+            self._zoom_anchor_vp = event.position().toPoint()
+            self._zoom_anchor_scene = self.mapToScene(self._zoom_anchor_vp)
+            self._zoom_start_scale = self.transform().m11()
+            self._zoom_moved = False
+            event.accept()
+            return
+        if mode == "zoom_ventana" and event.button() == Qt.LeftButton:
+            self._band_start = self.mapToScene(event.position().toPoint())
+            self._band_vp = event.position().toPoint()
+            self._band_zoom = True
+            event.accept()
+            return
         if mode != "select" and event.button() == Qt.LeftButton:
             pos, _ = self._snapped(self.mapToScene(event.position().toPoint()))
             pos = self._constrain(pos, event.modifiers())
@@ -4195,7 +4215,7 @@ class ComposerCanvasView(QGraphicsView):
         return scene_pos.x() < self._band_start.x()
 
     def _update_band(self, scene_pos) -> None:
-        crossing = self._band_crossing(scene_pos)
+        crossing = (not self._band_zoom) and self._band_crossing(scene_pos)
         if self._band_item is None:
             self._band_item = self.scene().addRect(QRectF())
             self._band_item.setZValue(100002)
@@ -4214,6 +4234,7 @@ class ComposerCanvasView(QGraphicsView):
             self._band_item = None
         self._band_start = None
         self._band_vp = None
+        self._band_zoom = False
 
     def box_select(self, rect: QRectF, crossing: bool, modifiers) -> list:
         """Select the sheet items in ``rect`` (page mm): enclosed ones in
@@ -4279,6 +4300,20 @@ class ComposerCanvasView(QGraphicsView):
             hbar, vbar = self.horizontalScrollBar(), self.verticalScrollBar()
             hbar.setValue(hbar.value() - d.x())
             vbar.setValue(vbar.value() - d.y())
+            event.accept()
+            return
+        if self._zoom_last is not None:
+            if not (event.buttons() & Qt.LeftButton):
+                self._zoom_last = None                # the release never came
+                return
+            p = event.position().toPoint()
+            if p != self._zoom_last:
+                self._zoom_last = p
+                self._zoom_moved = True
+                total = 1.01 ** (self._zoom_anchor_vp.y() - p.y())   # up = in
+                self._zoom_anchored(self._zoom_start_scale * total,
+                                    self._zoom_anchor_scene,
+                                    self._zoom_anchor_vp)
             event.accept()
             return
         raw = self.mapToScene(event.position().toPoint())
@@ -4758,14 +4793,56 @@ class ComposerCanvasView(QGraphicsView):
                                  second.x(), second.y(), sep_mm=sep,
                                  anchors=anchors, axis=axis)
 
+    #: The cursor each armed tool shows on the sheet.
+    _TOOL_CURSORS = {"pan": Qt.OpenHandCursor, "estilo": Qt.CrossCursor,
+                     "zoom": Qt.SizeVerCursor, "zoom_ventana": Qt.CrossCursor}
+
+    def tool_cursor(self):
+        return self._TOOL_CURSORS.get(self.composer.tool_mode, Qt.ArrowCursor)
+
     def _end_pan(self) -> None:
         """Stop panning and give the cursor back to the armed tool."""
         self._pan_last = None
-        self.setCursor(Qt.OpenHandCursor
-                       if self.composer.tool_mode == "pan"
-                       else Qt.CrossCursor
-                       if self.composer.tool_mode == "estilo"
-                       else Qt.ArrowCursor)
+        self.setCursor(self.tool_cursor())
+
+    # ---- zoom tools (the model's Zoom and Zoom Window, on the sheet) ------
+
+    def _zoom_about(self, factor: float, anchor_vp) -> None:
+        """Scale the view by *factor* keeping the page point under the
+        viewport pixel *anchor_vp* where it is."""
+        self._zoom_anchored(self.transform().m11() * factor,
+                            self.mapToScene(anchor_vp), anchor_vp)
+
+    def _zoom_anchored(self, scale: float, anchor_scene, anchor_vp) -> None:
+        """Set the view's scale so that *anchor_scene* (page mm) stays
+        under *anchor_vp* (viewport px). Computed from those two absolutes
+        every time — a drag re-derives its total from the press, never
+        accumulates steps, so the scroll bars' integer rounding cannot
+        drift the anchor over a long drag."""
+        scale = max(1e-3, float(scale))
+        self.setTransform(QTransform().scale(scale, scale))
+        self.update_pan_range()          # room to centre where asked
+        vc = self.viewport().rect().center()
+        self.centerOn(QPointF(anchor_scene.x() + (vc.x() - anchor_vp.x()) / scale,
+                              anchor_scene.y() + (vc.y() - anchor_vp.y()) / scale))
+        self.composer.update_zoom_label()
+
+    def _finish_zoom_band(self, scene_pos) -> None:
+        """Zoom Window's release: fill the view with the box, or — for a
+        box too small to be one — zoom in ×2 on the point."""
+        start_vp = self._band_vp
+        rect = self._band_rect(scene_pos)
+        self._drop_band()
+        vp = self.mapFromScene(scene_pos)
+        if (start_vp is None
+                or (vp - start_vp).manhattanLength() < self._BAND_CLICK_PX):
+            self._zoom_about(2.0, vp)
+        else:
+            self.fitInView(rect, Qt.KeepAspectRatio)
+            if self.composer.zoom_percent() > 1600.0:   # the combo's ceiling
+                self.composer.set_zoom(1600.0)
+            self.composer.update_zoom_label()
+        self.update_pan_range()
 
     def enterEvent(self, event) -> None:
         # Coming back in with nothing pressed: whatever happened out there,
@@ -4782,9 +4859,21 @@ class ComposerCanvasView(QGraphicsView):
             self._end_pan()
             event.accept()
             return
+        if self._zoom_last is not None and event.button() == Qt.LeftButton:
+            if not self._zoom_moved:                  # a click: in, ×1.25
+                self._zoom_about(1.25, self._zoom_anchor_vp)
+            self._zoom_last = None
+            self.update_pan_range()
+            event.accept()
+            return
         if self._band_start is not None and event.button() == Qt.LeftButton:
-            self._finish_band(self.mapToScene(event.position().toPoint()),
-                              event.modifiers())
+            if self._band_zoom:
+                self._finish_zoom_band(
+                    self.mapToScene(event.position().toPoint()))
+            else:
+                self._finish_band(
+                    self.mapToScene(event.position().toPoint()),
+                    event.modifiers())
             event.accept()
             return
         if getattr(self.composer, "view_drag_active", lambda: False)():
@@ -4869,6 +4958,7 @@ class ComposerCanvasView(QGraphicsView):
             self._preview = None
         self._clear_snap_marker()
         self._drop_band()
+        self._zoom_last = None
 
     def _shift_changed(self, down: bool) -> None:
         """Shift went down or up while a segment is being drawn: redraw
@@ -5124,6 +5214,12 @@ class ComposerWindow(QMainWindow):
          False),
         ("pan", "pan", "Pan the sheet (or drag with the middle button "
                        "anywhere)", False),
+        ("zoom", "zoom",
+         "Zoom: drag up to zoom in, down to zoom out, around the point you "
+         "pressed (Ctrl+wheel does the same with any tool)", False),
+        ("zoom_ventana", "zoom_window",
+         "Zoom window: drag a box and the view fills with it (a click "
+         "zooms in on the point)", False),
         ("estilo", "eyedropper",
          "Format painter: click an item to copy its style, then click the "
          "items to paste it on (Esc to finish)", False),
@@ -5234,9 +5330,7 @@ class ComposerWindow(QMainWindow):
             self._view.cancel_placement()
         self.tool_mode = mode
         if hasattr(self, "_view"):
-            self._view.setCursor({"pan": Qt.OpenHandCursor,
-                                  "estilo": Qt.CrossCursor}.get(
-                                      mode, Qt.ArrowCursor))
+            self._view.setCursor(self._view.tool_cursor())
         if mode == "estilo":
             # The format painter starts by taking a style: the first click
             # copies, every later click pastes.

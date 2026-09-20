@@ -6,6 +6,14 @@ follow [SemVer](https://semver.org).
 
 ## [Sin publicar]
 
+### Añadido
+- **Zoom y Zoom ventana en la barra de la lámina** (Marco): los dos del
+  modelo, en el compositor. **Zoom**: arrastra hacia arriba para acercar
+  y hacia abajo para alejar, alrededor del punto donde pulsaste (un clic
+  acerca un paso); **Zoom ventana**: arrastra un recuadro y la vista se
+  llena con él. Las dos siguen armadas hasta que cambias de herramienta,
+  como Desplazar. Ctrl+rueda sigue funcionando con cualquier herramienta.
+
 ### Cambiado
 - **La N del norte gira con la aguja** (Marco: «cuando giro la N de norte
   debería la N girar también»): va en la punta de la aguja, fuera del
