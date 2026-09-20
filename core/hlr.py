@@ -364,6 +364,134 @@ def visible_spans(a2, b2, az, bz, tv2, tvz, eps: float):
     return visible
 
 
+# ── The section cap: the poché covers ───────────────────────────────────────
+#
+# A section cut leaves the solid OPEN: the clipper throws the hidden half
+# away and nothing closes the hole, so the hidden-line pass still sees
+# straight through the wall it just sliced and inks whatever sits behind —
+# the far end of the board, the next divider — right across the poché.
+# «Tapa pero no tapa», said Rafael, and the fill mode made no difference:
+# the fill is painted UNDER the lines.
+#
+# So the rings the composer fills are also an OCCLUDER, exactly the same
+# region under exactly the same even-odd rule: whatever lies strictly
+# behind the cut plane and inside the poché is inside solid material, and
+# solid material is not see-through. The cut chords themselves sit ON the
+# plane, so they are never their own victims and the outline always survives.
+
+
+def cap_depth_affine(plane, eye, right, up, fwd):
+    """``(alpha, beta, gamma)`` with the cut plane's camera depth given by
+    ``alpha·x + beta·y + gamma`` over the camera plane — a parallel camera
+    maps a plane to a plane. ``None`` when the cut is seen edge-on: its cap
+    projects to a line and covers nothing."""
+    from core.triangulate import plane_axes
+    u, v = plane_axes(plane.normal)
+    p = plane.point
+    pts = np.array([[p.x(), p.y(), p.z()],
+                    [p.x() + u.x(), p.y() + u.y(), p.z() + u.z()],
+                    [p.x() + v.x(), p.y() + v.y(), p.z() + v.z()]],
+                   dtype=np.float64)
+    c = _to_cam(pts, eye, right, up, fwd)
+    area2 = ((c[1, 0] - c[0, 0]) * (c[2, 1] - c[0, 1])
+             - (c[1, 1] - c[0, 1]) * (c[2, 0] - c[0, 0]))
+    if abs(area2) < 1e-9:
+        return None
+    m = np.array([[c[0, 0], c[0, 1], 1.0],
+                  [c[1, 0], c[1, 1], 1.0],
+                  [c[2, 0], c[2, 1], 1.0]])
+    try:
+        return np.linalg.solve(m, c[:, 2])
+    except np.linalg.LinAlgError:
+        return None
+
+
+def cap_ring_edges(loops):
+    """Every ring of the cap as one pair of (K, 2) endpoint arrays ``P→Q``.
+    Stacking all the rings together IS the even-odd rule: a hollow wall's
+    inner ring flips the parity back, so its hole stays see-through."""
+    if not loops:
+        return None, None
+    P = np.concatenate([np.asarray(r, dtype=np.float64)[:, :2] for r in loops])
+    Q = np.concatenate([np.roll(np.asarray(r, dtype=np.float64)[:, :2], -1,
+                                axis=0) for r in loops])
+    return P, Q
+
+
+def _inside_cap(px: float, py: float, P, Q) -> bool:
+    """Even-odd point-in-region over the stacked ring edges (ray to +x)."""
+    y0 = P[:, 1]
+    y1 = Q[:, 1]
+    hit = (y0 > py) != (y1 > py)
+    if not hit.any():
+        return False
+    ya, yb = y0[hit], y1[hit]
+    xa, xb = P[hit, 0], Q[hit, 0]
+    xi = xa + (xb - xa) * (py - ya) / (yb - ya)
+    return bool(int((xi > px).sum()) & 1)
+
+
+def cap_hidden_spans(a2, b2, az, bz, P, Q, abg, eps: float):
+    """t-intervals of ONE edge that the section cap hides: behind the cut
+    plane AND inside the filled region. Sorted and disjoint."""
+    d2 = b2 - a2
+    behind = _interval_from_linear(
+        float(az - (abg[0] * a2[0] + abg[1] * a2[1] + abg[2]) - eps),
+        float((bz - az) - (abg[0] * d2[0] + abg[1] * d2[1])))
+    if behind is None:
+        return []
+    lo, hi = max(0.0, behind[0]), min(1.0, behind[1])
+    if hi - lo <= _T_EPS:
+        return []
+    # Where the edge crosses the outline, the parity — and so the answer —
+    # flips: cut it there and ask each piece once, at its midpoint. A
+    # crossing counted twice only splits a piece in two that agree.
+    e = Q - P
+    w = P - a2
+    denom = d2[0] * e[:, 1] - d2[1] * e[:, 0]
+    ok = np.abs(denom) > 1e-15
+    cuts = np.empty(0, dtype=np.float64)
+    if ok.any():
+        dn = denom[ok]
+        t = (w[ok, 0] * e[ok, 1] - w[ok, 1] * e[ok, 0]) / dn
+        s = (w[ok, 0] * d2[1] - w[ok, 1] * d2[0]) / dn
+        m = (s >= 0.0) & (s <= 1.0) & (t > lo) & (t < hi)
+        cuts = np.sort(t[m])
+    bounds = np.concatenate(([lo], cuts, [hi]))
+    out: list = []
+    for i in range(len(bounds) - 1):
+        t0, t1 = float(bounds[i]), float(bounds[i + 1])
+        if t1 - t0 <= _T_EPS:
+            continue
+        tm = (t0 + t1) * 0.5
+        if _inside_cap(a2[0] + tm * d2[0], a2[1] + tm * d2[1], P, Q):
+            if out and t0 - out[-1][1] <= _T_EPS:
+                out[-1] = (out[-1][0], t1)
+            else:
+                out.append((t0, t1))
+    return out
+
+
+def subtract_spans(spans, hidden):
+    """``spans`` minus ``hidden`` (both sorted, disjoint, within [0,1])."""
+    if not hidden:
+        return spans
+    out: list = []
+    for lo, hi in spans:
+        cur = lo
+        for c0, c1 in hidden:
+            if c1 <= cur or c0 >= hi:
+                continue
+            if c0 - cur > _T_EPS:
+                out.append((cur, min(c0, hi)))
+            cur = max(cur, c1)
+            if cur >= hi:
+                break
+        if hi - cur > _T_EPS:
+            out.append((cur, hi))
+    return out
+
+
 def _geometry_as_lists(tris, hard, soft, soft_n):
     """Array geometry → the tuple lists ``clip_to_section`` walks."""
     t = [tuple(map(tuple, tri)) for tri in np.asarray(tris).tolist()]
@@ -506,7 +634,7 @@ def _merge_collinear(segs, world, kinds, tol: float):
 
 
 def hlr_drawing(scene, camera, geometry=None, profiles: bool = True,
-                fills: bool = True) -> HlrDrawing:
+                fills: bool = True, caps: bool = True) -> HlrDrawing:
     """The full line drawing of *scene* under *camera* (parallel): visible
     segments classified as edge / profile / cut, plus the section-cut
     rings to fill. :func:`hlr_view` is the segments-only view of this.
@@ -519,9 +647,14 @@ def hlr_drawing(scene, camera, geometry=None, profiles: bool = True,
     skips the test (every non-cut line is KIND_EDGE).
 
     Fills: the chords of the active section chained into closed rings
-    (:func:`section_loops`), projected to the camera plane. They are NOT
-    occlusion-tested — the plane is the nearest thing in a plan or a cross
-    section looked at squarely, which is what sections are for.
+    (:func:`section_loops`), projected to the camera plane.
+
+    Caps: those same rings also OCCLUDE — whatever lies strictly behind the
+    cut plane and inside the filled region is inside solid material, and a
+    poché that lets the far side of the board show through «tapa pero no
+    tapa» (Rafael, 2026-09-16). The cut chords lie ON the plane, so the
+    outline of the cut always survives. ``caps=False`` draws the open
+    silhouette instead.
 
     ``geometry`` — optional pre-collected arrays ``(tris, hard, soft,
     soft_n)`` as ``Viewport.hlr_geometry()`` returns them (world space:
@@ -613,6 +746,21 @@ def hlr_drawing(scene, camera, geometry=None, profiles: bool = True,
     ab = np.concatenate([A[:, :2], B[:, :2]])
     ext_e = float((ab.max(axis=0) - ab.min(axis=0)).max()) or 1.0
     zero_len = ext_e * 1e-9             # a vertical seen end-on: a point
+    # The section cap: the rings the composer fills also COVER (see above).
+    loops: list = []
+    cap_P = cap_Q = cap_abg = None
+    cap_eps = 0.0
+    cap_box = None
+    if len(cut_edges):
+        for ring in section_loops(cut_edges):
+            loops.append(_to_cam(ring, eye, right, up, fwd)[:, :2])
+        if loops and caps:
+            cap_abg = cap_depth_affine(sp, eye, right, up, fwd)
+        if cap_abg is not None:
+            cap_P, cap_Q = cap_ring_edges(loops)
+            zs = np.concatenate([A[:, 2], B[:, 2]])
+            cap_eps = max(float(zs.max() - zs.min()) * 1e-4, eps, 1e-9)
+            cap_box = (cap_P.min(axis=0), cap_P.max(axis=0))
     out: list = []
     out_w: list = []
     out_k: list = []
@@ -639,6 +787,14 @@ def hlr_drawing(scene, camera, geometry=None, profiles: bool = True,
             else:
                 spans = visible_spans(a2, b2, az, bz,
                                       tv2[idx], tvz[idx], eps)
+        if cap_abg is not None and spans:
+            elo = np.minimum(a2, b2)
+            ehi = np.maximum(a2, b2)
+            if not (ehi[0] < cap_box[0][0] or elo[0] > cap_box[1][0]
+                    or ehi[1] < cap_box[0][1] or elo[1] > cap_box[1][1]):
+                spans = subtract_spans(
+                    spans, cap_hidden_spans(a2, b2, az, bz, cap_P, cap_Q,
+                                            cap_abg, cap_eps))
         for t0, t1 in spans:
             if (t1 - t0) < 1e-9:
                 continue
@@ -679,12 +835,7 @@ def hlr_drawing(scene, camera, geometry=None, profiles: bool = True,
     if len(segs) > 1:
         segs, world, kinds = _merge_collinear(segs, world, kinds,
                                               ext_e * 1e-9)
-    loops: list = []
-    if fills and len(cut_edges):
-        for ring in section_loops(cut_edges):
-            c = _to_cam(ring, eye, right, up, fwd)[:, :2]
-            loops.append(c)
-    return HlrDrawing(segs, world, kinds, loops)
+    return HlrDrawing(segs, world, kinds, loops if fills else [])
 
 
 def hlr_view(scene, camera, return_world: bool = False, geometry=None):
