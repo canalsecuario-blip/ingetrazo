@@ -1907,6 +1907,10 @@ class MainWindow(QMainWindow):
             act_active.setCheckable(True)
             act_active.setChecked(sec_planes[0].active)
             menu.addAction(tr("Align View"), self._on_align_view_to_section)
+            # Rafael, 50:45: «no sé cómo cambiarle el 1 por AA o BB». The
+            # prompt only ever appeared the moment a plane was placed.
+            menu.addAction(tr("Name and symbol…"),
+                           lambda p=sec_planes[0]: self.prompt_section_name(p))
             menu.addSeparator()
 
         from core.image_plane import ImagePlane

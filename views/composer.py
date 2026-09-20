@@ -36,6 +36,7 @@ from core.composition import (COMMON_SCALES, NEW_FRAME_STYLE, PAPER_SIZES_MM, RE
                               ImagenItem, Leyenda, MarcoVista,
                               PerfilTerreno, RemoveItemCommand, TextoItem,
                               apply_frame_camera, cota_line_deg,
+                              format_scale, parse_scale,
                               readable_deg, snap_mm)
 from core.i18n import tr
 from core.composition import pen_px
@@ -220,7 +221,7 @@ def frame_title_text(frame: MarcoVista) -> str:
     perspective frame has no scale to give, so it says what it is."""
     if getattr(frame, "perspective", False):
         return f"{frame_view_name(frame)} — {tr('perspective')}"
-    return f"{frame_view_name(frame)} — 1:{frame.scale_n:g}"
+    return f"{frame_view_name(frame)} — {format_scale(frame.scale_n)}"
 
 
 def view_title_texts(frame: MarcoVista) -> dict:
@@ -235,7 +236,7 @@ def view_title_texts(frame: MarcoVista) -> dict:
     # LayOut writes under a perspective viewport (Marco, 2026-09-17).
     persp = bool(getattr(frame, "perspective", False))
     n = f"{frame.scale_n:g}"
-    scale_field = tr("no scale") if persp else f"1:{n}"
+    scale_field = tr("no scale") if persp else format_scale(frame.scale_n)
 
     def ex(text) -> str:
         text = (text or "").replace("{escala}", scale_field)
@@ -244,7 +245,8 @@ def view_title_texts(frame: MarcoVista) -> dict:
         "title": ex(getattr(frame, "title_text", "")) or frame_view_name(frame),
         "subtitle": ex(getattr(frame, "title_subtitle", "")),
         "scale": ("" if not getattr(frame, "title_scale", True)
-                  else tr("NO SCALE") if persp else f"ESC. 1:{n}"),
+                  else tr("NO SCALE") if persp
+                  else "ESC. " + format_scale(frame.scale_n)),
         "number": ex(getattr(frame, "title_number", "")),
         "sheet": ex(getattr(frame, "title_sheet", "")),
     }
@@ -941,19 +943,27 @@ def paint_perfil_mm(painter: QPainter, m: PerfilTerreno, profile,
 
 
 def paint_norte_mm(painter: QPainter, n: FlechaNorte) -> None:
-    """Circle + needle + N, rotated to the project north."""
+    """Circle + needle + N, rotated to the project north.
+
+    With ``label_pos="top"`` — the default, and how a north arrow is
+    normally drawn — the compass shrinks into the lower part of the box and
+    the N gets a clear band above it. It used to sit at the middle, right
+    over the black-and-white needle, where it was hard to read (Rafael,
+    33:20). The item's box does not change size either way."""
     sz = n.size_mm
+    top = (getattr(n, "label_pos", "top") or "top") != "centre"
     c = sz / 2.0
+    cy, rad = (sz * 0.60, sz * 0.38) if top else (c, c)
     painter.save()
-    painter.translate(c, c)
+    painter.translate(c, cy)
     painter.rotate(n.angle_deg)
     pen = QPen(QColor(30, 36, 44))
     pen.setWidthF(0.35)
     painter.setPen(pen)
     painter.setBrush(Qt.NoBrush)
-    painter.drawEllipse(QPointF(0, 0), c * 0.92, c * 0.92)
+    painter.drawEllipse(QPointF(0, 0), rad * 0.92, rad * 0.92)
     from PySide6.QtGui import QPolygonF
-    r = c * 0.78
+    r = rad * 0.78
     painter.setBrush(QBrush(QColor(30, 36, 44)))
     painter.drawPolygon(QPolygonF([QPointF(0, -r), QPointF(r * 0.28, r * 0.35),
                                    QPointF(0, r * 0.12)]))
@@ -961,8 +971,9 @@ def paint_norte_mm(painter: QPainter, n: FlechaNorte) -> None:
     painter.drawPolygon(QPolygonF([QPointF(0, -r), QPointF(-r * 0.28, r * 0.35),
                                    QPointF(0, r * 0.12)]))
     painter.restore()
-    _draw_text_mm(painter, QRectF(0, sz * 0.30, sz, sz * 0.4), "N",
-                  sz * 0.30, bold=True,
+    box = (QRectF(0, 0, sz, sz * 0.24) if top
+           else QRectF(0, sz * 0.30, sz, sz * 0.4))
+    _draw_text_mm(painter, box, "N", sz * (0.24 if top else 0.30), bold=True,
                   align=Qt.AlignHCenter | Qt.AlignTop)
 
 
@@ -2757,6 +2768,32 @@ class _SheetItem(QGraphicsItem):
     #: magnetic snap of a drag must not swallow a 1 mm arrow-key move.
     _nudging = False
 
+    #: Whether this kind of item magnetises to the MODEL's geometry under
+    #: it, not just to the page's margins, guides and other items. An
+    #: image dropped over a view has to sit ON something — «aquí sería
+    #: guapo que hiciese snap al objeto para que no quedase el objeto
+    #: volando y quedara eso perfectamente alineado» (Rafael, 40:50). The
+    #: rest of the items are furniture of the sheet and keep to the page.
+    SNAPS_TO_DRAWING = False
+
+    def _snap_corner_to_drawing(self, x, y, w, h):
+        """Land whichever corner of the item is nearest a drawn point of a
+        view exactly on it, or ``None`` to leave the position alone."""
+        if not self.SNAPS_TO_DRAWING:
+            return None
+        near = getattr(self.composer, "nearest_snap_point", None)
+        if near is None:
+            return None
+        best = None
+        for cx, cy in ((x, y), (x + w, y), (x, y + h), (x + w, y + h)):
+            hit = near(cx, cy, _SNAP_MM)
+            if hit is None:
+                continue
+            d2 = (hit[0] - cx) ** 2 + (hit[1] - cy) ** 2
+            if best is None or d2 < best[0]:
+                best = (d2, x + (hit[0] - cx), y + (hit[1] - cy))
+        return None if best is None else (best[1], best[2])
+
     def itemChange(self, change, value):
         if (change == QGraphicsItem.ItemPositionChange and self.scene()
                 and not self._nudging):
@@ -2769,7 +2806,8 @@ class _SheetItem(QGraphicsItem):
                         _SNAP_MM)
             y = snap_mm(y + h, self.composer.snap_targets_y(exclude=self),
                         _SNAP_MM) - h
-            return QPointF(x, y)
+            got = self._snap_corner_to_drawing(x, y, w, h)
+            return QPointF(*got) if got is not None else QPointF(x, y)
         if change == QGraphicsItem.ItemPositionHasChanged:
             self.model.x_mm = self.pos().x()
             self.model.y_mm = self.pos().y()
@@ -2866,6 +2904,9 @@ class TextItem(_SheetItem):
 
 
 class ImageItem(_SheetItem):
+    #: An image dropped over a view has to sit ON something (Rafael, 40:50).
+    SNAPS_TO_DRAWING = True
+
     def paint(self, painter, option, widget=None) -> None:
         paint_image_mm(painter, self.model,
                        self.composer.image_cache(self.model.path))
@@ -6033,6 +6074,12 @@ class ComposerWindow(QMainWindow):
         self.norte_angle.setSuffix(" °")
         self.norte_angle.valueChanged.connect(self._on_norte_props)
         form.addRow(tr("Angle"), self.norte_angle)
+        self.norte_label = QComboBox()
+        for label, key in ((tr("Above the compass"), "top"),
+                           (tr("Over the needle"), "centre")):
+            self.norte_label.addItem(label, key)
+        self.norte_label.currentIndexChanged.connect(self._on_norte_props)
+        form.addRow(tr("The N"), self.norte_label)
         return w
 
     def _page_leyenda(self) -> QWidget:
@@ -6139,7 +6186,7 @@ class ComposerWindow(QMainWindow):
         form = QFormLayout(w)
         self.cota_scale = QComboBox()
         self.cota_scale.setEditable(True)
-        self.cota_scale.addItems([f"1:{n}" for n in COMMON_SCALES])
+        self.cota_scale.addItems([format_scale(n) for n in COMMON_SCALES])
         self.cota_scale.currentTextChanged.connect(self._on_cota_props)
         form.addRow(tr("Scale"), self.cota_scale)
         self.cota_text = QLineEdit()
@@ -7072,6 +7119,7 @@ class ComposerWindow(QMainWindow):
     # ---- canvas --------------------------------------------------------------
     def _rebuild_canvas(self) -> None:
         self._updating = True
+        self._evict_dead_frames()   # id(frame) keys outlive their frames
         # The selection lives on the items, and the items die with the
         # canvas: every rebuild — the auto-render pass after a scale or size
         # edit, a page change, a title-block field — dropped it, so each
@@ -7193,7 +7241,7 @@ class ComposerWindow(QMainWindow):
                 f: MarcoVista = item.model
                 idx = self.view_combo.findData(f.view_key)
                 self.view_combo.setCurrentIndex(max(idx, 0))
-                self.scale_combo.setCurrentText(f"1:{f.scale_n:g}")
+                self.scale_combo.setCurrentText(format_scale(f.scale_n))
                 self.persp_check.setChecked(
                     bool(getattr(f, "perspective", False)))
                 self.fov_spin.setValue(
@@ -7359,6 +7407,9 @@ class ComposerWindow(QMainWindow):
             elif isinstance(item, NorteItem):
                 self.norte_size.setValue(item.model.size_mm)
                 self.norte_angle.setValue(item.model.angle_deg)
+                lidx = self.norte_label.findData(
+                    getattr(item.model, "label_pos", "top") or "top")
+                self.norte_label.setCurrentIndex(max(lidx, 0))
                 self.props.setCurrentIndex(6)
             elif isinstance(item, LeyendaItem):
                 self.ley_title.setText(item.model.title)
@@ -7673,13 +7724,37 @@ class ComposerWindow(QMainWindow):
         if isinstance(it, FrameItem):
             self.add_scale_label(it.model)
 
+    def _frame_caches(self) -> tuple:
+        return (self.render_cache, self.hlr_cache, self.hlr_kinds,
+                self.hlr_fills, self.snap_cache, self.annot_cache)
+
     def _forget_frame(self, frame) -> None:
         """Drop every cache of *frame*: render, lines and their classes,
         fills, snap points, annotations."""
         fid = id(frame)
-        for cache in (self.render_cache, self.hlr_cache, self.hlr_kinds,
-                      self.hlr_fills, self.snap_cache, self.annot_cache):
+        for cache in self._frame_caches():
             cache.pop(fid, None)
+
+    def _evict_dead_frames(self) -> None:
+        """Forget the caches of frames that are no longer in the document.
+
+        They are keyed on ``id(frame)``, and **CPython hands the same
+        address to the next object of that size**: delete a view and add
+        another, and the new one came up wearing the dead one's render —
+        «pongo una ventana y me muestra ese previo que yo ya no tengo»
+        (Rafael, 2026-09-16, 33:40). Deleting never dropped them, and
+        neither did cut, nor the undo of an add, nor loading a template;
+        sweeping after each rebuild closes all of those at once. Frames on
+        the document's OTHER sheets stay: switching sheets must not throw
+        away renders that cost seconds to make.
+        """
+        live = {id(f) for c in (self._scene().compositions or [self.comp])
+                for f in c.frames}
+        live.update(id(f) for f in self.comp.frames)
+        for cache in self._frame_caches():
+            for fid in [k for k in cache if k not in live]:
+                cache.pop(fid, None)
+        self._stale.intersection_update(live)
 
     def on_item_geometry(self, item: _SheetItem, final: bool = False) -> None:
         if isinstance(item, FrameItem) and final:
@@ -9168,7 +9243,7 @@ class ComposerWindow(QMainWindow):
         combo.blockSignals(True)
         current = combo.currentText()
         combo.clear()
-        combo.addItems([f"1:{n:g}" for n in self._scale_options()])
+        combo.addItems([format_scale(n) for n in self._scale_options()])
         if current:
             combo.setCurrentText(current)
         combo.blockSignals(False)
@@ -9188,14 +9263,7 @@ class ComposerWindow(QMainWindow):
         self._reload_scale_options()
 
     def _current_scale_n(self) -> float:
-        text = self.scale_combo.currentText().strip()
-        if ":" in text:
-            text = text.split(":", 1)[1]
-        try:
-            n = float(text.replace(",", "."))
-        except ValueError:
-            n = 100.0
-        return n if n > 0 else 100.0
+        return parse_scale(self.scale_combo.currentText(), 100.0)
 
     def _on_page_changed(self, *_a) -> None:
         if self._updating:
@@ -9822,8 +9890,10 @@ class ComposerWindow(QMainWindow):
         if self._updating or not isinstance(item, NorteItem):
             return
         item.prepareGeometryChange()
-        self._panel_edit(item, {"size_mm": self.norte_size.value(),
-                                "angle_deg": self.norte_angle.value()})
+        self._panel_edit(item, {
+            "size_mm": self.norte_size.value(),
+            "angle_deg": self.norte_angle.value(),
+            "label_pos": self.norte_label.currentData() or "top"})
 
     def _on_leyenda_props(self, *_a) -> None:
         item = self._selected_item()

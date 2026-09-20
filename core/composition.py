@@ -30,7 +30,50 @@ PAPER_SIZES_MM = {
 }
 
 #: Scales offered in the UI; any positive N is legal.
-COMMON_SCALES = (50, 100, 200, 250, 500, 1000, 2000)
+#: The scale list, as DENOMINATORS of 1:N. Below 1 they are enlargements:
+#: 0.5 is 2:1, 0.1 is 10:1. Architecture reduces, but «cuando utilizamos
+#: objetos que son más pequeños, pues aquí necesitamos poner 10 a uno de
+#: ampliación… no la tienes en la lista» (Rafael, 34:00).
+COMMON_SCALES = (0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 25,
+                 50, 100, 200, 250, 500, 1000, 2000)
+
+
+def format_scale(n: float) -> str:
+    """A scale the way a drawing writes it: ``1:50`` when it reduces,
+    ``10:1`` when it enlarges, ``1:1`` at full size. Never ``1:0.1``, which
+    is what the sheet used to print for a tenfold enlargement (Rafael,
+    35:00: «no me muestra la escala que yo le había metido, que era 10 a
+    uno»)."""
+    try:
+        n = float(n)
+    except (TypeError, ValueError):
+        return ""
+    if n <= 0:
+        return ""
+    if n < 1.0:
+        return f"{1.0 / n:g}:1"
+    return f"1:{n:g}"
+
+
+def parse_scale(text: str, default: float = 100.0) -> float:
+    """The denominator a typed scale means. ``1:50`` → 50, ``10:1`` → 0.1,
+    ``50`` → 50. Reading only what follows the colon turned a typed
+    ``10:1`` into 1:1 — silently, on a technical drawing."""
+    s = str(text or "").strip().replace(",", ".")
+    if ":" in s:
+        left, _, right = s.partition(":")
+        try:
+            a, b = float(left), float(right)
+        except ValueError:
+            return default
+        if a <= 0 or b <= 0:
+            return default
+        return b / a                      # 1:50 → 50, 10:1 → 0.1
+    try:
+        n = float(s)
+    except ValueError:
+        return default
+    return n if n > 0 else default
 
 #: Print resolution for the raster fill of a view frame.
 RENDER_DPI = 300
@@ -279,11 +322,16 @@ class MarcoVista:
     def scale_label(self) -> str:
         if getattr(self, "perspective", False):
             return _tr("NO SCALE")
-        n = f"{self.scale_n:g}"
+        shown = format_scale(self.scale_n)
         try:
-            return (self.scale_text or "ESC. 1:{n}").replace("{n}", n)
+            template = self.scale_text or "ESC. 1:{n}"
+            # «1:{n}» is the old template and means «the scale»; an
+            # enlargement has to come out as 10:1, not 1:0.1.
+            if "1:{n}" in template:
+                return template.replace("1:{n}", shown)
+            return template.replace("{n}", f"{self.scale_n:g}")
         except Exception:  # noqa: BLE001 — a broken template still labels
-            return f"1:{n}"
+            return shown
 
     def model_height_m(self) -> float:
         return model_height_for_frame(self.h_mm, self.scale_n)
@@ -513,6 +561,11 @@ class FlechaNorte:
     y_mm: float = 20.0
     size_mm: float = 18.0
     angle_deg: float = 0.0
+    #: Where the N sits. ``top`` puts it in a band ABOVE the compass, which
+    #: is how a north arrow is normally drawn; ``centre`` is the old look,
+    #: with the letter over the needle — «la N de norte quizás por aquí
+    #: arriba estaría mejor, porque ahí se ve mal» (Rafael, 33:20).
+    label_pos: str = "top"       # top | centre
     z: float = 0.0            # stacking order on the page (higher = on top)
     locked: bool = False         # locked: shown but not movable/resizable
     group_id: str = ""            # sheet group (Ctrl+G); "" = ungrouped
@@ -1368,7 +1421,7 @@ def field_values(frame_uid: str = "") -> dict:
         "lamina": ((getattr(caj, "lamina", "") or "") if caj else "")
                   or (comp.name if comp is not None else ""),
         "nombre": comp.name if comp is not None else "",
-        "escala": f"1:{main.scale_n:g}" if main is not None else "",
+        "escala": format_scale(main.scale_n) if main is not None else "",
         "escena": scene_name,
         "fecha": datetime.date.today().strftime("%d/%m/%Y"),
         "archivo": Path(str(path)).stem if path else "",

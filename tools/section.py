@@ -20,7 +20,7 @@ from PySide6.QtGui import QVector3D
 
 from core.history import PlaceSectionPlaneCommand
 from core.i18n import tr
-from core.section import SectionPlane
+from core.section import SectionPlane, next_symbol
 from core.triangulate import plane_axes
 from tools.base import Tool, ToolContext
 
@@ -89,9 +89,10 @@ class SectionPlaneTool(Tool):
     def on_click(self, ctx: ToolContext) -> None:
         viewport = ctx.viewport
         n = self._current_normal()
-        count = len(getattr(viewport.scene, "section_planes", [])) + 1
+        planes = getattr(viewport.scene, "section_planes", []) or []
+        count = len(planes) + 1
         plane = SectionPlane(ctx.world, n, name=tr("Section {n}", n=count),
-                            symbol=str(count))
+                             symbol=next_symbol(planes))
         viewport.history.execute(PlaceSectionPlaneCommand(plane))
         # SketchUp prompts for a name and symbol right after placing.
         window = viewport.window() if hasattr(viewport, "window") else None

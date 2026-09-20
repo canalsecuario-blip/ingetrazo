@@ -114,7 +114,9 @@ def test_tool_aligns_to_hovered_face_and_places_active():
     sp = scene.section_planes[0]
     assert sp.active                          # new plane = the active cut
     assert abs(abs(sp.normal.y()) - 1.0) < 1e-6   # aligned to the wall
-    assert sp.symbol == "1"
+    # Sections are named by LETTER, and the mark reads «A … A» across
+    # the plan — «no suele ser un 1, sino A-A, B-B» (Rafael, 50:45).
+    assert sp.symbol == "A"
     assert vp.history.undo()
     assert scene.section_planes == []
 

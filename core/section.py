@@ -34,6 +34,29 @@ def _take_uid(wanted: int | None) -> int:
     return wanted
 
 
+def next_symbol(planes) -> str:
+    """The letter the next section plane takes: A, B, C… then AA, AB.
+
+    Sections are named by letter and the mark reads «A … A» across the
+    plan — «las secciones se nombran así, no suele ser un 1, sino A-A,
+    B-B» (Rafael, 2026-09-16, 50:45). They used to be numbered, so his
+    sheets said «1 … 1» and he could not find where to change it.
+    """
+    taken = {str(getattr(p, "symbol", "") or "").strip().upper()
+             for p in (planes or [])}
+    i = 0
+    while True:
+        n, label = i, ""
+        while True:
+            label = chr(ord("A") + n % 26) + label
+            n = n // 26 - 1
+            if n < 0:
+                break
+        if label not in taken:
+            return label
+        i += 1
+
+
 class SectionPlane:
     """Origin + unit normal (+ name/symbol). ``active`` = the cutting one."""
 
