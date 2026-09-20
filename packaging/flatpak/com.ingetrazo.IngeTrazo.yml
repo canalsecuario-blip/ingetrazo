@@ -99,6 +99,14 @@ modules:
       #    wheel installs 771 MB, 195 of them a WebEngine no line of this
       #    program touches. Blocklist, not allowlist: an unknown library
       #    stays, so a Qt upgrade can add deps without blanking the app.
+      #
+      #    ⚠️ QtPrintSupport is NOT on the list, and must not go back on it:
+      #    the sheet composer's «Print preview» imports it, and with the
+      #    module gone the import failed inside the slot, silently — the
+      #    button simply did nothing, which is exactly what Rafael reported
+      #    on 2026-09-16 (30:20) while PDF export, which goes through
+      #    QPdfWriter in QtGui, worked perfectly for him. QtPdf IS still
+      #    trimmed: that is the PDF *viewer*, which we do not use.
       - |
         set -e
         PYVER=$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])')
@@ -106,7 +114,7 @@ modules:
         cd "$PS"
         rm -rf Qt/qml Qt/resources Qt/libexec Qt/metatypes examples typesystems glue include
         rm -f  assistant designer linguist lupdate lrelease qmlformat qmllint qmlls qsb balsam* svgtoqml
-        for stem in WebEngine Pdf PrintSupport Quick Qml 3D Quick3D Multimedia SpatialAudio                     Location Positioning Sensors SerialPort SerialBus Bluetooth                     Nfc WebSockets WebChannel WebView RemoteObjects Scxml                     TextToSpeech Charts DataVisualization Graphs Sql Help                     UiTools Designer NetworkAuth HttpServer VirtualKeyboard                     LabsAnimation LabsFolderListModel LabsPlatform LabsQmlModels                     LabsSettings LabsSharedImage LabsWavefrontMesh Test; do
+        for stem in WebEngine Pdf Quick Qml 3D Quick3D Multimedia SpatialAudio                     Location Positioning Sensors SerialPort SerialBus Bluetooth                     Nfc WebSockets WebChannel WebView RemoteObjects Scxml                     TextToSpeech Charts DataVisualization Graphs Sql Help                     UiTools Designer NetworkAuth HttpServer VirtualKeyboard                     LabsAnimation LabsFolderListModel LabsPlatform LabsQmlModels                     LabsSettings LabsSharedImage LabsWavefrontMesh Test; do
           rm -f  Qt${stem}*.abi3.so Qt${stem}*.pyi
           rm -f  Qt/lib/libQt6${stem}*.so*
         done

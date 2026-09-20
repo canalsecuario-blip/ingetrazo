@@ -565,19 +565,33 @@ def vector_pens(frame: MarcoVista) -> dict:
 
 
 def _paint_hlr_lines_mm(painter: QPainter, frame: MarcoVista, hlr,
-                        kinds) -> None:
+                        kinds, budget=None) -> None:
     """Ink the hidden-line segments thin → profile → cut, so the heavy
-    lines always sit on top where they cross the light ones."""
+    lines always sit on top where they cross the light ones.
+
+    With a ``budget`` it inks at most that many, keeping the SILHOUETTE:
+    every cut line and every profile first, plain edges with what is left.
+    That is the drag pass — see ``_DRAG_SEG_BUDGET``; a printed or exported
+    sheet never passes one."""
     import numpy as np
     from PySide6.QtCore import QLineF
     from core.hlr import KIND_CUT, KIND_EDGE, KIND_PROFILE
     segs = np.asarray(hlr, dtype=float).reshape(-1, 4)
     pens = vector_pens(frame)
     if kinds is None or len(kinds) != len(segs):
-        groups = [(KIND_EDGE, segs)]
+        groups = [(KIND_EDGE, segs
+                   if budget is None else segs[:int(budget)])]
     else:
         k = np.asarray(kinds)
-        groups = [(kind, segs[k == kind])
+        rows = {kind: segs[k == kind]
+                for kind in (KIND_EDGE, KIND_PROFILE, KIND_CUT)}
+        if budget is not None and len(segs) > budget:
+            left = int(budget)
+            for kind in (KIND_CUT, KIND_PROFILE, KIND_EDGE):
+                take = max(0, min(len(rows[kind]), left))
+                rows[kind] = rows[kind][:take]
+                left -= take
+        groups = [(kind, rows[kind])
                   for kind in (KIND_EDGE, KIND_PROFILE, KIND_CUT)]
     for kind, rows in groups:
         if not len(rows):
@@ -686,7 +700,8 @@ def _paint_section_mark_mm(painter: QPainter, a, ink: QColor,
 
 def paint_frame_mm(painter: QPainter, frame: MarcoVista,
                    image: Optional[QImage], hlr=None, annots=None,
-                   screen: bool = False, kinds=None, fills=None) -> None:
+                   screen: bool = False, kinds=None, fills=None,
+                   budget=None) -> None:
     r = QRectF(0, 0, frame.w_mm, frame.h_mm)
     if frame.style == "vectorial":
         painter.fillRect(r, QColor(255, 255, 255))
@@ -694,7 +709,7 @@ def paint_frame_mm(painter: QPainter, frame: MarcoVista,
             painter.save()
             painter.setClipRect(r)
             _paint_cut_fills_mm(painter, frame, fills)
-            _paint_hlr_lines_mm(painter, frame, hlr, kinds)
+            _paint_hlr_lines_mm(painter, frame, hlr, kinds, budget)
             painter.restore()
         else:
             _draw_text_mm(painter, r.adjusted(2, 2, -2, -2),
@@ -2462,6 +2477,15 @@ class _SheetBorderCanvasItem(QGraphicsItem):
 #: instead — see ComposerWindow._sync_item_caches.
 _ITEM_CACHE_MAX_PX = 4_000_000
 
+#: How many line segments a vector frame inks while it is being DRAGGED.
+#: Past this it draws its silhouette — cut lines and profiles first, plain
+#: edges until the budget runs out — so the cost of a drag stops depending
+#: on the model. Measured on a 200×140 mm frame at 4 px/mm: 5 000 segments
+#: cost 29 ms to ink, 20 000 cost 120 ms and 60 000 cost 351. 3 000 keeps a
+#: drag near 20 ms, which reads as smooth; the whole drawing comes back,
+#: exactly, the moment the mouse comes up.
+_DRAG_SEG_BUDGET = 3_000
+
 
 class _SheetItem(QGraphicsItem):
     """A sheet item on the canvas: movable, snappable, corner-resizable.
@@ -2653,6 +2677,33 @@ class _SheetItem(QGraphicsItem):
                 and abs(pos.x() - w) <= _HANDLE_MM
                 and abs(pos.y() - h) <= _HANDLE_MM)
 
+    def _set_drag_cache(self, on: bool) -> None:
+        """Put every frame being dragged into its FAST mode, and take it
+        out again when the mouse comes up.
+
+        A vector frame inks every visible edge of the model, one QLineF at
+        a time, on every repaint: measured on a 200×140 mm frame of 20 000
+        segments at 4 px/mm, **203 ms** — five frames a second while you
+        drag it. That is Rafael's «trato de mover y como que parpadea la
+        ventana» (35:20, 36:50), and Marco read the cause right: «cuando
+        pones vectorial la gráfica trabaja más».
+
+        The device cache the items already keep cannot fix it: Qt re-renders
+        a DeviceCoordinateCache whenever the item's device position moves by
+        a fraction of a pixel, which a drag does constantly — measured, the
+        cached item still repainted on half the moves. So the drag does what
+        the viewport does while you orbit (2026-09-07): it draws the
+        drawing's SILHOUETTE — the cut lines and the profiles first, plain
+        edges until a fixed budget runs out — and the whole thing again,
+        exactly, the moment you let go. The cost of a drag stops depending
+        on the model.
+        """
+        items = list(self.scene().selectedItems()) if self.scene() else []
+        for it in items + [self]:
+            if isinstance(it, FrameItem) and it._dragging != on:
+                it._dragging = on
+                it.update()
+
     def mousePressEvent(self, event) -> None:
         note = getattr(self.composer, "note_drag_start", None)
         if note is not None:
@@ -2667,6 +2718,7 @@ class _SheetItem(QGraphicsItem):
             event.accept()
             self.setSelected(True)
             return
+        self._set_drag_cache(True)
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event) -> None:
@@ -2689,6 +2741,7 @@ class _SheetItem(QGraphicsItem):
     def mouseReleaseEvent(self, event) -> None:
         was_resizing = self._resizing
         self._resizing = False
+        self._set_drag_cache(False)
         super().mouseReleaseEvent(event)
         if self._press_state is None:
             return
@@ -2733,6 +2786,9 @@ class _SheetItem(QGraphicsItem):
 
 
 class FrameItem(_SheetItem):
+    #: True from the mouse going down on a drag to it coming up.
+    _dragging = False
+
     def boundingRect(self) -> QRectF:
         r = super().boundingRect()
         left, top, bottom = view_title_extent(self.model)
@@ -2751,7 +2807,8 @@ class FrameItem(_SheetItem):
                        hlr=self.composer.hlr_cache.get(fid),
                        annots=self.composer.annot_cache.get(fid),
                        screen=True, kinds=self.composer.hlr_kinds.get(fid),
-                       fills=self.composer.hlr_fills.get(fid))
+                       fills=self.composer.hlr_fills.get(fid),
+                       budget=_DRAG_SEG_BUDGET if self._dragging else None)
         if self.composer.is_stale(self.model):
             _paint_stale_badge(painter, self.model)
         if self.composer.view_edit_item is self:
@@ -10904,6 +10961,19 @@ class ComposerWindow(QMainWindow):
         if not img.save(path, None, quality):
             raise OSError(f"could not write {path}")
 
+    @staticmethod
+    def print_support():
+        """Qt's printing module, or ``None`` when the build does not carry
+        it. It is an OPTIONAL dependency on purpose: everything else about
+        a sheet — PDF, image, the canvas — goes through QtGui, so a build
+        without QtPrintSupport still does its whole job except previewing
+        and printing. What it must never do is fail in silence."""
+        try:
+            from PySide6 import QtPrintSupport
+        except ImportError:
+            return None
+        return QtPrintSupport
+
     def _printer_for_sheet(self):
         from PySide6.QtGui import QPageLayout, QPageSize
         from PySide6.QtPrintSupport import QPrinter
@@ -10926,9 +10996,23 @@ class ComposerWindow(QMainWindow):
             painter.end()
 
     def _on_print_preview(self) -> None:
-        from PySide6.QtPrintSupport import QPrintPreviewDialog
+        """See the sheet as it prints. The import is what decided whether
+        this button worked at all: it lives inside the slot, so in a build
+        with QtPrintSupport trimmed away it raised where nobody could see
+        it and the button just did nothing (Rafael, 2026-09-16, 30:20).
+        Now it says so, and points at the export that does work."""
+        mod = self.print_support()
+        if mod is None:
+            QMessageBox.information(
+                self, tr("Print preview"),
+                tr("This build of IngeTrazo has no printing support "
+                   "(Qt's print module is missing), so the sheet cannot "
+                   "be previewed or printed from here.\n\nExport PDF "
+                   "gives you the same sheet, at its exact paper size, "
+                   "ready to print."))
+            return
         printer = self._printer_for_sheet()
-        dlg = QPrintPreviewDialog(printer, self)
+        dlg = mod.QPrintPreviewDialog(printer, self)
         dlg.setWindowTitle(tr("Print preview") + " — " + self.comp.name)
         dlg.paintRequested.connect(self._paint_to_printer)
         dlg.resize(1100, 800)
