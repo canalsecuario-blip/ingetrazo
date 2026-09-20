@@ -56,6 +56,22 @@ class OrbitCamera:
         d = self.target - self.eye()
         return d.normalized() if d.lengthSquared() > 1e-18 else QVector3D(0, 1, 0)
 
+    def up_vector(self) -> QVector3D:
+        """The up vector every projection must use: ``up`` itself, unless
+        the sight line runs along it — the exact Top and Bottom views —
+        where ``lookAt`` has no right and a cross product gives nothing.
+        There it is the limit of the view a hair short of vertical: north
+        up the screen in Top (y+ at the default yaw), the same axis the
+        other way in Bottom, so the exact view looks like the 89° one it
+        replaces, only straight. A rolled ``up`` (the composer turning a
+        plan) is never along the sight line and comes back as it is."""
+        f = self.forward()
+        if abs(QVector3D.dotProduct(f, self.up)) < 0.9999:
+            return self.up
+        sign = -1.0 if self.pitch > 0 else 1.0
+        return QVector3D(sign * math.cos(self.yaw), sign * math.sin(self.yaw),
+                         0.0)
+
     # ---- First person (SketchUp's Position Camera / Look Around / Walk) -----
     # The orbit model stays: a walkthrough only ever asks "the eye is HERE,
     # looking THERE", and that is a target at ``distance`` along the look
@@ -98,7 +114,7 @@ class OrbitCamera:
 
     def view_matrix(self) -> QMatrix4x4:
         m = QMatrix4x4()
-        m.lookAt(self.eye(), self.target, self.up)
+        m.lookAt(self.eye(), self.target, self.up_vector())
         return m
 
     def projection_matrix(self) -> QMatrix4x4:
@@ -154,7 +170,7 @@ class OrbitCamera:
         # target + distance·(cp·cy, cp·sy, sp), so forward is its negation.
         # Using +that vector flipped screen-right, inverting horizontal pan.
         forward = QVector3D(-cp * cy, -cp * sy, -sp)
-        right = QVector3D.crossProduct(forward, self.up).normalized()
+        right = QVector3D.crossProduct(forward, self.up_vector()).normalized()
         screen_up = QVector3D.crossProduct(right, forward).normalized()
         world_per_pixel = (
             2.0
@@ -219,9 +235,14 @@ class OrbitCamera:
                             MIN_DISTANCE)
 
     # Yaw / pitch presets for standard architectural views (Z-up convention).
+    # Top and Bottom are EXACTLY vertical: at 89° the parallel projection
+    # showed every vertical edge as a short line and a plan came out a
+    # hair oblique (@pacaeiro, issue #45: «Top and Bottom views are not
+    # straight (camera not perpendicular to view)»). ``up_vector`` keeps
+    # lookAt and the camera bases from degenerating there.
     _STANDARD_VIEWS = {
-        "top":    (math.radians(-90.0), math.radians(89.0)),
-        "bottom": (math.radians(-90.0), math.radians(-89.0)),
+        "top":    (math.radians(-90.0), math.radians(90.0)),
+        "bottom": (math.radians(-90.0), math.radians(-90.0)),
         "front":  (math.radians(-90.0), 0.0),
         "back":   (math.radians(90.0), 0.0),
         "right":  (0.0, 0.0),

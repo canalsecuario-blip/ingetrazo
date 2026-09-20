@@ -43,7 +43,8 @@ def camera_basis(camera):
     e = np.array([eye.x(), eye.y(), eye.z()], dtype=np.float64)
     t = np.array([camera.target.x(), camera.target.y(),
                   camera.target.z()], dtype=np.float64)
-    up = np.array([camera.up.x(), camera.up.y(), camera.up.z()],
+    up_v = camera.up_vector() if hasattr(camera, "up_vector") else camera.up
+    up = np.array([up_v.x(), up_v.y(), up_v.z()],
                   dtype=np.float64)
     f = t - e
     f /= max(np.linalg.norm(f), 1e-12)

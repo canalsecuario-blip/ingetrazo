@@ -1737,7 +1737,8 @@ def roll_camera(camera, deg: float) -> None:
     cp, sp = math.cos(camera.pitch), math.sin(camera.pitch)
     cy, sy = math.cos(camera.yaw), math.sin(camera.yaw)
     f = (-cp * cy, -cp * sy, -sp)          # eye → target, as the camera builds it
-    u0 = _xyz(camera.up)
+    u0 = _xyz(camera.up_vector() if hasattr(camera, "up_vector")
+              else camera.up)
     r = (f[1] * u0[2] - f[2] * u0[1],      # right = f × up
          f[2] * u0[0] - f[0] * u0[2],
          f[0] * u0[1] - f[1] * u0[0])
