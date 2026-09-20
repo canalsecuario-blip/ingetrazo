@@ -821,6 +821,14 @@ class CotaAngularItem:
         return max(abs(self.ay_mm), abs(self.by_mm), self.radius_mm, 2.0)
 
 
+def cota_line_deg(ct) -> float:
+    """The legible rotation of a cota's text: the angle of its DIMENSION
+    LINE, not of the segment it measures — a cota forced horizontal reads
+    horizontal however slanted the two points are."""
+    (ax, ay), (bx, by) = ct.line_points()
+    return readable_deg(bx - ax, by - ay)
+
+
 def readable_deg(dx_mm: float, dy_mm: float) -> float:
     """The rotation a dimension's TEXT takes so it is read, not deciphered.
 
@@ -895,6 +903,19 @@ class CotaItem:
     anchor_uid: str = ""
     a_world: Optional[list] = None
     b_world: Optional[list] = None
+    #: Direction of the dimension LINE. ``""`` measures the segment
+    #: itself, the way LayOut and SketchUp do (AutoCAD calls it DIMALIGNED);
+    #: ``"h"`` / ``"v"`` measure only the horizontal or vertical part of it
+    #: and draw the line straight, with extension lines of DIFFERENT
+    #: lengths reaching each real point (AutoCAD's DIMLINEAR).
+    #:
+    #: It is what Rafael could not do (41:30–43:00): «si el punto a acotar
+    #: no está perfectamente alineado con el otro… ¿veis cómo queda la cota
+    #: inclinada? La cota no puede quedar inclinada si estás acotando algo
+    #: en vertical». Forcing the second POINT onto an axis, which is what
+    #: Shift used to do, loses the snap to the point he actually wants and
+    #: leaves the measurement to the eye — «software técnico: a ojo no».
+    axis: str = ""               # "" aligned | h | v
     z: float = 0.0            # stacking order on the page (higher = on top)
     locked: bool = False         # locked: shown but not movable/resizable
     group_id: str = ""            # sheet group (Ctrl+G); "" = ungrouped
@@ -918,11 +939,33 @@ class CotaItem:
             return (0.0, -1.0)
         return (-self.dy_mm / length, self.dx_mm / length)
 
+    def line_points(self) -> tuple[tuple, tuple]:
+        """The DIMENSION LINE's two ends, in item space (origin = the first
+        measured point). Aligned: the segment itself pushed ``sep_mm`` along
+        its normal. Forced horizontal or vertical: a straight line at
+        ``sep_mm``, spanning only the part of the segment it measures."""
+        if self.axis == "h":
+            return (0.0, self.sep_mm), (self.dx_mm, self.sep_mm)
+        if self.axis == "v":
+            return (self.sep_mm, 0.0), (self.sep_mm, self.dy_mm)
+        nx, ny = self.normal()
+        s = self.sep_mm
+        return (nx * s, ny * s), (self.dx_mm + nx * s, self.dy_mm + ny * s)
+
+    def measured_mm(self) -> float:
+        """Paper length the label reports: the whole segment, or only its
+        horizontal / vertical part when the cota is forced straight."""
+        if self.axis == "h":
+            return abs(self.dx_mm)
+        if self.axis == "v":
+            return abs(self.dy_mm)
+        return math.hypot(self.dx_mm, self.dy_mm)
+
     def real_distance_m(self) -> float:
         """Paper length at the cota's scale — for an anchored cota that is
         the distance projected on its frame's view plane, since the
         composer reprojects its endpoints from the model."""
-        return math.hypot(self.dx_mm, self.dy_mm) * self.scale_n / 1000.0
+        return self.measured_mm() * self.scale_n / 1000.0
 
     def auto_label(self) -> str:
         """The measured value, formatted in the cota's units (metres by

@@ -39,6 +39,7 @@ class _StubComposer:
         self.tool_mode = mode
         self.placed = []
         self.anchors = []
+        self.axes = []
         self.snap_at = None    # full (x, y, world, frame) hit, or None
 
     def nearest_snap_point(self, x, y, thr):
@@ -47,9 +48,11 @@ class _StubComposer:
     def update_cursor_label(self, x, y):
         pass
 
-    def place_tool(self, x0, y0, x1, y1, sep_mm=0.0, anchors=None):
+    def place_tool(self, x0, y0, x1, y1, sep_mm=0.0, anchors=None,
+                   hit_a=None, axis=""):
         self.placed.append((x0, y0, x1, y1, sep_mm))
         self.anchors.append(anchors)
+        self.axes.append(axis)
         self.tool_mode = "select"
 
 
@@ -790,24 +793,39 @@ class TestGroundLine:
 
 
 class TestShiftOrtho:
-    """Shift locks the second point of a segment to the horizontal or the
-    vertical through the first (Marco, 2026-09-08: «cuando acote para
-    sacar una distancia me gustaría que apretando Shift me restrinja de
-    forma ortogonal»)."""
+    """Shift restricts a measurement orthogonally (Marco, 2026-09-08:
+    «cuando acote para sacar una distancia me gustaría que apretando Shift
+    me restrinja de forma ortogonal»).
 
-    def test_a_cota_drawn_with_shift_comes_out_horizontal(self):
+    On a DIMENSION it does that by forcing the dimension straight and
+    leaving the measured point where it snapped, not by dragging the point
+    onto an axis: dragging it threw the snap away and left the number to
+    the eye (Rafael, 41:30 «no me coge el punto final así como así… me lo
+    hizo inclinado porque solté el shift antes de tiempo»). On a line or an
+    arrow, where there is nothing to project, it still moves the point.
+    """
+
+    def test_a_cota_drawn_with_shift_comes_out_straight(self):
         view, comp = _view("cota")
         _click(view, 50, 100)                                # first point
         _mouse(view, QEvent.MouseMove, 150, 112, mods=Qt.ShiftModifier)
         _mouse(view, QEvent.MouseButtonPress, 150, 112, mods=Qt.ShiftModifier)
         _mouse(view, QEvent.MouseButtonRelease, 150, 112, mods=Qt.ShiftModifier)
-        ax, ay = _scene_xy(view, 50, 100)
+        bx, by = _scene_xy(view, 150, 112)
         assert view._second_pt is not None
-        assert abs(view._second_pt.y() - ay) < 1e-6           # locked flat
-        assert view._second_pt.x() > ax + 50
+        # the point is untouched — it keeps whatever it snapped to
+        assert view._second_pt.x() == pytest.approx(bx)
+        assert view._second_pt.y() == pytest.approx(by)
         _click(view, 150, 130)                               # the offset
         x0, y0, x1, y1, _sep = comp.placed[0]
-        assert abs(y1 - y0) < 1e-6 and x1 > x0
+        assert (x1, y1) == pytest.approx((bx, by))
+        assert comp.axes[0] == "h"                           # …the COTA is flat
+        from core.composition import CotaItem
+        ct = CotaItem(x_mm=x0, y_mm=y0, dx_mm=x1 - x0, dy_mm=y1 - y0,
+                      sep_mm=comp.placed[0][4], axis="h")
+        (a2x, a2y), (b2x, b2y) = ct.line_points()
+        assert a2y == pytest.approx(b2y)                     # a straight line
+        assert ct.measured_mm() == pytest.approx(abs(x1 - x0))
 
     def test_the_closer_axis_wins_and_no_shift_stays_free(self):
         view, comp = _view("linea")
@@ -821,21 +839,41 @@ class TestShiftOrtho:
         x0, y0, x1, y1, _sep = comp.placed[0]
         assert abs(x1 - x0) > 5                              # free
 
-    def test_a_drag_with_shift_locks_too_and_the_offset_click_does_not(self):
+    def test_a_drag_with_shift_straightens_too_and_the_offset_still_moves(self):
         view, comp = _view("cota")
         _mouse(view, QEvent.MouseButtonPress, 50, 100)
         _mouse(view, QEvent.MouseMove, 150, 108, buttons=Qt.LeftButton,
                mods=Qt.ShiftModifier)
         _mouse(view, QEvent.MouseButtonRelease, 150, 108,
                mods=Qt.ShiftModifier)
-        ax, ay = _scene_xy(view, 50, 100)
-        assert abs(view._second_pt.y() - ay) < 1e-6
-        # the third click (the dimension line's offset) is never locked:
-        # Shift there must not pull the separation to zero
+        bx, by = _scene_xy(view, 150, 108)
+        assert view._second_pt.y() == pytest.approx(by)
+        assert view._cota_axis == "h"
+        # the third click (the dimension line's offset) still moves the
+        # line: Shift there must not pull the separation to zero
         _mouse(view, QEvent.MouseButtonPress, 150, 130, mods=Qt.ShiftModifier)
         assert comp.placed and abs(comp.placed[0][4]) > 5
+        assert comp.axes[0] == "h"
 
-    def test_chain_next_point_locks_after_the_offset_is_fixed(self):
+    def test_letting_shift_go_a_moment_early_does_not_lose_the_cota(self):
+        """«Me lo hizo inclinado porque seguramente solté yo el shift antes
+        de tiempo» — so the choice sticks until the cota is placed."""
+        view, comp = _view("cota")
+        _click(view, 50, 100)
+        _mouse(view, QEvent.MouseMove, 150, 112, mods=Qt.ShiftModifier)
+        _mouse(view, QEvent.MouseButtonPress, 150, 112, mods=Qt.ShiftModifier)
+        _mouse(view, QEvent.MouseButtonRelease, 150, 112, mods=Qt.ShiftModifier)
+        _mouse(view, QEvent.MouseMove, 150, 130)             # Shift let go
+        _mouse(view, QEvent.MouseButtonPress, 150, 130)      # the offset
+        assert comp.axes[0] == "h"
+        # …and a cota placed without Shift at all is still the aligned one
+        view, comp = _view("cota")
+        _click(view, 50, 100)
+        _click(view, 150, 112)
+        _click(view, 150, 130)
+        assert comp.axes[0] == ""
+
+    def test_the_chain_straightens_too_and_keeps_its_points(self):
         from unittest import mock
         view, comp = _view("cota_cadena")
         comp.place_chain_cota = mock.Mock(return_value=object())
@@ -846,7 +884,9 @@ class TestShiftOrtho:
         _mouse(view, QEvent.MouseButtonRelease, 200, 109, mods=Qt.ShiftModifier)
         args = comp.place_chain_cota.call_args_list[-1][0]
         (px, py), (qx, qy) = args[0], args[1]
-        assert abs(qy - py) < 1e-6 and qx > px
+        qbx, qby = _scene_xy(view, 200, 109)
+        assert (qx, qy) == pytest.approx((qbx, qby))         # point untouched
+        assert args[4] == "h"                                # cota straight
 
     def test_pressing_shift_replays_the_rubber_band_where_the_cursor_is(self):
         from PySide6.QtGui import QKeyEvent

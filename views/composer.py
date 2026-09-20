@@ -34,7 +34,8 @@ from core.composition import (COMMON_SCALES, NEW_FRAME_STYLE, PAPER_SIZES_MM, RE
                               EditItemCommand, EtiquetaItem, expand_fields, set_field_context, FlechaNorte, FormaItem, LlamadaItem, NivelItem,
                               ImagenItem, Leyenda, MarcoVista,
                               PerfilTerreno, RemoveItemCommand, TextoItem,
-                              apply_frame_camera, readable_deg, snap_mm)
+                              apply_frame_camera, cota_line_deg,
+                              readable_deg, snap_mm)
 from core.i18n import tr
 from core.composition import pen_px
 from core.saved_views import apply_shadow_state, georef_objects
@@ -1097,15 +1098,15 @@ def cota_label_anchor(ct: CotaItem) -> tuple:
     plus the free drag (``text_dx_mm``/``text_dy_mm``) — LayOut lets the
     text box be dragged anywhere, and the line stays put."""
     import math as _math
-    nx, ny = ct.normal()
-    s = ct.sep_mm
-    mx, my = ct.dx_mm / 2 + nx * s, ct.dy_mm / 2 + ny * s
+    (a2x, a2y), (b2x, b2y) = ct.line_points()
+    mx, my = (a2x + b2x) / 2, (a2y + b2y) / 2
     along = getattr(ct, "text_along", "middle") or "middle"
     if along in ("start", "end"):
-        length = _math.hypot(ct.dx_mm, ct.dy_mm)
+        ldx, ldy = b2x - a2x, b2y - a2y
+        length = _math.hypot(ldx, ldy)
         if length > 1e-9:
-            ux, uy = ct.dx_mm / length, ct.dy_mm / length
-            deg = readable_deg(ct.dx_mm, ct.dy_mm)
+            ux, uy = ldx / length, ldy / length
+            deg = cota_line_deg(ct)
             horizontal = (getattr(ct, "text_align", "aligned")
                           or "aligned") == "horizontal"
             label = ct.label()
@@ -1141,7 +1142,7 @@ def cota_aside_frame(ct: CotaItem) -> tuple:
     of straddling it (Marco, 2026-09-08: «sería bueno que la posición de
     texto en acotar también haya una opción para ponerla a un costado»)."""
     import math as _math
-    deg = readable_deg(ct.dx_mm, ct.dy_mm)
+    deg = cota_line_deg(ct)
     horizontal = (getattr(ct, "text_align", "aligned")
                   or "aligned") == "horizontal"
     label = ct.label()
@@ -1171,26 +1172,28 @@ def paint_cota_mm(painter: QPainter, ct: CotaItem) -> None:
     would change it."""
     import math as _math
     from PySide6.QtGui import QBrush, QPolygonF
-    nx, ny = ct.normal()
-    s = ct.sep_mm
     a = QPointF(0, 0)
     b = QPointF(ct.dx_mm, ct.dy_mm)
-    a2 = QPointF(nx * s, ny * s)
-    b2 = QPointF(ct.dx_mm + nx * s, ct.dy_mm + ny * s)
+    (a2x, a2y), (b2x, b2y) = ct.line_points()
+    a2, b2 = QPointF(a2x, a2y), QPointF(b2x, b2y)
     color = QColor(ct.color)
     pen = QPen(color)
     pen.setWidthF(ct.stroke_mm)
     painter.setPen(pen)
-    if abs(s) > 0.05:
-        # extension lines: small gap at the measured point, small overshoot
-        # past the dimension line (the drafting convention LayOut follows)
-        sign = 1.0 if s >= 0 else -1.0
-        gap, over = 1.0 * sign, 1.2 * sign
-        for p, p2 in ((a, a2), (b, b2)):
-            painter.drawLine(
-                QPointF(p.x() + nx * gap, p.y() + ny * gap),
-                QPointF(p2.x() + nx * over, p2.y() + ny * over))
-    ang = _math.atan2(ct.dy_mm, ct.dx_mm)
+    # Extension lines: small gap at the measured point, small overshoot past
+    # the dimension line (the drafting convention LayOut follows). Each one
+    # runs from ITS point to ITS foot, so a cota forced straight over two
+    # points at different heights gets extension lines of different lengths
+    # — which is the whole point of forcing it.
+    for p, p2 in ((a, a2), (b, b2)):
+        ex, ey = p2.x() - p.x(), p2.y() - p.y()
+        ln = _math.hypot(ex, ey)
+        if ln <= 0.05:                  # the point is on the line already
+            continue
+        ux, uy = ex / ln, ey / ln
+        painter.drawLine(QPointF(p.x() + ux, p.y() + uy),
+                         QPointF(p2.x() + ux * 1.2, p2.y() + uy * 1.2))
+    ang = _math.atan2(b2.y() - a2.y(), b2.x() - a2.x())
     label = ct.label()
     mid = QPointF((a2.x() + b2.x()) / 2, (a2.y() + b2.y()) / 2)
     text_pos = getattr(ct, "text_pos", "above") or "above"
@@ -1252,7 +1255,7 @@ def paint_cota_mm(painter: QPainter, ct: CotaItem) -> None:
         align = Qt.AlignHCenter | Qt.AlignVCenter
     else:
         painter.translate(lx, ly)
-        deg = readable_deg(ct.dx_mm, ct.dy_mm)      # ISO: head to the LEFT
+        deg = cota_line_deg(ct)                     # ISO: head to the LEFT
         if (getattr(ct, "text_align", "aligned") or "aligned") == "horizontal":
             deg = 0.0
         painter.rotate(deg)
@@ -3268,9 +3271,8 @@ class CotaCanvasItem(_SheetItem):
         super(_SheetItem, self).hoverMoveEvent(event)
 
     def _line_mid(self) -> tuple[float, float]:
-        nx, ny = self.model.normal()
-        s = self.model.sep_mm
-        return (self.model.dx_mm / 2 + nx * s, self.model.dy_mm / 2 + ny * s)
+        (ax, ay), (bx, by) = self.model.line_points()
+        return ((ax + bx) / 2, (ay + by) / 2)
 
     def shape(self):
         """Hit area = the drawn lines (extension, dimension, label strip)
@@ -3279,11 +3281,9 @@ class CotaCanvasItem(_SheetItem):
         the small cotas inside it (Marco, 2026-09-02)."""
         from PySide6.QtGui import QPainterPath, QPainterPathStroker
         m = self.model
-        nx, ny = m.normal()
-        s = m.sep_mm
         p0, p1 = QPointF(0.0, 0.0), QPointF(m.dx_mm, m.dy_mm)
-        a2 = QPointF(nx * s, ny * s)
-        b2 = QPointF(m.dx_mm + nx * s, m.dy_mm + ny * s)
+        (a2x, a2y), (b2x, b2y) = m.line_points()
+        a2, b2 = QPointF(a2x, a2y), QPointF(b2x, b2y)
         lines = QPainterPath()
         for a, b in ((p0, a2), (p1, b2), (a2, b2)):
             lines.moveTo(a)
@@ -3324,7 +3324,7 @@ class CotaCanvasItem(_SheetItem):
         else:
             strip.addRect(QRectF(-w / 2, -m.offset_mm - m.text_mm * 1.3 - 1.0,
                                  w, m.offset_mm + m.text_mm * 1.3 + 2.0))
-        deg = readable_deg(m.dx_mm, m.dy_mm)
+        deg = cota_line_deg(m)
         if (getattr(m, "text_align", "aligned") or "aligned") == "horizontal":
             deg = 0.0
         t = QTransform().translate(lx, ly).rotate(deg)
@@ -3333,7 +3333,6 @@ class CotaCanvasItem(_SheetItem):
     def boundingRect(self) -> QRectF:
         import math as _math
         m = self.model
-        nx, ny = m.normal()
         pad = m.offset_mm + m.text_mm + 4
         if (getattr(m, "text_pos", "") or "") in ("aside", "aside_below"):
             pad += cota_aside_frame(m)[3]        # the label box stands off
@@ -3343,8 +3342,9 @@ class CotaCanvasItem(_SheetItem):
             mx, my = self._line_mid()
             pad += _math.hypot(lx - mx, ly - my) + \
                 len(m.label()) * m.text_mm * 0.62 + 2.0
-        xs = (0.0, m.dx_mm, nx * m.sep_mm, m.dx_mm + nx * m.sep_mm)
-        ys = (0.0, m.dy_mm, ny * m.sep_mm, m.dy_mm + ny * m.sep_mm)
+        (a2x, a2y), (b2x, b2y) = m.line_points()
+        xs = (0.0, m.dx_mm, a2x, b2x)
+        ys = (0.0, m.dy_mm, a2y, b2y)
         return QRectF(min(xs) - pad, min(ys) - pad,
                       max(xs) - min(xs) + 2 * pad,
                       max(ys) - min(ys) + 2 * pad)
@@ -3369,9 +3369,15 @@ class CotaCanvasItem(_SheetItem):
             self.update()
             return
         if self._sep_dragging:
-            nx, ny = self.model.normal()
+            m = self.model
             self.prepareGeometryChange()
-            self.model.sep_mm = (event.pos().x() * nx + event.pos().y() * ny)
+            if m.axis == "h":            # the line only moves up and down
+                m.sep_mm = event.pos().y()
+            elif m.axis == "v":
+                m.sep_mm = event.pos().x()
+            else:
+                nx, ny = m.normal()
+                m.sep_mm = event.pos().x() * nx + event.pos().y() * ny
             self.update()
             return
         if self._resizing:
@@ -3460,6 +3466,12 @@ class ComposerCanvasView(QGraphicsView):
         self._ignore_release = False   # release of a finishing second click
         self._second_pt = None         # cota: measured points fixed, placing
         self._preview = None           #       the dimension line (sep phase)
+        #: Shift during a cota gesture straightens it: "" aligned, "h", "v".
+        #: STICKY until the cota is placed or dropped — Rafael lost one by
+        #: letting Shift go a moment early, and the panel can still change
+        #: it afterwards, so there is nothing to gain by forgetting it.
+        self._cota_axis = ""
+        self._chain_axis = ""
         self._snap_marker = None       # green dot over a frame vertex/edge
         self._last_hit = None          # richest snap hit of the last _snapped
         self._hit_a = None             # snap hits of the two measured points
@@ -3490,8 +3502,16 @@ class ComposerCanvasView(QGraphicsView):
     #: vertical through the first (Marco, 2026-09-08: «cuando acote para
     #: sacar una distancia me gustaría que apretando Shift me restrinja de
     #: forma ortogonal» — AutoCAD's Ortho, SketchUp's axis lock).
-    _ORTHO_TOOLS = frozenset(("cota", "cota_cadena", "linea", "flecha",
-                              "terreno"))
+    _ORTHO_TOOLS = frozenset(("linea", "flecha", "terreno"))
+
+    #: Tools whose Shift forces the DIMENSION straight instead of moving
+    #: the point: the second point stays on the geometry it snapped to and
+    #: the cota measures only its horizontal or vertical part, with
+    #: extension lines of different lengths (AutoCAD's DIMLINEAR). Moving
+    #: the point instead threw the snap away and left the measurement to
+    #: the eye — Rafael, 41:30: «me lo hizo inclinado porque seguramente
+    #: solté yo el shift antes de tiempo… software técnico: a ojo no».
+    _STRAIGHT_TOOLS = frozenset(("cota", "cota_cadena"))
 
     def _ortho_anchor(self):
         """The fixed point the cursor is measured from while a segment is
@@ -3501,14 +3521,35 @@ class ComposerCanvasView(QGraphicsView):
         mode = self.composer.tool_mode
         if mode not in self._ORTHO_TOOLS:
             return None
-        if mode == "cota_cadena":
-            pts = self._chain_pts
-            if not pts or (len(pts) == 2 and self._chain_sep is None):
-                return None
-            return pts[-1][0]
         if self._drag_start is not None and self._second_pt is None:
             return self._drag_start
         return None
+
+    def _straighten(self, a, b, mods) -> str:
+        """Shift while a cota is being drawn: force the dimension straight
+        along whichever of the two axes the points are further apart on,
+        and remember it. It replaces the old lock of the POINT — the point
+        keeps its snap, and only the MEASUREMENT is projected, which is
+        what makes the cota exact instead of «a ojo»."""
+        if mods & Qt.ShiftModifier and a is not None and b is not None:
+            dx, dy = abs(b.x() - a.x()), abs(b.y() - a.y())
+            return "h" if dx >= dy else "v"
+        return ""
+
+    @staticmethod
+    def _line_ends(a, b, sep: float, axis: str):
+        """The dimension LINE's two ends in PAGE mm — the view's mirror of
+        ``CotaItem.line_points``, for previews before the item exists."""
+        import math as _math
+        if axis == "h":
+            return QPointF(a.x(), a.y() + sep), QPointF(b.x(), a.y() + sep)
+        if axis == "v":
+            return QPointF(a.x() + sep, a.y()), QPointF(a.x() + sep, b.y())
+        dx, dy = b.x() - a.x(), b.y() - a.y()
+        ln = _math.hypot(dx, dy)
+        nx, ny = ((-dy / ln, dx / ln) if ln > 1e-9 else (0.0, -1.0))
+        return (QPointF(a.x() + nx * sep, a.y() + ny * sep),
+                QPointF(b.x() + nx * sep, b.y() + ny * sep))
 
     def _constrain(self, pos, mods):
         """*pos* locked to the horizontal or the vertical through the
@@ -3657,7 +3698,10 @@ class ComposerCanvasView(QGraphicsView):
             return
         if mode == "cota_cadena" and event.button() == Qt.LeftButton:
             pos, _ = self._snapped(self.mapToScene(event.position().toPoint()))
-            pos = self._constrain(pos, event.modifiers())
+            if self._chain_pts:
+                self._chain_axis = self._straighten(
+                    self._chain_pts[-1][0], pos,
+                    event.modifiers()) or self._chain_axis
             self._chain_click(pos, self._last_hit)
             event.accept()
             return
@@ -3687,6 +3731,10 @@ class ComposerCanvasView(QGraphicsView):
             pos = self._constrain(pos, event.modifiers())
             if self._second_pt is not None:
                 # Third click of a dimension: fixes the line separation.
+                if mode in self._STRAIGHT_TOOLS:
+                    self._cota_axis = self._straighten(
+                        self._drag_start, self._second_pt,
+                        event.modifiers()) or self._cota_axis
                 self._finish_cota(pos)
                 self._ignore_release = True
                 event.accept()
@@ -3883,6 +3931,15 @@ class ComposerCanvasView(QGraphicsView):
         pos, _ = self._snapped(raw)
         pos = self._constrain(pos, mods)
         self.composer.update_cursor_label(pos.x(), pos.y())
+        mode = self.composer.tool_mode
+        if mode in self._STRAIGHT_TOOLS and (mods & Qt.ShiftModifier):
+            if mode == "cota_cadena" and self._chain_pts:
+                self._chain_axis = self._straighten(
+                    self._chain_pts[-1][0], pos, mods) or self._chain_axis
+            elif self._drag_start is not None:
+                self._cota_axis = self._straighten(
+                    self._drag_start, self._second_pt or pos,
+                    mods) or self._cota_axis
         if self._chain_pts:
             self._update_chain_preview(pos)
             return True
@@ -3905,9 +3962,15 @@ class ComposerCanvasView(QGraphicsView):
     # ---- dimension sep phase (points fixed, placing the line) ---------------
 
     def _cota_sep(self, pos) -> float:
-        """Signed ⟂ distance from the measured segment to *pos* (page mm)."""
+        """Where the cursor puts the dimension line: the ⟂ distance from
+        the measured segment, or — when the cota is forced straight — the
+        page row or column the line sits on."""
         import math as _math
         a, b = self._drag_start, self._second_pt
+        if self._cota_axis == "h":
+            return pos.y() - a.y()
+        if self._cota_axis == "v":
+            return pos.x() - a.x()
         dx, dy = b.x() - a.x(), b.y() - a.y()
         length = _math.hypot(dx, dy)
         if length < 1e-9:
@@ -3938,16 +4001,14 @@ class ComposerCanvasView(QGraphicsView):
             self._preview.setZValue(100000)
             self.scene().addItem(self._preview)
         a, b = self._drag_start, self._second_pt
-        dx, dy = b.x() - a.x(), b.y() - a.y()
-        length = _math.hypot(dx, dy)
-        nx, ny = ((-dy / length, dx / length) if length > 1e-9 else (0.0, -1.0))
         s = self._cota_sep(pos)
+        a2, b2 = self._line_ends(a, b, s, self._cota_axis)
         path = QPainterPath()
-        for p in (a, b):
+        for p, p2 in ((a, a2), (b, b2)):
             path.moveTo(p)
-            path.lineTo(p.x() + nx * s, p.y() + ny * s)
-        path.moveTo(a.x() + nx * s, a.y() + ny * s)
-        path.lineTo(b.x() + nx * s, b.y() + ny * s)
+            path.lineTo(p2)
+        path.moveTo(a2)
+        path.lineTo(b2)
         self._preview.setPath(path)
 
     def _update_angular_preview(self, pos) -> None:
@@ -4004,7 +4065,7 @@ class ComposerCanvasView(QGraphicsView):
             self._chain_sep = self._sep_between(a, b, pos)
             self._chain_cotas.append(self.composer.place_chain_cota(
                 (a.x(), a.y()), (b.x(), b.y()), self._chain_sep,
-                self._pair_anchors(pts[0][1], pts[1][1])))
+                self._pair_anchors(pts[0][1], pts[1][1]), self._chain_axis))
             self._clear_snap_marker()
             self._update_chain_preview(pos)
             return
@@ -4013,7 +4074,7 @@ class ComposerCanvasView(QGraphicsView):
         sep = self._chain_sep_for(prev[0], pos)
         self._chain_cotas.append(self.composer.place_chain_cota(
             (prev[0].x(), prev[0].y()), (pos.x(), pos.y()), sep,
-            self._pair_anchors(prev[1], hit)))
+            self._pair_anchors(prev[1], hit), self._chain_axis))
         self._update_chain_preview(pos)
 
     @staticmethod
@@ -4023,10 +4084,14 @@ class ComposerCanvasView(QGraphicsView):
             return (hit_a[3], hit_a[2], hit_b[2])
         return None
 
-    @staticmethod
-    def _sep_between(a, b, pos) -> float:
-        """Signed ⟂ distance from segment a→b to *pos* (page mm)."""
+    def _sep_between(self, a, b, pos) -> float:
+        """Signed ⟂ distance from segment a→b to *pos* (page mm), or the
+        row / column the line sits on when the chain is forced straight."""
         import math as _math
+        if self._chain_axis == "h":
+            return pos.y() - a.y()
+        if self._chain_axis == "v":
+            return pos.x() - a.x()
         dx, dy = b.x() - a.x(), b.y() - a.y()
         length = _math.hypot(dx, dy)
         if length < 1e-9:
@@ -4041,6 +4106,13 @@ class ComposerCanvasView(QGraphicsView):
         from *a* to the chain line along the new cota's normal."""
         import math as _math
         p1, p2 = self._chain_pts[0][0], self._chain_pts[1][0]
+        if self._chain_axis in ("h", "v"):
+            # every cota of a forced chain shares ONE line, so its offset is
+            # just that row (or column) measured from its own first point
+            sep = float(self._chain_sep or 0.0)
+            if self._chain_axis == "h":
+                return p1.y() + sep - a.y()
+            return p1.x() + sep - a.x()
         d12x, d12y = p2.x() - p1.x(), p2.y() - p1.y()
         l12 = _math.hypot(d12x, d12y)
         dx, dy = b.x() - a.x(), b.y() - a.y()
@@ -4107,6 +4179,7 @@ class ComposerCanvasView(QGraphicsView):
         """End the chain: stack the total over two or more segments, clear
         the state; the tool stays armed for the next chain."""
         pts, cotas, sep = self._chain_pts, self._chain_cotas, self._chain_sep
+        axis, self._chain_axis = self._chain_axis, ""
         self._chain_pts, self._chain_cotas, self._chain_sep = [], [], None
         if self._preview is not None:
             self.scene().removeItem(self._preview)
@@ -4116,11 +4189,11 @@ class ComposerCanvasView(QGraphicsView):
             first, last = pts[0], pts[-1]
             self.composer.place_chain_total(
                 (first[0].x(), first[0].y()), (last[0].x(), last[0].y()),
-                sep, cotas, self._pair_anchors(first[1], last[1]))
+                sep, cotas, self._pair_anchors(first[1], last[1]), axis)
 
     def _finish_cota(self, pos) -> None:
         start, second = self._drag_start, self._second_pt
-        sep = self._cota_sep(pos)
+        sep = self._cota_sep(pos)          # reads _cota_axis: set it first
         # Both points snapped to geometry of the SAME frame → the cota
         # anchors to those 3D model points and follows the model.
         anchors = None
@@ -4135,9 +4208,10 @@ class ComposerCanvasView(QGraphicsView):
             self.scene().removeItem(self._preview)
             self._preview = None
         self._clear_snap_marker()
+        axis, self._cota_axis = self._cota_axis, ""
         self.composer.place_tool(start.x(), start.y(),
                                  second.x(), second.y(), sep_mm=sep,
-                                 anchors=anchors)
+                                 anchors=anchors, axis=axis)
 
     def mouseReleaseEvent(self, event) -> None:
         if self._pan_last is not None and event.button() in (
@@ -4228,6 +4302,7 @@ class ComposerCanvasView(QGraphicsView):
         self._press_vp = None
         self._ignore_release = False
         self._hit_a = self._hit_b = None
+        self._cota_axis = ""
         if self._preview is not None:
             self.scene().removeItem(self._preview)
             self._preview = None
@@ -4513,12 +4588,16 @@ class ComposerWindow(QMainWindow):
         ("rect", "rectangle", "Draw a rectangle (two clicks or drag)", True),
         ("elipse", "circle", "Draw an ellipse (two clicks or drag)", True),
         ("poligono", "polygon", "Draw a polygon (two clicks or drag)", True),
-        ("cota", "dimension", "Draw a dimension (two points + separation; Shift locks the second point horizontal or vertical)", True),
+        ("cota", "dimension",
+         "Draw a dimension: two points and the line's offset. Shift "
+         "forces it straight (horizontal or vertical) WITHOUT moving "
+         "the points, so it keeps what it snapped to", True),
         ("cota_cadena", "dimension_chain",
-         "Chain dimensions: two points and the line's offset, then every "
-         "click adds the next segment on the same line; click the last "
-         "point or press Esc to end (the total is stacked above). Shift "
-         "locks the next point horizontal or vertical", False),
+         "Chain dimensions the way AutoCAD does: two points and the "
+         "line's offset place the first, then every click adds the "
+         "next from the last point on the same line; click the last "
+         "point or press Esc to end (the total is stacked above). "
+         "Shift forces the whole chain straight", False),
         ("cota_ang", "protractor",
          "Draw an angular dimension (vertex, two points, then the arc)", False),
     )
@@ -4622,7 +4701,8 @@ class ComposerWindow(QMainWindow):
         return best
 
     def place_tool(self, x0: float, y0: float, x1: float, y1: float,
-                   sep_mm: float = 0.0, anchors=None, hit_a=None) -> None:
+                   sep_mm: float = 0.0, anchors=None, hit_a=None,
+                   axis: str = "") -> None:
         """A click (or drag) landed on the page with a placement tool
         armed: create the item there, through the history. ``anchors``
         (cota only) is ``(frame, a_world, b_world)`` when both measured
@@ -4739,16 +4819,19 @@ class ComposerWindow(QMainWindow):
                 item = FormaItem(kind=kind, x_mm=x, y_mm=y,
                                  w_mm=max(w, 2.0), h_mm=max(h, 2.0))
         elif mode == "cota":
-            item = self._new_cota((x0, y0), (x1, y1), sep_mm, anchors)
+            item = self._new_cota((x0, y0), (x1, y1), sep_mm, anchors, axis)
         if item is not None:
             item.z = self._next_z()         # new items land on top (QGIS)
             self._pending_sel = item
             self.history.execute(AddItemCommand(self.comp, item))
         self._after_place()
 
-    def _new_cota(self, a, b, sep_mm: float, anchors=None) -> CotaItem:
+    def _new_cota(self, a, b, sep_mm: float, anchors=None,
+                  axis: str = "") -> CotaItem:
         """A cota from page point *a* to *b* in the sheet's remembered
-        style, anchored when both points snapped to one frame."""
+        style, anchored when both points snapped to one frame. ``axis``
+        forces the dimension line horizontal or vertical (AutoCAD's
+        DIMLINEAR) instead of measuring the segment itself."""
         n = self.comp.frames[0].scale_n if self.comp.frames else 100.0
         style = dict(getattr(self, "_last_cota_style", None) or {})
         style.setdefault("offset_mm", 0.8)
@@ -4761,7 +4844,8 @@ class ComposerWindow(QMainWindow):
                          "centered" if self.dimension_norma() != "iso"
                          else "above")
         item = CotaItem(x_mm=a[0], y_mm=a[1], dx_mm=b[0] - a[0],
-                        dy_mm=b[1] - a[1], scale_n=n, sep_mm=sep_mm, **style)
+                        dy_mm=b[1] - a[1], scale_n=n, sep_mm=sep_mm,
+                        axis=axis, **style)
         if anchors is not None:
             frame, a_world, b_world = anchors
             if not frame.uid:
@@ -4773,17 +4857,18 @@ class ComposerWindow(QMainWindow):
             item.scale_n = frame.scale_n
         return item
 
-    def place_chain_cota(self, a, b, sep_mm: float, anchors=None) -> CotaItem:
+    def place_chain_cota(self, a, b, sep_mm: float, anchors=None,
+                         axis: str = "") -> CotaItem:
         """One segment of a chain: placed through the history like any
         item, but the tool stays armed for the next point."""
-        item = self._new_cota(a, b, sep_mm, anchors)
+        item = self._new_cota(a, b, sep_mm, anchors, axis)
         item.z = self._next_z()
         self._pending_sel = item
         self.history.execute(AddItemCommand(self.comp, item))
         return item
 
     def place_chain_total(self, a, b, sep_mm: float, segments,
-                          anchors=None) -> CotaItem:
+                          anchors=None, axis: str = "") -> CotaItem:
         """The chain's total, stacked one row beyond its dimension line
         (a text height plus clearances, on the side the chain sits)."""
         import math as _math
@@ -4791,18 +4876,28 @@ class ComposerWindow(QMainWindow):
                       default=2.8)
         step = text_mm * 2.0 + 2.5
         sep = sep_mm + (step if sep_mm >= 0 else -step)
-        # the total runs along the chain line: its own normal is a→b's, so
-        # measure the stack from the chain line, not from a→b
         p1 = segments[0]
-        nx, ny = p1.normal()
-        chain_line = (p1.x_mm + nx * p1.sep_mm, p1.y_mm + ny * p1.sep_mm)
-        dx, dy = b[0] - a[0], b[1] - a[1]
-        length = _math.hypot(dx, dy)
-        if length > 1e-9:
-            tnx, tny = -dy / length, dx / length
-            on_line = (chain_line[0] - a[0]) * tnx + (chain_line[1] - a[1]) * tny
-            sep = on_line + (step if sep_mm >= 0 else -step)
-        item = self._new_cota(a, b, sep, anchors)
+        if axis in ("h", "v"):
+            # the chain's line is one page row (or column); the total sits
+            # a row further out, measured from the total's own first point
+            (l0x, l0y), _ = p1.line_points()
+            line = (p1.x_mm + l0x, p1.y_mm + l0y)
+            out = step if sep_mm >= 0 else -step
+            sep = ((line[1] - a[1]) + out if axis == "h"
+                   else (line[0] - a[0]) + out)
+        else:
+            # the total runs along the chain line: its own normal is a→b's,
+            # so measure the stack from the chain line, not from a→b
+            nx, ny = p1.normal()
+            chain_line = (p1.x_mm + nx * p1.sep_mm, p1.y_mm + ny * p1.sep_mm)
+            dx, dy = b[0] - a[0], b[1] - a[1]
+            length = _math.hypot(dx, dy)
+            if length > 1e-9:
+                tnx, tny = -dy / length, dx / length
+                on_line = ((chain_line[0] - a[0]) * tnx
+                           + (chain_line[1] - a[1]) * tny)
+                sep = on_line + (step if sep_mm >= 0 else -step)
+        item = self._new_cota(a, b, sep, anchors, axis)
         item.z = self._next_z()
         self._pending_sel = item
         self.history.execute(AddItemCommand(self.comp, item))
@@ -5747,6 +5842,21 @@ class ComposerWindow(QMainWindow):
             self.cota_text_pos.addItem(label, key)
         self.cota_text_pos.currentIndexChanged.connect(self._on_cota_props)
         form.addRow(tr("Text position"), self.cota_text_pos)
+        # AutoCAD's DIMALIGNED / DIMLINEAR. A cota already drawn can be
+        # straightened from here, which is the way back when Shift was let
+        # go a moment early (Rafael, 41:30).
+        self.cota_axis = QComboBox()
+        for label, key in ((tr("Aligned with the two points"), ""),
+                           (tr("Forced horizontal"), "h"),
+                           (tr("Forced vertical"), "v")):
+            self.cota_axis.addItem(label, key)
+        self.cota_axis.setToolTip(tr(
+            "A forced dimension measures only the horizontal or vertical "
+            "part between the two points and draws its line straight, with "
+            "extension lines of different lengths. Shift while drawing does "
+            "the same."))
+        self.cota_axis.currentIndexChanged.connect(self._on_cota_props)
+        form.addRow(tr("Direction"), self.cota_axis)
         self.cota_text_along = QComboBox()
         for label, key in ((tr("Over the middle"), "middle"),
                            (tr("Outside the start"), "start"),
@@ -6852,6 +6962,9 @@ class ComposerWindow(QMainWindow):
                 pidx = self.cota_text_pos.findData(
                     getattr(item.model, "text_pos", "above") or "above")
                 self.cota_text_pos.setCurrentIndex(max(pidx, 0))
+                xidx = self.cota_axis.findData(
+                    getattr(item.model, "axis", "") or "")
+                self.cota_axis.setCurrentIndex(max(xidx, 0))
                 lidx = self.cota_text_along.findData(
                     getattr(item.model, "text_along", "middle") or "middle")
                 self.cota_text_along.setCurrentIndex(max(lidx, 0))
@@ -9297,6 +9410,7 @@ class ComposerWindow(QMainWindow):
             "ends": self.cota_ends.currentData() or "tick",
             "stroke_mm": self.cota_stroke.value(),
             "text_pos": self.cota_text_pos.currentData() or "above",
+            "axis": self.cota_axis.currentData() or "",
             "text_along": self.cota_text_along.currentData() or "middle",
             "text_align": self.cota_text_align.currentData() or "aligned",
             "text_color": ("" if self.cota_text_same.isChecked()
