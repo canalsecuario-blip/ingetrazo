@@ -167,3 +167,104 @@ def test_the_N_turns_with_the_needle_and_stays_in_the_box():
         out = _north_ink(FlechaNorte(size_mm=sz, angle_deg=deg), px, pad)
         lo, hi = pad * px, (pad + sz) * px
         assert all(lo <= x < hi and lo <= y < hi for x, y in out), deg
+
+
+# ---- 4. an image magnetises to the drawing under it ---------------------
+
+def test_only_an_image_snaps_to_the_model_geometry():
+    from views.composer import (CotaCanvasItem, FrameItem, ImageItem,
+                                TextItem)
+    assert ImageItem.SNAPS_TO_DRAWING is True
+    for other in (FrameItem, TextItem, CotaCanvasItem):
+        assert other.SNAPS_TO_DRAWING is False
+
+
+def test_a_dragged_image_lands_its_nearest_corner_on_a_drawn_point(
+        monkeypatch):
+    from views.composer import ComposerWindow, ImageItem
+    from views.main_window import MainWindow
+    from core.composition import ImagenItem
+    monkeypatch.setattr(ComposerWindow, "render_frame", lambda self, f: None)
+    win = MainWindow()
+    comp = None
+    try:
+        comp = ComposerWindow(win)
+        comp.comp.images.append(ImagenItem(x_mm=50.0, y_mm=50.0,
+                                           w_mm=40.0, h_mm=30.0))
+        comp._rebuild_canvas()
+        item = next(it for it in comp.canvas.items()
+                    if isinstance(it, ImageItem))
+        # one drawn point, 1 mm off the image's bottom-right corner
+        target = (91.0, 81.0)
+        monkeypatch.setattr(
+            ComposerWindow, "nearest_snap_point",
+            lambda self, x, y, thr: (target + ((0.0, 0.0, 0.0), None)
+                                     if abs(x - target[0]) <= thr
+                                     and abs(y - target[1]) <= thr else None))
+        got = item._snap_corner_to_drawing(50.0, 50.0, 40.0, 30.0)
+        assert got == pytest.approx((51.0, 51.0))   # the corner lands on it
+        # …and a corner nowhere near a drawn point is left alone
+        assert item._snap_corner_to_drawing(5.0, 5.0, 40.0, 30.0) is None
+    finally:
+        if comp is not None:
+            comp.close()
+        win._saved_version = win.viewport.scene.version
+        win.close()
+
+
+# ---- 5. a new view wearing a dead one's render --------------------------
+
+def test_a_deleted_frames_caches_are_forgotten(monkeypatch):
+    """«Pongo una ventana y me muestra ese previo que yo ya no tengo»
+    (33:40). The caches are keyed on id(frame), and CPython hands the same
+    address to the next object of that size — so the new frame inherited
+    the dead one's render, lines, fills, snap points and annotations."""
+    from views.composer import ComposerWindow
+    from views.main_window import MainWindow
+    monkeypatch.setattr(ComposerWindow, "render_frame", lambda self, f: None)
+    win = MainWindow()
+    comp = None
+    try:
+        comp = ComposerWindow(win)
+        doomed = comp.comp.frames[0]
+        fid = id(doomed)
+        comp.render_cache[fid] = "a render nobody should see again"
+        comp.hlr_cache[fid] = "lines"
+        comp.annot_cache[fid] = ["annots"]
+        comp._stale.add(fid)
+
+        comp.comp.frames.remove(doomed)          # as a delete leaves it
+        comp._rebuild_canvas()
+
+        assert fid not in comp.render_cache
+        assert fid not in comp.hlr_cache
+        assert fid not in comp.annot_cache
+        assert fid not in comp._stale
+    finally:
+        if comp is not None:
+            comp.close()
+        win._saved_version = win.viewport.scene.version
+        win.close()
+
+
+def test_the_sweep_spares_the_frames_of_the_other_sheets(monkeypatch):
+    """Switching sheets must not throw away renders that cost seconds."""
+    from views.composer import ComposerWindow
+    from views.main_window import MainWindow
+    monkeypatch.setattr(ComposerWindow, "render_frame", lambda self, f: None)
+    win = MainWindow()
+    comp = None
+    try:
+        comp = ComposerWindow(win)
+        other = Composicion(name="Lámina 2")
+        other.frames.append(MarcoVista())
+        win.viewport.scene.compositions.append(other)
+        keep = id(other.frames[0])
+        comp.render_cache[keep] = "the other sheet's render"
+        comp._rebuild_canvas()
+        assert keep in comp.render_cache
+    finally:
+        if comp is not None:
+            comp.close()
+        win._saved_version = win.viewport.scene.version
+        win.close()
