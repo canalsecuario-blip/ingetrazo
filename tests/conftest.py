@@ -14,3 +14,19 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 
 if QApplication.instance() is None:
     QApplication(sys.argv[:1])
+
+# And a QSettings store of its own, thrown away with the session. The suite
+# is not read-only about preferences: a test that exercises «new items
+# inherit the last style» writes that style out, so it landed in the
+# developer's real settings and POISONED ITS OWN NEXT RUN — the cota style
+# test placed a cota with text_pos="below" and then failed the next day
+# asserting "above". Isolating the store makes every run start from the
+# same place, here and on the CI runner.
+import tempfile  # noqa: E402
+
+from PySide6.QtCore import QSettings  # noqa: E402
+
+_settings_dir = tempfile.mkdtemp(prefix="ingetrazo-tests-settings-")
+QSettings.setDefaultFormat(QSettings.IniFormat)
+for scope in (QSettings.UserScope, QSettings.SystemScope):
+    QSettings.setPath(QSettings.IniFormat, scope, _settings_dir)
