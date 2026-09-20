@@ -4419,17 +4419,17 @@ class ComposerCanvasView(QGraphicsView):
         return self.composer.tool_mode == "cota_base"
 
     def _run_step_mm(self) -> float:
-        """How far out the next baseline cota stacks: a row of text plus
-        clearance, the same step the chain's total uses, so the two read
-        as one family.
-
-        Measured off the run's FIRST cota, not off the tallest so far:
-        taking the maximum made the step grow halfway through a run, so
-        the rows came out unevenly spaced.
-        """
-        cotas = self._chain_cotas
-        text_mm = float(getattr(cotas[0], "text_mm", 2.8)) if cotas else 2.8
-        return text_mm * 2.0 + 2.5
+        """How far apart the rows of a baseline run sit, in paper mm —
+        AutoCAD's DIMDLI. It is a number the drafter sets (Estilo de cota ▸
+        Escalón de línea base), not one derived from the text height:
+        Marco's call, 2026-09-19. It lives in the document, so a drawing
+        keeps the spacing it was drawn with."""
+        try:
+            style = self.composer._scene().dimension_style or {}
+            step = float(style.get("base_step_mm", 8.0))
+        except (AttributeError, TypeError, ValueError):
+            step = 8.0
+        return step if step > 0.1 else 8.0
 
     def _seed_run_from(self, cota) -> bool:
         """Start a chain / baseline run OFF AN EXISTING COTA, the way

@@ -1710,6 +1710,20 @@ class DimensionStylePanel(QWidget):
             "so a drawing keeps the standard it was drawn to."))
         grid.addWidget(self._norma, 4, 1)
 
+        # AutoCAD's DIMDLI: how far apart the rows of a baseline run sit.
+        grid.addWidget(QLabel(tr("Baseline step:")), 5, 0)
+        self._base_step = QDoubleSpinBox()
+        self._base_step.setRange(1.0, 60.0)
+        self._base_step.setSingleStep(0.5)
+        self._base_step.setDecimals(1)
+        self._base_step.setSuffix(" mm")
+        self._base_step.setValue(float(style.get("base_step_mm", 8.0)))
+        self._base_step.setToolTip(tr(
+            "How far apart the rows of a baseline dimension run sit on "
+            "paper. It travels with the document."))
+        self._base_step.valueChanged.connect(self._apply)
+        grid.addWidget(self._base_step, 5, 1)
+
     def _style(self) -> dict:
         return self._window.viewport.scene.dimension_style
 
@@ -1719,6 +1733,7 @@ class DimensionStylePanel(QWidget):
         style["units"] = self._units.currentText()
         style["font_size"] = self._font.value()
         style["norma"] = self._norma.currentData() or "iso"
+        style["base_step_mm"] = float(self._base_step.value())
         self._window.viewport.scene.version += 1
         self._window.viewport.update()
 

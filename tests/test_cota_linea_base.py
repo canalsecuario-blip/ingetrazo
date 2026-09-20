@@ -142,6 +142,44 @@ def test_every_baseline_cota_starts_at_the_SAME_point(monkeypatch):
         win.close()
 
 
+def test_the_step_is_a_number_the_drafter_sets(monkeypatch):
+    """AutoCAD's DIMDLI. Marco's call, 2026-09-19: a value he sets, not one
+    derived from the text height. It lives in the document, so a drawing
+    keeps the spacing it was drawn with."""
+    from core.scene import Scene
+    from views.composer import ComposerWindow
+    from views.main_window import MainWindow
+    assert Scene().dimension_style["base_step_mm"] == 8.0
+    # an .igz written before the field opens at the default
+    legacy = Scene()
+    legacy.dimension_style.update({"decimals": 3})
+    assert legacy.dimension_style["base_step_mm"] == 8.0
+
+    monkeypatch.setattr(ComposerWindow, "render_frame", lambda self, f: None)
+    win = MainWindow()
+    comp = None
+    try:
+        comp = ComposerWindow(win)
+        style = win.viewport.scene.dimension_style
+        assert comp._view._run_step_mm() == pytest.approx(8.0)
+        style["base_step_mm"] = 12.5
+        assert comp._view._run_step_mm() == pytest.approx(12.5)
+        # a broken value never divides the sheet by zero
+        style["base_step_mm"] = 0.0
+        assert comp._view._run_step_mm() == pytest.approx(8.0)
+        style["base_step_mm"] = "x"
+        assert comp._view._run_step_mm() == pytest.approx(8.0)
+        # and the text height no longer moves it
+        style["base_step_mm"] = 9.0
+        comp._view._chain_cotas = [CotaItem(text_mm=6.0)]
+        assert comp._view._run_step_mm() == pytest.approx(9.0)
+    finally:
+        if comp is not None:
+            comp.close()
+        win._saved_version = win.viewport.scene.version
+        win.close()
+
+
 def test_the_baseline_cotas_stack_one_row_apart(monkeypatch):
     from views.composer import ComposerWindow
     from views.main_window import MainWindow

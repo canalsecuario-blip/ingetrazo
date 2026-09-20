@@ -82,9 +82,12 @@ class Scene:
     #: redraw a colleague's dimensions the moment he opened the file
     #: (Marco, 2026-09-17). Absent from an older .igz = ISO, which is what
     #: those files were drawn with.
+    #: ``base_step_mm`` is how far apart the rows of a baseline run sit on
+    #: PAPER — AutoCAD's DIMDLI, and Marco asked for it as a number he
+    #: sets rather than one derived from the text height (2026-09-19).
     dimension_style: dict = field(default_factory=lambda: {
         "decimals": 2, "units": "m", "font_size": 9, "color": [45, 55, 75],
-        "norma": "iso"})
+        "norma": "iso", "base_step_mm": 8.0})
     # Back-face tint override (RGB 0..1), e.g. adopted from an imported
     # .skp's style so unpainted faces read like they did for the author.
     # ``None`` = the viewport's default SketchUp blue-grey.
