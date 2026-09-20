@@ -5328,6 +5328,14 @@ class ComposerWindow(QMainWindow):
         # whatever the document or the remembered style say — the other
         # positions still paint, for drawings that already carry them.
         style["text_pos"] = "above"
+        # …and over the MIDDLE of the line: where the words sit along it
+        # is placed per cota, never inherited (Marco's sheet of 2026-09-20
+        # had every number at an end because one dragged cota had taught
+        # the rest). The factory ends are Rafael's arrows — «esa es la que
+        # deberá acotar por defecto» —, while the dataclass keeps «tick»
+        # so a sheet from before the field existed still draws its ticks.
+        style["text_along"] = "middle"
+        style.setdefault("ends", "arrow")
         item = CotaItem(x_mm=a[0], y_mm=a[1], dx_mm=b[0] - a[0],
                         dy_mm=b[1] - a[1], scale_n=n, sep_mm=sep_mm,
                         axis=axis, **style)
@@ -6328,8 +6336,8 @@ class ComposerWindow(QMainWindow):
         self.cota_units.currentTextChanged.connect(self._on_cota_props)
         form.addRow(tr("Units"), self.cota_units)
         self.cota_ends = QComboBox()
-        for label, key in ((tr("Oblique ticks"), "tick"),
-                           (tr("Arrows"), "arrow"),
+        for label, key in ((tr("Arrows"), "arrow"),
+                           (tr("Oblique ticks"), "tick"),
                            (tr("None"), "none")):
             self.cota_ends.addItem(label, key)
         self.cota_ends.currentIndexChanged.connect(self._on_cota_props)
@@ -8429,7 +8437,7 @@ class ComposerWindow(QMainWindow):
     #: The look of each item kind — never its geometry or content.
     STYLE_FIELDS = {
         CotaItem: ("text_mm", "decimals", "units", "ends", "stroke_mm", "color",
-                   "offset_mm", "text_along", "text_align",
+                   "offset_mm", "text_align",
                    "text_color", "text_bg", "text_bg_opacity"),
         TextoItem: ("size_pt", "bold", "italic", "underline", "family",
                     "color", "align", "bg_color", "bg_opacity"),
@@ -10055,7 +10063,7 @@ class ComposerWindow(QMainWindow):
             "text_mm": self.cota_text_mm.value(),
             "decimals": int(self.cota_decimals.value()),
             "units": self.cota_units.currentText() or "m",
-            "ends": self.cota_ends.currentData() or "tick",
+            "ends": self.cota_ends.currentData() or "arrow",
             "stroke_mm": self.cota_stroke.value(),
             "text_pos": self.cota_text_pos.currentData() or "above",
             "axis": self.cota_axis.currentData() or "",
@@ -10232,9 +10240,18 @@ class ComposerWindow(QMainWindow):
     #: Style fields a new cota inherits from the last one edited (LayOut
     #: draws new dimensions with the current style settings).
     _COTA_STYLE_FIELDS = ("text_mm", "decimals", "ends", "stroke_mm",
-                          "color", "offset_mm", "text_along",
+                          "color", "offset_mm",
                           "text_align", "text_color", "text_bg",
                           "text_bg_opacity", "units")
+
+    #: QSettings key of the remembered cota style. The «2» is the ISO-only
+    #: decision of 2026-09-20: a style saved under the old key carries the
+    #: ends and the text placement of before (Marco's own held «tick» and
+    #: «end»), which would keep beating the new factory defaults for ever.
+    #: It is read once, minus those, and saved here.
+    _COTA_STYLE_KEY = "composer/default_cota_style_2"
+    _COTA_STYLE_KEY_OLD = "composer/default_cota_style"
+    _COTA_STYLE_NOT_MIGRATED = ("ends", "text_along", "text_pos")
 
     def _remember_cota_style(self, model) -> None:
         """The last edited cota's look becomes the sheet's default for new
@@ -10245,7 +10262,7 @@ class ComposerWindow(QMainWindow):
                                  for k in self._COTA_STYLE_FIELDS
                                  if hasattr(model, k)}
         try:
-            QSettings().setValue("composer/default_cota_style",
+            QSettings().setValue(self._COTA_STYLE_KEY,
                                  json.dumps(self._last_cota_style))
         except Exception:  # noqa: BLE001 — a style that won't serialise
             pass
@@ -10253,14 +10270,22 @@ class ComposerWindow(QMainWindow):
     def _load_default_cota_style(self) -> None:
         import json
         from PySide6.QtCore import QSettings
-        raw = QSettings().value("composer/default_cota_style", "")
-        try:
-            style = json.loads(str(raw or "")) if raw else {}
-        except Exception:  # noqa: BLE001
-            style = {}
+
+        def read(key):
+            raw = QSettings().value(key, "")
+            try:
+                style = json.loads(str(raw or "")) if raw else {}
+            except Exception:  # noqa: BLE001
+                style = {}
+            return dict(style) if isinstance(style, dict) else {}
+
+        style = read(self._COTA_STYLE_KEY)
+        if not style:
+            style = {k: v for k, v in read(self._COTA_STYLE_KEY_OLD).items()
+                     if k not in self._COTA_STYLE_NOT_MIGRATED}
         probe = CotaItem()
         self._last_cota_style = {
-            k: v for k, v in dict(style).items()
+            k: v for k, v in style.items()
             if k in self._COTA_STYLE_FIELDS and hasattr(probe, k)}
 
     def _on_pick_cota_color(self) -> None:

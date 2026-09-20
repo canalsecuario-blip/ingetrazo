@@ -138,7 +138,7 @@ def test_the_default_cota_style_survives_a_new_composer():
     from core.composition import CotaItem
     sample = CotaItem(text_mm=3.6, ends="arrow", color="#aa0000", units="cm")
     composer._remember_cota_style(sample)
-    saved = json.loads(str(QSettings().value("composer/default_cota_style")))
+    saved = json.loads(str(QSettings().value(ComposerWindow._COTA_STYLE_KEY)))
     assert saved["ends"] == "arrow" and saved["units"] == "cm"
     again = ComposerWindow(host)
     assert again._last_cota_style["text_mm"] == 3.6
@@ -146,4 +146,35 @@ def test_the_default_cota_style_survives_a_new_composer():
     ct = again._new_cota((0, 0), (30, 0), 5.0)
     assert (ct.text_mm, ct.ends, ct.units) == (3.6, "arrow", "cm")
     # clean up the shared settings for the other tests
-    QSettings().remove("composer/default_cota_style")
+    QSettings().remove(ComposerWindow._COTA_STYLE_KEY)
+
+
+def test_a_new_cota_is_born_like_rafaels_sheet_and_the_old_memory_is_migrated():
+    """Marco, 2026-09-20, holding Rafael's bracket next to his own sheet:
+    «la de flechitas es la de Rafael, esa es la que deberá acotar por
+    defecto». His sheet had oblique ticks and every number at an END of
+    its line — a style remembered from before, where one dragged cota had
+    taught the rest. So: arrows by default, the words over the middle
+    always (placement is per cota, never inherited), and a style saved
+    under the old key comes across ONCE without those three."""
+    from core.composition import CotaItem
+    QSettings().remove(ComposerWindow._COTA_STYLE_KEY)
+    QSettings().setValue(ComposerWindow._COTA_STYLE_KEY_OLD, json.dumps({
+        "text_mm": 2.5, "ends": "tick", "text_pos": "centered",
+        "text_along": "end", "text_bg": "#ffffff", "text_bg_opacity": 0.7,
+        "color": "#1e242c", "units": "m"}))
+    try:
+        composer, _host = _composer()
+        ct = composer._new_cota((0, 0), (30, 0), 5.0)
+        assert (ct.ends, ct.text_pos, ct.text_along) == (
+            "arrow", "above", "middle")
+        assert ct.text_bg == "#ffffff" and ct.text_mm == 2.5   # the look stays
+        # …and once the drafter edits a cota, its placement still does not
+        # travel to the next one, while its ends (a look) do.
+        sample = CotaItem(ends="tick", text_along="end", text_mm=3.0)
+        composer._remember_cota_style(sample)
+        nxt = composer._new_cota((0, 0), (30, 0), 5.0)
+        assert (nxt.ends, nxt.text_along, nxt.text_mm) == ("tick", "middle", 3.0)
+    finally:
+        QSettings().remove(ComposerWindow._COTA_STYLE_KEY)
+        QSettings().remove(ComposerWindow._COTA_STYLE_KEY_OLD)
