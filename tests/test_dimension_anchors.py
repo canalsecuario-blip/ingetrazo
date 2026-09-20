@@ -107,6 +107,60 @@ def test_an_endpoint_off_any_vertex_stays_static():
     assert d.b == V(2, 0) and d.value() == pytest.approx(2.0)
 
 
+def test_a_dimension_on_a_group_made_from_geometry_follows_the_scale_tool():
+    """Marco, 2026-09-20: «la vez pasada arreglamos a medias… faltaba en
+    grupo: tenga un grupo acotado y lo escalo». Make Group moves the
+    geometry into the group's mesh and leaves ORPHAN vertices behind in
+    the loose one, at the same spots; the anchor found those ghosts first
+    and the group scaled away from under the dimension. A vertex nothing
+    references is no anchor."""
+    from core.edits import build_add_edges
+    from core.history import MakeGroupCommand
+    from tools.scale import ScaleTool
+    scene = Scene()
+    vp = _Vp(scene)
+    sq = [V(2, 0), V(6, 0), V(6, 2), V(2, 2)]
+    vp.history.execute(build_add_edges(
+        scene, [(sq[i], sq[(i + 1) % 4]) for i in range(4)]))
+    vp.history.execute(MakeGroupCommand(list(scene.mesh.faces),
+                                        list(scene.mesh.edges)))
+    g = scene.groups[0]
+    d = Dimension(V(2, 0), V(6, 0), V(0, -1))
+    vp.history.execute(AddDimensionCommand(d))
+    assert d.anchored
+    assert d.anchor_a.mesh is g.mesh and d.anchor_a.chain == (g,)
+    scene.selection.clear()
+    scene.selection.add(g)
+    t = ScaleTool()
+    t.on_activate(vp)
+    grip = next(gr for gr in t._grips if gr.params == (1.0, 1.0, 0.5))
+    t._grab(vp, grip, (0.0, 0.0))                    # anchor = corner (2, 0)
+    t._commit(vp, (1.5, 1.5, 1.0))
+    assert d.value() == pytest.approx(6.0)           # 4 m × 1.5
+    assert d.b == V(8, 0)
+    vp.history.undo()
+    assert d.value() == pytest.approx(4.0)
+
+
+def test_far_out_coordinates_still_bind_through_a_placement():
+    """A point that came through a placement's float32 matrix and back is
+    off by a micron or so at hundreds of metres; the old 1e-6 tolerance
+    rejected the very vertex the registry had found."""
+    from core.group import world_mesh
+    scene = Scene()
+    m = Mesh()
+    m.add_face([V(0, 0), V(2.37, 0), V(2.37, 1.41), V(0, 1.41)])
+    g = Group(m, "lejos")
+    g.xform = QMatrix4x4()
+    g.xform.translate(412.345, -387.89, 3.2)
+    g.xform.rotate(33.0, 0, 0, 1)
+    scene.groups.append(g)
+    for v in world_mesh(g).vertices:                 # what the snap hands over
+        d = Dimension(v.position, v.position + V(1, 0), V(0, -1))
+        d.bind(scene)
+        assert d.anchor_a is not None, v.position
+
+
 def test_a_dimension_inside_a_component_follows_its_placement():
     scene = Scene()
     m = Mesh()

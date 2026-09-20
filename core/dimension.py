@@ -53,10 +53,11 @@ class VertexAnchor:
     def position(self):
         """The vertex's world position now — ``None`` once the mesh no
         longer registers this very vertex (erased, or welded into another
-        one), which is the anchor's cue to let go."""
+        one) or nothing references it any more, which is the anchor's cue
+        to let go."""
         v = self.vertex
         try:
-            if self.mesh.vertex_at(v.position) is not v:
+            if self.mesh.vertex_at(v.position) is not v or not v.edges:
                 return None
         except Exception:  # noqa: BLE001 — a mesh that cannot answer
             return None
@@ -65,17 +66,28 @@ class VertexAnchor:
             else QVector3D(v.position)
 
 
-def resolve_vertex_anchor(scene, point: QVector3D, tol: float = 1e-6):
-    """The vertex sitting exactly at *point* (world), as a
-    :class:`VertexAnchor`, or ``None``. Loose geometry first, then every
-    group placement, the point taken back into each placement's local
-    coordinates — O(1) per mesh through the vertex registry, so a click
-    costs nothing on a big model."""
+def resolve_vertex_anchor(scene, point: QVector3D, tol: float = 1e-4):
+    """The vertex sitting at *point* (world), as a :class:`VertexAnchor`,
+    or ``None``. Loose geometry first, then every group placement, the
+    point taken back into each placement's local coordinates — O(1) per
+    mesh through the vertex registry, so a click costs nothing on a big
+    model. ``tol`` is the registry's own weld resolution (0.1 mm): a
+    point that came through a placement's float32 matrix and back lands
+    within a micron of the vertex, which a tighter tolerance rejected on
+    far-out coordinates."""
     from core.group import iter_placements
 
     def hit(mesh, local, chain):
         v = mesh.vertex_at(local)
         if v is None or (v.position - local).length() > tol:
+            return None
+        if not v.edges:
+            # An orphan: a vertex nothing references any more. Make Group
+            # moves the geometry into the group's mesh and leaves these
+            # behind in the loose one, at the very same spots — so a
+            # dimension on a fresh group anchored to the ghost, and the
+            # group scaled away from under it (Marco, 2026-09-20: «faltaba
+            # en grupo»). A point held by nothing holds nothing.
             return None
         return VertexAnchor(v, mesh, chain)
 

@@ -26,6 +26,14 @@ follow [SemVer](https://semver.org).
   como Desplazar. Ctrl+rueda sigue funcionando con cualquier herramienta.
 
 ### Arreglado
+- **Una cota sobre un grupo no seguía al grupo al escalarlo** (Marco:
+  «la vez pasada arreglamos a medias… faltaba en grupo»). Crear grupo
+  lleva la geometría a la malla del grupo y deja en la malla suelta
+  vértices huérfanos en los mismos puntos; la cota se agarraba a esos
+  fantasmas, que no se mueven. Un vértice al que nada hace referencia
+  ya no vale de ancla, y la tolerancia del enganche es la de soldadura
+  de la malla (0,1 mm), así que una cota sobre un componente a cientos
+  de metros del origen también se agarra.
 - **Mover / Copiar no enganchaba los ejes X e Y** (issue #42, @pacaeiro:
   «aligns well with the Z axis» pero X e Y nunca). Mover arrastra sobre
   un plano vertical de cara a la cámara, que contiene Z y la horizontal
