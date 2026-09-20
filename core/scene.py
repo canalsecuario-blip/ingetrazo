@@ -76,8 +76,15 @@ class Scene:
     # them again (Marco, 2026-09-02).
     custom_scales: list = field(default_factory=list)
     # Display style for dimension annotations (edited from the Tray).
+    #: ``norma`` is the drafting standard the dimensions obey — ISO (and so
+    #: the Spanish UNE) or the German/Japanese one. It belongs to the
+    #: DOCUMENT and not to the machine: a setting kept in QSettings would
+    #: redraw a colleague's dimensions the moment he opened the file
+    #: (Marco, 2026-09-17). Absent from an older .igz = ISO, which is what
+    #: those files were drawn with.
     dimension_style: dict = field(default_factory=lambda: {
-        "decimals": 2, "units": "m", "font_size": 9, "color": [45, 55, 75]})
+        "decimals": 2, "units": "m", "font_size": 9, "color": [45, 55, 75],
+        "norma": "iso"})
     # Back-face tint override (RGB 0..1), e.g. adopted from an imported
     # .skp's style so unpainted faces read like they did for the author.
     # ``None`` = the viewport's default SketchUp blue-grey.

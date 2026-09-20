@@ -1692,6 +1692,24 @@ class DimensionStylePanel(QWidget):
         grid.addWidget(self._color_btn, 3, 1)
         self._refresh_color_btn()
 
+        # The drafting standard, which is a property of the DRAWING: ISO
+        # keeps the dimension line whole with the text above it; the
+        # German/Japanese one breaks the line and centres the text in the
+        # gap (Rafael's video, rules 5 and 18).
+        grid.addWidget(QLabel(tr("Standard:")), 4, 0)
+        self._norma = QComboBox()
+        for label, key in ((tr("ISO / UNE (text above, line whole)"), "iso"),
+                           (tr("German / Japanese (text in a broken line)"),
+                            "din")):
+            self._norma.addItem(label, key)
+        i = self._norma.findData(str(style.get("norma", "iso") or "iso"))
+        self._norma.setCurrentIndex(max(i, 0))
+        self._norma.currentIndexChanged.connect(self._apply)
+        self._norma.setToolTip(tr(
+            "Dimension standard for this document. It travels in the file, "
+            "so a drawing keeps the standard it was drawn to."))
+        grid.addWidget(self._norma, 4, 1)
+
     def _style(self) -> dict:
         return self._window.viewport.scene.dimension_style
 
@@ -1700,6 +1718,7 @@ class DimensionStylePanel(QWidget):
         style["decimals"] = self._decimals.value()
         style["units"] = self._units.currentText()
         style["font_size"] = self._font.value()
+        style["norma"] = self._norma.currentData() or "iso"
         self._window.viewport.scene.version += 1
         self._window.viewport.update()
 
