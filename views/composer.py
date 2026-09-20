@@ -5055,18 +5055,18 @@ class ComposerWindow(QMainWindow):
          "Draw a dimension: two points and the line's offset. Shift "
          "forces it straight (horizontal or vertical) WITHOUT moving "
          "the points, so it keeps what it snapped to", True),
-        ("cota_base", "dimension_baseline",
-         "Baseline dimensions, the way AutoCAD does: every cota measures "
-         "from the SAME first point, each one stacked a row further out. "
-         "Select a cota first and it carries on from that one; otherwise "
-         "give it two points and the offset. Esc ends the run, Shift "
-         "forces them all straight", False),
         ("cota_cadena", "dimension_chain",
          "Chain dimensions the way AutoCAD does: every click adds the "
          "next cota from the last point, on the same line. Select a cota "
          "first and it carries on from that one; otherwise give it two "
          "points and the offset. Click the last point or Esc to end (the "
          "total is stacked above); Shift forces the chain straight", False),
+        ("cota_base", "dimension_baseline",
+         "Baseline dimensions, the way AutoCAD does: every cota measures "
+         "from the SAME first point, each one stacked a row further out. "
+         "Select a cota first and it carries on from that one; otherwise "
+         "give it two points and the offset. Esc ends the run, Shift "
+         "forces them all straight", False),
         ("cota_ang", "dimension_angular",
          "Draw an angular dimension (vertex, two points, then the arc). "
          "Shift puts an arm on an exact multiple of 15\u00b0 — the second "
