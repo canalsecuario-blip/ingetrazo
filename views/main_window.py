@@ -2523,7 +2523,14 @@ class MainWindow(QMainWindow):
         sel.update(self.viewport.scene.groups if ctx is None
                    else (getattr(ctx, "children", None) or []))
         sel.update(getattr(self.viewport.scene, "dimensions", []))
-        self.viewport.update()
+        # Bump the version and say so: the GL colour caches are keyed on it
+        # and Entity Info listens for it, so a selection made behind
+        # Scene.select()'s back left the status bar counting entities the
+        # viewport drew unselected and the tray called "nothing selected"
+        # (issue #38). Everything else goes through Scene.select(); this
+        # one builds the set by hand because "all" is four sources.
+        self.viewport.scene.version += 1
+        self.viewport.notify_scene_changed()
         self.statusBar().showMessage(
             tr("Selected everything ({n} entities)", n=len(sel)), 2500)
 
