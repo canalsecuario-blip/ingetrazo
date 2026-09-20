@@ -7,12 +7,39 @@ follow [SemVer](https://semver.org).
 ## [Sin publicar]
 
 ### Añadido
+- **La cinta y el transportador se imantan a los ejes** como la Línea
+  (issue #41, @pacaeiro): una medida a pocos grados de X, Y o Z cae sobre
+  el eje, con su color; la cinta encuentra también el eje que su plano de
+  trabajo no contiene. Los brazos del transportador se imantan a los
+  ejes que están en el plano de su disco.
+- **Con el arco magenta (redondeo de esquina), el número tecleado es el
+  radio** (issue #43, @pacaeiro): fijadas las dos tangencias, teclea el
+  radio y el redondeo se dibuja con él, tangente a las dos aristas y
+  recortando la esquina; un radio que no cabe en las aristas se rechaza
+  con las cifras. Fuera del redondeo, el valor sigue siendo la comba y
+  `2r` el radio.
 - **Zoom y Zoom ventana en la barra de la lámina** (Marco): los dos del
   modelo, en el compositor. **Zoom**: arrastra hacia arriba para acercar
   y hacia abajo para alejar, alrededor del punto donde pulsaste (un clic
   acerca un paso); **Zoom ventana**: arrastra un recuadro y la vista se
   llena con él. Las dos siguen armadas hasta que cambias de herramienta,
   como Desplazar. Ctrl+rueda sigue funcionando con cualquier herramienta.
+
+### Arreglado
+- **Mover / Copiar no enganchaba los ejes X e Y** (issue #42, @pacaeiro:
+  «aligns well with the Z axis» pero X e Y nunca). Mover arrastra sobre
+  un plano vertical de cara a la cámara, que contiene Z y la horizontal
+  de la propia cámara — X o Y solo con la vista de frente; desde
+  cualquier vista oblicua el detector nunca los veía. Ahora los encuentra
+  por dónde apunta el cursor, como la Línea desde la #31, y el movimiento
+  va exactamente por el eje. Medido sobre el arnés de snaps: 368 celdas
+  cambian, todas de Mover y todas «nada → eje X/Y»; ninguna que ya tenía
+  un punto con nombre.
+- **Un grupo solo ya no se agrupa dentro de una copia de sí mismo**
+  (issue #35, @pacaeiro): con un único grupo o componente seleccionado,
+  Crear grupo lo dice en la barra de estado en vez de fabricar la muñeca
+  rusa, y el clic derecho no ofrece la entrada. Dos grupos, o un grupo
+  con geometría suelta, se agrupan como siempre.
 
 ### Cambiado
 - **Las pistas largas de los iconos salen en un cuadro**, no en una tira
