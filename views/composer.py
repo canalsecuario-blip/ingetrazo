@@ -3853,6 +3853,10 @@ class ComposerCanvasView(QGraphicsView):
             return QPointF(pos.x(), a.y())
         return QPointF(a.x(), pos.y())
 
+    def _snap_thr_mm(self) -> float:
+        """The snap radius in page mm: ~7 px on screen at the current zoom."""
+        return 7.0 / max(self.transform().m11(), 1e-6)
+
     def _snapped(self, pos):
         """Snap *pos* (scene mm) to the nearest frame geometry point when a
         drawing tool is armed. Returns (QPointF, hit). Threshold scales with
@@ -3866,7 +3870,7 @@ class ComposerCanvasView(QGraphicsView):
             # the cursor says — snapping would fight the offset.
             self._clear_snap_marker()
             return pos, False
-        thr_mm = 7.0 / max(self.transform().m11(), 1e-6)
+        thr_mm = self._snap_thr_mm()
         hit = self.composer.nearest_snap_point(pos.x(), pos.y(), thr_mm)
         self._last_hit = hit
         if hit is None:
@@ -3993,15 +3997,30 @@ class ComposerCanvasView(QGraphicsView):
             event.accept()
             return
         if mode == "cota_radio" and event.button() == Qt.LeftButton:
-            pos, _ = self._snapped(self.mapToScene(event.position().toPoint()))
-            if self._rad_centre is None:
+            raw = self.mapToScene(event.position().toPoint())
+            pos, _ = self._snapped(raw)
+            kind = ("diameter" if event.modifiers() & Qt.ControlModifier
+                    else "radius")
+            circ = (self.composer.circle_at(raw.x(), raw.y(),
+                                            self._snap_thr_mm())
+                    if self._rad_centre is None else None)
+            if circ is not None:
+                # One click ON the arc: the circle lends its centre and
+                # its radius, the click only says which way the line
+                # leaves (AutoCAD's DIMRADIUS; Marco, 2026-09-20: «no
+                # reconoce el centro de un círculo»).
+                import math as _math
+                cx, cy, r = circ
+                a = _math.atan2(raw.y() - cy, raw.x() - cx)
+                self.cancel_placement()
+                self.composer.place_radial(
+                    (cx, cy), (cx + r * _math.cos(a), cy + r * _math.sin(a)),
+                    kind)
+            elif self._rad_centre is None:
                 self._rad_centre = QPointF(pos)
                 self._update_radial_preview(pos)
             else:
                 c = self._rad_centre
-                kind = ("diameter"
-                        if event.modifiers() & Qt.ControlModifier
-                        else "radius")
                 self.cancel_placement()
                 self.composer.place_radial((c.x(), c.y()),
                                            (pos.x(), pos.y()), kind)
@@ -4259,6 +4278,9 @@ class ComposerCanvasView(QGraphicsView):
         if self._rad_centre is not None:
             self._update_radial_preview(pos)
             return True
+        if mode == "cota_radio":
+            self._update_circle_hint(raw, mods)
+            return True
         if self._ang_pts:
             self._update_angular_preview(self._ang_step(pos, mods))
             return True
@@ -4376,6 +4398,46 @@ class ComposerCanvasView(QGraphicsView):
         path.addEllipse(c, r, r)
         path.moveTo(c)
         path.lineTo(pos)
+        self._preview.setPath(path)
+
+    def _update_circle_hint(self, raw, mods) -> None:
+        """Before the radius tool's first click: when the cursor rides an
+        arc of the drawing, ghost the dimension that one click would
+        place — its centre marked and the line out to the cursor's side —
+        so the drafter sees the circle was recognised before committing.
+        Off the arc, nothing (the click would then be a centre)."""
+        import math as _math
+        from PySide6.QtGui import QPainterPath
+        from PySide6.QtWidgets import QGraphicsPathItem
+        circ = self.composer.circle_at(raw.x(), raw.y(), self._snap_thr_mm())
+        if circ is None:
+            if self._preview is not None:
+                self.scene().removeItem(self._preview)
+                self._preview = None
+            return
+        if self._preview is None or not isinstance(
+                self._preview, QGraphicsPathItem):
+            if self._preview is not None:
+                self.scene().removeItem(self._preview)
+            pen = QPen(QColor(58, 110, 165), 0.3, Qt.DashLine)
+            self._preview = QGraphicsPathItem()
+            self._preview.setPen(pen)
+            self._preview.setZValue(100000)
+            self.scene().addItem(self._preview)
+        cx, cy, r = circ
+        a = _math.atan2(raw.y() - cy, raw.x() - cx)
+        tip = QPointF(cx + r * _math.cos(a), cy + r * _math.sin(a))
+        path = QPainterPath()
+        m = max(1.0, self._snap_thr_mm() * 0.6)          # the centre's cross
+        path.moveTo(cx - m, cy)
+        path.lineTo(cx + m, cy)
+        path.moveTo(cx, cy - m)
+        path.lineTo(cx, cy + m)
+        if mods & Qt.ControlModifier:                    # Ø: right across
+            path.moveTo(QPointF(cx - r * _math.cos(a), cy - r * _math.sin(a)))
+        else:
+            path.moveTo(QPointF(cx, cy))
+        path.lineTo(tip)
         self._preview.setPath(path)
 
     def _update_angular_preview(self, pos) -> None:
@@ -4880,6 +4942,7 @@ class ComposerWindow(QMainWindow):
         self.hlr_kinds: dict[int, object] = {}     # line class per segment
         self.hlr_fills: dict[int, object] = {}     # section-cut rings, mm
         self.snap_cache: dict[int, object] = {}   # frame → page-mm snap pts
+        self.circle_cache: dict[int, list] = {}   # frame → page-mm circles
         self.annot_cache: dict[int, list] = {}    # frame → model annotations
         self._images: dict[str, QImage] = {}
         self._updating = False
@@ -5071,10 +5134,12 @@ class ComposerWindow(QMainWindow):
          "Shift puts an arm on an exact multiple of 15\u00b0 — the second "
          "one measured from the first, so the angle comes out round", False),
         ("cota_radio", "dimension_radius",
-         "Draw a radius dimension: click the CENTRE, then a point on the "
-         "arc. Ctrl on that second click makes it a diameter instead. The "
-         "line always reaches the centre and the symbol (R / \u00d8) goes "
-         "with the value, as the standard asks", False),
+         "Draw a radius dimension: click ON a circle or arc of the drawing "
+         "and it takes the centre and the radius by itself (the click "
+         "picks the side the line leaves by). Elsewhere, click the centre, "
+         "then a point on the arc. Ctrl makes it a diameter. The line "
+         "always reaches the centre and the symbol (R / \u00d8) goes with "
+         "the value, as the standard asks", False),
     )
 
     def set_toolbar_icon_size(self, px: int) -> None:
@@ -7836,7 +7901,8 @@ class ComposerWindow(QMainWindow):
 
     def _frame_caches(self) -> tuple:
         return (self.render_cache, self.hlr_cache, self.hlr_kinds,
-                self.hlr_fills, self.snap_cache, self.annot_cache)
+                self.hlr_fills, self.snap_cache, self.circle_cache,
+                self.annot_cache)
 
     def _forget_frame(self, frame) -> None:
         """Drop every cache of *frame*: render, lines and their classes,
@@ -10694,11 +10760,87 @@ class ComposerWindow(QMainWindow):
                            dtype=np.float64).reshape(-1, 2, 3))
         return self._geom_cache
 
+    def _scene_circles(self) -> list:
+        """collect_circles(scene), cached like :meth:`_scene_geometry` —
+        the walk over every face (1.3 s on the 116 000-face plaza) happens
+        once per collection, not once per frame; each frame then only
+        projects what it can see."""
+        cached = getattr(self, "_circles_cache", None)
+        if cached is None:
+            from core.hlr import collect_circles
+            cached = self._circles_cache = collect_circles(self._scene())
+        return cached
+
     def _invalidate_geometry_caches(self) -> None:
         """The model may have changed: drop the collected geometry and
         every frame's snap set (renders are handled by their own caches)."""
         self._geom_cache = None
+        self._circles_cache = None
         self.snap_cache.clear()
+        self.circle_cache.clear()
+
+    def frame_circles(self, frame: MarcoVista) -> list:
+        """The model's circles and arcs as *frame* shows them —
+        ``[(cx, cy, r)]`` in PAGE millimetres — but only the ones FACE-ON
+        to the frame's view: a circle seen obliquely is an ellipse on
+        paper and has no radius to dimension. A perspective frame has
+        none (a radius there is a picture, not a measure). Cached by frame
+        id, dropped with the geometry caches."""
+        import math as _math
+        import numpy as np
+        cached = self.circle_cache.get(id(frame))
+        if cached is not None:
+            return cached
+        if self.frame_is_perspective(frame):
+            self.circle_cache[id(frame)] = []
+            return []
+        from core.composition import frame_page_projector
+        from core.hlr import _to_cam, camera_basis
+        circles = self._scene_circles()
+
+        def run():
+            vp = self._window.viewport
+            eye, right, up, fwd = camera_basis(vp.camera)
+            local = frame_page_projector(frame, vp.camera)
+            out = []
+            for c, r, n in circles:
+                if abs(n.x() * fwd[0] + n.y() * fwd[1]
+                       + n.z() * fwd[2]) < 0.9995:
+                    continue                       # seen at a slant
+                c3 = np.array([c.x(), c.y(), c.z()], dtype=np.float64)
+                # the centre and a point one radius away ALONG THE VIEW's
+                # right, which lies in the face's plane: their distance on
+                # paper is the radius at the frame's scale
+                pts = _to_cam(np.stack([c3, c3 + right * r]),
+                              eye, right, up, fwd)
+                px, py = local(pts[0][0], pts[0][1], pts[0][2])
+                qx, qy = local(pts[1][0], pts[1][1], pts[1][2])
+                out.append((frame.x_mm + float(px), frame.y_mm + float(py),
+                            float(_math.hypot(qx - px, qy - py))))
+            return out
+
+        out = self._with_frame_camera(frame, run)
+        self.circle_cache[id(frame)] = out
+        return out
+
+    def circle_at(self, x_mm: float, y_mm: float, thr_mm: float):
+        """The circle or arc whose RING passes within *thr_mm* of the page
+        point — ``(cx, cy, r)`` or None. It is looked for in the frame
+        under the point, so the radius tool can take the centre and the
+        radius from one click on the arc, as AutoCAD does, instead of
+        asking for a centre the drawing does not mark."""
+        import math as _math
+        host = self.frame_at_page(x_mm, y_mm)
+        if host is None:
+            return None
+        best = None
+        for cx, cy, r in self.frame_circles(host):
+            if r < 0.5:
+                continue
+            d = abs(_math.hypot(x_mm - cx, y_mm - cy) - r)
+            if d <= thr_mm and (best is None or d < best[0]):
+                best = (d, (cx, cy, r))
+        return best[1] if best else None
 
     def frame_snap_points(self, frame: MarcoVista):
         """Snappable geometry points of *frame*'s view — an ``(M, 2)`` array

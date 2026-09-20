@@ -111,6 +111,51 @@ def collect_geometry(scene):
     return tris, hard, soft
 
 
+def collect_circles(scene) -> list:
+    """Every circle and arc the model carries, as ``(centre, radius,
+    normal)`` in world space — the curves :func:`core.snap.curve_centers_of_face`
+    reads off each visible face's boundary (a drawn circle, a rounded
+    corner, a hole; an imported polyline by its shape), placements taken
+    through their transform. It is what a sheet's radius / diameter tool
+    recognises when the drafter clicks ON the arc, the way AutoCAD's
+    DIMRADIUS asks for the arc and never for a centre nobody can see
+    (Marco, 2026-09-20: «como que no reconoce el centro de un círculo»).
+    The same curve on two faces (a hole and the pipe through it) is
+    reported once."""
+    from core.group import iter_placements
+    from core.snap import curve_centers_of_face
+
+    out: list = []
+    seen: set = set()
+
+    def eat(mesh, xform=None, visible=lambda _f: True):
+        for face in mesh.faces:
+            if not visible(face):
+                continue
+            n = face.normal()
+            if xform is not None:
+                n = xform.mapVector(n)
+                if n.length() < 1e-9:
+                    continue
+                n.normalize()
+            for c, r, _key in curve_centers_of_face(face, xform):
+                key = (round(c.x(), 4), round(c.y(), 4), round(c.z(), 4),
+                       round(r, 4), round(abs(n.x()), 3),
+                       round(abs(n.y()), 3), round(abs(n.z()), 3))
+                if key in seen:
+                    continue
+                seen.add(key)
+                out.append((c, r, n))
+
+    eat(scene.loose_mesh, visible=scene.entity_visible)
+    for g in scene.groups:
+        if not scene.entity_visible(g) or getattr(g, "billboard", False):
+            continue
+        for placed, m in iter_placements(g):
+            eat(placed.mesh, m)
+    return out
+
+
 def clip_to_section(tris, hard, soft, plane, split_cuts: bool = False):
     """Clip collected geometry to the KEPT side of the active section plane
     (S5 — the point of the sections track): triangles are cut, edges are

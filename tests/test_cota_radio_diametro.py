@@ -287,3 +287,119 @@ def test_a_level_mark_on_an_elevation_knows_its_height(monkeypatch):
             comp.close()
         win._saved_version = win.viewport.scene.version
         win.close()
+
+
+# ---- one click ON the arc: the circle lends its centre and radius --------
+
+def _sheet_with_circles():
+    """A real ComposerWindow over a GL-free scene: a Ø2 m circle lying flat
+    at (2, 3) — what a plan shows face-on — and a Ø1 m one standing up in
+    the XZ plane, which a plan sees edge-on. The frame is a plan at 1:50."""
+    import math
+    from PySide6.QtGui import QVector3D
+    from PySide6.QtWidgets import QWidget
+    from tests.test_composer_canvas import _FakeViewport
+    from views.composer import ComposerWindow
+    host = QWidget()
+    host.viewport = _FakeViewport()
+    mesh = host.viewport.scene.mesh
+    flat = [QVector3D(2.0 + math.cos(2 * math.pi * i / 24),
+                      3.0 + math.sin(2 * math.pi * i / 24), 0.0)
+            for i in range(24)]
+    mesh.add_face(flat)
+    standing = [QVector3D(6.0 + 0.5 * math.cos(2 * math.pi * i / 24), 0.0,
+                          1.0 + 0.5 * math.sin(2 * math.pi * i / 24))
+                for i in range(24)]
+    mesh.add_face(standing)
+    composer = ComposerWindow(host)
+    frame = composer.comp.frames[0]
+    frame.view_key = "std:top"
+    frame.scale_n = 50.0
+    composer._invalidate_geometry_caches()
+    composer._host = host
+    return composer, frame
+
+
+def test_a_plan_knows_its_circles_face_on_only():
+    """`frame_circles` reports the flat circle where the plan draws it, at
+    the frame's scale (1 m → 20 mm at 1:50), and not the standing one,
+    which the plan sees as a line and has no radius to dimension."""
+    composer, frame = _sheet_with_circles()
+    circles = composer.frame_circles(frame)
+    assert len(circles) == 1
+    cx, cy, r = circles[0]
+    assert r == pytest.approx(20.0, abs=0.05)
+    (px, py), = composer._frame_world_to_page(frame, [[2.0, 3.0, 0.0]])
+    assert (cx, cy) == pytest.approx((px, py), abs=0.05)
+    # the ring is found from near it, never from the middle of the disc
+    assert composer.circle_at(cx + 20.3, cy, 1.0) == pytest.approx((cx, cy, r))
+    assert composer.circle_at(cx, cy, 1.0) is None
+    assert composer.circle_at(cx + 10.0, cy, 1.0) is None
+    # a frame in perspective has none: a radius there is a picture
+    frame.perspective = True
+    composer.circle_cache.clear()
+    assert composer.frame_circles(frame) == []
+
+
+def test_one_click_on_the_arc_places_the_radius_and_ctrl_the_diameter():
+    """Marco, 2026-09-20: «acota bien como dice Rafael pero… como que no
+    reconoce el centro de un círculo». The drawing marks no centre to
+    click on, so — as AutoCAD's DIMRADIUS — the click goes ON the arc:
+    the circle gives the centre and the radius, the click only picks the
+    side the line leaves by. Off any arc the two-click flow still works."""
+    import math
+    from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
+    from PySide6.QtGui import QMouseEvent
+    composer, frame = _sheet_with_circles()
+    view = composer._view
+    (cx, cy, r), = composer.frame_circles(frame)
+
+    def click(x_mm, y_mm, mods=Qt.NoModifier):
+        px = view.mapFromScene(QPointF(x_mm, y_mm))
+        view.mousePressEvent(QMouseEvent(
+            QEvent.MouseButtonPress, QPointF(px), view.mapToGlobal(QPoint(px)),
+            Qt.LeftButton, Qt.LeftButton, mods))
+
+    composer.tool_mode = "cota_radio"
+    a = math.radians(-30.0)
+    click(cx + (r + 0.3) * math.cos(a), cy + (r + 0.3) * math.sin(a))
+    assert view._rad_centre is None             # no second click needed
+    assert len(composer.comp.cotas_rad) == 1
+    ct = composer.comp.cotas_rad[0]
+    assert ct.kind == "radius"
+    assert (ct.x_mm, ct.y_mm) == pytest.approx((cx, cy), abs=1e-6)
+    assert ct.radius_mm == pytest.approx(r, abs=1e-6)   # the circle's, not the click's
+    assert ct.angle_deg == pytest.approx(-30.0, abs=0.5)
+    assert ct.real_distance_m() == pytest.approx(1.0, abs=0.01)
+
+    composer.tool_mode = "cota_radio"
+    click(cx - r, cy, Qt.ControlModifier)       # Ctrl on that one click
+    assert composer.comp.cotas_rad[-1].kind == "diameter"
+    assert composer.comp.cotas_rad[-1].real_distance_m() == pytest.approx(
+        2.0, abs=0.02)
+
+    composer.tool_mode = "cota_radio"           # off the arc: centre, then arc
+    before = len(composer.comp.cotas_rad)
+    click(cx + 60.0, cy + 60.0)
+    assert view._rad_centre is not None         # taken as a centre
+    click(cx + 70.0, cy + 60.0)
+    assert len(composer.comp.cotas_rad) == before + 1
+    assert view._rad_centre is None
+
+
+def test_hovering_an_arc_ghosts_the_dimension_before_the_click():
+    """The recognition shows before it commits: over the ring the tool
+    ghosts the centre's cross and the line out to the cursor's side; off
+    the ring the ghost goes, because a click there would be a centre."""
+    from PySide6.QtCore import QPointF, Qt
+    composer, frame = _sheet_with_circles()
+    view = composer._view
+    (cx, cy, r), = composer.frame_circles(frame)
+    composer.tool_mode = "cota_radio"
+    assert view._track(QPointF(cx + r + 0.2, cy), Qt.NoModifier)
+    assert view._preview is not None
+    ghost = view._preview.path().boundingRect()
+    assert ghost.contains(QPointF(cx, cy))          # the centre's cross
+    assert ghost.contains(QPointF(cx + r, cy))      # …out to the ring
+    assert view._track(QPointF(cx + 3 * r, cy + 3 * r), Qt.NoModifier)
+    assert view._preview is None
