@@ -283,3 +283,71 @@ def test_the_fillet_follows_the_faces_plane(viewport):
     assert _corner_gone(mesh, (2, 0, 0))
     for e in _arc_edges(mesh):
         assert abs(e.a.y()) < 1e-6 and abs(e.b.y()) < 1e-6
+
+
+# ---- @pacaeiro, issue #43: with both tangencies fixed, a number is the RADIUS
+
+def test_a_typed_value_on_the_magenta_arc_is_the_fillet_radius(viewport):
+    """«We click on the first edge, position cursor to get the 2nd tangent
+    to edge and give a value (the arc Radius, keeping the tangency)…
+    right now it is directed to bulge». On a right-angle corner a radius
+    r puts the tangent points r from the corner (d = r / tan 45°), so
+    typing 0.8 after arming the fillet at 0.5 rounds the corner with
+    radius 0.8, tangent to both edges, and trims it."""
+    _square(viewport)
+    tool = _tool(viewport)
+    mesh = viewport.scene.mesh
+    tool.on_click(_ctx(viewport, QVector3D(1.5, 0, 0)))
+    P2 = QVector3D(2.0, 0.5, 0)
+    tool.on_hover(_ctx(viewport, P2))
+    tool.on_click(_ctx(viewport, P2))
+    assert tool._fillet is not None
+    tool.on_hover(_ctx(viewport, QVector3D(1.9, 0.4, 0)))   # anywhere
+    assert tool.on_value(viewport, 0.8) is True
+    assert tool.start_point is None                          # committed
+    assert _corner_gone(mesh, (2, 0, 0))
+    arc = _arc_edges(mesh)
+    assert len(arc) == tool.segments
+    c = QVector3D(2.0 - 0.8, 0.8, 0)                         # centre for r = 0.8
+    for e in arc:
+        for p in (e.a, e.b):
+            assert abs((p - c).length() - 0.8) < 1e-6
+    ends = {tuple(round(v, 6) for v in (p.x(), p.y(), p.z()))
+            for e in arc for p in (e.a, e.b)}
+    assert (1.2, 0.0, 0.0) in ends and (2.0, 0.8, 0.0) in ends   # tangent points
+    assert ArcTool.last_fillet_d == pytest.approx(0.8)
+    assert len(mesh.faces) == 1
+
+
+def test_a_radius_the_edges_cannot_hold_is_refused_and_said(viewport):
+    _square(viewport)
+    tool = _tool(viewport)
+    said = []
+    viewport.flash_status = lambda msg, *a, **k: said.append(msg)
+    try:
+        tool.on_click(_ctx(viewport, QVector3D(1.5, 0, 0)))
+        P2 = QVector3D(2.0, 0.5, 0)
+        tool.on_hover(_ctx(viewport, P2))
+        tool.on_click(_ctx(viewport, P2))
+        tool.on_hover(_ctx(viewport, QVector3D(1.9, 0.4, 0)))
+        assert tool.on_value(viewport, 3.0) is True           # 3 m on a 2 m edge
+        assert said and "3.00" in said[-1]
+        assert tool._fillet is not None                        # still armed
+        assert not _corner_gone(viewport.scene.mesh, (2, 0, 0))
+    finally:
+        viewport.flash_status = lambda *a, **k: None
+
+
+def test_off_the_fillet_a_typed_value_is_still_the_bulge(viewport):
+    """The plain two-point arc keeps its VCB meaning."""
+    _square(viewport)
+    tool = _tool(viewport)
+    mesh = viewport.scene.mesh
+    tool.on_click(_ctx(viewport, QVector3D(0.5, 1.0, 0)))    # off any edge
+    tool.on_click(_ctx(viewport, QVector3D(1.5, 1.0, 0)))
+    assert tool._fillet is None
+    tool.on_hover(_ctx(viewport, QVector3D(1.0, 1.3, 0)))
+    assert tool.on_value(viewport, 0.2) is True
+    arc = _arc_edges(mesh)
+    top = max(p.y() for e in arc for p in (e.a, e.b))
+    assert top == pytest.approx(1.2, abs=1e-6)                # bulge 0.2

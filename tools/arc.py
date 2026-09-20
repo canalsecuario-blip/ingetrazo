@@ -168,8 +168,10 @@ class ArcTool(PlaneLock, Tool):
         # cursor is snapped to, as ``(V, P2, edge B)``.
         self._equidistant = None
         # After the end click: ``(V, P1, P2)`` when the end point was the
-        # equidistant one — the corner this arc rounds.
+        # equidistant one — the corner this arc rounds; and the corner's
+        # second edge, so a typed radius can be checked against it.
         self._fillet = None
+        self._fillet_edge_b = None
         # The last committed arc and its parameters, so "Ns" typed right
         # after can rebuild it with another segment count (SketchUp).
         self._last_cmd = None
@@ -206,10 +208,12 @@ class ArcTool(PlaneLock, Tool):
                 return
             self.end_point = end
             self._fillet = None
+            self._fillet_edge_b = None
             if self._equidistant is not None:
-                V, P2, _B = self._equidistant
+                V, P2, B = self._equidistant
                 self._fillet = (QVector3D(V), QVector3D(self.start_point),
                                 QVector3D(P2))
+                self._fillet_edge_b = B
             self._equidistant = None
             self._tangent_dir = self._tangent_at_start(ctx.viewport)
             if self._tangent_dir is None:
@@ -565,11 +569,65 @@ class ArcTool(PlaneLock, Tool):
             return False
         if isinstance(value, tuple):
             return False
+        if self._fillet is not None:
+            # Both tangencies fixed — the corner is being rounded — so the
+            # number is the fillet's RADIUS, the one thing a drafter means
+            # there (@pacaeiro, issue #43: «when Tangent to Edge is fixed
+            # on both sides and we write a value it is directed to bulge,
+            # instead of Arc radius, keeping the tangencies»).
+            return self._fillet_with_radius(viewport, float(value))
         sign = -1.0 if self._bulge_for(self.hover_point) < 0 else 1.0
         self._bulge_kind = None
         pts = self._points(None, bulge=sign * value)
         if len(pts) >= 2:
             self._commit(viewport, pts)
+        return True
+
+    def _fillet_with_radius(self, viewport, radius: float) -> bool:
+        """Redraw the armed fillet with ``radius``: the tangent points move
+        to ``d = r / tan(θ/2)`` from the corner along each edge (θ the
+        angle the edges make), the arc stays tangent to both, the corner
+        is trimmed. A radius the edges cannot hold is refused, and said."""
+        V, P1, P2 = self._fillet
+        a = P1 - V
+        b = P2 - V
+        if radius <= 0 or a.length() < 1e-9 or b.length() < 1e-9:
+            return False
+        ua, ub = a.normalized(), b.normalized()
+        cos_t = max(-1.0, min(1.0, QVector3D.dotProduct(ua, ub)))
+        theta = math.acos(cos_t)
+        if theta < 1e-3 or abs(theta - math.pi) < 1e-3:
+            return False                       # no corner to round
+        d = radius / math.tan(theta / 2.0)
+        edge_a = self._start_edge[0] if self._start_edge else None
+        edge_b = self._fillet_edge_b
+        reach = []
+        for e in (edge_a, edge_b):
+            if e is None:
+                continue
+            reach.append((e.v0.position - e.v1.position).length())
+        if reach and d > min(reach) + 1e-6:
+            viewport.flash_status(tr(
+                "Radius {r} m needs {d} m of edge on each side of the "
+                "corner; the shorter one is {e} m",
+                r=f"{radius:.2f}", d=f"{d:.2f}", e=f"{min(reach):.2f}"))
+            return True
+        self.start_point = V + ua * d
+        self.end_point = V + ub * d
+        if self._start_edge is not None:
+            self._start_edge = (self._start_edge[0], QVector3D(self.start_point))
+        self._fillet = (QVector3D(V), QVector3D(self.start_point),
+                        QVector3D(self.end_point))
+        self._tangent_dir = (V - self.start_point).normalized()
+        h = self._tangent_bulge()
+        if h is None:
+            return False
+        self._snap_bulge = h
+        self._bulge_kind = "fillet"
+        pts = self._points(None, bulge=h)
+        if len(pts) < 2:
+            return False
+        self._commit(viewport, pts, trim=self._corner_trim(None))
         return True
 
     def on_radius_value(self, viewport, radius: float) -> bool:
@@ -740,6 +798,7 @@ class ArcTool(PlaneLock, Tool):
         self._start_edge = None
         self._equidistant = None
         self._fillet = None
+        self._fillet_edge_b = None
         self._last_apex = None
         self.wireframe_color = None
 
