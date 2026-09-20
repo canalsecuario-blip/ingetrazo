@@ -6223,16 +6223,34 @@ class Viewport(QOpenGLWidget):
             self._draw_occluded_segment(painter, dim.b, bp)
             painter.setPen(QPen(ink, 1.5))
             self._draw_occluded_segment(painter, ap, bp)         # dimension line
-            # End ticks: short screen-space perpendiculars at each end (drawn
-            # only when the end point itself is visible).
+            # The ends, in screen space, drawn only where the end point
+            # itself is visible: filled arrows pointing outward (the
+            # document's default), oblique ticks, or nothing.
             dx, dy = pbp[0] - pap[0], pbp[1] - pap[1]
             ln = math.hypot(dx, dy)
-            if ln > 1e-6:
-                ox, oy = -dy / ln * 4.0, dx / ln * 4.0
-                for (cx, cy), w in ((pap, ap), (pbp, bp)):
-                    if not self._is_occluded(w):
+            ends = style.get("ends", "arrow") or "arrow"
+            if ln > 1e-6 and ends != "none":
+                ux, uy = dx / ln, dy / ln
+                for (cx, cy), w, sign in ((pap, ap, 1.0), (pbp, bp, -1.0)):
+                    if self._is_occluded(w):
+                        continue
+                    if ends == "tick":
+                        ox, oy = -uy * 4.0, ux * 4.0
                         painter.drawLine(QPointF(cx - ox, cy - oy),
                                          QPointF(cx + ox, cy + oy))
+                    else:
+                        # tip at the end, wings trailing INTO the line
+                        # (inside arrows: they point at the extension lines)
+                        L, half = 10.0, 2.2
+                        bx, by = cx + sign * ux * L, cy + sign * uy * L
+                        painter.save()
+                        painter.setBrush(ink)
+                        painter.setPen(Qt.NoPen)
+                        painter.drawPolygon(QPolygonF([
+                            QPointF(cx, cy),
+                            QPointF(bx - uy * half, by + ux * half),
+                            QPointF(bx + uy * half, by - ux * half)]))
+                        painter.restore()
             # Value label at the dimension line's midpoint — hidden if that
             # point is behind the solid.
             mid_world = dim.midpoint()

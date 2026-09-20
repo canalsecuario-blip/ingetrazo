@@ -130,7 +130,13 @@ def test_vector_frame_projects_dimensions_and_texts(monkeypatch):
         assert all(a[5] == 3.5 for a in annots if a[0] == "text")
         kinds = [a[0] for a in annots]
         assert kinds.count("text") == 2                 # value + label
-        assert kinds.count("line") >= 6                 # ext + dim + ticks
+        # ext + dim lines + the two ends: arrows by default, ticks (two
+        # more lines) when the document says so
+        assert kinds.count("line") >= 4 and kinds.count("arrow") == 2
+        scene.dimension_style["ends"] = "tick"
+        kinds = [a[0] for a in comp.compute_annotations(frame)]
+        assert kinds.count("line") >= 6 and kinds.count("arrow") == 0
+        scene.dimension_style["ends"] = "arrow"
         value = next(a for a in annots if a[0] == "text" and "m" in a[4])
         assert value[4] == "4.00 m"
         # Everything lands inside the frame (mm, frame-local).

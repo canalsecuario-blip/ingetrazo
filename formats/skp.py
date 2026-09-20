@@ -408,6 +408,9 @@ def _apply_payload_inner(scene, payload) -> str:
         # Adopt the file's style back-face colour so unpainted faces seen
         # from behind read like they did for the author.
         scene.back_face_color = tuple(back)
+    for dim in scene.dimensions:        # groups are in: hold their vertices
+        if hasattr(dim, "bind"):
+            dim.bind(scene)
     scene.version += 1
     return payload.get("backend", "?")
 

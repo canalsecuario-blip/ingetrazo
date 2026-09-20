@@ -991,12 +991,15 @@ class PurgeUnusedCommand(Command):
 
 
 class AddDimensionCommand(Command):
-    """Add a static dimension annotation to ``scene.dimensions``."""
+    """Add a dimension annotation to ``scene.dimensions``, anchored to the
+    vertices under its endpoints (if any) so it follows the geometry."""
 
     def __init__(self, dimension) -> None:
         self.dimension = dimension
 
     def do(self, scene) -> None:
+        if hasattr(self.dimension, "bind"):
+            self.dimension.bind(scene)
         scene.dimensions.append(self.dimension)
         scene.version += 1
 
@@ -1062,6 +1065,47 @@ class MoveTextLabelsCommand(Command):
     def undo(self, scene) -> None:
         for t in self._labels:
             t.offset = t.offset - self._delta
+        scene.version += 1
+
+
+class MoveDimensionsCommand(Command):
+    """Move dimensions with the Move tool. A dimension ANCHORED at both
+    ends slides its LINE by the delta (minus any component along the
+    measured segment, so the line stays parallel and the extension lines
+    stay square) while the endpoints keep holding their vertices —
+    SketchUp's Move-on-dimension, «mover la cota conservando la línea guía»
+    (Marco, 2026-09-20). A dimension with a free endpoint moves that
+    endpoint rigidly instead. ``modes`` maps each dimension to ``"line"``
+    or ``"rigid"``, decided by the tool at grab time."""
+
+    def __init__(self, modes: dict, delta) -> None:
+        self._modes = dict(modes)
+        self._delta = QVector3D(delta)
+
+    @staticmethod
+    def shift(dim, mode: str, step: QVector3D) -> None:
+        """Apply one step — the tool's live preview uses it too."""
+        if mode == "line":
+            ab = dim.b - dim.a
+            length = ab.length()
+            if length > 1e-9:
+                d = ab / length
+                step = step - d * QVector3D.dotProduct(step, d)
+            dim.offset = dim.offset + step
+        else:
+            if dim.anchor_a is None:
+                dim.a = dim.a + step
+            if dim.anchor_b is None:
+                dim.b = dim.b + step
+
+    def do(self, scene) -> None:
+        for dim, mode in self._modes.items():
+            self.shift(dim, mode, self._delta)
+        scene.version += 1
+
+    def undo(self, scene) -> None:
+        for dim, mode in self._modes.items():
+            self.shift(dim, mode, -self._delta)
         scene.version += 1
 
 

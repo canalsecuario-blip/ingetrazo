@@ -34,9 +34,11 @@ from PySide6.QtGui import QMatrix4x4, QVector3D
 from core.group import Group, copy_group, transformed_attrs
 from core.i18n import tr
 from core.mesh import Edge, Face, Mesh
+from core.dimension import Dimension
 from core.history import (AddEdgeCommand, AddFaceCommand, CompoundCommand,
                           InsertGroupCommand, MoveGroupCommand,
-                          MoveTextLabelsCommand, MoveVerticesCommand)
+                          MoveDimensionsCommand, MoveTextLabelsCommand,
+                          MoveVerticesCommand)
 from core.textlabel import TextLabel
 from core.topology import _key
 from tools.base import Tool, ToolContext
@@ -82,6 +84,36 @@ def gather_targets(ctx: ToolContext):
         elif isinstance(ent, Face):
             positions.extend(ent.vertices)
     return groups, _dedup(positions)
+
+
+def gather_dimensions(ctx: ToolContext, groups, verts) -> dict:
+    """Dimensions Move acts on, each with how: the selected ones, or (with
+    nothing selected) the one under the cursor. ``"line"`` — both ends
+    anchored to geometry: the dimension LINE slides and the extension
+    lines stretch from their vertices (the user of DriveMeca's video:
+    «no se puede mover después de colocarlo»); ``"rigid"`` — a free end
+    travels with the delta. A dimension whose anchors are themselves
+    being moved in this very drag is left alone: it rides along with its
+    vertices, and shifting its line too would move it twice."""
+    viewport = ctx.viewport
+    dims = [d for d in viewport.scene.selection if isinstance(d, Dimension)]
+    if not dims and not viewport.scene.selection:
+        pick = getattr(viewport, "pick_dimension", None)
+        d = pick(ctx.screen.x(), ctx.screen.y()) if pick else None
+        if d is not None:
+            dims = [d]
+    moving_verts = {id(v) for v in verts}
+    moving_groups = {id(g) for g in groups}
+    out: dict = {}
+    for d in dims:
+        anchors = [an for an in (d.anchor_a, d.anchor_b) if an is not None]
+        riding = [an for an in anchors
+                  if id(an.vertex) in moving_verts
+                  or any(id(g) in moving_groups for g in an.chain)]
+        if len(anchors) == 2 and len(riding) == 2:
+            continue                          # follows its vertices
+        out[d] = "line" if len(anchors) == 2 else "rigid"
+    return out
 
 
 def gather_labels(ctx: ToolContext) -> list[TextLabel]:
@@ -145,6 +177,7 @@ class MoveTool(Tool):
         self._splanes: list = []               # section planes being moved
         self._images: list = []                # reference images being moved
         self._labels: list[TextLabel] = []     # leader texts whose label moves
+        self._dims: dict = {}                  # dimension → "line" | "rigid"
         self._preview_delta = QVector3D(0.0, 0.0, 0.0)  # currently applied live
         self._copy = False                     # Ctrl: move a COPY
         self._sel_faces: list = []             # loose geometry copy mode duplicates
@@ -209,7 +242,16 @@ class MoveTool(Tool):
                 # geometry that happens to sit behind it.
                 groups, positions = [], []
             images = gather_images(ctx)
-            if not (groups or positions or labels or splanes or images):
+            mesh = viewport.scene.mesh
+            verts = [v for v in (mesh.vertex_at(p) for p in positions)
+                     if v is not None]
+            dims = gather_dimensions(ctx, groups, verts)
+            if dims and not viewport.scene.selection:
+                # A click on a dimension's lines grabs the dimension, not
+                # the geometry behind it.
+                groups, positions, verts = [], [], []
+            if not (groups or positions or labels or splanes or images
+                    or dims):
                 return  # nothing under the cursor / selected to move
             self._last = None            # a new move ends the array window
             self.start_point = ctx.world
@@ -217,14 +259,13 @@ class MoveTool(Tool):
             self._groups = groups
             self._positions = positions
             self._labels = labels
+            self._dims = dims
             self._splanes = splanes
             self._images = images
-            # Resolve the grabbed positions to vertex OBJECTS once: the live
+            # The grabbed positions resolved to vertex OBJECTS once: the live
             # preview then moves these identities directly, so dragging through
             # (or onto) a coincident vertex never drags the innocent one along.
-            mesh = viewport.scene.mesh
-            self._verts = [v for v in (mesh.vertex_at(p) for p in positions)
-                           if v is not None]
+            self._verts = verts
             self._vp_preview = False
             if (self._groups and not self._verts and not self._positions):
                 # Groups-only drag: viewport-side preview — the caches
@@ -432,6 +473,8 @@ class MoveTool(Tool):
             viewport.scene.mesh.move_vertex(v, step)
         for lab in self._labels:
             lab.offset = lab.offset + step
+        for dim, mode in self._dims.items():
+            MoveDimensionsCommand.shift(dim, mode, step)
         for sp in self._splanes:
             sp.point = sp.point + step
         for im in self._images:
@@ -450,6 +493,8 @@ class MoveTool(Tool):
             # rebuilds. Labels/section planes ride along in Python (few).
             for lab in self._labels:
                 lab.offset = lab.offset + step
+            for dim, mode in self._dims.items():
+                MoveDimensionsCommand.shift(dim, mode, step)
             for sp in self._splanes:
                 sp.point = sp.point + step
             for im in self._images:
@@ -469,6 +514,8 @@ class MoveTool(Tool):
                 step = -self._preview_delta
                 for lab in self._labels:
                     lab.offset = lab.offset + step
+                for dim, mode in self._dims.items():
+                    MoveDimensionsCommand.shift(dim, mode, step)
                 for sp in self._splanes:
                     sp.point = sp.point + step
                 for im in self._images:
@@ -510,6 +557,8 @@ class MoveTool(Tool):
                 commands.append(MoveVerticesCommand(self._positions, delta))
             if self._labels:
                 commands.append(MoveTextLabelsCommand(self._labels, delta))
+            if self._dims:
+                commands.append(MoveDimensionsCommand(self._dims, delta))
             if self._splanes:
                 from core.history import MoveSectionPlanesCommand
                 commands.append(
@@ -533,6 +582,7 @@ class MoveTool(Tool):
         self._verts = []
         self._groups = []
         self._labels = []
+        self._dims = {}
         self._splanes = []
         self._images = []
         self._preview_delta = QVector3D(0.0, 0.0, 0.0)

@@ -524,6 +524,25 @@ def _paint_annots_mm(painter: QPainter, frame: MarcoVista, annots) -> None:
         elif a[0] == "line":
             painter.setPen(QPen(ink, 0.25))
             painter.drawLine(QPointF(a[1], a[2]), QPointF(a[3], a[4]))
+        elif a[0] == "arrow":
+            # a dimension's arrowhead: tip at (x, y), wings trailing back
+            # along (dx, dy) — the sheet cota's own proportions
+            from PySide6.QtGui import QPolygonF
+            import math as _math
+            _kind, x, y, dx, dy = a
+            L = 1.8
+            base = _math.radians(12)
+            ang = _math.atan2(dy, dx)
+            painter.save()
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(ink)
+            painter.drawPolygon(QPolygonF([
+                QPointF(x, y),
+                QPointF(x + L * _math.cos(ang + base),
+                        y + L * _math.sin(ang + base)),
+                QPointF(x + L * _math.cos(ang - base),
+                        y + L * _math.sin(ang - base))]))
+            painter.restore()
         elif a[0] == "secmark":
             _paint_section_mark_mm(painter, a, ink, halo)
         elif a[0] == "text":
@@ -9052,13 +9071,18 @@ class ComposerWindow(QMainWindow):
                 out.append(("line", b[0], b[1], b2[0], b2[1]))
                 out.append(("line", a2[0], a2[1], b2[0], b2[1]))
                 ang = math.atan2(b2[1] - a2[1], b2[0] - a2[0])
-                for x, y in (a2, b2):                 # oblique ticks
-                    t = 1.6
-                    out.append(("line",
-                                x - t * math.cos(ang + math.radians(45)),
-                                y - t * math.sin(ang + math.radians(45)),
-                                x + t * math.cos(ang + math.radians(45)),
-                                y + t * math.sin(ang + math.radians(45))))
+                ends = style.get("ends", "arrow") or "arrow"
+                for (x, y), heading in ((a2, ang), (b2, ang + math.pi)):
+                    if ends == "tick":                # oblique ticks
+                        t = 1.6
+                        out.append(("line",
+                                    x - t * math.cos(ang + math.radians(45)),
+                                    y - t * math.sin(ang + math.radians(45)),
+                                    x + t * math.cos(ang + math.radians(45)),
+                                    y + t * math.sin(ang + math.radians(45))))
+                    elif ends != "none":              # inside arrows
+                        out.append(("arrow", x, y, math.cos(heading),
+                                    math.sin(heading)))
                 measured = (fmt(dim.value(), style) if fmt is not None
                             else dim.label())
                 text = (dim.display_text(measured)

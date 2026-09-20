@@ -85,9 +85,14 @@ class Scene:
     #: ``base_step_mm`` is how far apart the rows of a baseline run sit on
     #: PAPER — AutoCAD's DIMDLI, and Marco asked for it as a number he
     #: sets rather than one derived from the text height (2026-09-19).
+    #: ``ends`` is what closes the dimension line — ``arrow`` (Rafael's
+    #: sheet, the default), ``tick`` (oblique, what every document drew
+    #: before the choice existed: a file without the key opens with it)
+    #: or ``none``. Asked for by a user of DriveMeca's video («los
+    #: extremos no tiene para cambiarla», 2026-09-20).
     dimension_style: dict = field(default_factory=lambda: {
         "decimals": 2, "units": "m", "font_size": 9, "color": [45, 55, 75],
-        "norma": "iso", "base_step_mm": 8.0})
+        "norma": "iso", "base_step_mm": 8.0, "ends": "arrow"})
     # Back-face tint override (RGB 0..1), e.g. adopted from an imported
     # .skp's style so unpainted faces read like they did for the author.
     # ``None`` = the viewport's default SketchUp blue-grey.

@@ -616,14 +616,18 @@ def _load_into_inner(scene, path: Path) -> None:
         reserve_group_names(names)   # new groups never reuse a stored "Group N"
 
     for raw in payload.get("dimensions", []):
-        scene.dimensions.append(Dimension(
+        dim = Dimension(
             QVector3D(*raw["a"]), QVector3D(*raw["b"]),
             QVector3D(*raw["offset"]), layer=raw.get("layer") or None,
-            text=raw.get("text") or None))
+            text=raw.get("text") or None)
+        dim.bind(scene)         # the vertex at that spot is the one snapped to
+        scene.dimensions.append(dim)
 
+    # A document from before the ends could be chosen drew oblique ticks:
+    # it keeps them. Only a NEW document is born with arrows.
     style = payload.get("dimension_style")
-    if isinstance(style, dict):
-        scene.dimension_style.update(style)
+    scene.dimension_style.update(
+        {"ends": "tick", **(style if isinstance(style, dict) else {})})
     scales = payload.get("custom_scales")
     if isinstance(scales, list):
         scene.custom_scales = [float(n) for n in scales
