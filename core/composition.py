@@ -557,13 +557,14 @@ class BarraEscala:
 class FlechaNorte:
     """A north arrow: circle, needle and N, rotatable to the project north.
 
-    The N goes in a band ABOVE the compass, where nothing else is drawn.
-    It used to sit at the middle, on top of the black-and-white needle,
-    which is what Rafael saw — «la N de norte quizás por aquí arriba
-    estaría mejor, porque ahí se ve mal» (33:20). Keeping that as an
-    option was a bad idea of mine: rendered side by side, the needle
-    simply swallows the letter (Marco, 2026-09-19). There is one north
-    arrow, and it reads.
+    The N rides the needle's tip, outside the circle, and turns with the
+    needle (Marco, 2026-09-20). It used to sit at the middle, on top of
+    the black-and-white needle, which is what Rafael saw — «la N de norte
+    quizás por aquí arriba estaría mejor, porque ahí se ve mal» (33:20);
+    then in a band above the compass, which did not turn. Keeping the
+    middle as an option was a bad idea of mine: rendered side by side,
+    the needle simply swallows the letter (Marco, 2026-09-19). There is
+    one north arrow, and it reads.
     """
 
     x_mm: float = 20.0

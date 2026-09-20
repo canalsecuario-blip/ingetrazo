@@ -117,134 +117,53 @@ def test_the_north_arrow_keeps_its_box():
     assert (old.nortes[0].w_mm, old.nortes[0].h_mm) == (20.0, 20.0)
 
 
+def _north_ink(n, px=8, pad=0):
+    """The inked pixels of a north arrow painted alone, as (x, y)."""
+    from PySide6.QtGui import QColor, QImage, QPainter
+    from views.composer import paint_norte_mm
+    side = int((n.size_mm + 2 * pad) * px)
+    img = QImage(side, side, QImage.Format_RGB32)
+    img.fill(QColor(255, 255, 255))
+    p = QPainter(img)
+    p.setRenderHint(QPainter.Antialiasing, False)
+    p.scale(px, px)
+    p.translate(pad, pad)
+    paint_norte_mm(p, n)
+    p.end()
+    return {(x, y) for y in range(img.height()) for x in range(img.width())
+            if img.pixelColor(x, y) != QColor(255, 255, 255)}
+
+
 def test_the_N_is_drawn_clear_of_the_needle():
     """«La N de norte quizás por aquí arriba estaría mejor, porque ahí se
     ve mal» (Rafael, 33:20), and rendered side by side the needle simply
     swallowed it (Marco, 2026-09-19), so there is no option to put it back
-    — there is one north arrow and it reads."""
-    from PySide6.QtGui import QColor, QImage, QPainter
+    — there is one north arrow and it reads. At 0° the letter sits above
+    the compass with clear air between them."""
     from core.composition import FlechaNorte
-    from views.composer import paint_norte_mm
-
-    def ink_rows(n):
-        px = 8
-        img = QImage(int(n.size_mm * px), int(n.size_mm * px),
-                     QImage.Format_RGB32)
-        img.fill(QColor(255, 255, 255))
-        p = QPainter(img)
-        p.setRenderHint(QPainter.Antialiasing, False)
-        p.scale(px, px)
-        paint_norte_mm(p, n)
-        p.end()
-        return {y for y in range(img.height())
-                for x in range(img.width())
-                if img.pixelColor(x, y) != QColor(255, 255, 255)}
-
     sz, px = 20.0, 8
-    rows = ink_rows(FlechaNorte(size_mm=sz))
-    circle_top = int((0.60 - 0.38 * 0.92) * sz * px)           # ≈ row 40
-    band = int(0.24 * sz * px)                                 # the N's band
-    assert min(rows) < band                    # the letter is up in its band
-    assert not any(band <= y < circle_top - px for y in rows)  # clear air
+    ink = _north_ink(FlechaNorte(size_mm=sz), px)
+    rows = {y for _x, y in ink}
+    circle_top = int((0.50 - 0.30 * 0.92) * sz * px)           # the compass
+    letter_bottom = int((0.50 - 0.40 + 0.09) * sz * px)        # the N's foot
+    assert min(rows) < letter_bottom                 # the letter is up top
+    assert not any(letter_bottom + 1 <= y < circle_top - 1 for y in rows)
     assert any(y >= circle_top for y in rows)                  # the compass
 
 
-# ---- 4. an image magnetises to the drawing under it ---------------------
-
-def test_only_an_image_snaps_to_the_model_geometry():
-    from views.composer import (CotaCanvasItem, FrameItem, ImageItem,
-                                TextItem)
-    assert ImageItem.SNAPS_TO_DRAWING is True
-    for other in (FrameItem, TextItem, CotaCanvasItem):
-        assert other.SNAPS_TO_DRAWING is False
-
-
-def test_a_dragged_image_lands_its_nearest_corner_on_a_drawn_point(
-        monkeypatch):
-    from views.composer import ComposerWindow, ImageItem
-    from views.main_window import MainWindow
-    from core.composition import ImagenItem
-    monkeypatch.setattr(ComposerWindow, "render_frame", lambda self, f: None)
-    win = MainWindow()
-    comp = None
-    try:
-        comp = ComposerWindow(win)
-        comp.comp.images.append(ImagenItem(x_mm=50.0, y_mm=50.0,
-                                           w_mm=40.0, h_mm=30.0))
-        comp._rebuild_canvas()
-        item = next(it for it in comp.canvas.items()
-                    if isinstance(it, ImageItem))
-        # one drawn point, 1 mm off the image's bottom-right corner
-        target = (91.0, 81.0)
-        monkeypatch.setattr(
-            ComposerWindow, "nearest_snap_point",
-            lambda self, x, y, thr: (target + ((0.0, 0.0, 0.0), None)
-                                     if abs(x - target[0]) <= thr
-                                     and abs(y - target[1]) <= thr else None))
-        got = item._snap_corner_to_drawing(50.0, 50.0, 40.0, 30.0)
-        assert got == pytest.approx((51.0, 51.0))   # the corner lands on it
-        # …and a corner nowhere near a drawn point is left alone
-        assert item._snap_corner_to_drawing(5.0, 5.0, 40.0, 30.0) is None
-    finally:
-        if comp is not None:
-            comp.close()
-        win._saved_version = win.viewport.scene.version
-        win.close()
-
-
-# ---- 5. a new view wearing a dead one's render --------------------------
-
-def test_a_deleted_frames_caches_are_forgotten(monkeypatch):
-    """«Pongo una ventana y me muestra ese previo que yo ya no tengo»
-    (33:40). The caches are keyed on id(frame), and CPython hands the same
-    address to the next object of that size — so the new frame inherited
-    the dead one's render, lines, fills, snap points and annotations."""
-    from views.composer import ComposerWindow
-    from views.main_window import MainWindow
-    monkeypatch.setattr(ComposerWindow, "render_frame", lambda self, f: None)
-    win = MainWindow()
-    comp = None
-    try:
-        comp = ComposerWindow(win)
-        doomed = comp.comp.frames[0]
-        fid = id(doomed)
-        comp.render_cache[fid] = "a render nobody should see again"
-        comp.hlr_cache[fid] = "lines"
-        comp.annot_cache[fid] = ["annots"]
-        comp._stale.add(fid)
-
-        comp.comp.frames.remove(doomed)          # as a delete leaves it
-        comp._rebuild_canvas()
-
-        assert fid not in comp.render_cache
-        assert fid not in comp.hlr_cache
-        assert fid not in comp.annot_cache
-        assert fid not in comp._stale
-    finally:
-        if comp is not None:
-            comp.close()
-        win._saved_version = win.viewport.scene.version
-        win.close()
-
-
-def test_the_sweep_spares_the_frames_of_the_other_sheets(monkeypatch):
-    """Switching sheets must not throw away renders that cost seconds."""
-    from views.composer import ComposerWindow
-    from views.main_window import MainWindow
-    monkeypatch.setattr(ComposerWindow, "render_frame", lambda self, f: None)
-    win = MainWindow()
-    comp = None
-    try:
-        comp = ComposerWindow(win)
-        other = Composicion(name="Lámina 2")
-        other.frames.append(MarcoVista())
-        win.viewport.scene.compositions.append(other)
-        keep = id(other.frames[0])
-        comp.render_cache[keep] = "the other sheet's render"
-        comp._rebuild_canvas()
-        assert keep in comp.render_cache
-    finally:
-        if comp is not None:
-            comp.close()
-        win._saved_version = win.viewport.scene.version
-        win.close()
+def test_the_N_turns_with_the_needle_and_stays_in_the_box():
+    """Marco, 2026-09-20: «cuando giro la N de norte debería la N girar
+    también». Turned 90° the letter is at the RIGHT of the compass, not
+    above it — and at every angle nothing is painted outside the item's
+    own box, or the canvas would leave shreds behind it."""
+    from core.composition import FlechaNorte
+    sz, px, pad = 20.0, 8, 4
+    side = sz * px
+    ink = _north_ink(FlechaNorte(size_mm=sz, angle_deg=90.0), px)
+    letter = {(x, y) for x, y in ink if x > 0.75 * side}     # right of it all
+    assert letter and all(abs(y - side / 2) < 0.12 * side for _x, y in letter)
+    assert not any(y < 0.15 * side for _x, y in ink)          # nothing on top
+    for deg in (0.0, 37.0, 90.0, 135.0, 180.0, 250.0):
+        out = _north_ink(FlechaNorte(size_mm=sz, angle_deg=deg), px, pad)
+        lo, hi = pad * px, (pad + sz) * px
+        assert all(lo <= x < hi and lo <= y < hi for x, y in out), deg

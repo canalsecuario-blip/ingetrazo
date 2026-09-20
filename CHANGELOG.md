@@ -7,6 +7,11 @@ follow [SemVer](https://semver.org).
 ## [Sin publicar]
 
 ### Cambiado
+- **La N del norte gira con la aguja** (Marco: «cuando giro la N de norte
+  debería la N girar también»): va en la punta de la aguja, fuera del
+  círculo, y da la vuelta con ella; a 0° queda donde estaba, encima. El
+  compás se centra en su caja y se ajusta para que la letra no salga de
+  ella en ningún ángulo.
 - **El número de la cota, a la distancia de la norma.** Marco puso su
   lámina junto a la de Rafael: «todavía no se ve como la norma». Dos
   cosas: la **separación** entre la línea de cota y el número se mide

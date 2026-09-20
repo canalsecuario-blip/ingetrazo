@@ -980,17 +980,19 @@ def paint_perfil_mm(painter: QPainter, m: PerfilTerreno, profile,
 
 
 def paint_norte_mm(painter: QPainter, n: FlechaNorte) -> None:
-    """Circle + needle + N, rotated to the project north.
+    """Circle + needle + N, the whole symbol rotated to the project north.
 
-    The compass sits in the lower part of the box and the N gets a clear
-    band above it — it used to be drawn at the middle, over the
-    black-and-white needle, which swallowed it (Rafael, 33:20). The box
-    keeps its size, so nothing on a sheet moves but the letter."""
+    The N rides the needle's tip, outside the circle, and turns with it
+    (Marco, 2026-09-20: «cuando giro la N de norte debería la N girar
+    también») — at 0° it sits where its band used to be, above the
+    compass. The compass is centred in the box and sized so the letter
+    stays inside the box at every angle: the item paints nothing beyond
+    its own bounds."""
     sz = n.size_mm
     c = sz / 2.0
-    cy, rad = sz * 0.60, sz * 0.38
+    rad = sz * 0.30
     painter.save()
-    painter.translate(c, cy)
+    painter.translate(c, c)
     painter.rotate(n.angle_deg)
     pen = QPen(QColor(30, 36, 44))
     pen.setWidthF(0.35)
@@ -1005,9 +1007,12 @@ def paint_norte_mm(painter: QPainter, n: FlechaNorte) -> None:
     painter.setBrush(QBrush(QColor(255, 255, 255)))
     painter.drawPolygon(QPolygonF([QPointF(0, -r), QPointF(-r * 0.28, r * 0.35),
                                    QPointF(0, r * 0.12)]))
+    # the N: centred 0.40·sz out along the needle, 0.18·sz tall — its far
+    # edge at 0.49·sz, just inside the box whichever way it points
+    h = sz * 0.18
+    _draw_text_mm(painter, QRectF(-c, -sz * 0.40 - h / 2, sz, h), "N", h,
+                  bold=True, align=Qt.AlignCenter)
     painter.restore()
-    _draw_text_mm(painter, QRectF(0, 0, sz, sz * 0.24), "N", sz * 0.24,
-                  bold=True, align=Qt.AlignHCenter | Qt.AlignTop)
 
 
 def paint_leyenda_mm(painter: QPainter, le: Leyenda) -> None:
