@@ -4203,6 +4203,16 @@ class ComposerCanvasView(QGraphicsView):
 
     def mouseMoveEvent(self, event) -> None:
         if self._pan_last is not None:
+            if not (event.buttons() & (Qt.MiddleButton | Qt.LeftButton)):
+                # The release never came. It does not always: a screenshot,
+                # a workspace switch or a dialog takes the pointer grab
+                # mid-drag and the button comes up somewhere else. Trusting
+                # it left the sheet panning for ever — the fist cursor
+                # stuck and every later move dragging the page (Marco,
+                # 2026-09-19, with the screenshot that caught it). The
+                # buttons that are actually DOWN are the truth.
+                self._end_pan()
+                return
             p = event.position().toPoint()
             d = p - self._pan_last
             self._pan_last = p
@@ -4645,13 +4655,28 @@ class ComposerCanvasView(QGraphicsView):
                                  second.x(), second.y(), sep_mm=sep,
                                  anchors=anchors, axis=axis)
 
+    def _end_pan(self) -> None:
+        """Stop panning and give the cursor back to the armed tool."""
+        self._pan_last = None
+        self.setCursor(Qt.OpenHandCursor
+                       if self.composer.tool_mode == "pan"
+                       else Qt.CrossCursor
+                       if self.composer.tool_mode == "estilo"
+                       else Qt.ArrowCursor)
+
+    def enterEvent(self, event) -> None:
+        # Coming back in with nothing pressed: whatever happened out there,
+        # the drag is over.
+        from PySide6.QtWidgets import QApplication as _App
+        if self._pan_last is not None and not (
+                _App.mouseButtons() & (Qt.MiddleButton | Qt.LeftButton)):
+            self._end_pan()
+        super().enterEvent(event)
+
     def mouseReleaseEvent(self, event) -> None:
         if self._pan_last is not None and event.button() in (
                 Qt.MiddleButton, Qt.LeftButton):
-            self._pan_last = None
-            self.setCursor(Qt.OpenHandCursor
-                           if self.composer.tool_mode == "pan"
-                           else Qt.ArrowCursor)
+            self._end_pan()
             event.accept()
             return
         if self._band_start is not None and event.button() == Qt.LeftButton:

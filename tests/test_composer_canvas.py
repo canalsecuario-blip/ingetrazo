@@ -1076,3 +1076,55 @@ def test_the_snap_dot_keeps_its_screen_size_at_any_zoom():
     near = view._snap_marker.rect().width()
     assert abs(far / near - 4.0) < 1e-6              # 4× zoom → ¼ the paper size
     assert abs(near * view.transform().m11() - 2 * view._SNAP_DOT_PX) < 1e-6
+
+
+class TestLostMouseRelease:
+    """A middle-button pan must not outlive the button.
+
+    The release does not always arrive: a screenshot, a workspace switch
+    or a dialog takes the pointer grab mid-drag and the button comes up
+    somewhere else. Trusting it left the sheet panning for ever — the fist
+    cursor stuck and every later move dragging the page (Marco,
+    2026-09-19, and his screenshot is what caught it)."""
+
+    def test_a_move_with_no_button_down_ends_the_pan(self):
+        view, comp = _view("cota")
+        _mouse(view, QEvent.MouseButtonPress, 300, 300, button=Qt.MiddleButton,
+               buttons=Qt.MiddleButton)
+        assert view._pan_last is not None
+        assert view.cursor().shape() == Qt.ClosedHandCursor
+        h0 = view.horizontalScrollBar().value()
+        # the release went somewhere else; the next move has no buttons
+        _mouse(view, QEvent.MouseMove, 380, 360, buttons=Qt.NoButton)
+        assert view._pan_last is None
+        assert view.cursor().shape() == Qt.ArrowCursor
+        # …and it did NOT drag the page on the way out
+        assert view.horizontalScrollBar().value() == h0
+
+    def test_a_move_with_the_button_still_down_keeps_panning(self):
+        view, comp = _view("cota")
+        _mouse(view, QEvent.MouseButtonPress, 300, 300, button=Qt.MiddleButton,
+               buttons=Qt.MiddleButton)
+        _mouse(view, QEvent.MouseMove, 340, 330, button=Qt.NoButton,
+               buttons=Qt.MiddleButton)
+        assert view._pan_last is not None
+        assert view.cursor().shape() == Qt.ClosedHandCursor
+
+    def test_coming_back_into_the_view_with_nothing_pressed_ends_it(self):
+        from PySide6.QtCore import QPointF
+        from PySide6.QtGui import QEnterEvent
+        view, comp = _view("cota")
+        _mouse(view, QEvent.MouseButtonPress, 300, 300, button=Qt.MiddleButton,
+               buttons=Qt.MiddleButton)
+        assert view._pan_last is not None
+        view.enterEvent(QEnterEvent(QPointF(10, 10), QPointF(10, 10),
+                                    QPointF(10, 10)))
+        assert view._pan_last is None
+        assert view.cursor().shape() == Qt.ArrowCursor
+
+    def test_the_pan_tool_gets_its_open_hand_back(self):
+        view, comp = _view("pan")
+        _mouse(view, QEvent.MouseButtonPress, 300, 300, button=Qt.MiddleButton,
+               buttons=Qt.MiddleButton)
+        _mouse(view, QEvent.MouseMove, 380, 360, buttons=Qt.NoButton)
+        assert view.cursor().shape() == Qt.OpenHandCursor
