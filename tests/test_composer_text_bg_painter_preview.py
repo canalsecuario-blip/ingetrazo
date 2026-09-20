@@ -59,7 +59,9 @@ def test_format_painter_copies_on_first_click_and_pastes_after(monkeypatch):
         comp.format_painter_click(by_id[id(txt)])         # other kind: no-op
         assert txt.color == "#1e242c"
         comp.format_painter_click(by_id[id(dst)])         # paste
-        assert (dst.text_mm, dst.color, dst.text_pos) == (4.5, "#aa0000", "below")
+        # The look travels; the text position does not — only ISO is on
+        # offer for now, so it stays above (Marco, 2026-09-20).
+        assert (dst.text_mm, dst.color, dst.text_pos) == (4.5, "#aa0000", "above")
         assert dst.y_mm == 60                             # geometry untouched
         # Esc leaves the tool.
         comp._view.keyPressEvent(QKeyEvent(QEvent.KeyPress, Qt.Key_Escape,

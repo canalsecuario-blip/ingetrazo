@@ -1180,10 +1180,9 @@ def paint_cota_mm(painter: QPainter, ct: CotaItem) -> None:
     The standard is carried by ``text_pos``, not by a switch over it:
     ``above`` is ISO, whose dimension line is NEVER interrupted (rule 5 of
     Rafael's video, 09:00), and ``centered`` IS the German/Japanese
-    rendering, which opens the line around the text (rule 18, 14:00). The
-    document's ``norma`` decides which one a new cota is born with — it
-    does not redraw a cota already placed, or opening a finished drawing
-    would change it."""
+    rendering, which opens the line around the text (rule 18, 14:00). Only
+    ISO is on the menu for now (Marco, 2026-09-20); the other values still
+    paint so a drawing that already carries them keeps its look."""
     import math as _math
     from PySide6.QtGui import QBrush, QPolygonF
     a = QPointF(0, 0)
@@ -5322,13 +5321,13 @@ class ComposerWindow(QMainWindow):
         style = dict(getattr(self, "_last_cota_style", None) or {})
         style.setdefault("offset_mm", 0.8)
         # Rule 1: the text goes ABOVE the line — «el texto ahí abajo es
-        # impensable» (Rafael, 06:00) — and that is what the document's
-        # norma says a new cota is born with; the German/Japanese standard
-        # puts it in the middle instead. A style carried over from the last
-        # cota is the drafter's own most recent word, so it still wins.
-        style.setdefault("text_pos",
-                         "centered" if self.dimension_norma() != "iso"
-                         else "above")
+        # impensable» (Rafael, 06:00). ISO is the only standard on offer
+        # for now (Marco, 2026-09-20: «hagamos las ISO por ahora, la
+        # alemana o japonesa quítalo para otras releases futuras… en
+        # posición de texto sé restrictivo»), so a new cota is born above
+        # whatever the document or the remembered style say — the other
+        # positions still paint, for drawings that already carry them.
+        style["text_pos"] = "above"
         item = CotaItem(x_mm=a[0], y_mm=a[1], dx_mm=b[0] - a[0],
                         dy_mm=b[1] - a[1], scale_n=n, sep_mm=sep_mm,
                         axis=axis, **style)
@@ -6345,15 +6344,13 @@ class ComposerWindow(QMainWindow):
         self.cota_color_btn.setFixedHeight(22)
         self.cota_color_btn.clicked.connect(self._on_pick_cota_color)
         form.addRow(tr("Colour"), self.cota_color_btn)
+        # Only ISO for now — the German/Japanese position and the ones
+        # outside any standard are off the menu until a future release
+        # (Marco, 2026-09-20: «en posición de texto sé restrictivo, solo que
+        # esté la ISO»). The painter still honours a cota that carries one
+        # of the old values, so an existing sheet keeps its look.
         self.cota_text_pos = QComboBox()
-        for label, key in (
-                (tr("Above the line (ISO)"), "above"),
-                (tr("Centered, line broken (German / Japanese)"), "centered"),
-                (tr("Below the line (outside any standard)"), "below"),
-                (tr("Beside the line"), "aside"),
-                (tr("Beside, the other side (outside any standard)"),
-                 "aside_below")):
-            self.cota_text_pos.addItem(label, key)
+        self.cota_text_pos.addItem(tr("Above the line (ISO)"), "above")
         self.cota_text_pos.currentIndexChanged.connect(self._on_cota_props)
         form.addRow(tr("Text position"), self.cota_text_pos)
         # AutoCAD's DIMALIGNED / DIMLINEAR. A cota already drawn can be
@@ -8432,7 +8429,7 @@ class ComposerWindow(QMainWindow):
     #: The look of each item kind — never its geometry or content.
     STYLE_FIELDS = {
         CotaItem: ("text_mm", "decimals", "units", "ends", "stroke_mm", "color",
-                   "offset_mm", "text_pos", "text_along", "text_align",
+                   "offset_mm", "text_along", "text_align",
                    "text_color", "text_bg", "text_bg_opacity"),
         TextoItem: ("size_pt", "bold", "italic", "underline", "family",
                     "color", "align", "bg_color", "bg_opacity"),
@@ -9418,8 +9415,9 @@ class ComposerWindow(QMainWindow):
         """The drafting standard the DOCUMENT's dimensions obey — ``"iso"``
         (the default, and so UNE) or ``"din"`` (German/Japanese). It lives
         in ``scene.dimension_style`` so it travels in the .igz with the
-        drawing instead of following the machine (Marco, 2026-09-17), and
-        one switch covers the model's dimensions and every sheet's."""
+        drawing instead of following the machine (Marco, 2026-09-17).
+        Nothing reads it yet: only ISO is on the menu for now, and a new
+        cota is born ``above`` regardless (Marco, 2026-09-20)."""
         try:
             style = self._window.viewport.scene.dimension_style or {}
         except AttributeError:
@@ -10234,7 +10232,7 @@ class ComposerWindow(QMainWindow):
     #: Style fields a new cota inherits from the last one edited (LayOut
     #: draws new dimensions with the current style settings).
     _COTA_STYLE_FIELDS = ("text_mm", "decimals", "ends", "stroke_mm",
-                          "color", "offset_mm", "text_pos", "text_along",
+                          "color", "offset_mm", "text_along",
                           "text_align", "text_color", "text_bg",
                           "text_bg_opacity", "units")
 

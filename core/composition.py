@@ -1182,13 +1182,19 @@ class CotaRadialItem:
 
         A DIAMETER's middle is the centre itself, and the centre belongs to
         the axes — «un número encima de un eje se lee mal, sobre todo la
-        coma» (rule 3). So it rides the middle of the outer half instead,
-        which is where the Ø41,96 of the reference sheet sits."""
+        coma» (rule 3). So it rides the middle of the RIGHT-HAND half — the
+        half the text reads towards — whichever way the line was drawn:
+        Marco, 2026-09-20, «para el caso de diámetros deberá ir al costado
+        derecho, no al medio, porque se cruzaría con otras líneas de dibujo
+        que salen del radio». That is where the Ø41,96 of the reference
+        sheet sits; a vertical diameter's right is its top, since its text
+        reads bottom-to-top."""
         ux, uy = self.heading()
         if not self.outside():
             if self.kind == "diameter":
+                d = math.radians(readable_deg(ux, uy))
                 h = float(self.radius_mm) / 2.0
-                return (ux * h, uy * h)
+                return (math.cos(d) * h, math.sin(d) * h)
             (ax, ay), (bx, by) = self.line_points()
             return ((ax + bx) / 2.0, (ay + by) / 2.0)
         reach = float(self.radius_mm) + self.label_width_mm() / 2.0 + 2.0

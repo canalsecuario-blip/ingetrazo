@@ -93,16 +93,28 @@ def test_a_small_one_takes_them_out_and_prolongs_the_line():
     assert tail >= math.hypot(lx, ly)                   # and carries the words
 
 
-def test_a_diameters_words_keep_off_the_centre_mark():
+@pytest.mark.parametrize("deg", [-30.0, 150.0, 0.0, 180.0, 60.0, -120.0])
+def test_a_diameters_words_keep_off_the_centre_mark_on_the_right(deg):
     """Rule 3's reason: the centre belongs to the axes, and «un número
     encima de un eje se lee mal, sobre todo la coma». The Ø41,96 of the
-    reference sheet sits in the outer half, not on the centre."""
-    ct = _r(kind="diameter", radius_mm=40.0)
+    reference sheet sits in the outer half — and Marco fixed WHICH half
+    (2026-09-20): the right-hand one, «no al medio porque se cruzaría con
+    otras líneas de dibujo que salen del radio», whichever way the line
+    was drawn."""
+    ct = _r(kind="diameter", radius_mm=40.0, angle_deg=deg)
     assert not ct.outside()
     lx, ly = ct.text_anchor()
     assert math.hypot(lx, ly) == pytest.approx(20.0)     # half the radius
-    ux, uy = ct.heading()
-    assert (lx * ux + ly * uy) > 0                       # on the arrow side
+    assert lx > 0                                        # the right-hand half
+
+
+def test_a_vertical_diameters_words_sit_on_its_top_half():
+    """A vertical diameter's text reads bottom-to-top, so its «right» is
+    the top of the page (y grows downward)."""
+    for deg in (90.0, -90.0):
+        lx, ly = _r(kind="diameter", radius_mm=40.0,
+                    angle_deg=deg).text_anchor()
+        assert abs(lx) < 1e-9 and ly < 0
 
 
 def test_the_drafter_can_force_it_either_way():

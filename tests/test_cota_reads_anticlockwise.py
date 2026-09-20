@@ -193,7 +193,13 @@ def test_the_standard_lives_in_the_document_and_defaults_to_iso(tmp_path):
     assert legacy.dimension_style["norma"] == "iso"
 
 
-def test_a_new_cota_is_born_in_the_documents_standard(monkeypatch):
+def test_a_new_cota_is_born_iso_whatever_the_document_or_memory_say(
+        monkeypatch):
+    """Only ISO is on offer for now (Marco, 2026-09-20: «hagamos las ISO
+    por ahora… en posición de texto sé restrictivo»): a new cota is born
+    ``above`` even if the document carries the German standard or the
+    remembered style of the last cota says otherwise — and the panel's
+    text-position menu holds nothing else."""
     from views.composer import ComposerWindow
     from views.main_window import MainWindow
     monkeypatch.setattr(ComposerWindow, "render_frame", lambda self, f: None)
@@ -205,14 +211,15 @@ def test_a_new_cota_is_born_in_the_documents_standard(monkeypatch):
         assert comp.dimension_norma() == "iso"
         assert comp._new_cota((0.0, 0.0), (40.0, 0.0), 0.0).text_pos == "above"
         win.viewport.scene.dimension_style["norma"] = "din"
-        assert comp.dimension_norma() == "din"
-        assert comp._new_cota((0.0, 0.0), (40.0, 0.0),
-                              0.0).text_pos == "centered"
-        # …but the style carried over from the last cota is the drafter's
-        # own most recent word, so it still wins (the inheritance feature
-        # of test_composer_cota_style).
+        assert comp._new_cota((0.0, 0.0), (40.0, 0.0), 0.0).text_pos == "above"
         comp._last_cota_style = {"text_pos": "aside"}
-        assert comp._new_cota((0.0, 0.0), (40.0, 0.0), 0.0).text_pos == "aside"
+        assert comp._new_cota((0.0, 0.0), (40.0, 0.0), 0.0).text_pos == "above"
+        keys = [comp.cota_text_pos.itemData(i)
+                for i in range(comp.cota_text_pos.count())]
+        assert keys == ["above"]
+        # …and the model's dimension-style panel offers no standard switch.
+        from views.tray import DimensionStylePanel
+        assert not hasattr(DimensionStylePanel(win), "_norma")
     finally:
         if comp is not None:
             comp.close()

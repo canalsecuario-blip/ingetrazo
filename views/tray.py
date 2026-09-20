@@ -1692,26 +1692,14 @@ class DimensionStylePanel(QWidget):
         grid.addWidget(self._color_btn, 3, 1)
         self._refresh_color_btn()
 
-        # The drafting standard, which is a property of the DRAWING: ISO
-        # keeps the dimension line whole with the text above it; the
-        # German/Japanese one breaks the line and centres the text in the
-        # gap (Rafael's video, rules 5 and 18).
-        grid.addWidget(QLabel(tr("Standard:")), 4, 0)
-        self._norma = QComboBox()
-        for label, key in ((tr("ISO / UNE (text above, line whole)"), "iso"),
-                           (tr("German / Japanese (text in a broken line)"),
-                            "din")):
-            self._norma.addItem(label, key)
-        i = self._norma.findData(str(style.get("norma", "iso") or "iso"))
-        self._norma.setCurrentIndex(max(i, 0))
-        self._norma.currentIndexChanged.connect(self._apply)
-        self._norma.setToolTip(tr(
-            "Dimension standard for this document. It travels in the file, "
-            "so a drawing keeps the standard it was drawn to."))
-        grid.addWidget(self._norma, 4, 1)
+        # The drafting standard (``dimension_style["norma"]``) stays in the
+        # document, but ISO is the only one offered for now: the
+        # German/Japanese switch is off the panel until a future release
+        # (Marco, 2026-09-20: «hagamos las ISO por ahora, la alemana o
+        # japonesa quítalo»).
 
         # AutoCAD's DIMDLI: how far apart the rows of a baseline run sit.
-        grid.addWidget(QLabel(tr("Baseline step:")), 5, 0)
+        grid.addWidget(QLabel(tr("Baseline step:")), 4, 0)
         self._base_step = QDoubleSpinBox()
         self._base_step.setRange(1.0, 60.0)
         self._base_step.setSingleStep(0.5)
@@ -1722,7 +1710,7 @@ class DimensionStylePanel(QWidget):
             "How far apart the rows of a baseline dimension run sit on "
             "paper. It travels with the document."))
         self._base_step.valueChanged.connect(self._apply)
-        grid.addWidget(self._base_step, 5, 1)
+        grid.addWidget(self._base_step, 4, 1)
 
     def _style(self) -> dict:
         return self._window.viewport.scene.dimension_style
@@ -1732,7 +1720,6 @@ class DimensionStylePanel(QWidget):
         style["decimals"] = self._decimals.value()
         style["units"] = self._units.currentText()
         style["font_size"] = self._font.value()
-        style["norma"] = self._norma.currentData() or "iso"
         style["base_step_mm"] = float(self._base_step.value())
         self._window.viewport.scene.version += 1
         self._window.viewport.update()

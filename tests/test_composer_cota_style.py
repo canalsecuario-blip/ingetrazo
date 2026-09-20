@@ -68,8 +68,10 @@ def test_new_cotas_inherit_the_last_style_and_copy_paste_style(monkeypatch):
         comp.tool_mode = "cota"                 # place_tool drops to select
         comp.place_tool(20.0, 40.0, 80.0, 40.0, sep_mm=6.0)
         second = comp.comp.cotas[-1]
+        # The look is inherited; the text position is NOT — only ISO is on
+        # offer for now, so every new cota is born above (2026-09-20).
         assert (second.text_pos, second.text_color, second.ends) == (
-            "centered", "#cc0000", "arrow")
+            "above", "#cc0000", "arrow")
         assert second.sep_mm == 6.0 and second.dx_mm == 60.0   # geometry own
 
         # Copy style from a third, plain cota → paste onto the first two.
@@ -86,10 +88,11 @@ def test_new_cotas_inherit_the_last_style_and_copy_paste_style(monkeypatch):
         items[id(second)].setSelected(True)
         comp.paste_style()
         assert first.text_mm == 4.0 and first.color == "#0000cc"
-        assert second.text_pos == "below" and second.text_color == ""
+        assert second.text_color == "" and second.text_mm == 4.0
+        assert second.text_pos == "above"       # position is not a "style"
         assert second.dx_mm == 60.0 and second.y_mm == 40.0    # untouched
         comp.history.undo()                                     # one item back
-        assert second.text_pos == "centered" or first.text_mm != 4.0
+        assert second.text_mm != 4.0 or first.text_mm != 4.0
     finally:
         _close(win, comp)
 
