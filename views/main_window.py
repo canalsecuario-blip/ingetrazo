@@ -3001,9 +3001,11 @@ class MainWindow(QMainWindow):
         thickness) → the parameters dict, or ``None`` when cancelled or
         blank. ``params`` pre-fills it (editing an existing text).
 
-        Height and thickness read in CENTIMETRES: Rafael typed «20» for the
-        extrusion and the field, in metres with a 10 m ceiling, refused it
-        (2026-09-16, f000845) — nobody extrudes a sign twenty metres."""
+        Height and thickness read in METRES, the model's unit everywhere
+        else (Marco, 2026-09-20: «debería ser la unidad en metros»), with
+        no low ceiling: Rafael typed «20» for the extrusion and a 10 m cap
+        refused it (2026-09-16, f000845) — the cap was the fault, not the
+        unit. Three decimals, so 0.05 m reads as such."""
         from PySide6.QtWidgets import (QCheckBox, QDialog, QDialogButtonBox,
                                        QDoubleSpinBox, QFontComboBox,
                                        QFormLayout, QLineEdit)
@@ -3027,18 +3029,18 @@ class MainWindow(QMainWindow):
         italic_check.setChecked(bool(params.get("italic", False)))
         form.addRow(tr("Italic:"), italic_check)
         height_spin = QDoubleSpinBox()
-        height_spin.setRange(0.1, 100000.0)
-        height_spin.setDecimals(1)
-        height_spin.setSingleStep(5.0)
-        height_spin.setValue(float(params.get("height", 0.25)) * 100.0)
-        height_spin.setSuffix(" cm")
+        height_spin.setRange(0.001, 1000.0)
+        height_spin.setDecimals(3)
+        height_spin.setSingleStep(0.05)
+        height_spin.setValue(float(params.get("height", 0.25)))
+        height_spin.setSuffix(" m")
         form.addRow(tr("Height:"), height_spin)
         depth_spin = QDoubleSpinBox()
-        depth_spin.setRange(0.0, 100000.0)
-        depth_spin.setDecimals(1)
-        depth_spin.setSingleStep(1.0)
-        depth_spin.setValue(float(params.get("thickness", 0.05)) * 100.0)
-        depth_spin.setSuffix(" cm")
+        depth_spin.setRange(0.0, 1000.0)
+        depth_spin.setDecimals(3)
+        depth_spin.setSingleStep(0.01)
+        depth_spin.setValue(float(params.get("thickness", 0.05)))
+        depth_spin.setSuffix(" m")
         depth_spin.setToolTip(tr("0 leaves flat faces (no extrusion)"))
         form.addRow(tr("Extruded:"), depth_spin)
         buttons = QDialogButtonBox(QDialogButtonBox.Ok
@@ -3053,8 +3055,8 @@ class MainWindow(QMainWindow):
             return None
         return text_params(
             text, font_box.currentFont().family(), bold_check.isChecked(),
-            italic_check.isChecked(), height_spin.value() / 100.0,
-            depth_spin.value() / 100.0)
+            italic_check.isChecked(), height_spin.value(),
+            depth_spin.value())
 
     def _on_insert_3d_text(self) -> None:
         """SketchUp's 3D Text: the dialog generates REAL extruded geometry —

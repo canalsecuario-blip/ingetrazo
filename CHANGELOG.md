@@ -4,6 +4,15 @@ All notable changes to IngeTrazo are documented here.
 Format inspired by [Keep a Changelog](https://keepachangelog.com); versions
 follow [SemVer](https://semver.org).
 
+## [Sin publicar]
+
+### Cambiado
+- **Texto 3D: altura y extrusión en metros**, la unidad del modelo en
+  todo lo demás (Marco). La 0.4.6 las había pasado a centímetros porque
+  Rafael tecleó «20» de extrusión y el campo, con tope de 10 m, lo
+  rechazaba; la culpa era del tope, no de la unidad. Tres decimales y
+  sin tope bajo.
+
 ## [0.4.7] — 2026-09-20
 
 **Las láminas de la segunda revisión de Rafael, y la acotación a norma.**
