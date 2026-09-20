@@ -34,7 +34,7 @@ from core.composition import (COMMON_SCALES, NEW_FRAME_STYLE, PAPER_SIZES_MM, RE
                               EditItemCommand, EtiquetaItem, expand_fields, set_field_context, FlechaNorte, FormaItem, LlamadaItem, NivelItem,
                               ImagenItem, Leyenda, MarcoVista,
                               PerfilTerreno, RemoveItemCommand, TextoItem,
-                              apply_frame_camera, snap_mm)
+                              apply_frame_camera, readable_deg, snap_mm)
 from core.i18n import tr
 from core.composition import pen_px
 from core.saved_views import apply_shadow_state, georef_objects
@@ -1105,9 +1105,7 @@ def cota_label_anchor(ct: CotaItem) -> tuple:
         length = _math.hypot(ct.dx_mm, ct.dy_mm)
         if length > 1e-9:
             ux, uy = ct.dx_mm / length, ct.dy_mm / length
-            deg = _math.degrees(_math.atan2(ct.dy_mm, ct.dx_mm))
-            if deg > 90 or deg < -90:
-                deg += 180
+            deg = readable_deg(ct.dx_mm, ct.dy_mm)
             horizontal = (getattr(ct, "text_align", "aligned")
                           or "aligned") == "horizontal"
             label = ct.label()
@@ -1143,10 +1141,7 @@ def cota_aside_frame(ct: CotaItem) -> tuple:
     of straddling it (Marco, 2026-09-08: «sería bueno que la posición de
     texto en acotar también haya una opción para ponerla a un costado»)."""
     import math as _math
-    ang = _math.atan2(ct.dy_mm, ct.dx_mm)
-    deg = _math.degrees(ang)
-    if deg > 90 or deg < -90:
-        deg += 180
+    deg = readable_deg(ct.dx_mm, ct.dy_mm)
     horizontal = (getattr(ct, "text_align", "aligned")
                   or "aligned") == "horizontal"
     label = ct.label()
@@ -1165,7 +1160,15 @@ def paint_cota_mm(painter: QPainter, ct: CotaItem) -> None:
     """Architect-style dimension: the line runs ``sep_mm`` off the measured
     points along their normal (LayOut-style), tied back with extension
     lines; oblique ticks / arrows / bare ends; centred label of the REAL
-    model distance (paper length × N)."""
+    model distance (paper length × N).
+
+    The standard is carried by ``text_pos``, not by a switch over it:
+    ``above`` is ISO, whose dimension line is NEVER interrupted (rule 5 of
+    Rafael's video, 09:00), and ``centered`` IS the German/Japanese
+    rendering, which opens the line around the text (rule 18, 14:00). The
+    document's ``norma`` decides which one a new cota is born with — it
+    does not redraw a cota already placed, or opening a finished drawing
+    would change it."""
     import math as _math
     from PySide6.QtGui import QBrush, QPolygonF
     nx, ny = ct.normal()
@@ -1249,9 +1252,7 @@ def paint_cota_mm(painter: QPainter, ct: CotaItem) -> None:
         align = Qt.AlignHCenter | Qt.AlignVCenter
     else:
         painter.translate(lx, ly)
-        deg = _math.degrees(ang)
-        if deg > 90 or deg < -90:
-            deg += 180                      # keep the label readable
+        deg = readable_deg(ct.dx_mm, ct.dy_mm)      # ISO: head to the LEFT
         if (getattr(ct, "text_align", "aligned") or "aligned") == "horizontal":
             deg = 0.0
         painter.rotate(deg)
@@ -3323,9 +3324,7 @@ class CotaCanvasItem(_SheetItem):
         else:
             strip.addRect(QRectF(-w / 2, -m.offset_mm - m.text_mm * 1.3 - 1.0,
                                  w, m.offset_mm + m.text_mm * 1.3 + 2.0))
-        deg = _math.degrees(_math.atan2(m.dy_mm, m.dx_mm))
-        if deg > 90 or deg <= -90:
-            deg += 180
+        deg = readable_deg(m.dx_mm, m.dy_mm)
         if (getattr(m, "text_align", "aligned") or "aligned") == "horizontal":
             deg = 0.0
         t = QTransform().translate(lx, ly).rotate(deg)
@@ -4753,6 +4752,14 @@ class ComposerWindow(QMainWindow):
         n = self.comp.frames[0].scale_n if self.comp.frames else 100.0
         style = dict(getattr(self, "_last_cota_style", None) or {})
         style.setdefault("offset_mm", 0.8)
+        # Rule 1: the text goes ABOVE the line — «el texto ahí abajo es
+        # impensable» (Rafael, 06:00) — and that is what the document's
+        # norma says a new cota is born with; the German/Japanese standard
+        # puts it in the middle instead. A style carried over from the last
+        # cota is the drafter's own most recent word, so it still wins.
+        style.setdefault("text_pos",
+                         "centered" if self.dimension_norma() != "iso"
+                         else "above")
         item = CotaItem(x_mm=a[0], y_mm=a[1], dx_mm=b[0] - a[0],
                         dy_mm=b[1] - a[1], scale_n=n, sep_mm=sep_mm, **style)
         if anchors is not None:
@@ -5730,11 +5737,13 @@ class ComposerWindow(QMainWindow):
         self.cota_color_btn.clicked.connect(self._on_pick_cota_color)
         form.addRow(tr("Colour"), self.cota_color_btn)
         self.cota_text_pos = QComboBox()
-        for label, key in ((tr("Above the line"), "above"),
-                           (tr("Centered on the line"), "centered"),
-                           (tr("Below the line"), "below"),
-                           (tr("Beside the line"), "aside"),
-                           (tr("Beside, the other side"), "aside_below")):
+        for label, key in (
+                (tr("Above the line (ISO)"), "above"),
+                (tr("Centered, line broken (German / Japanese)"), "centered"),
+                (tr("Below the line (outside any standard)"), "below"),
+                (tr("Beside the line"), "aside"),
+                (tr("Beside, the other side (outside any standard)"),
+                 "aside_below")):
             self.cota_text_pos.addItem(label, key)
         self.cota_text_pos.currentIndexChanged.connect(self._on_cota_props)
         form.addRow(tr("Text position"), self.cota_text_pos)
@@ -8213,9 +8222,7 @@ class ComposerWindow(QMainWindow):
                             else dim.label())
                 text = (dim.display_text(measured)
                         if hasattr(dim, "display_text") else measured)
-                deg = math.degrees(ang)
-                if deg > 90 or deg <= -90:
-                    deg += 180
+                deg = readable_deg(b2[0] - a2[0], b2[1] - a2[1])
                 out.append(("text", (a2[0] + b2[0]) / 2, (a2[1] + b2[1]) / 2,
                             deg, text, size))
             for lab in getattr(scene, "text_labels", []) or []:
@@ -8643,6 +8650,18 @@ class ComposerWindow(QMainWindow):
                 f"background: {getattr(c, 'border_color', '#1e242c')};")
         finally:
             self._updating = False
+
+    def dimension_norma(self) -> str:
+        """The drafting standard the DOCUMENT's dimensions obey — ``"iso"``
+        (the default, and so UNE) or ``"din"`` (German/Japanese). It lives
+        in ``scene.dimension_style`` so it travels in the .igz with the
+        drawing instead of following the machine (Marco, 2026-09-17), and
+        one switch covers the model's dimensions and every sheet's."""
+        try:
+            style = self._window.viewport.scene.dimension_style or {}
+        except AttributeError:
+            return "iso"
+        return str(style.get("norma", "iso") or "iso")
 
     # ---- arrange / lock ------------------------------------------------------
     def _next_z(self) -> float:

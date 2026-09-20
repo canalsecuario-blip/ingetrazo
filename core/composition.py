@@ -821,6 +821,29 @@ class CotaAngularItem:
         return max(abs(self.ay_mm), abs(self.by_mm), self.radius_mm, 2.0)
 
 
+def readable_deg(dx_mm: float, dy_mm: float) -> float:
+    """The rotation a dimension's TEXT takes so it is read, not deciphered.
+
+    ISO 129: dimension text is read from the bottom and from the right of
+    the sheet — you tilt your head to the LEFT, never to the right. It is
+    the rule Rafael repeats most in his video (09:00, 10:00), and it is
+    circular: it holds at every inclination, not just the vertical.
+
+    On the page Y grows downward, so the legible half-turn is
+    **[-90°, 90°)** — a vertical dimension's text runs bottom-to-top
+    whichever way the line happened to be drawn.
+
+    It used to be written out at five call sites in two contradictory
+    spellings: three tested ``deg > 90 or deg < -90``, which let the exact
+    +90° of a cota drawn DOWNWARD through, and two tested ``deg <= -90``,
+    which turned every vertical the wrong way round — that second pair is
+    what projected the MODEL's dimensions onto a sheet, so those always
+    read head-to-the-right.
+    """
+    deg = math.degrees(math.atan2(dy_mm, dx_mm))
+    return (deg + 90.0) % 180.0 - 90.0
+
+
 @dataclass
 class CotaItem:
     """A sheet dimension between two measured points; the label is the REAL
