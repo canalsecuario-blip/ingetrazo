@@ -77,6 +77,33 @@
   <url type="vcs-browser">https://github.com/ingelibre/ingetrazo</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.4.8" date="2026-09-20">
+      <description>
+        <p>@pacaeiro's batch on 0.4.7, and what came out of checking 0.4.7
+        point by point. His five reports of the day: the axis magnet Tape,
+        Protractor and Move lacked (Move only caught Z from an oblique
+        view), the face behind winning in the parallel camera, a group
+        grouped into a copy of itself, and the magenta arc taking a typed
+        number as bulge instead of radius. From Marco's check: a dimension
+        that did not follow its group when scaled — the missing case from
+        the video's first user —, sheet dimensions' text gap to the
+        standard, 3D Text in metres, the north's N turning with the needle,
+        Zoom and Zoom Window on the sheet, and tooltips that came out as a
+        strip.</p>
+        <p xml:lang="es">La tanda de @pacaeiro sobre la 0.4.7, y lo que
+        salió de comprobar la 0.4.7 punto por punto. Sus cinco reportes del
+        día: el imán de ejes que faltaba en Cinta, Transportador y Mover
+        (Mover solo enganchaba Z desde una vista oblicua), la cara de atrás
+        que ganaba en vista paralela, un grupo que se agrupaba dentro de
+        una copia de sí mismo, y el arco magenta que tomaba el número como
+        comba en vez de como radio. De la comprobación de Marco: la cota
+        que no seguía al grupo al escalarlo —el caso que faltaba del
+        usuario del vídeo—, la separación texto–línea de las cotas de
+        lámina a la norma, Texto 3D en metros, la N que gira con la aguja,
+        Zoom y Zoom ventana en la lámina, y las pistas de los iconos que
+        salían en una tira.</p>
+      </description>
+    </release>
     <release version="0.4.7" date="2026-09-20">
       <description>
         <p>The sheets half of Rafael's second review, and dimensions to

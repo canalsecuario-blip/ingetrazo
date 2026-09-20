@@ -4,7 +4,19 @@ All notable changes to IngeTrazo are documented here.
 Format inspired by [Keep a Changelog](https://keepachangelog.com); versions
 follow [SemVer](https://semver.org).
 
-## [Sin publicar]
+## [0.4.8] — 2026-09-20
+
+**La tanda de @pacaeiro sobre la 0.4.7, y lo que salió de comprobar la
+0.4.7 punto por punto.** Cinco reportes suyos del mismo día: el imán de
+ejes que faltaba en Cinta, Transportador y Mover (Mover solo enganchaba Z
+desde una vista oblicua), la cara de atrás que ganaba en vista paralela,
+un grupo que se agrupaba dentro de una copia de sí mismo, y el arco
+magenta que tomaba el número como comba en vez de como radio. De la
+comprobación de Marco: la cota que no seguía al grupo al escalarlo —el
+caso que faltaba del usuario del vídeo—, la separación texto–línea de las
+cotas de lámina a la norma, Texto 3D en metros, la N que gira con la
+aguja, Zoom y Zoom ventana en la lámina, y las pistas de los iconos que
+salían en una tira.
 
 ### Añadido
 - **La cinta y el transportador se imantan a los ejes** como la Línea
