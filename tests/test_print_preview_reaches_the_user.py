@@ -22,8 +22,11 @@ from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-MANIFEST = (Path(__file__).resolve().parents[2]
-            / "app/packaging/flatpak/com.ingetrazo.IngeTrazo.yml")
+# The repository root: ``app/`` on Marco's disk, ``ingetrazo/`` on the CI
+# runner — never assume the folder above it holds an ``app`` (it does not
+# there, and the v0.4.7 gate fell on exactly that).
+MANIFEST = (Path(__file__).resolve().parents[1]
+            / "packaging/flatpak/com.ingetrazo.IngeTrazo.yml")
 
 
 def _trimmed_modules() -> set[str]:
