@@ -7,6 +7,29 @@ follow [SemVer](https://semver.org).
 ## [Sin publicar]
 
 ### Arreglado
+- **Lo oculto que la vista enseña se puede clicar** (issue #53, @pacaeiro:
+  «we cannot select them with mouse click, only by window selection»). El
+  índice de picking guardaba el bloque de objetos con una firma que sabía
+  qué grupo estaba oculto pero no si Ver ▸ Objetos ocultos / Geometría
+  oculta estaba encendido: ocultar lo sacaba del bloque y encender la vista
+  lo dejaba fuera. Ahora el fantasma responde al clic como cualquier
+  objeto, y una arista oculta solo se clica mientras la vista la enseña
+  (igual que ya hacía la selección por ventana).
+- **Un vértice suelto gana a la esquina de un componente en el mismo
+  punto** (issue #36, @pacaeiro: «Endpoint in component and the vertice
+  endpoint share the same coordinate, but no face created»). Empatados a
+  distancia, el motor elegía por el orden en que los había encontrado;
+  ahora el punto del contexto en el que dibujas va primero, que es el
+  único al que una línea puede soldarse. Misma familia que la regla de la
+  0.4.4: una inferencia derivada nunca gana al punto del que sale.
+- **Desfase funciona con aristas, no solo con caras** (issue #40,
+  @pacaeiro: la barra decía «Clic en una cara, o en aristas conectadas» y
+  las aristas no estaban). Un clic sobre una arista toma su cadena de
+  aristas conectadas —polilínea abierta o contorno cerrado sin cara— y la
+  desplaza a la distancia arrastrada o tecleada, con esquinas a inglete;
+  y si seleccionas las aristas antes de activar la herramienta, el primer
+  clic ya empieza el desfase, como en SketchUp. Una cadena recta se
+  rechaza diciendo por qué (no tiene plano).
 - **El imán de ejes de Línea llega a arcos, círculos, polígonos,
   rectángulo girado, Texto y Cota** (issues #52 y #51, @pacaeiro: «The
   Draw commands in the group of ARCS and SHAPES should also use the
