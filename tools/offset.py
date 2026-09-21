@@ -15,14 +15,15 @@ from __future__ import annotations
 
 from PySide6.QtGui import QVector3D
 
+from core.edits import build_add_edges
 from core.history import (
     AddFaceCommand,
     DeleteFaceCommand,
     SnapshotCompound,
 )
 from core.i18n import tr
-from core.mesh import Face
-from core.offset import offset_regions
+from core.mesh import Edge, Face
+from core.offset import offset_chain, offset_regions
 from core.topology import max_offset_distance, offset_loop
 from tools.base import Tool, ToolContext
 
@@ -46,6 +47,7 @@ class OffsetTool(Tool):
 
     def __init__(self) -> None:
         self.hovered_face: Face | None = None
+        self.hovered_edge: Edge | None = None
         self.base_face: Face | None = None
         self.distance: float = 0.0  # signed; >0 inward, <0 outward
         self.dragging: bool = False
@@ -53,10 +55,20 @@ class OffsetTool(Tool):
         self._normal: QVector3D | None = None
         self._ref_point: QVector3D | None = None   # a point on the reference edge
         self._ref_inward: QVector3D | None = None   # its in-plane inward normal
+        #: Edges mode (issue #40, @pacaeiro): ``_loop`` is a run of connected
+        #: coplanar edges — open (a polyline) or closed (a loop with no
+        #: face) — instead of a face's boundary. The offset is new edges.
+        self._chain: bool = False
+        self._closed: bool = True
+        #: A run taken from the selection when the tool was picked up
+        #: (SketchUp: select the edges, then Offset): the first click
+        #: starts the offset instead of picking.
+        self._armed: bool = False
 
     # ---- Lifecycle ----------------------------------------------------------
     def on_activate(self, viewport) -> None:
         self._reset()
+        self._arm_from_selection(viewport)
 
     def on_deactivate(self, viewport) -> None:
         viewport.set_hover(None)
@@ -67,8 +79,16 @@ class OffsetTool(Tool):
     def on_hover(self, ctx: ToolContext) -> None:
         viewport = ctx.viewport
         if not self.dragging:
+            if self._armed:
+                return                       # the run is chosen; click starts
             self.hovered_face = viewport.pick_face(ctx.screen.x(), ctx.screen.y())
-            viewport.set_hover(self.hovered_face)
+            self.hovered_edge = None
+            if self.hovered_face is None:
+                # No face under the cursor: an edge is a run of edges.
+                pick_edge = getattr(viewport, "pick_edge", None)
+                self.hovered_edge = (pick_edge(ctx.screen.x(), ctx.screen.y())
+                                     if pick_edge is not None else None)
+            viewport.set_hover(self.hovered_face or self.hovered_edge)
             return
         cursor = self._cursor_on_plane(viewport, ctx.screen.x(), ctx.screen.y())
         if cursor is not None and self._ref_point is not None:
@@ -78,12 +98,21 @@ class OffsetTool(Tool):
     def on_click(self, ctx: ToolContext) -> None:
         viewport = ctx.viewport
         if not self.dragging:
-            face = self.hovered_face
-            if face is None or len(face.vertices) < 3:
+            if self._armed:
+                self._armed = False          # the run is already in _loop
+            elif self.hovered_face is not None:
+                face = self.hovered_face
+                if len(face.vertices) < 3:
+                    return
+                self.base_face = face
+                self._loop = [QVector3D(v) for v in face.vertices]
+                self._normal = face.normal()
+                self._chain, self._closed = False, True
+            elif self.hovered_edge is not None:
+                if not self._take_run(viewport, _run_from_edge(self.hovered_edge)):
+                    return
+            else:
                 return
-            self.base_face = face
-            self._loop = [QVector3D(v) for v in face.vertices]
-            self._normal = face.normal()
             self.distance = 0.0
             self.dragging = True
             self._pick_reference(viewport, ctx.screen.x(), ctx.screen.y())
@@ -97,7 +126,7 @@ class OffsetTool(Tool):
     def on_value(self, viewport, value) -> bool:
         if isinstance(value, tuple):
             return False
-        if not self.dragging or self.base_face is None or value <= 0.0:
+        if not self.dragging or not self._loop or value <= 0.0:
             return False
         # Keep the side the user is dragging toward; default to inward.
         sign = -1.0 if self.distance < 0.0 else 1.0
@@ -114,11 +143,16 @@ class OffsetTool(Tool):
     def rubber_band_lines(self):
         if not self.dragging or not self._loop or abs(self.distance) < 1e-6:
             return []
-        off = offset_loop(self._loop, self._normal, self.distance)
+        off = self._offset_points()
         if off is None:
             return []
-        n = len(off)
-        return [(off[i], off[(i + 1) % n]) for i in range(n)]
+        return _segments(off, self._closed)
+
+    def _offset_points(self):
+        """The slid boundary / run at the current distance, or ``None``."""
+        if self._closed:
+            return offset_loop(self._loop, self._normal, self.distance)
+        return offset_chain(self._loop, self._normal, self.distance)
 
     # ---- Internals ----------------------------------------------------------
     def _pick_reference(self, viewport, sx, sy) -> None:
@@ -126,15 +160,13 @@ class OffsetTool(Tool):
         the cursor's perpendicular distance from it (so dragging across that edge
         flips inward/outward naturally)."""
         cursor = self._cursor_on_plane(viewport, sx, sy)
-        loop = self._loop
-        count = len(loop)
+        segs = _segments(self._loop, self._closed)
         best_i, best_d = 0, float("inf")
-        for i in range(count):
-            a, b = loop[i], loop[(i + 1) % count]
+        for i, (a, b) in enumerate(segs):
             d = _point_segment_distance(cursor, a, b) if cursor is not None else 0.0
             if d < best_d:
                 best_d, best_i = d, i
-        a, b = loop[best_i], loop[(best_i + 1) % count]
+        a, b = segs[best_i]
         e = (b - a).normalized()
         self._ref_point = QVector3D(a)
         self._ref_inward = QVector3D.crossProduct(self._normal.normalized(), e).normalized()
@@ -148,10 +180,55 @@ class OffsetTool(Tool):
         denom = QVector3D.dotProduct(direction, n)
         if abs(denom) < 1e-9:
             return None
-        t = QVector3D.dotProduct(self.base_face.centroid() - origin, n) / denom
+        anchor = (self.base_face.centroid() if self.base_face is not None
+                  else self._loop[0])
+        t = QVector3D.dotProduct(anchor - origin, n) / denom
         return origin + direction * t
 
+    # ---- Edges mode (issue #40) ----------------------------------------------
+    def _arm_from_selection(self, viewport) -> None:
+        """SketchUp's other way in: the edges were selected BEFORE the tool
+        was picked up. Two or more edges and nothing else → their run is
+        the thing to offset, and the first click starts the drag."""
+        scene = getattr(viewport, "scene", None)
+        selection = list(getattr(scene, "selection", None) or ())
+        edges = [e for e in selection if isinstance(e, Edge)]
+        if len(edges) < 2 or len(edges) != len(selection):
+            return
+        run = _run_from_edges(edges)
+        if run is None:
+            return                     # not one connected run: say nothing yet
+        if self._take_run(viewport, run):
+            self._armed = True
+            viewport.flash_status(tr(
+                "{n} edges selected — click to start the offset",
+                n=len(edges)), 4000)
+
+    def _take_run(self, viewport, run) -> bool:
+        """Adopt ``run`` = ``(points, closed)`` as the thing to offset, or
+        say why it cannot be."""
+        if run is None:
+            viewport.flash_status(tr(
+                "Offset needs one connected run of edges — a polyline, "
+                "or a closed loop."), 5000)
+            return False
+        points, closed = run
+        normal = _newell(points)
+        if normal is None:
+            viewport.flash_status(tr(
+                "Offset needs at least two edges that are not in line — a "
+                "straight run has no plane to offset in."), 5000)
+            return False
+        self.base_face = None
+        self._loop = points
+        self._normal = normal
+        self._chain, self._closed = True, closed
+        return True
+
     def _commit(self, viewport) -> None:
+        if self._chain:
+            self._commit_chain(viewport)
+            return
         regions = offset_regions(self._loop, self._normal, self.distance)
         if not regions:
             # Safety net: the exact slide-and-intersect path still runs when
@@ -192,6 +269,23 @@ class OffsetTool(Tool):
         # the ring creates don't reverse cleanly command-by-command (they
         # leaked on undo). One snapshot reverses exactly.
         viewport.history.execute(SnapshotCompound(commands))
+        self._reset()
+        viewport.update()
+
+    def _commit_chain(self, viewport) -> None:
+        """Edges mode: the slid run becomes new edges — nothing is deleted
+        and no face is managed; a run that closes a planar loop gets its
+        face from the ordinary edge detection, as if drawn by hand."""
+        off = self._offset_points()
+        if off is None:
+            viewport.flash_status(tr(
+                "{d:.3g} m collapses this run — try a smaller offset",
+                d=abs(self.distance)), 5000)
+            self._reset()
+            viewport.update()
+            return
+        viewport.history.execute(
+            build_add_edges(viewport.scene, _segments(off, self._closed)))
         self._reset()
         viewport.update()
 
@@ -240,6 +334,7 @@ class OffsetTool(Tool):
 
     def _reset(self) -> None:
         self.hovered_face = None
+        self.hovered_edge = None
         self.base_face = None
         self.distance = 0.0
         self.dragging = False
@@ -247,6 +342,91 @@ class OffsetTool(Tool):
         self._normal = None
         self._ref_point = None
         self._ref_inward = None
+        self._chain = False
+        self._closed = True
+        self._armed = False
+
+
+def _segments(points: list, closed: bool) -> list:
+    """Consecutive pairs of ``points``, wrapping when ``closed``."""
+    n = len(points)
+    if n < 2:
+        return []
+    last = n if closed else n - 1
+    return [(points[i], points[(i + 1) % n]) for i in range(last)]
+
+
+def _newell(points: list):
+    """The plane normal of a polyline by Newell's method (open runs
+    included: the closing edge only adds a term), or ``None`` when the
+    points are in line."""
+    n = len(points)
+    if n < 3:
+        return None
+    nx = ny = nz = 0.0
+    for i in range(n):
+        p, q = points[i], points[(i + 1) % n]
+        nx += (p.y() - q.y()) * (p.z() + q.z())
+        ny += (p.z() - q.z()) * (p.x() + q.x())
+        nz += (p.x() - q.x()) * (p.y() + q.y())
+    normal = QVector3D(nx, ny, nz)
+    span = max((p - points[0]).length() for p in points) or 1.0
+    if normal.length() < 1e-6 * span * span:
+        return None
+    return normal.normalized()
+
+
+def _run_from_edges(edges: list):
+    """Order a set of edges into one run: ``(points, closed)``. ``None``
+    unless every vertex joins at most two of them and they form a single
+    path or cycle."""
+    nbrs: dict = {}
+    for e in edges:
+        for v in (e.v0, e.v1):
+            nbrs.setdefault(id(v), (v, []))[1].append(e)
+    if any(len(es) > 2 for _v, es in nbrs.values()):
+        return None
+    ends = [v for v, es in nbrs.values() if len(es) == 1]
+    if len(ends) not in (0, 2):
+        return None
+    closed = not ends
+    start = ends[0] if ends else edges[0].v0
+    points = [QVector3D(start.position)]
+    seen: set = set()
+    v = start
+    while True:
+        nxt = next((e for e in nbrs[id(v)][1] if id(e) not in seen), None)
+        if nxt is None:
+            break
+        seen.add(id(nxt))
+        v = nxt.other(v)
+        if closed and v is start:
+            break
+        points.append(QVector3D(v.position))
+    if len(seen) != len(edges):
+        return None                           # two separate runs
+    return points, closed
+
+
+def _run_from_edge(edge: Edge):
+    """The run ``edge`` belongs to, walked both ways through vertices
+    where exactly two edges meet (a corner of a polyline); a junction or a
+    free end stops the walk. ``(points, closed)``."""
+    def walk(v, e):
+        out = []
+        while len(v.edges) == 2:
+            e = next(x for x in v.edges if x is not e)
+            if e is edge:
+                return out, True              # came round: a closed loop
+            v = e.other(v)
+            out.append(QVector3D(v.position))
+        return out, False
+    fwd, closed = walk(edge.v1, edge)
+    if closed:
+        return [QVector3D(edge.v0.position), QVector3D(edge.v1.position)] + fwd[:-1], True
+    back, _ = walk(edge.v0, edge)
+    return list(reversed(back)) + [QVector3D(edge.v0.position),
+                                   QVector3D(edge.v1.position)] + fwd, False
 
 
 def _loop_extent(loop) -> float:

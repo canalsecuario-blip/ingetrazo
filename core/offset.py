@@ -173,3 +173,38 @@ def offset_regions(loop: list, normal: QVector3D, d: float) -> list:
             continue
         kept.append((outer, holes))
     return kept
+
+
+def offset_chain(points: list, normal: QVector3D, d: float) -> Optional[list]:
+    """Offset an OPEN polyline ``points`` (coplanar, ``normal`` its plane) by
+    ``d`` — the signed distance along ``cross(normal, direction)`` of each
+    segment, so the sign picks the side. Consecutive slid segments are
+    re-intersected (mitre), or bevelled past :data:`MITRE_LIMIT`; the two
+    free ends are not extended. Returns the new points, or ``None`` when
+    fewer than two distinct points remain (@pacaeiro, issue #40: «Click a
+    face, or connected edges, to offset» promised edges too)."""
+    from core.topology import _offset_line_intersection
+    n = normal.normalized()
+    lines = []
+    for a, b in zip(points, points[1:]):
+        edge = b - a
+        if edge.length() < 1e-9:
+            continue
+        direction = edge.normalized()
+        push = QVector3D.crossProduct(n, direction).normalized() * d
+        lines.append([a + push, b + push, direction])
+    if not lines:
+        return None
+    reach = MITRE_LIMIT * abs(d) + 1e-9
+    out = [QVector3D(lines[0][0])]
+    for i in range(len(lines) - 1):
+        _start, end, direction = lines[i]
+        nxt = lines[i + 1]
+        corner = _offset_line_intersection(end, direction, nxt[0], nxt[2], n)
+        if corner is not None and (corner - end).length() <= reach:
+            out.append(QVector3D(corner))
+        else:
+            out.append(QVector3D(end))          # bevel across the gap
+            out.append(QVector3D(nxt[0]))
+    out.append(QVector3D(lines[-1][1]))
+    return out if len(out) >= 2 else None
