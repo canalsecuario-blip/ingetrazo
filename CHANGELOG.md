@@ -7,6 +7,18 @@ follow [SemVer](https://semver.org).
 ## [Sin publicar]
 
 ### Arreglado
+- **La cinta saca guías desde los ejes y deja puntos guía con su
+  segmento** (Rafael, Revisión 3, 20-09). Con el documento vacío, un clic
+  en el eje rojo, verde o azul y una distancia —arrastrada o tecleada—
+  da una guía paralela a ese eje: así se sitúa un proyecto «a 20 m y a
+  5 m del origen» antes de dibujar nada. Y desde un punto con nombre
+  (extremo, origen, intersección, centro), el segundo clic o el valor
+  tecleado deja un **punto guía con su segmento discontinuo** hasta el
+  punto de partida, como el «segmento guía» de SketchUp que él usa para
+  centrar círculos o marcar el vuelo de un alero; de un punto a otro
+  punto con nombre solo mide, y un punto medio no cuenta como punto
+  («es ficticio»). El segmento se pinta con la profundidad del modelo,
+  viaja en el `.igz` y se borra con su punto.
 - **Pintar: las tres de la issue #47** (@pacaeiro). (1) **Alt mantenido
   = cuentagotas**, sin que el puntero haga de interruptor: el estado de
   los modificadores que leía Qt es el del ÚLTIMO evento entregado —al
