@@ -20,6 +20,15 @@ face has no vertex to hold and stays static.
 It is an annotation, not geometry: it lives in ``Scene.dimensions`` and is
 drawn as a screen-space overlay (extension lines + dimension line + value
 label), not in the mesh.
+
+Two kinds, as in SketchUp: **aligned** (``axis`` is None) — the dimension
+line parallel to a–b, measuring its length — and **linear** (``axis`` is
+``"x"``/``"y"``/``"z"``) — the dimension line parallel to that axis,
+measuring the segment's extent along it, the extension lines square to the
+axis. A slanted line dimensioned by pulling the cursor to its SIDE gives
+the vertical extent, pulling ABOVE gives the horizontal one, pulling square
+off the line gives the aligned length (@pacaeiro, issue #50: «the Dimension
+tool should be able to measure aligned (as it does now), but also linear»).
 """
 from __future__ import annotations
 
@@ -137,17 +146,61 @@ def _chain_to(root, target) -> tuple:
     return ()
 
 
+_AXIS_VECTORS = {
+    "x": QVector3D(1.0, 0.0, 0.0),
+    "y": QVector3D(0.0, 1.0, 0.0),
+    "z": QVector3D(0.0, 0.0, 1.0),
+}
+
+#: A linear dimension is offered only when the segment makes at least this
+#: angle with the axis (a near-parallel one reads the same as the aligned
+#: dimension) and at most its complement (a near-square one measures
+#: nothing). Between those, the two kinds say different things.
+_LINEAR_MIN_DEG = 15.0
+
+#: The cursor pulled square off the segment — within this angle of its
+#: perpendicular, measured from the midpoint — always asks for the aligned
+#: dimension, however far it goes: on a steep line a square pull soon
+#: passes the lower endpoint's column, and without this corridor it would
+#: turn into the vertical linear one under the drafter's hand.
+_ALIGNED_CONE_DEG = 20.0
+
+
+def _linear_frame(a: QVector3D, b: QVector3D, axis: str | None):
+    """``(u, e)`` for a linear dimension along ``axis``: ``u`` the axis and
+    ``e`` the extension-line direction — square to ``u``, in the plane of
+    the axis and the segment. ``None`` for an aligned dimension, a
+    degenerate segment, or a segment that runs along the axis (nothing to
+    project; the dimension falls back to aligned)."""
+    u = _AXIS_VECTORS.get(axis)
+    if u is None:
+        return None
+    ab = b - a
+    length = ab.length()
+    if length < 1e-9:
+        return None
+    d = ab / length
+    e = d - u * QVector3D.dotProduct(d, u)
+    if e.length() < 1e-6:
+        return None
+    return u, e / e.length()
+
+
 class Dimension:
     """See the module docstring. ``a`` and ``b`` read live through their
     anchors; assigning them sets the frozen position (what a rigid
     transform of the whole model does) and keeps the anchor."""
 
     def __init__(self, a: QVector3D, b: QVector3D, offset: QVector3D,
-                 layer: str | None = None, text: str | None = None) -> None:
+                 layer: str | None = None, text: str | None = None,
+                 axis: str | None = None) -> None:
         self._a = QVector3D(a)
         self._b = QVector3D(b)
         #: displacement from the a–b segment to the dimension line
         self.offset = QVector3D(offset)
+        #: ``None`` = aligned; ``"x"``/``"y"``/``"z"`` = linear along that
+        #: world axis (see the module docstring).
+        self.axis = axis if axis in _AXIS_VECTORS else None
         #: Layer (SketchUp tag) the annotation lives on; ``None`` = default
         #: layer. Scenes hide layers, so a plan scene can show a clean model
         #: and an "Anotaciones" layer can carry the cotas and leader texts.
@@ -245,7 +298,11 @@ class Dimension:
         return measured
 
     def value(self) -> float:
-        """Measured length (metres)."""
+        """Measured length (metres): the segment's, or — linear — its extent
+        along the axis."""
+        frame = _linear_frame(self.a, self.b, self.axis)
+        if frame is not None:
+            return abs(QVector3D.dotProduct(self.b - self.a, frame[0]))
         return (self.b - self.a).length()
 
     def label(self) -> str:
@@ -256,6 +313,11 @@ class Dimension:
         removed: the geometry may have turned under an anchored dimension
         since it was placed, and the extension lines must stay square to
         the line (the line itself is parallel to a–b whatever the offset)."""
+        frame = _linear_frame(self.a, self.b, self.axis)
+        if frame is not None:
+            # Linear: only the pull along the extension direction counts.
+            e = frame[1]
+            return e * QVector3D.dotProduct(self.offset, e)
         ab = self.b - self.a
         length = ab.length()
         if length < 1e-9:
@@ -265,7 +327,16 @@ class Dimension:
         return self.offset - dir_ * along
 
     def line_points(self) -> tuple[QVector3D, QVector3D]:
-        """The dimension line's endpoints (``a``/``b`` shifted by the offset)."""
+        """The dimension line's endpoints. Aligned: ``a``/``b`` shifted by
+        the offset. Linear: each endpoint pushed along the extension
+        direction until both sit on one line parallel to the axis — the one
+        through ``a + offset``."""
+        frame = _linear_frame(self.a, self.b, self.axis)
+        if frame is not None:
+            _u, e = frame
+            t_a = QVector3D.dotProduct(self.offset, e)
+            t_b = t_a - QVector3D.dotProduct(self.b - self.a, e)
+            return self.a + e * t_a, self.b + e * t_b
         off = self.perpendicular_offset()
         return self.a + off, self.b + off
 
@@ -287,3 +358,54 @@ class Dimension:
         to_cursor = cursor - a
         along = QVector3D.dotProduct(to_cursor, dir_)
         return to_cursor - dir_ * along
+
+    @staticmethod
+    def placement_for_cursor(a: QVector3D, b: QVector3D,
+                             cursor: QVector3D) -> tuple[QVector3D, str | None]:
+        """``(offset, axis)`` for the cursor's position — which dimension
+        the drafter is asking for, and where its line goes. SketchUp's
+        reading: the cursor pulled PAST both endpoints along an axis's
+        extension direction asks for the linear dimension along that axis
+        (to the side of a slanted line → its vertical extent; above it →
+        the horizontal one); pulled square off the segment, anywhere else,
+        or past both endpoints in two directions at once (the corner), the
+        aligned one. An axis within
+        ``_LINEAR_MIN_DEG`` of the segment, or of square to it, is never
+        offered: the linear reading would only duplicate or annul the
+        aligned one."""
+        import math
+        ab = b - a
+        length = ab.length()
+        if length < 1e-9:
+            return cursor - a, None
+        d = ab / length
+        aligned = Dimension.offset_for_cursor(a, b, cursor)
+        w = cursor - (a + b) * 0.5
+        along = abs(QVector3D.dotProduct(w, d))
+        perp = (w - d * QVector3D.dotProduct(w, d)).length()
+        if along <= math.tan(math.radians(_ALIGNED_CONE_DEG)) * perp:
+            return aligned, None
+        lo = math.sin(math.radians(_LINEAR_MIN_DEG))
+        hi = math.cos(math.radians(_LINEAR_MIN_DEG))
+        best = None                          # (overshoot, axis, offset)
+        beyond = 0
+        for name in ("x", "y", "z"):
+            frame = _linear_frame(a, b, name)
+            if frame is None:
+                continue
+            u, e = frame
+            along = abs(QVector3D.dotProduct(d, u))
+            if along < lo or along > hi:
+                continue
+            t = QVector3D.dotProduct(cursor - a, e)
+            span = QVector3D.dotProduct(ab, e)
+            low, high = min(0.0, span), max(0.0, span)
+            over = (low - t) if t < low else (t - high) if t > high else 0.0
+            if over <= 1e-9:
+                continue
+            beyond += 1
+            if best is None or over > best[0]:
+                best = (over, name, e * t)
+        if best is None or beyond > 1:
+            return aligned, None
+        return best[2], best[1]

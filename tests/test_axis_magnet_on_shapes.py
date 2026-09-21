@@ -14,6 +14,7 @@ from PySide6.QtGui import QVector3D
 from core.snap import compute_snap
 from tools.arc import ArcTool, CenterArcTool, ThreePointArcTool
 from tools.circle import CircleTool, PolygonTool
+from tools.dimension import DimensionTool
 from tools.freehand import FreehandTool
 from tools.line import LineTool
 from tools.rectangle import RectangleTool
@@ -34,7 +35,7 @@ def test_the_shapes_declare_the_line_tools_magnet():
     line = _magnet(LineTool())
     assert line == (3.0, 9.0)
     for cls in (ArcTool, ThreePointArcTool, CenterArcTool, CircleTool,
-                PolygonTool, RotatedRectangleTool, TextTool):
+                PolygonTool, RotatedRectangleTool, TextTool, DimensionTool):
         assert _magnet(cls()) == line, cls.__name__
 
 
@@ -56,6 +57,11 @@ def test_the_magnet_is_off_for_clicks_that_are_not_a_direction_from_the_start():
     assert _magnet(rr) == (3.0, 9.0)                  # the base edge
     rr.base_point = V(2, 0)
     assert _magnet(rr) == (None, None)                # the height
+    dim = DimensionTool()
+    dim.a = dim.start_point = V(0, 0)
+    assert _magnet(dim) == (3.0, 9.0)                 # the measured span
+    dim.b = V(2, 0)
+    assert _magnet(dim) == (None, None)               # the placement
 
 
 def _w2p(p):

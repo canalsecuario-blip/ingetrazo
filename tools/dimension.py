@@ -18,12 +18,18 @@ from PySide6.QtGui import QVector3D
 from core.dimension import Dimension
 from core.snap import project_to_view_plane
 from core.history import AddDimensionCommand
-from tools.base import Tool, ToolContext
+from tools.base import AxisMagnet, Tool, ToolContext
 
 
-class DimensionTool(Tool):
+class DimensionTool(AxisMagnet, Tool):
     name = "Dimension"
     shortcut = "D"
+
+    def magnet_on(self) -> bool:
+        # The second endpoint is a direction from the first (issue #50:
+        # «they often stick to a planar face» — the magnet lifts the
+        # point onto the axis instead). The placement click is not.
+        return self.b is None
 
     def __init__(self) -> None:
         self.a: QVector3D | None = None
@@ -68,10 +74,9 @@ class DimensionTool(Tool):
                 return  # need two distinct endpoints
             self.b = QVector3D(p)
             return
-        # Third click: place the dimension at the current offset.
-        offset = Dimension.offset_for_cursor(self.a, self.b, p)
-        ctx.viewport.history.execute(AddDimensionCommand(
-            Dimension(QVector3D(self.a), QVector3D(self.b), offset)))
+        # Third click: place the dimension where the cursor asks — aligned,
+        # or linear along an axis when pulled past the ends (issue #50).
+        ctx.viewport.history.execute(AddDimensionCommand(self._proposed(p)))
         self._reset()
         ctx.viewport.update()
 
@@ -86,8 +91,7 @@ class DimensionTool(Tool):
         if self.a is not None and self.b is None:
             return [(self.a, self.hover_point)]          # measuring span
         if self.a is not None and self.b is not None:
-            offset = Dimension.offset_for_cursor(self.a, self.b, self.hover_point)
-            ap, bp = self.a + offset, self.b + offset
+            ap, bp = self._proposed(self.hover_point).line_points()
             return [(self.a, ap), (self.b, bp), (ap, bp)]  # extension + dim line
         return []
 
@@ -97,9 +101,14 @@ class DimensionTool(Tool):
         if self.b is None:
             mid = (self.a + self.hover_point) * 0.5
             return (f"{(self.hover_point - self.a).length():.2f} m", mid)
-        offset = Dimension.offset_for_cursor(self.a, self.b, self.hover_point)
-        mid = (self.a + self.b) * 0.5 + offset
-        return (f"{(self.b - self.a).length():.2f} m", mid)
+        proposed = self._proposed(self.hover_point)
+        return (f"{proposed.value():.2f} m", proposed.midpoint())
+
+    def _proposed(self, cursor: QVector3D) -> Dimension:
+        """The dimension the current cursor would place (preview and
+        commit share it, so what you see is what you get)."""
+        offset, axis = Dimension.placement_for_cursor(self.a, self.b, cursor)
+        return Dimension(QVector3D(self.a), QVector3D(self.b), offset, axis=axis)
 
     def _reset(self) -> None:
         self.a = None

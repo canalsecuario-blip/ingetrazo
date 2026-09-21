@@ -64,7 +64,7 @@ HINTS: dict = {
     "protractor": ("Click the vertex of the angle.",
                    "Click the start of the angle, then the end; or type the degrees."),
     "dimension": ("Click the first point of the dimension.",
-                  "Click the second point, then place the dimension line."),
+                  "Click the 2nd point, then place it; past an end = linear."),
     # Two phases, because after the anchor click the tool is doing
     # something else entirely — the second click sets where the label sits
     # and the wording is then asked for in a dialog. Repeating the opening

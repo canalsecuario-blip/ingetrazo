@@ -456,3 +456,61 @@ def test_select_double_click_edits_dimension_text(monkeypatch, tmp_path):
     fresh = Scene()
     igz_format.load_into(fresh, path)
     assert fresh.dimensions[0].text == "VARIABLE"
+
+
+# ---- Linear (axis) dimensions — issue #50 ----------------------------------
+
+def test_linear_dimension_measures_the_extent_along_the_axis():
+    d = Dimension(V(0, 0, 0), V(4, 3, 0), V(0, 5, 0), axis="x")
+    assert abs(d.value() - 4.0) < 1e-6                 # not the 5 m diagonal
+    ap, bp = d.line_points()
+    assert (ap - V(0, 5, 0)).length() < 1e-6           # one line, parallel to X
+    assert (bp - V(4, 5, 0)).length() < 1e-6
+    d = Dimension(V(0, 0, 0), V(4, 3, 0), V(-2, 0, 0), axis="y")
+    assert abs(d.value() - 3.0) < 1e-6
+    ap, bp = d.line_points()
+    assert (ap - V(-2, 0, 0)).length() < 1e-6 and (bp - V(-2, 3, 0)).length() < 1e-6
+
+
+def test_a_segment_along_the_axis_falls_back_to_aligned():
+    d = Dimension(V(0, 0, 0), V(4, 0, 0), V(0, 2, 0), axis="x")
+    assert abs(d.value() - 4.0) < 1e-6
+    assert d.line_points()[0] == V(0, 2, 0)
+
+
+def test_placement_reads_where_the_cursor_is_pulled():
+    a, b = V(0, 0, 0), V(4, 3, 0)
+    place = Dimension.placement_for_cursor
+    assert place(a, b, V(-2, 1.5, 0))[1] == "y"        # to the side → vertical extent
+    assert place(a, b, V(2, 6, 0))[1] == "x"           # above → horizontal extent
+    assert place(a, b, V(1.4, 2.3, 0))[1] is None      # square off it → aligned
+    assert place(a, b, V(2 - 0.6 * 4, 1.5 + 0.8 * 4, 0))[1] is None   # …however far
+    assert place(a, b, V(-1, 6, 0))[1] is None         # the corner → aligned
+    # A near-flat segment never offers the horizontal one (it would read
+    # the same), and a steep one still gives aligned on a square pull.
+    assert place(V(0, 0, 0), V(4, 0.5, 0), V(2, 3, 0))[1] is None
+    steep_a, steep_b = V(0, 0, 0), V(2, 4, 0)
+    assert place(steep_a, steep_b, V(1 - 0.894 * 3, 2 + 0.447 * 3, 0))[1] is None
+    assert place(steep_a, steep_b, V(-3, 2, 0))[1] == "y"
+
+
+def test_dimension_tool_places_a_linear_dimension_when_pulled_to_the_side():
+    scene = Scene()
+    vp = _StubVP(scene)
+    tool = DimensionTool()
+    tool.on_activate(vp)
+    for p in (V(0, 0, 0), V(4, 3, 0), V(-2, 1.5, 0)):
+        tool.on_click(_ctx(vp, p))
+    (d,) = scene.dimensions
+    assert d.axis == "y" and abs(d.value() - 3.0) < 1e-6
+
+
+def test_linear_dimension_survives_igz_round_trip(tmp_path):
+    scene = Scene()
+    scene.dimensions.append(Dimension(V(0, 0, 0), V(4, 3, 0), V(0, 5, 0), axis="x"))
+    path = tmp_path / "linear.igz"
+    igz.save_scene(scene, path)
+    back = Scene()
+    igz.load_into(back, path)
+    (d,) = back.dimensions
+    assert d.axis == "x" and abs(d.value() - 4.0) < 1e-6

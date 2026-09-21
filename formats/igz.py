@@ -329,6 +329,7 @@ def save_scene(scene, path: Path) -> dict:
             {"a": [d.a.x(), d.a.y(), d.a.z()],
              "b": [d.b.x(), d.b.y(), d.b.z()],
              "offset": [d.offset.x(), d.offset.y(), d.offset.z()],
+             **({"axis": d.axis} if getattr(d, "axis", None) else {}),
              **({"layer": d.layer} if getattr(d, "layer", None) else {}),
              **({"text": d.text} if getattr(d, "text", None) else {})}
             for d in dims
@@ -619,7 +620,7 @@ def _load_into_inner(scene, path: Path) -> None:
         dim = Dimension(
             QVector3D(*raw["a"]), QVector3D(*raw["b"]),
             QVector3D(*raw["offset"]), layer=raw.get("layer") or None,
-            text=raw.get("text") or None)
+            text=raw.get("text") or None, axis=raw.get("axis") or None)
         dim.bind(scene)         # the vertex at that spot is the one snapped to
         scene.dimensions.append(dim)
 

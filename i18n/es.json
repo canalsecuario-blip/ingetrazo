@@ -1756,7 +1756,7 @@
  "Click the vertex of the angle.": "Clic en el vértice del ángulo.",
  "Click the start of the angle, then the end; or type the degrees for a guide.": "Clic en el inicio del ángulo y luego en el final; o teclea los grados para una guía.",
  "Click the first point of the dimension.": "Clic en el primer punto de la cota.",
- "Click the second point, then place the dimension line.": "Clic en el segundo punto y luego coloca la línea de cota.",
+ "Click the 2nd point, then place it; past an end = linear.": "Clic en el 2.º punto y colócala; pasado un extremo = lineal.",
  "Click a point to attach a label; click empty space for a screen note.": "Clic en un punto para anclar una etiqueta; clic en el vacío para una nota de pantalla.",
  "Click the points of the path; Enter or double-click finishes.": "Clic en los puntos del trazado; Enter o doble clic termina.",
  "Click a face to place the section plane on it. Shift keeps the orientation.": "Clic en una cara para colocar el plano de sección. Mayús mantiene la orientación.",
