@@ -7,6 +7,27 @@ follow [SemVer](https://semver.org).
 ## [Sin publicar]
 
 ### Arreglado
+- **El imán de ejes de Línea llega a arcos, círculos, polígonos,
+  rectángulo girado, Texto y Cota** (issues #52 y #51, @pacaeiro: «The
+  Draw commands in the group of ARCS and SHAPES should also use the
+  magnetic Snaps, like LINE. Except Freehand»). A menos de 3° de un eje el
+  punto cae SOBRE el eje, y el eje que el plano de trabajo no alcanza se
+  encuentra en pantalla; Alt lo apaga, como en Línea. Solo en los clics
+  que son una dirección desde el primer punto: la comba del arco, la
+  altura del rectángulo girado y la colocación de la cota van libres.
+  Mano alzada queda fuera, como pidió; el Rectángulo también, a
+  propósito: su segundo clic es la esquina opuesta, y una esquina imantada
+  al eje de la primera es un rectángulo de altura cero.
+- **La cota del modelo puede ser lineal, no solo alineada** (issue #50,
+  @pacaeiro: «When a line is rotated some degrees, the Dimension tool
+  should be able to measure aligned (as it does now), but also linear»).
+  Como en SketchUp, lo decide dónde tiras la línea de cota: en escuadra
+  con el segmento, alineada; pasado un extremo hacia un lado, la vertical
+  (la extensión en Y); por encima o por debajo, la horizontal (en X); y en
+  3D lo mismo con Z. La vista previa ya enseña cuál va a salir y el texto
+  mide lo que corresponde. Viaja en el .igz (`axis`); los documentos
+  anteriores no cambian. Y el segundo punto ya no se queda pegado a la cara
+  bajo el cursor cuando vas casi por un eje: el imán lo sube al eje.
 - **El Transportador soltaba todo menos el bloqueo de plano al
   recargarlo** (issue #48, @pacaeiro: «define a Hard Axis (Z) and Reload
   the command (Shift+H) — the Hard Axis keeps active»). Volver a pulsar
