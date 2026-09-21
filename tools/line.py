@@ -126,7 +126,8 @@ class LineTool(Tool):
         """Commit a segment from the VCB input.
 
         ``value`` is either:
-        - ``float``  → length along the current rubber-band direction.
+        - ``float``  → length along the current rubber-band direction
+                        (negative = the opposite way, SketchUp-style).
         - 3-tuple    → ``(dx, dy, dz)`` delta added to the start point,
                         which makes inclined / elevated lines trivial to
                         construct numerically (start, then type "3;4;5"
@@ -145,7 +146,10 @@ class LineTool(Tool):
                 self.start_point.z() + dz,
             )
         else:
-            if self.hover_point is None or value <= 0.0:
+            # A negative length runs AWAY from the cursor, as Move/Copy
+            # already do (issue #58, @pacaeiro: «Command LINE do not accept
+            # negative values»). Only zero has nowhere to go.
+            if self.hover_point is None or abs(value) < 1e-9:
                 return False
             delta = self.hover_point - self.start_point
             if delta.length() < 1e-9:
