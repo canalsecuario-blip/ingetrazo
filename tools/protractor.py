@@ -341,6 +341,13 @@ class ProtractorTool(ProtractorBase):
         self._guides = True
         self._reset()
         self._last = None
+        # Picking the tool up again (Shift+H while it is held) is SketchUp's
+        # "start over", and the arrow-key plane lock is part of what starts
+        # over: it stayed on across the reload (issue #48, @pacaeiro:
+        # «define a Hard Axis (Z) and Reload the command — the Hard Axis
+        # keeps active»). ``set_active_tool`` clears the viewport's own
+        # axis lock but cannot see this one.
+        self._axis_pick = None
 
     def on_deactivate(self, viewport) -> None:
         self._reset()
@@ -408,6 +415,7 @@ class ProtractorTool(ProtractorBase):
     def on_cancel(self, viewport) -> None:
         self._reset()
         self._last = None
+        self._axis_pick = None       # Esc and the reload both let it go (#48)
         viewport.update()
 
     # ---- Preview ------------------------------------------------------------

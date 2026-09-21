@@ -191,3 +191,22 @@ def test_vcb_parses_slope_ratio():
     assert parse("3:0") is None                    # zero run is no slope
     assert parse("1:2:3") is None
     assert parse("2.5") == 2.5                     # plain numbers unaffected
+
+
+def test_reload_and_escape_release_the_arrow_lock():
+    """Issue #48 (@pacaeiro): «define a Hard Axis (Z) and Reload the
+    command (Shift+H) — the Hard Axis keeps active». Re-picking the tool
+    runs ``on_cancel`` (the viewport's same-tool branch) and a fresh pick
+    runs ``on_activate``; both must let the arrow-key plane lock go."""
+    scene = Scene()
+    vp = _Vp(scene)
+    t = ProtractorTool()
+    t.on_activate(vp)
+    assert t.on_key(vp, Qt.Key_Up, Qt.NoModifier) is True
+    assert t._axis_pick == "z"
+    t.on_cancel(vp)                                 # Shift+H while held / Esc
+    assert t._axis_pick is None
+    assert t.on_key(vp, Qt.Key_Up, Qt.NoModifier) is True
+    t.on_deactivate(vp)
+    t.on_activate(vp)                               # picked up again
+    assert t._axis_pick is None
