@@ -351,11 +351,53 @@ class AsistenteDialog(QDialog):
 
         threading.Thread(target=worker, daemon=True).start()
 
+    def _missing_key_hint(self, provider: str, key: str) -> str | None:
+        """The plain-words message for a hosted provider with no key, or
+        None when there is nothing to say. Rafael picked «Groq (gratis)»,
+        left the key empty and Test connection answered with Groq's raw
+        ``HTTP 401 {"error":{"message":"Invalid API Key"…`` (Revisión 3,
+        2026-09-20). A missing key is known BEFORE any network round trip,
+        and the fix is one sentence, not a JSON blob."""
+        if key or provider == "ollama":
+            return None
+        label, url = ai.PROVIDER_INFO[provider]
+        return tr(
+            "{name} needs an API key — the quota is free, the key is not "
+            "optional. Create one at {url} (the link under the key field "
+            "opens it) and paste it in the \"API key\" field — it is saved "
+            "in your user profile, never in the document.", name=label,
+            url=url)
+
+    @staticmethod
+    def _bad_key_hint(provider: str, err: str) -> str | None:
+        """A rejected key (HTTP 401/403, or the providers' own wording),
+        translated into what to check."""
+        low = (err or "").lower()
+        if not ("401" in low or "403" in low or "invalid api key" in low
+                or "invalid_api_key" in low or "incorrect api key" in low
+                or "invalid x-api-key" in low or "api key not valid" in low
+                or "authentication" in low):
+            return None
+        label, url = ai.PROVIDER_INFO.get(provider, ("", ""))
+        prefixes = {"groq": "gsk_", "anthropic": "sk-ant-", "gemini": "AIza",
+                    "openrouter": "sk-or-", "openai": "sk-"}
+        pre = prefixes.get(provider)
+        tail = (tr(" A {name} key starts with «{prefix}».", name=label,
+                   prefix=pre) if pre else "")
+        return tr(
+            "{name} rejected the key. Check it was pasted whole, with no "
+            "spaces, and that it belongs to this provider — or create a new "
+            "one at {url}.", name=label, url=url) + tail
+
     def _on_probar(self) -> None:
         if self._busy:
             return
         self._save_settings()
         provider, model, key, ollama = self._config()
+        hint = self._missing_key_hint(provider, key)
+        if hint is not None:
+            self._append(hint, "err")
+            return
         self._append(tr("Testing {name} ({model})…",
                         name=ai.PROVIDER_INFO[provider][0], model=model),
                      "muted")
@@ -427,6 +469,11 @@ class AsistenteDialog(QDialog):
             return
         prompt = self._input.text().strip()
         if not prompt:
+            return
+        provider, _model, key, _ollama = self._config()
+        hint = self._missing_key_hint(provider, key)
+        if hint is not None:
+            self._append(hint, "err")     # the prompt stays in the box
             return
         self._input.clear()
         self._save_settings()
@@ -511,6 +558,10 @@ class AsistenteDialog(QDialog):
             else:
                 self._append(tr("Connection failed: {err}",
                                 err=msg.get("msg")), "err")
+                bad = self._bad_key_hint(self._effective_provider(),
+                                         str(msg.get("msg")))
+                if bad is not None:
+                    self._append(bad, "err")
                 if "model_not_found" in str(msg.get("msg")):
                     self._append(tr(
                         'That model no longer exists for your key — press '

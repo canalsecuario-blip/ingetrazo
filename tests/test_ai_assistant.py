@@ -509,7 +509,10 @@ def test_provider_selector_overrides_autodetect(monkeypatch):
         assert (dlg._model.lineEdit().placeholderText()
                 == ai.DEFAULT_MODELS["groq"])
 
-        # Probar conexión reports through the same reply channel.
+        # Probar conexión reports through the same reply channel. Groq's
+        # own slot is empty here, and an empty key no longer reaches the
+        # network (it is answered locally, in plain words) — paste one.
+        dlg._key.setText("gsk_prueba")
         monkeypatch.setattr(ai, "probar_conexion",
                             lambda *a, **k: (True, "OK"))
         dlg._on_probar()
@@ -741,3 +744,27 @@ def test_code_less_claims_and_agentic_models_are_caught():
     assert mime == "image/jpeg"
     _b64, mime = ai._message_image({"image_png_b64": "iVBORw0KGgo"})
     assert mime == "image/png"
+
+
+# ---- Missing / rejected key, in plain words (Rafael, Revisión 3) -----------
+
+def test_missing_key_is_caught_before_any_network_call():
+    """Rafael picked «Groq (gratis)», left the key empty and Test connection
+    showed Groq's raw HTTP 401 JSON. A hosted provider with no key is known
+    locally; Ollama and a pasted key say nothing."""
+    from plugins.ai_assistant import AsistenteDialog
+    hint = AsistenteDialog._missing_key_hint(None, "groq", "")
+    assert hint is not None
+    assert "console.groq.com" in hint
+    assert AsistenteDialog._missing_key_hint(None, "ollama", "") is None
+    assert AsistenteDialog._missing_key_hint(None, "groq", "gsk_x") is None
+    assert "gratis, con clave" in ai.PROVIDER_INFO["groq"][0]
+
+
+def test_rejected_key_names_the_prefix_to_check():
+    from plugins.ai_assistant import AsistenteDialog
+    err = ('HTTP 401: {"error":{"message":"Invalid API Key","type":'
+           '"invalid_request_error","code":"invalid_api_key"}}')
+    hint = AsistenteDialog._bad_key_hint("groq", err)
+    assert hint is not None and "gsk_" in hint
+    assert AsistenteDialog._bad_key_hint("groq", "HTTP 503: busy") is None

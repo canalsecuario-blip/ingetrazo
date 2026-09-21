@@ -665,11 +665,16 @@ def list_models(provider: str, api_key: str,
 
 #: UI metadata: (label, where to get the key). Mirrors IngePresupuestos.
 PROVIDER_INFO = {
-    "groq": ("Groq (gratis)", "https://console.groq.com/keys"),
+    # "gratis, con clave", not "gratis": Rafael read the bare word as "no
+    # key needed", pressed Test connection with the field empty and got a
+    # raw HTTP 401 (Revisión 3, 2026-09-20). The quota is free; the key is
+    # not optional.
+    "groq": ("Groq (gratis, con clave)", "https://console.groq.com/keys"),
     "anthropic": ("Anthropic (Claude)",
                   "https://console.anthropic.com/settings/keys"),
     "openai": ("OpenAI", "https://platform.openai.com/api-keys"),
-    "gemini": ("Google Gemini", "https://aistudio.google.com/app/apikey"),
+    "gemini": ("Google Gemini (gratis, con clave)",
+               "https://aistudio.google.com/app/apikey"),
     "openrouter": ("OpenRouter", "https://openrouter.ai/keys"),
     "deepseek": ("DeepSeek", "https://platform.deepseek.com/api_keys"),
     "ollama": ("Ollama (local)", "https://ollama.com/download"),
