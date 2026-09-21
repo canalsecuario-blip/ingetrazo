@@ -7,6 +7,28 @@ follow [SemVer](https://semver.org).
 ## [Sin publicar]
 
 ### Arreglado
+- **El Transportador soltaba todo menos el bloqueo de plano al
+  recargarlo** (issue #48, @pacaeiro: «define a Hard Axis (Z) and Reload
+  the command (Shift+H) — the Hard Axis keeps active»). Volver a pulsar
+  Shift+H con la herramienta en la mano es el «empezar de nuevo» de
+  SketchUp y ahora suelta también la flecha; Esc igual.
+- **Línea acepta longitudes negativas** (issue #58, @pacaeiro). `-2` y
+  Enter dibuja 2 m en sentido contrario al cursor, como ya hacían Mover y
+  Copiar. Solo el cero se rechaza.
+- **El Asistente IA dice en claro cuándo falta la clave** (Rafael,
+  Revisión 3). «Groq (gratis)» se leía como «sin clave»: Probar conexión
+  con el campo vacío devolvía el JSON crudo del HTTP 401 de Groq. Ahora
+  los proveedores gratuitos se llaman «gratis, con clave», la clave vacía
+  se detecta antes de tocar la red —con la dirección donde crearla— y una
+  clave rechazada dice qué comprobar (entera, sin espacios, del proveedor
+  correcto, el prefijo `gsk_`/`sk-ant-`/`AIza`…). Enviar un pedido sin
+  clave deja el texto en la caja en vez de perderlo.
+
+### Cambiado
+- **«Redondear» pasa a llamarse «Redondear 3D»** (issue #49, @pacaeiro).
+  Solo redondea aristas de un sólido; el redondeo 2D de una esquina sigue
+  en la herramienta Arco (tangente a las dos aristas, arco magenta), y el
+  nombre a secas mandaba allí a quien buscaba eso.
 - **Las vistas Superior e Inferior en proyección paralela no eran
   rectas** (issue #45, @pacaeiro: «camera not perpendicular to view»).
   Estaban a 89° para esquivar el caso degenerado de la cámara, y en
