@@ -21,7 +21,10 @@ from tools.base import Tool, ToolContext
 
 
 class FilletTool(Tool):
-    name = "Fillet"
+    #: "3D" in the name on purpose: this rounds the edges of a SOLID.
+    #: The 2-D fillet of a corner lives in the Arc tool (tangent-tangent),
+    #: and the bare word sent people here for it (issue #49, @pacaeiro).
+    name = "Fillet 3D"
     icon = "fillet"
     shortcut = None
     uses_snap = False
