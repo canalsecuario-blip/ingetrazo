@@ -7,6 +7,24 @@ follow [SemVer](https://semver.org).
 ## [Sin publicar]
 
 ### Arreglado
+- **Pintar: las tres de la issue #47** (@pacaeiro). (1) **Alt mantenido
+  = cuentagotas**, sin que el puntero haga de interruptor: el estado de
+  los modificadores que leía Qt es el del ÚLTIMO evento entregado —al
+  pulsar Alt aún no lo incluía y al soltarlo todavía sí—, así que el
+  cursor cambiaba una vez por pulsación en vez de seguir a la tecla; ahora
+  los manejadores de teclado dicen explícitamente si Alt está abajo.
+  (2) **El cuentagotas actualiza el material activo** del panel
+  Materiales (la casilla «Activo» y los campos de tamaño). (3) **Pintar un
+  grupo o componente desde fuera pinta el objeto entero**, con la regla
+  de SketchUp tal como la describió: el material de una cara va por
+  delante del del contenedor; solo las caras con el material por defecto
+  visten el del grupo, por las dos caras; y al explotar, esas se quedan
+  con él. El material del contenedor viaja en el `.igz`, sobrevive a
+  copiar/pegar, y dos instancias del mismo componente pueden ir de
+  colores distintos. El cuentagotas sobre una cara por defecto de un
+  grupo pintado toma el color del grupo. Al exportar a `.skp` el material
+  va en el grupo o la instancia, como lo guarda SketchUp. Pendiente: las
+  exportaciones de malla (.dae/.obj/.glTF) y el resumen por materiales.
 - **Lo oculto que la vista enseña se puede clicar** (issue #53, @pacaeiro:
   «we cannot select them with mouse click, only by window selection»). El
   índice de picking guardaba el bloque de objetos con una firma que sabía
