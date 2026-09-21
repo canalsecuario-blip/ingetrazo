@@ -132,3 +132,41 @@ def register(materials: dict, mat: Material) -> str:
         mat = Material(name, mat.color, mat.texture, mat.opacity)
     materials[name] = mat
     return name
+
+
+def has_own_material(attrs) -> bool:
+    """Whether a face was painted itself (a colour or a texture of its own),
+    as opposed to wearing the default material."""
+    return bool(attrs) and (attrs.get("texture") is not None
+                            or attrs.get("color") is not None)
+
+
+def effective_attrs(attrs, material):
+    """The attrs a face is DRAWN with inside a container that carries
+    ``material`` (a group's or component instance's paint, issue #47).
+
+    SketchUp's rule, as @pacaeiro spelled it out: the face's own material
+    always wins; only the faces wearing the default material take the
+    container's, front and back alike. ``material`` is a dict with the same
+    keys a face uses (``color`` / ``texture``, ``opacity``, ``mat``)."""
+    if not material or has_own_material(attrs):
+        return attrs
+    merged = dict(attrs or {})
+    for key in ("color", "texture", "opacity", "mat"):
+        if key in material and material[key] is not None:
+            merged[key] = material[key]
+    if not merged.get("back"):
+        merged["back"] = True            # both sides wear the container's
+    return merged
+
+
+def material_sig(material):
+    """A hashable signature of a container material for cache keys, or
+    ``None`` when there is none."""
+    if not material:
+        return None
+    tex = material.get("texture")
+    return (tuple(material["color"]) if material.get("color") is not None else None,
+            (tex.get("path"), tex.get("sw"), tex.get("sh"), tex.get("rot"))
+            if isinstance(tex, dict) else None,
+            material.get("opacity"), material.get("mat"))

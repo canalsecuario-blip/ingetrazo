@@ -266,6 +266,27 @@ def _ray_aabb(o, d, lo, hi) -> bool:
 _chunk_uid = itertools.count(1)
 
 
+def _proto_wrapper(vp, mesh, paint=None):
+    """The stable stand-in a prototype mesh is baked through, one per
+    (mesh, container paint): ``_group_chunk`` caches by the wrapper's id,
+    so the same object must come back for the same mesh — and a painted
+    instance (issue #47) gets a wrapper of its own. Module-level so the
+    stub viewports in tests reach it too."""
+    from types import SimpleNamespace
+    from core.materials import material_sig
+    wrappers = getattr(vp, "_proto_wrappers", None)
+    if wrappers is None:
+        wrappers = vp._proto_wrappers = {}
+    wkey = (id(mesh), material_sig(paint))
+    w = wrappers.get(wkey)
+    if w is None:
+        w = wrappers[wkey] = SimpleNamespace(mesh=mesh, xform=None,
+                                             material=paint)
+    else:
+        w.material = paint
+    return w
+
+
 def _cache_ver(vp):
     """The scene version the per-version caches key on — frozen during a
     groups-only transform preview (see Viewport.begin_groups_preview).
@@ -1982,17 +2003,13 @@ class Viewport(QOpenGLWidget):
                     or base.get("back_tcol") or base.get("back_ttex")
                     or base.get("fvcol"))
 
-    def _proto_base_chunk(self, mesh):
+    def _proto_base_chunk(self, mesh, paint=None):
         """The prototype's chunk in LOCAL coordinates (the same wrapper
-        ``_instance_chunk`` derives from)."""
-        wrappers = getattr(self, "_proto_wrappers", None)
-        if wrappers is None:
-            wrappers = self._proto_wrappers = {}
-        w = wrappers.get(id(mesh))
-        if w is None:
-            from types import SimpleNamespace
-            w = wrappers[id(mesh)] = SimpleNamespace(mesh=mesh, xform=None)
-        return self._group_chunk(w)
+        ``_instance_chunk`` derives from). ``paint`` is the container
+        material the variant is baked in (issue #47): a painted instance
+        has its own bake of the prototype, unpainted siblings share the
+        plain one."""
+        return self._group_chunk(_proto_wrapper(self, mesh, paint))
 
     def _placements_epoch(self):
         """A signature of everything the per-frame placement passes read:
@@ -2135,6 +2152,7 @@ class Viewport(QOpenGLWidget):
                 # Hide on an object takes its whole subtree along, and a
                 # hidden child stays hidden inside a visible parent.
                 proxy.hidden = hidden or bool(child.hidden)
+                proxy.material = getattr(child, "material", None)
                 if child is ctx:
                     # The group being edited, reached as a nested placement:
                     # it is the SUBJECT, not surroundings. Comparing by
@@ -4229,18 +4247,25 @@ class Viewport(QOpenGLWidget):
                 back_ttex_runs.setdefault(payload[0], []).append(payload[1])
             return kind in ("btcol", "bttex")
 
+        # Inside an open group its faces are the loose mesh, and the
+        # group's own paint (issue #47) must still dress the default ones.
+        from core.group import effective_material as _eff_mat
+        from core.materials import effective_attrs as _eff_attrs
+        ctx_paint = _eff_mat(self.scene.edit_group)
+
         def bucket_face(face):
             if face in suppressed_faces:
                 return
+            attrs = _eff_attrs(face.attrs, ctx_paint)
             fcull = bucket_back(face)
-            if back_is_default(face.attrs):
+            if back_is_default(attrs):
                 db = sink["dback"]
                 for t0, t1, t2 in self._tris_of(face):
                     db.extend([t0.x(), t0.y(), t0.z(),
                                t1.x(), t1.y(), t1.z(),
                                t2.x(), t2.y(), t2.z()])
-            tex = face.attrs.get("texture")
-            op = float(face.attrs.get("opacity", 1.0))
+            tex = attrs.get("texture")
+            op = float(attrs.get("opacity", 1.0))
             if tex is not None and tex.get("path"):
                 if op < 0.999:
                     tmp: dict = {}
@@ -4254,7 +4279,7 @@ class Viewport(QOpenGLWidget):
                 # opaque backs, and this combination is vanishing rare)
                 self._append_textured_face(sink["tex"], face, tex)
                 return
-            col = face.attrs.get("color")
+            col = attrs.get("color")
             base = tuple(col) if col is not None else self.DEFAULT_FACE_COLOR
             # Bake a subtle diffuse shade from the face normal against a fixed
             # world light — the matte-model look of SketchUp. World-fixed, so
@@ -6995,14 +7020,12 @@ class Viewport(QOpenGLWidget):
         the cached arrays instead of re-transforming."""
         import numpy as np
         mesh = group.mesh
-        wrappers = getattr(self, "_proto_wrappers", None)
-        if wrappers is None:
-            wrappers = self._proto_wrappers = {}
-        w = wrappers.get(id(mesh))
-        if w is None:
-            from types import SimpleNamespace
-            w = wrappers[id(mesh)] = SimpleNamespace(mesh=mesh, xform=None)
-        base = self._group_chunk(w)
+        from core.group import effective_material
+        # A painted instance (issue #47) bakes its own variant of the
+        # prototype: default faces in the container's paint. Unpainted
+        # siblings keep sharing the plain bake.
+        base = self._group_chunk(
+            _proto_wrapper(self, mesh, effective_material(group)))
         xf = group.xform
         key = (base["uid"], tuple(xf.data()))
         cache = getattr(self, "_inst_chunks", None)
@@ -7183,6 +7206,15 @@ class Viewport(QOpenGLWidget):
         entry = cache.get(id(group))
         vkey = (self.scene.version, id(self.scene.mesh))
         mesh = group.mesh
+        # The container's paint (issue #47) changes what default faces
+        # bake to without touching the mesh, so no serial or sample can
+        # notice it: it is part of the entry's identity instead.
+        from core.group import effective_material
+        from core.materials import effective_attrs, material_sig
+        paint = effective_material(group)
+        msig = material_sig(paint)
+        if entry is not None and entry.get("msig") != msig:
+            entry = None
         if entry is not None:
             if entry.get("vkey") == vkey:
                 return entry
@@ -7224,6 +7256,8 @@ class Viewport(QOpenGLWidget):
                 entry["serial"] = getattr(mesh, "_mut_serial", None)
                 return entry
         fp = self._group_fp(group)
+        if msig is not None:
+            fp = fp + (("paint",) + msig,)   # past [:3]/[4:]: the disk key too
         if entry is not None:
             same = entry["fp"] == fp
             if not same and entry.get("fp_approx"):
@@ -7251,6 +7285,7 @@ class Viewport(QOpenGLWidget):
         disk = _loader(group, fp, vkey) if callable(_loader) else None
         if disk is not None:
             cache[id(group)] = disk
+            disk["msig"] = msig
             disk["serial"] = getattr(mesh, "_mut_serial", None)
             mesh._chunk_dirty = False
             mesh._attrs_dirty = False
@@ -7298,6 +7333,7 @@ class Viewport(QOpenGLWidget):
                 # SketchUp's Hide on a face: out of the chunk entirely — not
                 # drawn, not picked, not snapped. Its edges stay (below).
                 continue
+            fattrs = effective_attrs(f.attrs, paint)
             i = len(faces)
             faces.append(f)
             if len(f.loop) < 3:
@@ -7311,7 +7347,7 @@ class Viewport(QOpenGLWidget):
                 areas.append(0.5 * ln)
                 tri_list = _triangulate(f.vertices, f.holes, normal)
             fprops[id(f)] = normal
-            back = f.attrs.get("back")
+            back = fattrs.get("back")
             fcull = 0
             if isinstance(back, dict):
                 kind, payload = self._bucket_back_face(f, back)
@@ -7325,8 +7361,8 @@ class Viewport(QOpenGLWidget):
                     back_ttex.setdefault(payload[0], []).append(payload[1])
                 if kind in ("btcol", "bttex"):
                     fcull = 1
-            tex = f.attrs.get("texture")
-            op = float(f.attrs.get("opacity", 1.0))
+            tex = fattrs.get("texture")
+            op = float(fattrs.get("opacity", 1.0))
             if tex is not None and tex.get("path"):
                 if op < 0.999:
                     self._append_textured_face(
@@ -7335,7 +7371,7 @@ class Viewport(QOpenGLWidget):
                 else:
                     self._append_textured_face(by_texture, f, tex)
             else:
-                col = f.attrs.get("color")
+                col = fattrs.get("color")
                 base = tuple(col) if col is not None else self.DEFAULT_FACE_COLOR
                 r, g, b = self._shaded_color(base, normal)
                 if op < 0.999:
@@ -7361,7 +7397,7 @@ class Viewport(QOpenGLWidget):
                              [t1.x(), t1.y(), t1.z()],
                              [t2.x(), t2.y(), t2.z()]])
                 tri_ent.append(i)
-            if tri_list and back_is_default(f.attrs):
+            if tri_list and back_is_default(fattrs):
                 dback_faces.append(i)
 
         sprops: dict = {}
@@ -7441,6 +7477,7 @@ class Viewport(QOpenGLWidget):
         samples = [(i, (verts[i].position.x(), verts[i].position.y(),
                         verts[i].position.z())) for i in idxs]
         entry = {"fp": fp, "vkey": vkey, "rev": 0, "uid": next(_chunk_uid),
+                 "msig": msig,
                  "serial": getattr(mesh, "_mut_serial", None),
                  "nv": nv, "ne": len(mesh.edges), "nf": len(mesh.faces),
                  "samples": samples, "coordsum": coordsum, "bbox": bbox,
@@ -9339,8 +9376,13 @@ class Viewport(QOpenGLWidget):
         icon = getattr(self.active_tool, "icon", None)
         if icon == "paint":
             from tools.paint import PaintTool
-            if (PaintTool.sample_armed
-                    or QApplication.keyboardModifiers() & Qt.AltModifier):
+            # ``keyboardModifiers()`` is the state as of the LAST event
+            # delivered: on the Alt press it did not include Alt yet and on
+            # the release it still did, so the pointer flipped once per
+            # tap instead of following the key (issue #47, @pacaeiro: «the
+            # cursor is acting as a toggle button»). The key handlers say
+            # explicitly whether Alt is down.
+            if PaintTool.sample_armed or getattr(self, "_alt_down", False):
                 icon = "eyedropper"
         # SketchUp's guide-mode plus: the Tape and the Protractor say with
         # it whether this measurement will leave a guide behind (issue #29).
@@ -10224,7 +10266,7 @@ class Viewport(QOpenGLWidget):
         # 0b. Alt turns Paint into the eyedropper: show it on the pointer the
         #     moment the key goes down, not after the next mouse move.
         if ev.key() == Qt.Key_Alt and not ev.isAutoRepeat():
-            self._apply_alt_cursor()
+            self._apply_alt_cursor(True)
         elif self._alt_tap and not ev.isAutoRepeat():
             # Alt+something is a shortcut: we are not taking its release.
             self._alt_tap = False
@@ -10498,16 +10540,18 @@ class Viewport(QOpenGLWidget):
         if fn is not None:
             fn()
 
-    def _apply_alt_cursor(self) -> None:
+    def _apply_alt_cursor(self, down: bool) -> None:
         """Refresh the pointer for an Alt state change (Paint <-> eyedropper);
-        no-op while a camera nav mode owns the cursor."""
+        no-op while a camera nav mode owns the cursor. ``down`` is the key's
+        state after this event — see ``_apply_tool_cursor``."""
+        self._alt_down = bool(down)
         if self.nav_mode is None and getattr(
                 self.active_tool, "icon", None) == "paint":
             self._apply_tool_cursor()
 
     def keyReleaseEvent(self, ev) -> None:
         if ev.key() == Qt.Key_Alt and not ev.isAutoRepeat():
-            self._apply_alt_cursor()
+            self._apply_alt_cursor(False)
             if self._alt_tap:
                 # We acted on the press, so the release is ours: swallowing
                 # it keeps Qt's menu bar from taking focus on it. Otherwise
@@ -10526,6 +10570,7 @@ class Viewport(QOpenGLWidget):
         """Focus gone means the Alt release will land somewhere else, so the
         claim on it lapses (issue #26)."""
         self._alt_tap = False
+        self._alt_down = False        # its release will not reach us either
         super().focusOutEvent(ev)
 
     # Inferences whose direction can be captured by a Shift lock.

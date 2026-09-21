@@ -280,6 +280,8 @@
  "Concrete": "Concreto",
  "Connection OK — the model answered.": "Conexión OK — el modelo respondió.",
  "Connection failed: {err}": "Falló la conexión: {err}",
+ "Painted {name} — faces with a material of their own keep it": "Pintado {name}: las caras con material propio lo conservan",
+ "group": "grupo",
  "{n} edges selected — click to start the offset": "{n} aristas seleccionadas: clic para empezar el desfase",
  "Offset needs one connected run of edges — a polyline, or a closed loop.": "Desfase necesita una sola cadena de aristas conectadas: una polilínea o un contorno cerrado.",
  "Offset needs at least two edges that are not in line — a straight run has no plane to offset in.": "Desfase necesita al menos dos aristas que no estén en línea: una cadena recta no tiene plano en el que desfasar.",

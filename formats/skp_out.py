@@ -776,6 +776,14 @@ def _share_repeats(sources):
     return protos, per_owner
 
 
+def _opt_material(fn, handle) -> dict:
+    """``{"material": handle}`` when there is one and ``fn`` takes it
+    (openskp ≥ 1.3 does on instances and groups), else nothing."""
+    if handle is None or "material" not in _supported(fn, "material"):
+        return {}
+    return {"material": handle}
+
+
 def _iter_export_faces(loose_faces, classic, defs):
     """Every face the geometry pass will emit, prototype meshes ONCE — the
     material pass must cover exactly this set, no more (a prototype's attrs
@@ -1157,9 +1165,33 @@ def _write_skp(scene, path, openskp, SkpWriteError, stage_dir: Path) -> None:
                 materials_info[key]["mat"] = attrs["mat"]
 
     # Register materials (must be before layers and geometry).
+    # A container's own paint (issue #47) is a material too: SketchUp
+    # keeps it on the group / instance and its default faces show it.
+    def _containers():
+        for g, kids, _faces in classic:
+            yield g
+            yield from (c for _ci, c in kids)
+        for d in defs:
+            yield from (c for _ci, c in d["children"])
+        yield from (g for _di, g in roots)
+
+    for g in _containers():
+        paint = getattr(g, "material", None)
+        if not isinstance(paint, dict):
+            continue
+        key = _material_key_attrs(paint)
+        if key is not None and key not in materials_info:
+            materials_info[key] = _material_info_attrs(paint)
+
     applied: dict = {}
     mat_handles = _collect_materials(materials_info, builder, stage_dir,
                                      applied)
+
+    def _container_material(g):
+        paint = getattr(g, "material", None)
+        if not isinstance(paint, dict):
+            return None
+        return mat_handles.get(_material_key_attrs(paint))
     # Textured faces get per-face pins; probe the writer once (a tiny .skp
     # in the stage dir) to learn what it does to them.
     quirks = _writer_uv_quirks(openskp, stage_dir) if applied else frozenset()
@@ -1196,6 +1228,7 @@ def _write_skp(scene, path, openskp, SkpWriteError, stage_dir: Path) -> None:
                 translation=translation,
                 matrix3x3=matrix3x3,
                 layer=layer_handles.get(getattr(c, "layer", None)),
+                **_opt_material(container.add_instance, _container_material(c)),
             )
 
     # Definitions come first and in registration order — post-order, so a
@@ -1214,7 +1247,9 @@ def _write_skp(scene, path, openskp, SkpWriteError, stage_dir: Path) -> None:
 
     for g, kids, faces in classic:
         with builder.add_group(
-                g.name, layer=layer_handles.get(getattr(g, "layer", None))) as grp:
+                g.name, layer=layer_handles.get(getattr(g, "layer", None)),
+                **_opt_material(builder.add_group,
+                                _container_material(g))) as grp:
             for face in faces:
                 _emit_face(grp, face, mat_handles, layer_handles,
                            SkpWriteError, quirks, applied)
@@ -1232,6 +1267,7 @@ def _write_skp(scene, path, openskp, SkpWriteError, stage_dir: Path) -> None:
             translation=translation,
             matrix3x3=matrix3x3,
             layer=layer_handles.get(getattr(g, "layer", None)),
+            **_opt_material(builder.add_instance, _container_material(g)),
         )
 
     _emit_annotations(scene, builder)

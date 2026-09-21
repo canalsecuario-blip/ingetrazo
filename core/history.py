@@ -54,6 +54,7 @@ def _plog(tag: str, ms: float, extra: str = "", floor: float = 100.0) -> None:
 from PySide6.QtGui import QVector3D
 
 from core.group import Group
+from core.materials import has_own_material
 from core.mesh import (PAINT_KEYS, Edge, Face, Mesh, Vertex, edge_flags,
                        edge_is_plain, stamp_edge_flags)
 from core.topology import (
@@ -3053,6 +3054,27 @@ class MergeGroupsCommand(Command):
         scene.version += 1
 
 
+class SetGroupMaterialCommand(Command):
+    """Paint a group or component instance as a whole (issue #47): the
+    container's ``material`` is set — ``None`` unpaints — and every face
+    inside wearing the default material shows it; faces painted themselves
+    keep their own. Nothing in the mesh changes, so undo is a plain swap."""
+
+    def __init__(self, group, material) -> None:
+        self.group = group
+        self.material = dict(material) if material else None
+        self._old = None
+
+    def do(self, scene) -> None:
+        self._old = getattr(self.group, "material", None)
+        self.group.material = self.material
+        scene.version += 1
+
+    def undo(self, scene) -> None:
+        self.group.material = self._old
+        scene.version += 1
+
+
 class ExplodeGroupCommand(Command):
     """Dissolve a group: merge its geometry back into the loose mesh (welding to
     whatever it touches). Snapshot undo restores the loose mesh and the group."""
@@ -3085,6 +3107,16 @@ class ExplodeGroupCommand(Command):
                                 [[W(v) for v in h] for h in f.holes] or None)
                 if f.attrs:
                     nf.attrs.update(dict(f.attrs))   # colour/texture travel out
+                # A default face kept the group's paint while inside; it
+                # keeps it on the way out too (SketchUp; issue #47, rule d).
+                paint = (getattr(pg, "material", None)
+                         or getattr(self.group, "material", None))
+                if paint and not has_own_material(f.attrs):
+                    for key in ("color", "texture", "opacity", "mat"):
+                        if paint.get(key) is not None:
+                            nf.attrs[key] = (dict(paint[key])
+                                             if isinstance(paint[key], dict)
+                                             else paint[key])
             for e in pg.mesh.edges:
                 v0, v1 = m.vertex_at(W(e.a)), m.vertex_at(W(e.b))
                 if v0 is None or v1 is None or m.find_edge(v0, v1) is None:

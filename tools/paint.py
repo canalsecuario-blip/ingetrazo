@@ -45,6 +45,7 @@ from core.history import (
     SetFaceMaterialTagCommand,
     SetFaceOpacityCommand,
     SetFaceTextureCommand,
+    SetGroupMaterialCommand,
 )
 from tools.base import Tool, ToolContext
 
@@ -190,8 +191,11 @@ class PaintTool(Tool):
             # sampling "Concreto visto" paints "Concreto visto". The side
             # under the cursor is what gets sampled: a back painted on its
             # own gives its own material, a two-sided face its front, a
-            # default back the default paint.
-            src = face.attrs
+            # default back the default paint. A default face inside a
+            # painted container wears the container's paint (issue #47).
+            from core.group import effective_material
+            from core.materials import effective_attrs
+            src = effective_attrs(face.attrs, effective_material(group))
             if back_side:
                 back = face.attrs.get("back")
                 if isinstance(back, dict):
@@ -213,11 +217,18 @@ class PaintTool(Tool):
             name = src.get("mat")
             PaintTool.current_material = (
                 vp.scene.materials.get(name) if name else None)
+            win = vp.window() if hasattr(vp, "window") else None
             if PaintTool.sample_armed:
                 PaintTool.sample_armed = False
-                win = vp.window()
                 if hasattr(win, "release_eyedropper"):
                     win.release_eyedropper()
+            # The tray's «Activo» swatch shows what the next click paints —
+            # it stayed on the old paint after a sample (issue #47,
+            # @pacaeiro: «the Active Material in Materials List is not
+            # updated»).
+            tray = getattr(win, "tray", None)
+            if hasattr(tray, "sync_from_paint"):
+                tray.sync_from_paint()
             vp.update()
             # Optional, like the other viewport niceties this package uses:
             # the tool has to work against a bare viewport too.
@@ -225,6 +236,30 @@ class PaintTool(Tool):
             if callable(flash):
                 flash(tr("Material sampled — click a face to paint it"))
             return
+
+        # A face inside a container clicked from OUTSIDE it paints the
+        # container — the group or component instance as a whole (SketchUp;
+        # issue #47, @pacaeiro: «it's painting the picked face, instead of
+        # the whole group or component»). Its default faces take the paint;
+        # faces painted themselves keep their own.
+        if group is not None:
+            pick_obj = getattr(vp, "pick_group", None)
+            obj = (pick_obj(ctx.screen.x(), ctx.screen.y())
+                   if pick_obj is not None else None)
+            if obj is not None:
+                mat = PaintTool.current_material
+                vp.history.execute(CompoundCommand([
+                    SetFaceMaterialTagCommand(
+                        [], mat.name if mat is not None else None, mat),
+                    SetGroupMaterialCommand(obj, self._current_as_material()),
+                ]))
+                flash = getattr(vp, "flash_status", None)
+                if callable(flash):
+                    flash(tr("Painted {name} — faces with a material of "
+                             "their own keep it",
+                             name=getattr(obj, "name", "") or tr("group")))
+                vp.update()
+                return
 
         # Paint the clicked face — or, if it is part of the current face
         # selection, the whole selection. A face on a curved surface (cylinder
@@ -272,6 +307,24 @@ class PaintTool(Tool):
                 tag,
             ]))
         vp.update()
+
+    @classmethod
+    def _current_as_material(cls) -> dict:
+        """The current paint as a container material (the keys a face's
+        attrs use). A positioned texture travels without its map: a
+        container has no plane of its own, each face projects it."""
+        paint: dict = {}
+        if cls.current_texture is not None:
+            tex = dict(cls.current_texture)
+            tex.pop("uvw", None)
+            paint["texture"] = tex
+        else:
+            paint["color"] = list(cls.current_color)
+        if cls.current_opacity is not None:
+            paint["opacity"] = float(cls.current_opacity)
+        if cls.current_material is not None:
+            paint["mat"] = cls.current_material.name
+        return paint
 
     @classmethod
     def _back_material_for(cls, face) -> dict:

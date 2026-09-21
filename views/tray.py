@@ -1645,6 +1645,14 @@ class MaterialsPanel(QWidget):
         # A texture picked from disk is a material named after its file.
         self._apply_texture(path_str, size, name=Path(path_str).stem)
 
+    def sync_from_paint(self) -> None:
+        """Mirror what the Paint tool holds NOW — called after the
+        eyedropper sampled a face, so the «Activo» swatch and the size
+        fields say what the next click will paint (issue #47)."""
+        if PaintTool.current_texture is not None:
+            self._load_texture_fields()
+        self._refresh_preview()
+
     def _refresh_preview(self) -> None:
         if PaintTool.current_texture is not None:
             pm = _texture_pixmap(PaintTool.current_texture["path"])

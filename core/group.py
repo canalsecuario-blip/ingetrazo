@@ -43,7 +43,8 @@ def reserve_group_names(names) -> None:
 
 class Group:
     __slots__ = ("mesh", "name", "layer", "ifc", "billboard", "xform",
-                 "children", "owner", "context", "text3d", "hidden", "uid")
+                 "children", "owner", "context", "text3d", "hidden", "uid",
+                 "material")
 
     def __init__(self, mesh: Mesh | None = None, name: str | None = None) -> None:
         self.mesh = mesh if mesh is not None else Mesh()
@@ -69,6 +70,12 @@ class Group:
         # it remembers which objects it hides. Fresh per object; a copy gets
         # its own (see ``copy_group``).
         self.uid = new_uid()
+        #: The container's own paint (SketchUp: a group or component
+        #: instance takes a material, and every face inside that wears the
+        #: default material shows it; a face painted itself keeps its own —
+        #: issue #47, @pacaeiro). Same keys as a face's attrs: ``color`` or
+        #: ``texture``, ``opacity``, ``mat``. ``None`` = unpainted.
+        self.material: dict | None = None
         # Component instance (SketchUp): when set, ``mesh`` is a PROTOTYPE in
         # local coordinates SHARED with sibling instances, and ``xform`` maps
         # local -> world. ``None`` = classic group (mesh in world coords).
@@ -473,6 +480,7 @@ def copy_group(group, delta=None):
     g.billboard = group.billboard
     g.text3d = dict(group.text3d) if group.text3d else None
     g.hidden = group.hidden
+    g.material = dict(group.material) if getattr(group, "material", None) else None
     # Nested placements ride along untranslated: ``delta`` already moved the
     # parent, and a child's transform is relative to it.
     g.children = [copy_group(c) for c in (group.children or ())]
@@ -673,3 +681,18 @@ def oriented_box_corners(frame, lo, hi) -> list:
                    + v * (hi[1] if i & 2 else lo[1])
                    + w * (hi[2] if i & 4 else lo[2]))
     return [QVector3D(p) for p in out]
+
+
+def effective_material(group):
+    """The paint a placement's default faces show: its own, else the
+    top-level object's it belongs to (a nested piece of a painted
+    component). ``None`` for an unpainted one."""
+    if group is None:
+        return None
+    own = getattr(group, "material", None)
+    if own:
+        return own
+    owner = getattr(group, "owner", None)
+    if owner is not None and owner is not group:
+        return getattr(owner, "material", None) or None
+    return None
