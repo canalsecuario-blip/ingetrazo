@@ -14,10 +14,10 @@ from PySide6.QtGui import QVector3D
 from core.history import AddTextLabelCommand
 from core.i18n import tr
 from core.textlabel import TextLabel
-from tools.base import Tool, ToolContext
+from tools.base import AxisMagnet, Tool, ToolContext
 
 
-class TextTool(Tool):
+class TextTool(AxisMagnet, Tool):
     name = "Text"
     shortcut = "X"
 

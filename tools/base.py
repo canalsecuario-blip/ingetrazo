@@ -35,6 +35,43 @@ PLANE_LOCK_AXES = {"x": QVector3D(1.0, 0.0, 0.0),
 PLANE_LOCK_NAMES = {"x": "YZ", "y": "XZ", "z": "XY"}
 
 
+class AxisMagnet:
+    """The Line tool's axis magnet, for the other drawing tools.
+
+    @pacaeiro, issue #52: «The Draw commands in the group of ARCS and
+    SHAPES should also use the magnetic Snaps, like LINE. Except
+    Freehand» — and #51 for Text, #50 for Dimension. Same two numbers as
+    Line (issue #31): within 3° of an axis from ``start_point`` the point
+    lands ON the axis instead of merely lighting the cue, and the axis the
+    work plane cannot hold is found in pixels. Alt still switches it off.
+
+    Only a click that is a *direction from the start point* wants this:
+    an arc's bulge, a rotated rectangle's height or a dimension's placement
+    are measured from somewhere else, and a magnet aimed at the first point
+    would bend them. Those tools say when by overriding :meth:`magnet_on`;
+    the viewport reads the two properties afresh on every hover.
+
+    Rectangle stays out on purpose: its second click is the opposite
+    corner, and a corner pulled onto the axis through the first is a
+    rectangle of zero height — every thin rectangle near an axis would
+    collapse. Its plane lock and the Shift/arrow locks are its magnets.
+    """
+
+    _MAGNET_DEG = 3.0
+    _MAGNET_PX = 9.0
+
+    def magnet_on(self) -> bool:
+        return True
+
+    @property
+    def magnetic_axis_deg(self):
+        return self._MAGNET_DEG if self.magnet_on() else None
+
+    @property
+    def screen_axis_px(self):
+        return self._MAGNET_PX if self.magnet_on() else None
+
+
 class PlaneLock:
     """Arrow keys BEFORE the first click lock a planar tool (circle,
     polygon, rectangle, the arcs) to a drawing plane: Right = the plane

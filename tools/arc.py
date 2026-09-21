@@ -33,7 +33,7 @@ from core.edits import build_add_edges
 from core.history import (DeleteEdgesCommand, RebuildPlanarFacesCommand,
                           TagCurveCommand)
 from core.triangulate import plane_axes
-from tools.base import PlaneLock, Tool, ToolContext
+from tools.base import AxisMagnet, PlaneLock, Tool, ToolContext
 
 _SEGMENTS = 16  # polyline segments approximating the arc
 
@@ -129,7 +129,7 @@ def commit_arc(viewport, pts: list[QVector3D], close_to=None, trim=None):
     return cmd
 
 
-class ArcTool(PlaneLock, Tool):
+class ArcTool(AxisMagnet, PlaneLock, Tool):
     name = "Arc"
     shortcut = "A"
     vcb_label = "Bulge"
@@ -149,6 +149,12 @@ class ArcTool(PlaneLock, Tool):
     #: Distance corner→tangent points of the last fillet (shared by every
     #: arc tool instance): a double-click near another corner repeats it.
     last_fillet_d: float | None = None
+
+    def magnet_on(self) -> bool:
+        # The chord end is a direction from the start; the bulge is not
+        # (it is measured off the chord's midpoint), so the magnet would
+        # flatten a shallow arc near an axis.
+        return self.end_point is None
 
     def __init__(self) -> None:
         self.start_point: QVector3D | None = None
@@ -803,7 +809,7 @@ class ArcTool(PlaneLock, Tool):
         self.wireframe_color = None
 
 
-class ThreePointArcTool(PlaneLock, Tool):
+class ThreePointArcTool(AxisMagnet, PlaneLock, Tool):
     """3-point arc: the arc passes through all three clicked points.
 
     Click start, click a second point the arc runs through, then move and click
@@ -892,7 +898,7 @@ class ThreePointArcTool(PlaneLock, Tool):
         self.clear_plane_lock()
 
 
-class CenterArcTool(PlaneLock, Tool):
+class CenterArcTool(AxisMagnet, PlaneLock, Tool):
     """Compass arc (SketchUp's protractor 'Arc'): centre → start point (the
     radius and 0° arm) → sweep angle. The polyline samples at the same 15°
     pitch as the 24-side circle, so a centre arc drawn concentric with a

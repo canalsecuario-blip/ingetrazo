@@ -50,10 +50,10 @@ def busy_plane(scene, new_points):
     return None
 from core.i18n import tr
 from core.triangulate import plane_axes
-from tools.base import PlaneLock, Tool, ToolContext
+from tools.base import AxisMagnet, PlaneLock, Tool, ToolContext
 
 
-class _RadialTool(PlaneLock, Tool):
+class _RadialTool(AxisMagnet, PlaneLock, Tool):
     """Shared centre+radius regular-polygon tool. Subclasses set ``sides``."""
 
     sides: int = 24

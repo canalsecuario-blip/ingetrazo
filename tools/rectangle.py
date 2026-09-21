@@ -44,6 +44,9 @@ def _plane_axes(normal: QVector3D) -> tuple[QVector3D, QVector3D]:
     return u, v
 
 
+# No AxisMagnet here, deliberately (issue #52): the second click is the
+# OPPOSITE CORNER, and a corner pulled onto the axis through the first is a
+# rectangle of zero height. See ``tools.base.AxisMagnet``.
 class RectangleTool(PlaneLock, Tool):
     name = "Rectangle"
     shortcut = "R"

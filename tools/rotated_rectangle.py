@@ -25,16 +25,21 @@ from core.edits import build_add_edges
 from core.i18n import tr
 from core.history import AddFaceCommand
 from core.triangulate import plane_axes
-from tools.base import face_the_plane, PlaneLock, Tool, ToolContext
+from tools.base import AxisMagnet, face_the_plane, PlaneLock, Tool, ToolContext
 
 
-class RotatedRectangleTool(PlaneLock, Tool):
+class RotatedRectangleTool(AxisMagnet, PlaneLock, Tool):
     #: Debajo de esto el ancho no hace rectángulo: las esquinas se funden.
     _MIN_WIDTH = 1e-6
 
     name = "Rotated Rect"
     shortcut = "K"
     vcb_label = "Width; angle"
+
+    def magnet_on(self) -> bool:
+        # The base edge is a direction from the first corner; the height
+        # is measured square off that edge, not from the corner.
+        return self.base_point is None
 
     def __init__(self) -> None:
         self.start_point: QVector3D | None = None   # first corner (drives plane)
