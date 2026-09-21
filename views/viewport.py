@@ -2012,6 +2012,16 @@ class Viewport(QOpenGLWidget):
                        getattr(self, "_preview_epoch", 0),
                        bool(getattr(self, "_preview_groups", None)),
                        getattr(self, "_edit_rest_mode", None),
+                       # View ▸ Hidden Objects / Geometry decide which
+                       # placements the pick block lists as selectable. The
+                       # per-group ``hidden`` below was in the key, the two
+                       # switches were not: Hide rebuilt the block without
+                       # the object, and turning the view on left that
+                       # block in place — the ghost was drawn and could not
+                       # be clicked, only window-selected (issue #53,
+                       # @pacaeiro).
+                       bool(getattr(sc, "show_hidden_objects", False)),
+                       bool(getattr(sc, "show_hidden_geometry", False)),
                        tuple((ly.name, ly.visible, ly.locked) for ly in sc.layers)]
 
         loose = sc.mesh
@@ -7911,7 +7921,14 @@ class Viewport(QOpenGLWidget):
             edges.append(e)
             ea.append([e.a.x(), e.a.y(), e.a.z()])
             eb.append([e.b.x(), e.b.y(), e.b.z()])
-            esel.append(scene.entity_selectable(e))
+            # A hidden EDGE (Hide on raw geometry, a smoothed surface's
+            # inner edges) is selectable only while the hidden view shows
+            # it — what window selection already did; a click found it
+            # through here with the view off.
+            esel.append(scene.entity_selectable(e)
+                        and (not getattr(e, "hidden", False)
+                             or bool(getattr(scene, "show_hidden_geometry",
+                                             False))))
 
         idx = SimpleNamespace(
             entities=entities,
