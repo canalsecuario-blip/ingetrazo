@@ -49,6 +49,9 @@ class TapeMeasureTool(Tool):
     #: screen. Measuring along an axis is the everyday case.
     magnetic_axis_deg = 3.0
     screen_axis_px = 9.0
+    #: The viewport shows «On axis» while this tool hovers a model axis
+    #: before its first click (``Viewport._axis_source_cue``).
+    axis_source = True
 
     def __init__(self) -> None:
         self.start_point: QVector3D | None = None
@@ -160,6 +163,12 @@ class TapeMeasureTool(Tool):
                 if g is not None and getattr(g, "is_line", False):
                     edge = g
             self._from_point = kind in self._POINT_KINDS
+            if (edge is None and kind == "on_axis" and ctx.snap is not None
+                    and ctx.snap.axis in _AXES):
+                # The cue already found the axis and put the point ON it.
+                axis = QVector3D(*_AXES[ctx.snap.axis])
+                edge = Guide(QVector3D(0, 0, 0), axis)
+                self.start_point = QVector3D(ctx.snap.point)
             if edge is None and not self._from_point:
                 # The model's own axes are sources too: with nothing drawn
                 # yet, a click on the red axis pulls a guide parallel to

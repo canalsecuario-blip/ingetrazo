@@ -1730,6 +1730,13 @@ class MainWindow(QMainWindow):
         if bool(getattr(scene, attr, False)) == bool(on):
             return
         setattr(scene, attr, bool(on))
+        if not on:
+            # What the view no longer shows cannot stay selected: the ghost
+            # group's orange outline outlived the switch (Marco,
+            # 2026-09-21, issue #53).
+            for ent in list(scene.selection):
+                if scene.entity_hidden(ent) or getattr(ent, "hidden", False):
+                    scene.selection.discard(ent)
         scene.version += 1
         self.viewport.update()
 

@@ -51,6 +51,7 @@ def plan_edge_commands(
     scene,
     segments: Sequence[Segment],
     detect_faces: bool = True,
+    eye=None,
 ) -> list[Command]:
     """Build the ordered command list to add ``segments`` to ``scene``.
 
@@ -127,12 +128,12 @@ def plan_edge_commands(
             if already is None:
                 simulated.append(Edge(sa, sb))
             if detect_faces:
-                _plan_faces(commands, faces_snapshot, simulated, sa, sb)
+                _plan_faces(commands, faces_snapshot, simulated, sa, sb, eye)
 
     return commands
 
 
-def _plan_faces(commands, faces_snapshot, simulated, sa, sb) -> None:
+def _plan_faces(commands, faces_snapshot, simulated, sa, sb, eye=None) -> None:
     """Emit the face commands for a freshly added edge ``sa``–``sb``.
 
     Two paths, mutually exclusive:
@@ -164,6 +165,7 @@ def _plan_faces(commands, faces_snapshot, simulated, sa, sb) -> None:
 
     for cycle in find_cycles_through(simulated, sa, sb):
         if is_planar(cycle) and not face_exists(faces_snapshot, cycle):
+            cycle = face_up_or_toward(cycle, eye)
             commands.append(AddFaceCommand(cycle))
             faces_snapshot.append(Face(list(cycle)))
 
@@ -288,9 +290,50 @@ def _append_active_tag(scene, commands) -> None:
         commands.append(AutoTagDrawnFacesCommand(face_cmds, tag))
 
 
-def build_add_edge(scene, a: QVector3D, b: QVector3D, detect_faces: bool = True) -> Command:
+def _newell(loop) -> QVector3D:
+    nx = ny = nz = 0.0
+    n = len(loop)
+    for i in range(n):
+        p, q = loop[i], loop[(i + 1) % n]
+        nx += (p.y() - q.y()) * (p.z() + q.z())
+        ny += (p.z() - q.z()) * (p.x() + q.x())
+        nz += (p.x() - q.x()) * (p.y() + q.y())
+    return QVector3D(nx, ny, nz)
+
+
+def face_up_or_toward(loop, eye=None):
+    """The winding a brand-new face should take (SketchUp's rule for a face
+    with no neighbour to agree with): a horizontal one shows its FRONT
+    upwards, any other one faces the ``eye`` that drew it. A loop closed by
+    hand with Line, or by Offset, came out either way — the order the cycle
+    was traced in — and Marco read the blue back as «cara invertida»
+    (2026-09-21, tests 15 and 19 of the bench). Returns the loop, reversed
+    when needed; untouched when nothing decides (no eye and a vertical
+    face, or a degenerate loop)."""
+    pts = list(loop)
+    if len(pts) < 3:
+        return pts
+    n = _newell(pts)
+    if n.length() < 1e-12:
+        return pts
+    if abs(n.z()) > 0.5 * n.length():
+        want = n.z() > 0
+    elif eye is not None:
+        c = QVector3D(0, 0, 0)
+        for q in pts:
+            c += q
+        c /= float(len(pts))
+        want = QVector3D.dotProduct(n, QVector3D(eye) - c) > 0
+    else:
+        return pts
+    return pts if want else [pts[0]] + pts[:0:-1]
+
+
+def build_add_edge(scene, a: QVector3D, b: QVector3D, detect_faces: bool = True,
+                   eye=None) -> Command:
     """Single-segment convenience: one drawn edge → one atomic command."""
-    commands = plan_edge_commands(scene, [(a, b)], detect_faces=detect_faces)
+    commands = plan_edge_commands(scene, [(a, b)], detect_faces=detect_faces,
+                                  eye=eye)
     _append_active_tag(scene, commands)
     _append_flat_curve_rebuild(scene, commands, [a, b])
     if detect_faces:
@@ -311,10 +354,13 @@ def build_add_edges(
     segments: Sequence[Segment],
     detect_faces: bool = True,
     extra: Iterable[Command] = (),
+    eye=None,
 ) -> Command:
     """Batch convenience: many drawn edges (+ optional ``extra`` commands such
-    as a tool-managed face) → one atomic command."""
-    commands = plan_edge_commands(scene, segments, detect_faces=detect_faces)
+    as a tool-managed face) → one atomic command. ``eye`` (the camera's
+    position) decides which way a new vertical face looks."""
+    commands = plan_edge_commands(scene, segments, detect_faces=detect_faces,
+                                  eye=eye)
     commands.extend(extra)
     _append_active_tag(scene, commands)
     _append_flat_curve_rebuild(

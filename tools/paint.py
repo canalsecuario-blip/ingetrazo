@@ -255,9 +255,9 @@ class PaintTool(Tool):
                 ]))
                 flash = getattr(vp, "flash_status", None)
                 if callable(flash):
-                    flash(tr("Painted {name} — faces with a material of "
-                             "their own keep it",
-                             name=getattr(obj, "name", "") or tr("group")))
+                    flash(tr("{name} painted as a whole; a face that already "
+                             "had its own material keeps it",
+                             name=getattr(obj, "name", "") or tr("Group")))
                 vp.update()
                 return
 

@@ -284,8 +284,11 @@ class OffsetTool(Tool):
             self._reset()
             viewport.update()
             return
+        cam = getattr(viewport, "camera", None)
+        eye = cam.eye() if cam is not None and hasattr(cam, "eye") else None
         viewport.history.execute(
-            build_add_edges(viewport.scene, _segments(off, self._closed)))
+            build_add_edges(viewport.scene, _segments(off, self._closed),
+                            eye=eye))
         self._reset()
         viewport.update()
 

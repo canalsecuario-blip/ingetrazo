@@ -280,6 +280,8 @@
  "Concrete": "Concreto",
  "Connection OK — the model answered.": "Conexión OK — el modelo respondió.",
  "Connection failed: {err}": "Falló la conexión: {err}",
+ "On axis": "En el eje",
+ "{name} painted as a whole; a face that already had its own material keeps it": "{name} pintado entero; una cara que ya tenía material propio lo conserva",
  "Painted {name} — faces with a material of their own keep it": "Pintado {name}: las caras con material propio lo conservan",
  "group": "grupo",
  "{n} edges selected — click to start the offset": "{n} aristas seleccionadas: clic para empezar el desfase",

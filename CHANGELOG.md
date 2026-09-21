@@ -7,6 +7,18 @@ follow [SemVer](https://semver.org).
 ## [Sin publicar]
 
 ### Arreglado
+- **Cuatro cosas de la primera pasada de Marco por el banco de pruebas.**
+  (1) Una cara oculta que la vista enseña se seleccionaba y el pase de
+  dibujo la soltaba al instante por no ser «visible»: solo el doble clic
+  parecía funcionar; ahora lo seleccionable se queda. (2) Apagar Ver ▸
+  Objetos/Geometría ocultos quita de la selección lo que deja de verse:
+  el contorno naranja de la caja fantasma sobrevivía al interruptor.
+  (3) **Una cara nueva mira hacia arriba, y si es vertical hacia la cámara
+  que la dibujó** (regla de SketchUp): una cara cerrada con Línea o el
+  contorno del Desfase salían con el reverso hacia fuera según el orden
+  en que se hubiera recorrido el ciclo. (4) **La cinta enseña «En el eje»**
+  (cuadradito rojo, verde o azul) al pasar por un eje antes del primer
+  clic: la guía desde el eje funcionaba y nada lo decía.
 - **La cinta saca guías desde los ejes y deja puntos guía con su
   segmento** (Rafael, Revisión 3, 20-09). Con el documento vacío, un clic
   en el eje rojo, verde o azul y una distancia —arrastrada o tecleada—

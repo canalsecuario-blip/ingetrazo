@@ -171,7 +171,10 @@ class LineTool(Tool):
         (introducing a shared vertex), and attaches a face when the new edge
         closes a planar cycle — the SketchUp-style "any planar loop becomes a
         face" behaviour, now correct even when the loop relies on a crossing."""
-        return build_add_edge(viewport.scene, start, end, detect_faces=True)
+        cam = getattr(viewport, "camera", None)
+        eye = cam.eye() if cam is not None and hasattr(cam, "eye") else None
+        return build_add_edge(viewport.scene, start, end, detect_faces=True,
+                              eye=eye)
 
     def _reset(self) -> None:
         self.start_point = None

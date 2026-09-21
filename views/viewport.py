@@ -640,6 +640,7 @@ class Viewport(QOpenGLWidget):
         "arc_midpoint": "Arc midpoint",
         "component_origin": "Component origin",
         "on_line": "On line",
+        "on_axis": "On axis",
         "tangent": "Tangent at vertex",
         "on_edge": "On edge",
         "on_face": "On face",
@@ -4067,13 +4068,22 @@ class Viewport(QOpenGLWidget):
                            if self.scene.entity_visible(g)
                            and not getattr(g, "billboard", False)]
 
+                # A hidden face/edge the hidden view shows is selectable,
+                # and a selection it took must not be dropped here: a
+                # single click on a ghost face looked like nothing (only
+                # a double click, which selected its visible edges too,
+                # seemed to work — Marco, 2026-09-21, issue #53).
+                def shown(ent):
+                    return (self.scene.entity_visible(ent)
+                            or self.scene.entity_selectable(ent))
+
                 def alive(ent):
                     if isinstance(ent, Edge):
                         if ent in self.scene.loose_mesh.edges:
-                            return self.scene.entity_visible(ent)
+                            return shown(ent)
                         return any(ent in gm.edges for gm in gmeshes)
                     if ent in self.scene.loose_mesh.faces:
-                        return self.scene.entity_visible(ent)
+                        return shown(ent)
                     return any(ent in gm.faces for gm in gmeshes)
 
             if isinstance(hover, (Edge, Face)) and not alive(hover):
@@ -5464,6 +5474,7 @@ class Viewport(QOpenGLWidget):
             painter.setBrush(QColor.fromRgbF(r, g, b, 0.85))
             painter.drawEllipse(QPointF(px, py), 6.5, 6.5)
         elif snap.kind in ("endpoint", "origin", "component_origin", "on_edge",
+                           "on_axis",
                            "on_line", "extension", "from_point", "aligned",
                            "tangent"):
             rect = QRectF(px - 7, py - 7, 14, 14)
@@ -8932,6 +8943,26 @@ class Viewport(QOpenGLWidget):
                 pts.append(_SnapEdge(p, QVector3D(p)))
         return pts
 
+    def _axis_source_cue(self, snap, px_x: float, px_y: float):
+        """Before its first click, a tool that reads the model axes as a
+        source (the Tape: ``axis_source``) shows the cursor is ON the red,
+        green or blue axis — SketchUp's small square on the axis line.
+        Without the cue the axis looked ungrabbable (Marco, testing
+        Rafael's guide from an axis, 2026-09-21): the pick worked, nothing
+        said so. Only where the engine found nothing better."""
+        tool = self.active_tool
+        if (snap is None or not getattr(tool, "axis_source", False)
+                or getattr(tool, "start_point", None) is not None
+                or snap.kind not in ("none", "on_face")):
+            return snap
+        name = self.pick_axis(px_x, px_y)
+        if name is None:
+            return snap
+        from core.snap import AXIS_COLORS
+        axis = QVector3D(*_AXIS_DIRS[name])
+        foot = axis * QVector3D.dotProduct(snap.point, axis)
+        return SnapResult(foot, "on_axis", AXIS_COLORS[name], axis=name)
+
     def pick_axis(self, screen_x: float, screen_y: float):
         """The model axis line under the cursor — ``"x"`` / ``"y"`` /
         ``"z"`` — or ``None``. The Tape reads an axis as a guide source
@@ -10563,6 +10594,7 @@ class Viewport(QOpenGLWidget):
             linear_mode=self.linear_inference_mode,
             work_plane_normal=self._work_plane_normal(),
         )
+        snap = self._axis_source_cue(snap, px_x, px_y)
         self.last_snap = snap
         ctx = ToolContext(
             viewport=self,
@@ -10898,6 +10930,7 @@ class Viewport(QOpenGLWidget):
             linear_mode=self.linear_inference_mode,
             work_plane_normal=self._work_plane_normal(),
         )
+        snap = self._axis_source_cue(snap, px_x, px_y)
         return ToolContext(
             viewport=self,
             world=snap.point,
