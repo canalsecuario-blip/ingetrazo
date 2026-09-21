@@ -1038,6 +1038,11 @@ def _lock_line_snaps(
     )
 
 
+#: Two point candidates closer than this on screen are a tie, and the tie
+#: goes to the drawing context (see ``_resolve`` in :func:`compute_snap`).
+_TIE_PX = 0.5
+
+
 def compute_snap(
     candidate_world: QVector3D,
     candidate_pixel: tuple[float, float],
@@ -1197,9 +1202,22 @@ def compute_snap(
         pending.append((d, world, kind, color, context, occludable))
 
     def _resolve():
-        """The nearest visible candidate, or ``None``; clears the list."""
+        """The nearest visible candidate, or ``None``; clears the list.
+
+        Near-ties go to the point of the context being drawn in — a loose
+        vertex beats a component's corner at the same spot. The two really
+        do coincide when the line was started ON that corner, and only the
+        loose vertex can be welded to; the component's copy (mapped through
+        its placement, a float or two away) ended a line that closed no
+        face, with the tip promising it had snapped (issue #36, @pacaeiro:
+        «Endpoint in component and the vertice endpoint share the same
+        coordinate, but no face created»). Same family as the 0.4.4 rule:
+        a derived point never beats the point it derives from. Within the
+        bucket the order stays as appended (named points before endpoints).
+        """
         nonlocal best
-        pending.sort(key=lambda c: c[0])
+        pending.sort(key=lambda c: (math.floor(c[0] / _TIE_PX),
+                                    0 if c[4] is None else 1))
         chosen = None
         for d, world, kind, color, context, occludable in pending:
             # Only snap to geometry the user can actually see — a vertex
