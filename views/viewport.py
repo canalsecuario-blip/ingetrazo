@@ -106,6 +106,7 @@ from core.group import Group, copy_group, world_mesh
 from core.mesh import Edge, Face
 from core.history import EraseSelectionCommand, History
 from core.scene import Scene
+from core.materials import material_sig as _material_sig
 from core.snap import SnapResult, _AXIS_VECTORS, compute_snap
 from core.texture import face_uv_axes
 from core.triangulate import plane_axes
@@ -2018,7 +2019,8 @@ class Viewport(QOpenGLWidget):
             # instance chunk, whose winding is put right — see
             # ``_instance_chunk``. Mirrors are rare; the cost is nothing.
             return False
-        base = self._proto_base_chunk(g.mesh)
+        from core.group import effective_material
+        base = self._proto_base_chunk(g.mesh, effective_material(g))
         # Translucent / back-side / glass content still rides the
         # consolidated passes (they need global draw ordering).
         return not (base.get("tcol") or base.get("ttex")
@@ -2077,7 +2079,8 @@ class Viewport(QOpenGLWidget):
                       if m is not None and m is not loose else None)
             parts.append((id(g), id(m), serial,
                           tuple(xf.data()) if xf is not None else None,
-                          g.layer, bool(g.billboard), bool(g.hidden)))
+                          g.layer, bool(g.billboard), bool(g.hidden),
+                          _material_sig(getattr(g, "material", None))))
             for c in (g.children or ()):
                 walk(c)
         for g in sc.groups:
@@ -2249,22 +2252,32 @@ class Viewport(QOpenGLWidget):
                             lo[None, :, :])
             keep = ((pick * n[:, None, :]).sum(axis=2)
                     + pl[:, 3][:, None] >= 0.0).all(axis=0)
+        # One pool per (prototype, container paint): a painted instance
+        # (issue #47) draws its own bake of the prototype, not the plain
+        # one its siblings share — pooled by mesh alone it kept showing
+        # unpainted from outside while its inside (the loose bake) was
+        # painted (Marco, 2026-09-21, bench test 21).
+        from core.group import effective_material
         for i in np.flatnonzero(keep):
             g = groups[i]
-            out.setdefault(id(g.mesh), (g.mesh, []))[1].append(g)
+            paint = effective_material(g)
+            out.setdefault((id(g.mesh), _material_sig(paint)),
+                           (g.mesh, paint, []))[2].append(g)
         self._frame_instanced = out
         return out
 
-    def _ensure_proto_draw(self, mesh):
+    def _ensure_proto_draw(self, mesh, paint=None):
         """Static draw entry of one prototype: vcol/edges/texture VBOs from
         the LOCAL base chunk, three VAOs wiring them to the shared
-        per-instance matrix buffer (divisor 1), built once per proto rev."""
+        per-instance matrix buffer (divisor 1), built once per proto rev —
+        and per container paint (issue #47)."""
         cache = getattr(self, "_proto_draw", None)
         if cache is None:
             cache = self._proto_draw = {}
-        base = self._proto_base_chunk(mesh)
+        base = self._proto_base_chunk(mesh, paint)
         key = (base["uid"], base.get("rev"))
-        entry = cache.get(id(mesh))
+        ckey = (id(mesh), _material_sig(paint))
+        entry = cache.get(ckey)
         if entry is not None and entry["key"] == key:
             return entry
         extra = self.context().extraFunctions()
@@ -2374,7 +2387,7 @@ class Viewport(QOpenGLWidget):
                  "dback_count": len(dback_raw) // 12,
                  "tex_vao": tex_vao, "tex_vbo": tex_vbo,
                  "tex_runs": tex_runs}
-        cache[id(mesh)] = entry
+        cache[ckey] = entry
         return entry
 
     def _update_inst_matrices(self, entry, groups) -> int:
@@ -2421,8 +2434,8 @@ class Viewport(QOpenGLWidget):
         if mode == "xray":
             self._program.setUniformValue1f(self._loc_opacity, 0.55)
             self._gl.glDepthMask(GL_FALSE)
-        for mesh, groups in by_proto.values():
-            entry = self._ensure_proto_draw(mesh)
+        for mesh, paint, groups in by_proto.values():
+            entry = self._ensure_proto_draw(mesh, paint)
             for lote, fade in self._instanced_batches(groups):
                 if not lote:
                     continue
@@ -2507,8 +2520,8 @@ class Viewport(QOpenGLWidget):
         if not by_proto:
             return
         extra = self.context().extraFunctions()
-        for mesh, groups in by_proto.values():
-            entry = self._ensure_proto_draw(mesh)
+        for mesh, paint, groups in by_proto.values():
+            entry = self._ensure_proto_draw(mesh, paint)
             n = self._update_inst_matrices(entry, groups)
             if entry["vcol_count"]:
                 entry["vcol_vao"].bind()
@@ -2526,8 +2539,8 @@ class Viewport(QOpenGLWidget):
         if not by_proto:
             return
         extra = self.context().extraFunctions()
-        for mesh, groups in by_proto.values():
-            entry = self._ensure_proto_draw(mesh)
+        for mesh, paint, groups in by_proto.values():
+            entry = self._ensure_proto_draw(mesh, paint)
             if not entry["edge_count"]:
                 continue
             for lote, fade in self._instanced_batches(groups):
@@ -3498,8 +3511,8 @@ class Viewport(QOpenGLWidget):
         finally:
             self._frame_planes = saved
         extra = self.context().extraFunctions()
-        for mesh, groups in by_proto.values():
-            entry = self._ensure_proto_draw(mesh)
+        for mesh, paint, groups in by_proto.values():
+            entry = self._ensure_proto_draw(mesh, paint)
             n = self._update_inst_matrices(entry, groups)
             prog.bind()                # entry building binds the main program
             if entry["vcol_count"]:

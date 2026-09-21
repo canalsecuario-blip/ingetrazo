@@ -18,7 +18,11 @@ follow [SemVer](https://semver.org).
   contorno del Desfase salían con el reverso hacia fuera según el orden
   en que se hubiera recorrido el ciclo. (4) **La cinta enseña «En el eje»**
   (cuadradito rojo, verde o azul) al pasar por un eje antes del primer
-  clic: la guía desde el eje funcionaba y nada lo decía.
+  clic: la guía desde el eje funcionaba y nada lo decía. (5) **Pintar
+  un componente desde fuera no se veía** hasta entrar en él: el pase que
+  dibuja las instancias las agrupa por prototipo y las pintaba todas con
+  el horneado sin pintura; ahora agrupa por (prototipo, pintura), así que
+  la copia pintada se ve pintada y sus hermanas siguen como estaban.
 - **La cinta saca guías desde los ejes y deja puntos guía con su
   segmento** (Rafael, Revisión 3, 20-09). Con el documento vacío, un clic
   en el eje rojo, verde o azul y una distancia —arrastrada o tecleada—

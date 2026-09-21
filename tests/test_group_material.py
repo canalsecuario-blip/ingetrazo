@@ -280,3 +280,37 @@ def test_the_skp_carries_the_instance_paint(tmp_path):
     painted = [i for i in insts if getattr(i, "material", None) not in (None, "", 0)]
     if insts and any(hasattr(i, "material") for i in insts):
         assert len(painted) == 1, [getattr(i, "material", None) for i in insts]
+
+
+# ---- the instanced draw pools by paint too --------------------------------
+
+def test_the_instanced_pool_splits_a_painted_instance_from_its_siblings():
+    """Marco, bench test 21: painted from outside, the cube did not change;
+    inside (the loose bake) it was red. The instanced pass pooled by
+    prototype mesh alone and drew every sibling from the plain bake."""
+    scene = Scene()
+    vp = _stub(scene)
+    vp.camera = None
+    vp._preview_groups = None
+    proto = Mesh()
+    proto.add_face([V(0, 0), V(1, 0), V(1, 1), V(0, 1)])
+    a, b = Group(proto, "a"), Group(proto, "b")
+    for g, dx in ((a, 0.0), (b, 3.0)):
+        xf = QMatrix4x4()
+        xf.translate(dx, 0, 0)
+        g.xform = xf
+        scene.groups.append(g)
+    scene.version += 1
+    epoch0 = vp._placements_epoch()
+    b.material = dict(RED)
+    scene.version += 1
+    assert vp._placements_epoch() != epoch0          # the paint is part of the key
+    from core.materials import material_sig
+    assert material_sig(RED) != material_sig(None)
+    pooled = {}
+    for g in (a, b):
+        from core.group import effective_material
+        paint = effective_material(g)
+        pooled.setdefault((id(g.mesh), material_sig(paint)), []).append(g)
+    assert len(pooled) == 2                          # two pools, one prototype
+    assert vp._instanced_eligible(a) and vp._instanced_eligible(b)
