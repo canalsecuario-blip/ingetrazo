@@ -9,9 +9,18 @@ SketchUp behaviour, two modes decided by what the first click lands on:
   alignment workflow: pull a guide 2.5 m off a wall, then draw against it.
   A **guide line's body** works the same way (SketchUp; issue #22): pull a
   second guide 2 m off the first, and so on across a whole grid.
-- **From a point** (endpoint, corner, free space) → the second click just
+- **From free space, or a spot on an edge** → the second click just
   **measures**: the distance shows live at the cursor and in the status bar,
   and stays in the measurements box. No geometry is created.
+
+- **From an axis** (nothing drawn yet) → the same: the red, green or blue
+  axis is a source, so a guide 20 m off the origin comes before the first
+  line (Rafael, Revisión 3 — how a plan is placed against its datum).
+- **From a named point** (endpoint, corner, origin, intersection) → the
+  second click, or a typed distance, leaves a **guide point** there with
+  its dashed guide segment back to the start (SketchUp's; Rafael uses it
+  to centre a circle or set a roof's overhang). Clicking another named
+  point instead just **measures**, as does starting in free space.
 
 Guides are scaffolding (``Scene.guides``): dashed overlay lines the snap engine
 locks onto, erasable with the Eraser or Edit ▸ Delete Guides. Esc cancels.
@@ -25,6 +34,8 @@ from core.guide import Guide
 from core.history import AddGuideCommand
 from core.i18n import tr
 from tools.base import Tool, ToolContext
+
+_AXES = {"x": (1.0, 0.0, 0.0), "y": (0.0, 1.0, 0.0), "z": (0.0, 0.0, 1.0)}
 
 
 class TapeMeasureTool(Tool):
@@ -45,6 +56,7 @@ class TapeMeasureTool(Tool):
         self.chain_first_point: QVector3D | None = None  # silence close-snap
         self.work_plane: tuple | None = None
         self._edge = None            # source edge → guide-line mode
+        self._from_point = False     # started on a named point → guide point
         self._measured: float | None = None
         #: SketchUp's Ctrl on the Tape cycles THREE ways, as its own status
         #: bar spells out: «Ctrl = Líneas guía del ciclo / Puntos guía /
@@ -56,6 +68,12 @@ class TapeMeasureTool(Tool):
         #:
         #: Reset on pickup, like SketchUp's + (issue #29, @pacaeiro).
         self._mode = "line"
+
+    #: Snap kinds that make the first click a POINT the tape measures
+    #: from — SketchUp's guide segment needs a real point; a midpoint or a
+    #: spot on an edge is not one (Rafael: «el punto medio es ficticio»).
+    _POINT_KINDS = frozenset(("endpoint", "origin", "intersection",
+                              "component_origin", "center"))
 
     #: The order Ctrl walks, and the label each one flashes.
     _MODES = (("line", "Guides: guide lines"),
@@ -141,11 +159,26 @@ class TapeMeasureTool(Tool):
                 g = pick(ctx.screen.x(), ctx.screen.y()) if pick else None
                 if g is not None and getattr(g, "is_line", False):
                     edge = g
+            self._from_point = kind in self._POINT_KINDS
+            if edge is None and not self._from_point:
+                # The model's own axes are sources too: with nothing drawn
+                # yet, a click on the red axis pulls a guide parallel to
+                # it (Rafael, Revisión 3). The start is the foot on the
+                # axis, so the offset is measured from the line itself.
+                pick_axis = getattr(viewport, "pick_axis", None)
+                name = (pick_axis(ctx.screen.x(), ctx.screen.y())
+                        if pick_axis else None)
+                if name is not None:
+                    axis = QVector3D(*_AXES[name])
+                    edge = Guide(QVector3D(0, 0, 0), axis)
+                    self.start_point = axis * QVector3D.dotProduct(
+                        ctx.world, axis)
             self._edge = edge if (self._mode == "line" and edge is not None
                                   and kind not in ("endpoint", "midpoint",
                                                    "close", "origin",
                                                    "intersection")) else None
             return
+        kind = ctx.snap.kind if ctx.snap is not None else "none"
         if self._mode == "point":
             # A guide POINT at the measured spot — no source edge needed,
             # which is the whole use: marking a place on a face.
@@ -154,6 +187,13 @@ class TapeMeasureTool(Tool):
             offset = self._guide_offset(ctx.world)
             if offset is not None and offset.length() > 1e-9:
                 self._place_guide(viewport, offset)
+        elif (self._mode == "line" and self._from_point
+              and kind not in self._POINT_KINDS
+              and (ctx.world - self.start_point).length() > 1e-9):
+            # From a named point to a free spot: a guide point there, with
+            # its segment back to the start (SketchUp). To another named
+            # point it only measures — nobody wants a guide on a corner.
+            self._place_guide_point(viewport, ctx.world, self.start_point)
         else:
             dist = (ctx.world - self.start_point).length()
             self._measured = dist
@@ -182,6 +222,16 @@ class TapeMeasureTool(Tool):
             viewport.update()
             return True
         if self._edge is None:
+            if self._mode == "line" and self._from_point:
+                d = self.hover_point - self.start_point
+                if d.length() < 1e-9:
+                    return False
+                self._place_guide_point(
+                    viewport, self.start_point + d.normalized() * float(value),
+                    self.start_point)
+                self._reset()
+                viewport.update()
+                return True
             return False
         offset = self._guide_offset(self.hover_point)
         if offset is None or offset.length() < 1e-9:
@@ -229,12 +279,17 @@ class TapeMeasureTool(Tool):
         delta = world - self.start_point
         return delta - d * QVector3D.dotProduct(delta, d)
 
-    def _place_guide_point(self, viewport, where: QVector3D) -> None:
-        """A guide POINT (a ``Guide`` with no direction) at ``where``."""
-        viewport.history.execute(AddGuideCommand(Guide(QVector3D(where))))
+    def _place_guide_point(self, viewport, where: QVector3D,
+                           origin: QVector3D | None = None) -> None:
+        """A guide POINT (a ``Guide`` with no direction) at ``where`` —
+        with its guide segment back to ``origin`` when measured from a
+        named point."""
+        viewport.history.execute(AddGuideCommand(
+            Guide(QVector3D(where), None, origin)))
         d = (where - self.start_point).length()
         viewport.flash_status(
-            tr("Guide point at {d} m").format(d=f"{d:.3f}"), 3000)
+            (tr("Guide point at {d} m, with its segment") if origin is not None
+             else tr("Guide point at {d} m")).format(d=f"{d:.3f}"), 3000)
 
     def _place_guide(self, viewport, offset: QVector3D) -> None:
         guide = Guide(self.start_point + offset, self._edge_dir())
@@ -245,4 +300,5 @@ class TapeMeasureTool(Tool):
     def _reset(self) -> None:
         self.start_point = None
         self._edge = None
+        self._from_point = False
         self.work_plane = None

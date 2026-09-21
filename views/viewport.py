@@ -424,6 +424,28 @@ def _guide_vertices(guides, spacing: float, selection=(), centre=None,
     n = max(1, min(int(2.0 * reach / spacing), 4000))
     for g in guides or ():
         if not getattr(g, "is_line", False):
+            # A guide POINT measured from a vertex draws its guide SEGMENT
+            # (Rafael, Revisión 3): finite, dashed the same way, from the
+            # vertex to the point. The cross itself stays in the overlay.
+            o = getattr(g, "origin", None)
+            p = getattr(g, "point", None)
+            if o is None or p is None:
+                continue
+            seg = p - o
+            length = seg.length()
+            if length < 1e-9:
+                continue
+            d = seg / length
+            start = len(coords) // 3
+            t = 0.0
+            while t < length:
+                a = o + d * t
+                b = o + d * min(t + dash, length)
+                coords.extend([a.x(), a.y(), a.z(), b.x(), b.y(), b.z()])
+                t += spacing
+            count = len(coords) // 3 - start
+            if count:
+                spans.append((start, count, id(g) in sel))
             continue
         d = getattr(g, "direction", None)
         p = getattr(g, "point", None)
@@ -8909,6 +8931,28 @@ class Viewport(QOpenGLWidget):
             for p in oriented_box_corners(*self._group_obb(ent)):
                 pts.append(_SnapEdge(p, QVector3D(p)))
         return pts
+
+    def pick_axis(self, screen_x: float, screen_y: float):
+        """The model axis line under the cursor — ``"x"`` / ``"y"`` /
+        ``"z"`` — or ``None``. The Tape reads an axis as a guide source
+        (Rafael, Revisión 3: in SketchUp «pinchas el eje y sacas una guía
+        paralela a 20 m del origen» before anything is drawn)."""
+        from core.guide import GUIDE_HALF_LEN
+        best, best_d = None, self.pick_threshold_px
+        for name, (dx, dy, dz) in _AXIS_DIRS.items():
+            d = QVector3D(dx, dy, dz) * GUIDE_HALF_LEN
+            seg = self._clip_segment_front(-d, d)
+            if seg is None:
+                continue
+            pa = self._world_to_pixel(seg[0])
+            pb = self._world_to_pixel(seg[1])
+            if pa is None or pb is None:
+                continue
+            dist = _point_to_segment_distance_2d((screen_x, screen_y), pa, pb)
+            if dist < best_d:
+                best_d = dist
+                best = name
+        return best
 
     def pick_guide(self, screen_x: float, screen_y: float):
         """Return the construction guide nearest the cursor within the pick

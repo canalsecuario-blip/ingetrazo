@@ -18,13 +18,23 @@ GUIDE_HALF_LEN = 1.0e4
 
 class Guide:
     """A construction guide: an infinite line (``point`` + ``direction``) or,
-    when ``direction`` is None, a guide point."""
+    when ``direction`` is None, a guide point.
 
-    def __init__(self, point: QVector3D, direction: QVector3D | None = None) -> None:
+    A guide point pulled from a vertex keeps ``origin``, the vertex it was
+    measured from: SketchUp draws the dashed *guide segment* from there to
+    the point (Rafael, Revisión 3: «un segmento guía que termina en un
+    puntito»), which is how the eye reads what the point is 1,5 m from.
+    The segment is a drawing, not a snap target — the point is."""
+
+    def __init__(self, point: QVector3D, direction: QVector3D | None = None,
+                 origin: QVector3D | None = None) -> None:
         self.point = QVector3D(point)
         self.direction = (QVector3D(direction).normalized()
                           if direction is not None and
                           QVector3D(direction).length() > 1e-12 else None)
+        self.origin = (QVector3D(origin)
+                       if origin is not None and self.direction is None
+                       else None)
 
     @property
     def is_line(self) -> bool:
@@ -53,10 +63,15 @@ class Guide:
         if self.direction is not None:
             entry["direction"] = [self.direction.x(), self.direction.y(),
                                   self.direction.z()]
+        if self.origin is not None:
+            entry["origin"] = [self.origin.x(), self.origin.y(),
+                               self.origin.z()]
         return entry
 
     @classmethod
     def from_dict(cls, data: dict) -> "Guide":
         d = data.get("direction")
+        o = data.get("origin")
         return cls(QVector3D(*data["point"]),
-                   QVector3D(*d) if d else None)
+                   QVector3D(*d) if d else None,
+                   QVector3D(*o) if o else None)
