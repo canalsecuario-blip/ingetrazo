@@ -368,3 +368,83 @@ def build_add_edges(
     if len(commands) == 1 and not _scene_has_curves(scene):
         return commands[0]
     return SnapshotCompound(commands)
+
+
+def divide_edges(mesh, edges, n: int) -> int:
+    """SketchUp's Divide (issue #63, @pacaeiro): split each selected edge —
+    or, for an edge of a curve, the whole curve — into ``n`` pieces of
+    equal length. A straight edge gets n−1 new vertices; a curve (arc,
+    circle) is measured along its chain and cut where the k/n marks fall,
+    the pieces keeping the curve's identity so it still selects as one
+    contour. Faces the edges bound take the new vertices in their loops
+    (``Mesh.split_edge``). Returns the number of cuts made."""
+    n = int(n)
+    if n < 2:
+        return 0
+    done: set = set()
+    cuts = 0
+    for edge in list(edges):
+        if id(edge) in done:
+            continue
+        chain = mesh.curve_edges(edge) if getattr(edge, "curve", None) is not None else [edge]
+        chain = _order_chain(chain, edge)
+        for e in chain:
+            done.add(id(e))
+        lengths = [(e.b - e.a).length() for e in chain]
+        total = sum(lengths)
+        if total < 1e-9:
+            continue
+        step = total / n
+        marks = [step * k for k in range(1, n)]
+        walked = 0.0
+        for seg, ln in zip(chain, lengths):
+            if ln < 1e-12:
+                continue
+            a, b = QVector3D(seg.a), QVector3D(seg.b)
+            local = [m - walked for m in marks if walked + 1e-9 < m < walked + ln - 1e-9]
+            walked += ln
+            if not local:
+                continue
+            curve = getattr(seg, "curve", None)
+            soft = getattr(seg, "soft", False)
+            rest = seg
+            start = 0.0
+            for t in local:
+                frac = (t - start) / (ln - start)
+                point = a + (b - a) * ((t) / ln)
+                e0, e1 = mesh.split_edge(rest, point)
+                if e0 is e1:
+                    break
+                for piece in (e0, e1):
+                    if curve is not None:
+                        piece.curve = curve
+                    if soft and hasattr(piece, "soft"):
+                        piece.soft = soft
+                rest = e1
+                cuts += 1
+    return cuts
+
+
+def _order_chain(chain, seed):
+    """The edges of a curve in walking order, starting at one end (or at
+    ``seed`` for a closed loop) so the k/n marks land where SketchUp's do."""
+    if len(chain) <= 1:
+        return list(chain)
+    by_vertex: dict = {}
+    for e in chain:
+        for v in (e.v0, e.v1):
+            by_vertex.setdefault(id(v), (v, []))[1].append(e)
+    ends = [v for v, es in by_vertex.values() if len(es) == 1]
+    start_v = ends[0] if ends else seed.v0
+    ordered, seen, v = [], set(), start_v
+    while True:
+        nxt = next((e for e in by_vertex[id(v)][1] if id(e) not in seen), None)
+        if nxt is None:
+            break
+        seen.add(id(nxt))
+        ordered.append(nxt)
+        v = nxt.other(v)
+        if len(ordered) == len(chain):
+            break
+    # Orient each edge's a/b along the walk for the length bookkeeping.
+    return ordered

@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QSpinBox,
     QTabWidget,
+    QLabel,
     QVBoxLayout,
     QWidget,
 )
@@ -99,6 +100,15 @@ class PreferencesDialog(QDialog):
                                     "(.igz.bak)"))
         self._backup.setChecked(str(st.value("general/backup", "1")) != "0")
         form.addRow("", self._backup)
+
+        self._undo_steps = QSpinBox()
+        self._undo_steps.setRange(0, 5000)
+        self._undo_steps.setSpecialValueText(tr("unlimited"))
+        self._undo_steps.setValue(int(st.value("general/undo_steps", 200)))
+        self._undo_steps.setToolTip(tr(
+            "Steps kept for Undo. Each one holds a snapshot of the model, "
+            "so fewer steps mean less memory on a big model; 0 = unlimited."))
+        form.addRow(tr("Undo steps"), self._undo_steps)
 
         self._ask_section = QCheckBox(tr(
             "Ask for a name and symbol when placing a section plane"))
@@ -211,6 +221,37 @@ class PreferencesDialog(QDialog):
         form.addRow("", self._shots)
         tabs.addTab(ia, tr("AI Assistant"))
 
+        # ---- Units (of THIS document) ---------------------------------------
+        # Issue #33 (@pacaeiro): «when doing architecture I work in meters
+        # and with mechanical pieces all the work is in millimeters». The
+        # unit a bare number is typed in and every readout shows. It is a
+        # property of the document (it travels in the .igz), shown here
+        # because this is where people look for it (Marco, 2026-09-21).
+        from core import units as _units
+        scene = getattr(getattr(self._window, "viewport", None), "scene", None)
+        current = _units.model_units_of(scene)
+        un = QWidget()
+        form = QFormLayout(un)
+        self._unit = QComboBox()
+        for code in _units.UNIT_CHOICES:
+            self._unit.addItem(_units.unit_label(code), code)
+        self._unit.setCurrentIndex(max(0, self._unit.findData(
+            current.get("length", "m"))))
+        form.addRow(tr("Length unit"), self._unit)
+        self._decimals = QSpinBox()
+        self._decimals.setRange(0, 6)
+        self._decimals.setValue(int(current.get("precision", 2)))
+        form.addRow(tr("Decimals"), self._decimals)
+        note = QLabel(tr(
+            "These are the units of the document you have open — they are "
+            "saved with it. A number typed without a unit is in this unit "
+            "(«2» is 2 mm in a millimetre document; «2m» is always 2 m), and "
+            "every length and area on screen is shown in it. The dimension "
+            "style follows it; its own panel can still set it apart."))
+        note.setWordWrap(True)
+        form.addRow("", note)
+        tabs.addTab(un, tr("Units"))
+
         buttons = QDialogButtonBox(QDialogButtonBox.Ok
                                    | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
@@ -220,6 +261,20 @@ class PreferencesDialog(QDialog):
     # ---- Apply --------------------------------------------------------------
     def accept(self) -> None:  # noqa: D102 — QDialog override
         st = QSettings()
+
+        # Units of the open document (issue #33).
+        from core import units as _units
+        scene = getattr(getattr(self._window, "viewport", None), "scene", None)
+        chosen = {"length": str(self._unit.currentData()),
+                  "precision": int(self._decimals.value())}
+        if scene is not None and chosen != _units.model_units_of(scene):
+            scene.units = chosen
+            style = getattr(scene, "dimension_style", None)
+            if isinstance(style, dict):
+                style["units"] = chosen["length"]
+                style["decimals"] = chosen["precision"]
+            scene.version += 1
+            self._window.viewport.update()
 
         # Language: same contract as the menu (persists; applies on restart).
         # Reverting a still-pending change back to the running language just
@@ -250,6 +305,10 @@ class PreferencesDialog(QDialog):
         st.setValue("general/backup", "1" if self._backup.isChecked() else "0")
         st.setValue("section/ask_name",
                     "1" if self._ask_section.isChecked() else "0")
+        st.setValue("general/undo_steps", int(self._undo_steps.value()))
+        history = getattr(getattr(self._window, "viewport", None), "history", None)
+        if history is not None:
+            history.max_steps = int(self._undo_steps.value())
         st.setValue("general/platform", self._platform.currentData())
         setup = getattr(self._window, "_setup_autosave", None)
         if callable(setup):

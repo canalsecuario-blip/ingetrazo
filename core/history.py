@@ -110,6 +110,13 @@ class History:
         from core.paths import user_log_dir
         return str(user_log_dir() / "ingetrazo-errors.log")
 
+    #: How many steps back the history keeps; the oldest fall off the
+    #: front. Every command carries a mesh snapshot, so on a big model the
+    #: stack is where the memory goes (issue #56, @pacaeiro: «an option to
+    #: control number of Undo Steps, start thinking in ways of improving
+    #: performance»). Preferences ▸ General sets it; 0 = unlimited.
+    max_steps: int = 200
+
     def __init__(self, scene) -> None:
         self.scene = scene
         self.undo_stack: list[Command] = []
@@ -142,6 +149,9 @@ class History:
         # lands on the wrong mesh after the user exits the group.
         cmd._history_mesh = self.scene.mesh
         self.undo_stack.append(cmd)
+        cap = int(getattr(self, "max_steps", 0) or 0)
+        if cap > 0 and len(self.undo_stack) > cap:
+            del self.undo_stack[:len(self.undo_stack) - cap]
         self.redo_stack.clear()
         self._rebind_dimensions()
 

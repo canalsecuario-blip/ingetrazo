@@ -110,16 +110,25 @@ class _Section(QWidget):
         self._btn.setArrowType(Qt.DownArrow if on else Qt.RightArrow)
 
 
-def fit_rows(view, min_rows: int = 3) -> None:
+def fit_rows(view, min_rows: int = 3, max_rows: int | None = None) -> None:
     """Grow a list / tree to show ALL its rows — no scroll bar of its own,
     so the only scrolling in a tray is the tray's (Marco, 2026-09-14: «no
     me gusta hacer scroll dentro del scroll»). Call after every refill;
-    ``min_rows`` keeps an empty list from collapsing to a sliver."""
+    ``min_rows`` keeps an empty list from collapsing to a sliver.
+
+    ``max_rows`` caps that: past it the view stops growing and scrolls on
+    its own — for the lists that get long, Layers and Components in the
+    model (issue #55, @pacaeiro: «should have their own vertical scroll
+    bar»). Short lists keep the no-nested-scroll rule."""
     from PySide6.QtWidgets import QAbstractItemView, QTreeView
-    view.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-    view.setSizePolicy(view.sizePolicy().horizontalPolicy(), QSizePolicy.Fixed)
     model = view.model()
     rows = model.rowCount() if model is not None else 0
+    capped = max_rows is not None and rows > max_rows
+    view.setVerticalScrollBarPolicy(
+        Qt.ScrollBarAsNeeded if capped else Qt.ScrollBarAlwaysOff)
+    view.setSizePolicy(view.sizePolicy().horizontalPolicy(), QSizePolicy.Fixed)
+    if capped:
+        rows = max_rows
     if isinstance(view, QTreeView):
         row_h = view.sizeHintForRow(0) if rows else 0
         header = view.header().height() if not view.header().isHidden() else 0
@@ -1083,7 +1092,7 @@ class ComponentsPanel(QWidget):
             self._in_model.addItem(item)
         if self._in_model.count() == 0:
             self._in_model.addItem(QListWidgetItem(tr("No components yet")))
-        fit_rows(self._in_model)
+        fit_rows(self._in_model, max_rows=12)
 
     def _select_component(self, item) -> None:
         groups = item.data(Qt.UserRole)
@@ -2479,7 +2488,7 @@ class LayersPanel(QWidget):
             item.setCheckState(1, Qt.Checked if ly.visible else Qt.Unchecked)
             item.setCheckState(2, Qt.Checked if ly.locked else Qt.Unchecked)
             self.tree.addTopLevelItem(item)
-        fit_rows(self.tree)
+        fit_rows(self.tree, max_rows=12)
         self._updating = False
 
     # ---- View → model --------------------------------------------------------

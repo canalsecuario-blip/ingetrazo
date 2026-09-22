@@ -15,9 +15,23 @@ follow [SemVer](https://semver.org).
   was before»). El `.igz` guarda la cámara con la que se guardó y al abrirlo
   se ve lo que veía su autor; un documento nuevo vuelve a la vista por
   defecto. Los `.igz` anteriores abren como hasta ahora.
+- **Dividir** (issue #63, @pacaeiro: «In SK we have a command DIVIDE…
+  It's a needed command»): clic derecho sobre una línea o un arco ▸
+  **Dividir…** y el número de segmentos. Una línea se parte en N trozos
+  iguales; un arco o círculo se mide a lo largo de su cadena y se corta en
+  las marcas k/N, y sigue siendo una sola curva. Las caras que bordean
+  reciben los vértices nuevos. Un solo paso de deshacer.
+- **Pasos de deshacer configurables** (issue #56, @pacaeiro): Preferencias
+  ▸ General ▸ «Pasos de deshacer» (200 por defecto; 0 = sin límite). Cada
+  paso lleva una instantánea del modelo, así que en un modelo grande el
+  tope es memoria.
+- **Capas y Componentes con su propio scroll** (issue #55, @pacaeiro): las
+  dos listas crecen hasta 12 filas y a partir de ahí desplazan ellas solas,
+  en vez de estirar la bandeja entera. Las listas cortas siguen sin scroll
+  anidado, como pidió Marco.
 - **Unidades del modelo** (issue #33, @pacaeiro: «when doing architecture I
   work in meters and with mechanical pieces all the work is in
-  millimeters»). **Ventana ▸ Unidades del modelo…**: metros, centímetros,
+  millimeters»). **Preferencias ▸ Unidades**: metros, centímetros,
   milímetros, pulgadas, pies, pies y pulgadas (decimales o fraccionarias) y
   los decimales. La unidad viaja en el documento y manda en las dos
   direcciones: un número tecleado **sin unidad** está en ella (`2` son 2 mm
