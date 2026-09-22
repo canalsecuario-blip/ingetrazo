@@ -4,6 +4,17 @@ All notable changes to IngeTrazo are documented here.
 Format inspired by [Keep a Changelog](https://keepachangelog.com); versions
 follow [SemVer](https://semver.org).
 
+## [Sin publicar]
+
+### Cambiado
+- **La ventana del puente MCP nombra a Antigravity CLI, no a Gemini CLI.**
+  Google cerró el 18-06-2026 el acceso gratuito con cuenta de Google a
+  Gemini CLI («This client is no longer supported for Gemini Code Assist
+  for individuals»); su sucesor para particulares es **Antigravity CLI**
+  (`agy`), con plan Individual gratis, que lee el bloque `mcpServers` en
+  `~/.gemini/config/mcp_config.json`. El manual y el guion del tutorial
+  van con él.
+
 ## [0.4.9] — 2026-09-21
 
 **La release de @pacaeiro: dieciséis de sus reportes, y las guías de

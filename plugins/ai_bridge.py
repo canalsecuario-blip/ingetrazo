@@ -246,7 +246,10 @@ OTHER_CLIENTS = (
     ("Cursor", "~/.cursor/mcp.json"),
     ("VS Code (Copilot)", ".vscode/mcp.json  (key \"servers\")"),
     ("Windsurf", "~/.codeium/windsurf/mcp_config.json"),
-    ("Gemini CLI", "~/.gemini/settings.json"),
+    # Google retired Gemini CLI's free Google-account login on 2026-06-18;
+    # its successor for individuals is Antigravity CLI (`agy`), which reads
+    # this file (Marco hit the shutdown notice on 2026-09-21).
+    ("Antigravity CLI (Google)", "~/.gemini/config/mcp_config.json"),
     ("Codex CLI", "~/.codex/config.toml  ([mcp_servers.ingetrazo])"),
 )
 
