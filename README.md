@@ -4,7 +4,7 @@
 
 ![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)
 ![Status: usable](https://img.shields.io/badge/status-usable%20·%200.3.x-brightgreen)
-![Platform: Linux · Windows · macOS](https://img.shields.io/badge/platform-Linux%20%7C%20Windows%20%7C%20macOS-informational)
+![Platform: Linux · Windows · macOS (from source)](https://img.shields.io/badge/platform-Linux%20%7C%20Windows%20%7C%20macOS%20(source)-informational)
 ![Made in Peru](https://img.shields.io/badge/made%20in-Peru%20%F0%9F%87%B5%F0%9F%87%AA-red)
 
 IngeTrazo brings SketchUp-style *push/pull* modeling to Linux — where there is
@@ -59,6 +59,28 @@ tar -xzf IngeTrazo-*-linux-x86_64.tar.gz && IngeTrazo-*/ingetrazo
 Python, Qt and the pure-Python `.skp` reader travel inside; nothing else to
 install. `--check` prints what the install found and exits non-zero if
 anything is missing.
+
+- **macOS**: no packaged build yet — and, honestly, **no Mac here to test
+  one on**. Nothing in IngeTrazo is platform-specific (Python, Qt, OpenGL
+  3.3 core; every native dependency ships wheels for Intel and Apple
+  Silicon), so it should run from source. If you have a Mac, this is the
+  five-minute test that would let us ship a `.app`: you need Python 3.12+
+  (python.org or Homebrew), then
+
+```bash
+git clone https://github.com/ingelibre/ingetrazo.git
+cd ingetrazo/app
+python3 -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+python main.py
+```
+
+  Then please [open an issue](https://github.com/ingelibre/ingetrazo/issues)
+  saying whether it opens, whether the 3D view is smooth, and pasting
+  anything the Terminal prints. Known gaps on macOS: DWG import (`dwg2dxf`
+  is Linux-only for now) and the optional `skp2dae` converter (Wine); the
+  native `.skp` reader and writer work everywhere. The first `.app` will be
+  unsigned — right-click ▸ Open the first time.
 
 Something to open right away: [`examples/`](examples/) holds four real
 documents from the Yanque plaza project — the fountain, the bench with its
