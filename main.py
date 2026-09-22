@@ -33,7 +33,7 @@ elif sys.stderr is not None:
 # if the ghost bothers you: run with QT_QPA_PLATFORM=xcb. Re-test the ghost
 # when Mutter/Qt update; no app-side workaround cured it (see CLAUDE.md).
 
-from PySide6.QtCore import QLocale, QSettings, Qt
+from PySide6.QtCore import QEvent, QLocale, QSettings, Qt
 from PySide6.QtGui import QColor, QPalette, QSurfaceFormat
 from PySide6.QtWidgets import QApplication
 
@@ -136,6 +136,37 @@ def _open_document_in(window, doc: "Path") -> None:
                 window._on_zoom_extents()
 
         QTimer.singleShot(0, _open_skp)
+
+
+class _App(QApplication):
+    """QApplication subclass so macOS's file-open Apple Event reaches the
+    same code path as the argv-based association used on Linux/Windows.
+
+    Double-clicking an associated file on Linux/Windows hands the path as
+    plain ``argv[1]`` (see the single-instance block in ``main()``); macOS
+    never does that — Launch Services always starts the app with a bare
+    argv and delivers the path afterwards as a ``QFileOpenEvent``
+    (``QEvent.FileOpen``, Qt's wrapper for the OS's ``kAEOpenDocuments``
+    Apple Event). Without this override a macOS double-click on a ``.igz``
+    silently opened a blank "Untitled" window — the document never arrived.
+    """
+
+    def __init__(self, argv: list[str]) -> None:
+        super().__init__(argv)
+        self.open_window = None            # set once MainWindow exists
+        self.pending_open_path: Path | None = None
+
+    def event(self, e) -> bool:
+        if e.type() == QEvent.Type.FileOpen:
+            path = Path(e.file())
+            if self.open_window is not None:
+                _open_document_in(self.open_window, path)
+            else:
+                # Arrived before MainWindow exists — a cold macOS launch can
+                # deliver it this early. main() flushes this once it does.
+                self.pending_open_path = path
+            return True
+        return super().event(e)
 
 
 def _self_check() -> int:
@@ -265,7 +296,7 @@ def main() -> int:
     except Exception:
         platform_forced = None
     _configure_surface_format()
-    app = QApplication(sys.argv)
+    app = _App(sys.argv)
     app.setProperty("platform_forced", platform_forced)
     app.setApplicationName("IngeTrazo")
     app.setOrganizationName("IngeTrazo")
@@ -308,6 +339,12 @@ def main() -> int:
     tooltips = WrappingToolTips(app)
     app.installEventFilter(tooltips)
     window = MainWindow()
+    # From here on, a FileOpen Apple Event (macOS double-click / Open With,
+    # or a second one while this instance is already the running app — see
+    # _App.event) opens straight into this window, no process handoff
+    # needed: unlike Linux/Windows, macOS delivers it to the ALREADY-RUNNING
+    # process instead of spawning a new one.
+    app.open_window = window
 
     # Single instance: if IngeTrazo is already running, hand the document to
     # that window and quit — so a second double-click opens the file in the
@@ -317,6 +354,11 @@ def main() -> int:
     from PySide6.QtNetwork import QLocalServer, QLocalSocket
     _SOCKET = "ingetrazo-single-instance"
     arg = sys.argv[1] if len(sys.argv) > 1 else ""
+    if not arg and app.pending_open_path is not None:
+        # A cold macOS launch by double-click: no argv, the path arrived as
+        # the FileOpen event queued before `open_window` was set above.
+        arg = str(app.pending_open_path)
+        app.pending_open_path = None
     probe = QLocalSocket()
     probe.connectToServer(_SOCKET)
     if probe.waitForConnected(200):
