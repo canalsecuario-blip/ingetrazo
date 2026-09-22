@@ -6,6 +6,13 @@ follow [SemVer](https://semver.org).
 
 ## [Sin publicar]
 
+### Añadido
+- **Interfaz en portugués de Brasil** (PR #54, @dafrobozao): 1 260 textos,
+  tercer idioma del programa y el primero aportado desde fuera. Se elige en
+  Ventana ▸ Idioma ▸ «Português (Brasil)», y un sistema en portugués
+  arranca en él la primera vez. Lo que aún no está traducido sale en
+  inglés hasta que se complete.
+
 ### Arreglado
 - **Cuatro cosas de la primera pasada de Marco por el banco de pruebas.**
   (1) Una cara oculta que la vista enseña se seleccionaba y el pase de

@@ -44,6 +44,11 @@ Ahsan Mehmood <mail.ahsanmehmood@gmail.com>  (github.com/iamahsanmehmood)
     back upstream. His plugin pull requests (#1–#3) became the Extensions
     system.
 
+dafrobozao <dafrobozao.93@gmail.com>  (github.com/dafrobozao)
+    Brazilian Portuguese translation of the interface (pull request #54,
+    1 260 strings): IngeTrazo's third language, and the first one
+    contributed from outside.
+
 ---
 
 IngeTrazo is free software under GPL-3.0-or-later (see LICENSE).

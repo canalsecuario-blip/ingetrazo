@@ -928,7 +928,8 @@ class MainWindow(QMainWindow):
         help_menu.addAction(about_action)
 
     # ---- Language -----------------------------------------------------------
-    _LANGUAGE_NAMES = {"en": "English", "es": "Español"}
+    _LANGUAGE_NAMES = {"en": "English", "es": "Español",
+                       "pt-BR": "Português (Brasil)"}
 
     def _build_language_menu(self, parent_menu) -> None:
         lang_menu = parent_menu.addMenu(tr("Language"))

@@ -187,7 +187,8 @@ Developed on **Python 3.14** (3.11+ should work). Run the tests with
 
 Contributors from anywhere are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md)
 and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). All code, comments and commit
-messages are in **English**; the UI is bilingual (Spanish / English).
+messages are in **English**; the UI speaks Spanish, English and Brazilian
+Portuguese (translations are one JSON file each under `i18n/`).
 
 ## Acknowledgements
 
@@ -212,6 +213,8 @@ messages are in **English**; the UI is bilingual (Spanish / English).
   UV mapping, image entities, style colors, back-side materials, edge display
   flags, and a full reader for the classic pre-2021 MFC container format. If
   you need to read `.skp` files from Python, use OpenSKP — and give it a star.
+- **[dafrobozao](https://github.com/dafrobozao)** — the Brazilian Portuguese
+  translation of the interface (#54), IngeTrazo's third language.
 
 ## License
 
