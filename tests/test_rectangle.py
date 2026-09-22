@@ -79,3 +79,64 @@ def test_typed_dimensions_rejects_non_pair():
     assert t.on_value(vp, 3.0) is False          # a bare length isn't a W×H
     assert t.on_value(vp, (1.0, 2.0, 3.0)) is False  # a 3D delta isn't either
     assert len(vp.scene.faces) == 0
+
+
+# ---- Ctrl: from the centre (issue #39, @pacaeiro) ------------------------
+
+def test_ctrl_toggles_centre_mode_and_the_badge():
+    from PySide6.QtCore import Qt
+    vp = _Stub()
+    vp.flashed = []
+    vp.flash_status = lambda t, *a, **k: vp.flashed.append(t)
+    t = RectangleTool()
+    t.icon = "rectangle"
+    t.on_activate(vp)
+    assert t._from_center is False and t.icon == "rectangle"
+    assert t.on_key(vp, Qt.Key_Control, Qt.NoModifier) is True
+    assert t._from_center is True and t.icon == "rectangle_center"
+    assert t.on_key(vp, Qt.Key_Control, Qt.NoModifier) is True
+    assert t._from_center is False and t.icon == "rectangle"
+    assert len(vp.flashed) == 2
+
+
+def test_from_the_centre_the_second_click_is_a_corner():
+    from PySide6.QtCore import QPointF, Qt
+    from tools.base import ToolContext
+    vp = _Stub()
+    t = RectangleTool()
+    t.on_activate(vp)
+    t.on_key(vp, Qt.Key_Control, Qt.NoModifier)
+
+    def ctx(x, y):
+        return ToolContext(viewport=vp, world=V(x, y), screen=QPointF(0, 0),
+                           modifiers=Qt.NoModifier, snap=None)
+    t.on_click(ctx(1, 1))                      # the centre
+    t.hover_point = V(3, 2)
+    text, mid = t.value_label()
+    assert text == "4.00 × 2.00 m" and (mid - V(1, 1)).length() < 1e-9
+    t.on_click(ctx(3, 2))                      # a corner
+    assert _corner_keys(vp.scene.faces[0]) == {
+        (-1, 0, 0), (3, 0, 0), (3, 2, 0), (-1, 2, 0)}
+
+
+def test_typed_sizes_from_the_centre_are_the_whole_width_and_height():
+    from PySide6.QtCore import Qt
+    vp = _Stub()
+    t = RectangleTool()
+    t.on_activate(vp)
+    t.on_key(vp, Qt.Key_Control, Qt.NoModifier)
+    t.start_point = V(0, 0)
+    t.hover_point = V(5, 4)
+    assert t.on_value(vp, (4.0, 2.0)) is True
+    assert _corner_keys(vp.scene.faces[0]) == {
+        (-2, -1, 0), (2, -1, 0), (2, 1, 0), (-2, 1, 0)}
+
+
+def test_picking_the_tool_up_again_starts_corner_wise():
+    from PySide6.QtCore import Qt
+    vp = _Stub()
+    t = RectangleTool()
+    t.on_activate(vp)
+    t.on_key(vp, Qt.Key_Control, Qt.NoModifier)
+    t.on_activate(vp)
+    assert t._from_center is False

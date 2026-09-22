@@ -15,6 +15,12 @@ follow [SemVer](https://semver.org).
   was before»). El `.igz` guarda la cámara con la que se guardó y al abrirlo
   se ve lo que veía su autor; un documento nuevo vuelve a la vista por
   defecto. Los `.igz` anteriores abren como hasta ahora.
+- **Rectángulo desde el centro** (issue #39, @pacaeiro): con la
+  herramienta activa, **Ctrl** alterna entre esquina→esquina opuesta y
+  centro→esquina, como Mover/Copiar; el sello del lápiz cambia (dos iconos,
+  uno por método) y la barra lo dice. Desde el centro, un `4;2` tecleado es
+  el ancho y el alto **completos**, y el cuadrado imantado sigue centrado.
+  Al volver a coger la herramienta arranca desde la esquina.
 - **Barra de progreso al abrir un `.igz`** (issue #59, @pacaeiro: «if the
   file is big the user feels that the program has frozen»). Los mismos
   hitos que ya enseñaba la importación de `.skp`: leyendo, texturas,

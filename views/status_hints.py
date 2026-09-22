@@ -21,7 +21,7 @@ HINTS: dict = {
     "line": ("Click the start point. Arrows lock an axis, Shift locks the inference.",
              "Click the end point, or type the length and Enter."),
     "freehand": "Press and drag to draw a freehand line.",
-    "rectangle": ("Click the first corner. Arrows pick the plane.",
+    "rectangle": ("Click the first corner. Arrows pick the plane; Ctrl = centre.",
                   "Click the opposite corner, or type width;height and Enter."),
     "rotated_rect": ("Click the first corner of the base edge.",
                      "Click the end of the base edge, then the height; or type it."),

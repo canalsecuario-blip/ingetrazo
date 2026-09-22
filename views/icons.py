@@ -132,6 +132,16 @@ def _rectangle(p, ink):
     _dot(p, 37, 14, 2.9)
 
 
+def _rectangle_center(p, ink):
+    # The same rectangle drawn the other way (issue #39): the first click
+    # is the CENTRE, the second a corner — centre dot + half diagonal.
+    p.setBrush(Qt.NoBrush)
+    p.drawRect(QRectF(11, 14, 26, 20))
+    _guide(p, ink, (24, 24), (37, 14))
+    _dot(p, 24, 24, 2.9)
+    _dot(p, 37, 14, 2.9)
+
+
 def _rotated_rect(p, ink):
     # Rotated rectangle as its three clicks: the pivot (bigger dot), the
     # end of the first edge and the width — with the horizontal base line
@@ -1506,7 +1516,7 @@ _DRAW = {
     "arr_vcenter": _arr_vcenter, "arr_dist_h": _arr_dist_h,
     "arr_dist_v": _arr_dist_v, "arr_duplicate": _arr_duplicate,
     "arr_group": _arr_group, "arr_ungroup": _arr_ungroup, "arr_lock": _arr_lock,
-    "rectangle": _rectangle,
+    "rectangle": _rectangle, "rectangle_center": _rectangle_center,
     "image": _image_icon,
     "comp_vista": _comp_vista, "comp_norte": _comp_norte,
     "comp_leyenda": _comp_leyenda, "comp_escala": _comp_escala,
@@ -1573,7 +1583,8 @@ _cursor_cache: dict = {}
 # (None = bare pencil, SketchUp's Line). Hotspot = the pencil tip.
 _PENCIL_TOOLS = {
     "line": None, "freehand": "freehand",
-    "rectangle": "rectangle", "rotated_rect": "rotated_rect",
+    "rectangle": "rectangle", "rectangle_center": "rectangle_center",
+    "rotated_rect": "rotated_rect",
     "circle": "circle", "polygon": "polygon", "arc": "arc", "arc3": "arc3",
     "center_arc": "center_arc", "pie": "pie", "geopath": "geopath",
 }

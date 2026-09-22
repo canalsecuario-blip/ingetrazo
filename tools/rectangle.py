@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import math
 
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QVector3D
 
 from core.edits import build_add_edges
@@ -58,6 +59,10 @@ class RectangleTool(PlaneLock, Tool):
     def __init__(self) -> None:
         self.start_point: QVector3D | None = None
         self.hover_point: QVector3D | None = None
+        #: Ctrl toggles SketchUp's other way of drawing a rectangle: the
+        #: first click is the CENTRE and the second a corner (issue #39,
+        #: @pacaeiro). The cursor badge says which way is on.
+        self._from_center: bool = False
         # Aliased so the snap engine's close-polygon path doesn't fire on
         # the rectangle's first corner.
         self.chain_first_point: QVector3D | None = None
@@ -69,6 +74,7 @@ class RectangleTool(PlaneLock, Tool):
     # ---- Lifecycle ----------------------------------------------------------
     def on_activate(self, viewport) -> None:
         self._reset()
+        self._set_from_center(viewport, False)   # a pick-up starts corner-wise
 
     def on_deactivate(self, viewport) -> None:
         self._reset()
@@ -82,8 +88,8 @@ class RectangleTool(PlaneLock, Tool):
             if self.work_plane is None:
                 self.work_plane = self.locked_work_plane(ctx.world)
             return
-        far, _ = self._square_corner(self.start_point, ctx.world)
-        du, dv = self._dimensions(self.start_point, far)
+        anchor, far = self._span(ctx.world)
+        du, dv = self._dimensions(anchor, far)
         if abs(du) < 1e-6 or abs(dv) < 1e-6:
             # A side of zero (the second corner on the first's row or
             # column, an edge snap along one axis): SketchUp draws nothing.
@@ -93,7 +99,7 @@ class RectangleTool(PlaneLock, Tool):
             if flash is not None:
                 flash(self._degenerate_reason(ctx.world))
             return
-        self._commit_rect(ctx.viewport, self._corners(self.start_point, far))
+        self._commit_rect(ctx.viewport, self._corners(anchor, far))
 
     def _degenerate_reason(self, world) -> str:
         """Why the rectangle came out flat, in the words that actually help.
@@ -152,8 +158,13 @@ class RectangleTool(PlaneLock, Tool):
         du, dv = self._dimensions(self.start_point, self.hover_point)
         su = -1.0 if du < 0 else 1.0  # keep the side the cursor is heading to
         sv = -1.0 if dv < 0 else 1.0
-        far = self.start_point + u * (su * w) + v * (sv * h)
-        self._commit_rect(viewport, self._corners(self.start_point, far))
+        if self._from_center:
+            # Typed sizes are the WHOLE width and height, centred here.
+            half = u * (su * w * 0.5) + v * (sv * h * 0.5)
+            anchor, far = self.start_point - half, self.start_point + half
+        else:
+            anchor, far = self.start_point, self.start_point + u * (su * w) + v * (sv * h)
+        self._commit_rect(viewport, self._corners(anchor, far))
         return True
 
     def on_cancel(self, viewport) -> None:
@@ -166,8 +177,9 @@ class RectangleTool(PlaneLock, Tool):
             return []
         if self.start_point is None:
             return self._cursor_preview()
-        far, is_square = self._square_corner(self.start_point, self.hover_point)
-        c = self._corners(self.start_point, far)
+        anchor, far = self._span(self.hover_point)
+        is_square = self._square_corner(anchor, far)[1]
+        c = self._corners(anchor, far)
         lines = [
             (c[0], c[1]),
             (c[1], c[2]),
@@ -185,13 +197,35 @@ class RectangleTool(PlaneLock, Tool):
         sides are equal it reads "Cuadrado"."""
         if self.start_point is None or self.hover_point is None:
             return None
-        far, is_square = self._square_corner(self.start_point, self.hover_point)
-        du, dv = self._dimensions(self.start_point, far)
+        anchor, far = self._span(self.hover_point)
+        is_square = self._square_corner(anchor, far)[1]
+        du, dv = self._dimensions(anchor, far)
         text = f"{abs(du):.2f} × {abs(dv):.2f} m"
         if is_square:
             text += "  (Cuadrado)"
-        mid = (self.start_point + far) * 0.5
+        mid = (anchor + far) * 0.5
         return (text, mid)
+
+    def _span(self, cursor: QVector3D) -> tuple[QVector3D, QVector3D]:
+        """The two opposite corners the cursor asks for: from the first
+        click to the cursor, or — from the centre — the cursor and its
+        mirror through the first click. The square nudge is applied to
+        the span, so a centred square stays centred."""
+        if self._from_center:
+            mirror = self.start_point * 2.0 - cursor
+            far, _sq = self._square_corner(mirror, cursor)
+            return self.start_point * 2.0 - far, far
+        far, _sq = self._square_corner(self.start_point, cursor)
+        return self.start_point, far
+
+    def _set_from_center(self, viewport, on: bool) -> None:
+        self._from_center = bool(on)
+        # The badge on the pencil says which way is on (two icons, as
+        # @pacaeiro proposed: one per method).
+        self.icon = "rectangle_center" if self._from_center else "rectangle"
+        apply = getattr(viewport, "_apply_tool_cursor", None)
+        if callable(apply):
+            apply()
 
     # ---- Internals ----------------------------------------------------------
     def _cursor_preview(self):
@@ -272,6 +306,17 @@ class RectangleTool(PlaneLock, Tool):
 
 
     def on_key(self, viewport, key: int, modifiers) -> bool:
+        if key == Qt.Key_Control:
+            # Ctrl = corner ⇄ centre, like Move's Ctrl = copy (issue #39).
+            self._set_from_center(viewport, not self._from_center)
+            flash = getattr(viewport, "flash_status", None)
+            if callable(flash):
+                flash(tr("Rectangle from the centre") if self._from_center
+                      else tr("Rectangle from a corner"))
+            hint = getattr(viewport, "refresh_status_hint", None)
+            if callable(hint):
+                hint()
+            return True
         return self.plane_lock_key(viewport, key)
 
     def _reset(self) -> None:
