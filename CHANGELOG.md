@@ -4,7 +4,21 @@ All notable changes to IngeTrazo are documented here.
 Format inspired by [Keep a Changelog](https://keepachangelog.com); versions
 follow [SemVer](https://semver.org).
 
-## [Sin publicar]
+## [0.4.9] — 2026-09-21
+
+**La release de @pacaeiro: dieciséis de sus reportes, y las guías de
+Rafael.** Lo que quedaba abierto de él desde la 0.4.4 (unidades del
+modelo, rectángulo desde el centro, desfase de aristas, el vértice
+compartido) y la tanda nueva del 20 y 21 de septiembre: Dividir, la
+cámara guardada en el documento, la barra de progreso al abrir, los
+planos de sección que terminan y se colorean por eje, los pasos de
+deshacer, el scroll de las listas, Pintar con la regla de SketchUp
+(cara sobre grupo), lo oculto que se puede clicar, la cota lineal, el
+imán de ejes en todas las herramientas de dibujo. De la tercera revisión
+de Rafael: la cinta saca guías desde los ejes y deja puntos guía con su
+segmento, y el Asistente IA dice en claro cuándo falta la clave. Y el
+programa habla portugués de Brasil gracias a @dafrobozao. Archivos
+recientes, por fin.
 
 ### Añadido
 - **Archivo ▸ Abrir recientes**: los últimos diez documentos `.igz`
@@ -18,9 +32,11 @@ follow [SemVer](https://semver.org).
 - **Dividir** (issue #63, @pacaeiro: «In SK we have a command DIVIDE…
   It's a needed command»): clic derecho sobre una línea o un arco ▸
   **Dividir…** y el número de segmentos. Una línea se parte en N trozos
-  iguales; un arco o círculo se mide a lo largo de su cadena y se corta en
-  las marcas k/N, y sigue siendo una sola curva. Las caras que bordean
-  reciben los vértices nuevos. Un solo paso de deshacer.
+  iguales; un arco o círculo se mide a lo largo de su cadena, se corta en
+  las marcas k/N y queda en **N arcos independientes**, cada uno
+  seleccionable por su cuenta (un círculo dividido en cuatro son cuatro
+  cuartos, como en SketchUp). Las caras que bordean reciben los vértices
+  nuevos. Un solo paso de deshacer.
 - **Pasos de deshacer configurables** (issue #56, @pacaeiro): Preferencias
   ▸ General ▸ «Pasos de deshacer» (200 por defecto; 0 = sin límite). Cada
   paso lleva una instantánea del modelo, así que en un modelo grande el

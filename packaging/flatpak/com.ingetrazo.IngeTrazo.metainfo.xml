@@ -77,6 +77,36 @@
   <url type="vcs-browser">https://github.com/ingelibre/ingetrazo</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.4.9" date="2026-09-21">
+      <description>
+        <p>@pacaeiro's release: sixteen of his reports, and Rafael's guides.
+        What was still open from him since 0.4.4 (model units, rectangle
+        from the centre, offset on edges, the shared vertex) and his new
+        batch of 20–21 September: Divide, the camera saved in the
+        document, a progress bar on open, section planes that finish and
+        take their axis colour, the undo cap, scrolling lists, Paint with
+        SketchUp's rule (face over group), hidden things you can click, the
+        linear dimension, the axis magnet in every drawing tool. From
+        Rafael's third review: the Tape pulls guides off the axes and
+        leaves guide points with their segment, and the AI Assistant says
+        plainly when the key is missing. And the program speaks Brazilian
+        Portuguese thanks to @dafrobozao. Recent files, at last.</p>
+        <p xml:lang="es">La release de @pacaeiro: dieciséis de sus reportes, y las guías
+        de Rafael. Lo que quedaba abierto de él desde la 0.4.4 (unidades
+        del modelo, rectángulo desde el centro, desfase de aristas, el
+        vértice compartido) y la tanda nueva del 20 y 21 de septiembre:
+        Dividir, la cámara guardada en el documento, la barra de progreso
+        al abrir, los planos de sección que terminan y se colorean por
+        eje, los pasos de deshacer, el scroll de las listas, Pintar con la
+        regla de SketchUp (cara sobre grupo), lo oculto que se puede
+        clicar, la cota lineal, el imán de ejes en todas las herramientas
+        de dibujo. De la tercera revisión de Rafael: la cinta saca guías
+        desde los ejes y deja puntos guía con su segmento, y el Asistente
+        IA dice en claro cuándo falta la clave. Y el programa habla
+        portugués de Brasil gracias a @dafrobozao. Archivos recientes, por
+        fin.</p>
+      </description>
+    </release>
     <release version="0.4.8" date="2026-09-20">
       <description>
         <p>@pacaeiro's batch on 0.4.7, and what came out of checking 0.4.7
