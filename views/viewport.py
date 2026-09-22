@@ -44,6 +44,7 @@ import time as _time_mod
 from array import array
 from pathlib import Path
 from typing import Optional
+from core.units import fmt_len as _fmt_len
 
 # Perf telemetry (INGETRAZO_PERF=1): every operation slower than 50 ms and a
 # once-per-second frame summary land in ~/ingetrazo-perf.log — the tool for
@@ -588,6 +589,11 @@ def _parse_length_field(field: str):
     if num is None:
         return None
     unit = m.group(2) or ""
+    if unit == "":
+        # No unit typed: the model's (issue #33) — 2 is 2 m in a metric
+        # document, 2 mm in a millimetre one.
+        from core.units import bare_number_scale
+        return sign * num * bare_number_scale()
     scale = _METRIC_UNITS.get(unit)
     if scale is None:
         scale = _IMPERIAL_UNITS.get(unit)
@@ -687,6 +693,8 @@ class Viewport(QOpenGLWidget):
 
         self.camera = OrbitCamera()
         self.scene = Scene()
+        from core import units as _units
+        _units.bind_scene(self.scene)   # readouts format in the model's units
         self.history = History(self.scene)
         self.active_tool: Optional[Tool] = None
         self.axis_lock: Optional[str] = None  # None | "x" | "y" | "z"
@@ -6210,7 +6218,7 @@ class Viewport(QOpenGLWidget):
             return
         area = path.area()
         text = f"{tr('Area')}: {area:.1f} m²  ({area / 10000:.3f} ha)\n" \
-               f"{tr('Perimeter')}: {path.perimeter():.1f} m"
+               f"{tr('Perimeter')}: {_fmt_len(path.perimeter())}"
         font = QFont()
         font.setPointSize(9)
         font.setBold(True)
@@ -6441,7 +6449,7 @@ class Viewport(QOpenGLWidget):
             if len(segments) != 1:
                 return
             start, hover = segments[0]
-            text = f"{(hover - start).length():.2f} m"
+            text = _fmt_len((hover - start).length())
             mid_world = QVector3D(
                 (start.x() + hover.x()) * 0.5,
                 (start.y() + hover.y()) * 0.5,
@@ -6481,7 +6489,7 @@ class Viewport(QOpenGLWidget):
         segments = tool.rubber_band_lines()
         if len(segments) == 1:
             start, hover = segments[0]
-            return f"{(hover - start).length():.2f} m"
+            return _fmt_len((hover - start).length())
         return ""
 
     def _draw_axis_lock_label(self, painter: QPainter) -> None:

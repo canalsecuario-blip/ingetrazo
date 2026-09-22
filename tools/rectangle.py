@@ -22,6 +22,7 @@ from core.edits import build_add_edges
 from core.i18n import tr
 from core.history import AddFaceCommand
 from tools.base import face_the_plane, PlaneLock, Tool, ToolContext
+from core.units import fmt_pair
 
 
 def _plane_axes(normal: QVector3D) -> tuple[QVector3D, QVector3D]:
@@ -200,7 +201,7 @@ class RectangleTool(PlaneLock, Tool):
         anchor, far = self._span(self.hover_point)
         is_square = self._square_corner(anchor, far)[1]
         du, dv = self._dimensions(anchor, far)
-        text = f"{abs(du):.2f} × {abs(dv):.2f} m"
+        text = fmt_pair(abs(du), abs(dv))
         if is_square:
             text += "  (Cuadrado)"
         mid = (anchor + far) * 0.5

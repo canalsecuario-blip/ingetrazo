@@ -42,6 +42,7 @@ from core.history import (AddEdgeCommand, AddFaceCommand, CompoundCommand,
 from core.textlabel import TextLabel
 from core.topology import _key
 from tools.base import Tool, ToolContext
+from core.units import fmt_len
 
 
 
@@ -367,7 +368,7 @@ class MoveTool(Tool):
             return None
         delta = self.hover_point - self.grab
         mid = (self.grab + self.hover_point) * 0.5
-        return (f"{delta.length():.2f} m", mid)
+        return (fmt_len(delta.length()), mid)
 
     # ---- Snap exclusion -----------------------------------------------------
     def snap_excluded(self):

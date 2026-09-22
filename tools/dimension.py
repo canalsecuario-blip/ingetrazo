@@ -19,6 +19,7 @@ from core.dimension import Dimension
 from core.snap import project_to_view_plane
 from core.history import AddDimensionCommand
 from tools.base import AxisMagnet, Tool, ToolContext
+from core.units import fmt_len
 
 
 class DimensionTool(AxisMagnet, Tool):
@@ -100,9 +101,9 @@ class DimensionTool(AxisMagnet, Tool):
             return None
         if self.b is None:
             mid = (self.a + self.hover_point) * 0.5
-            return (f"{(self.hover_point - self.a).length():.2f} m", mid)
+            return (fmt_len((self.hover_point - self.a).length()), mid)
         proposed = self._proposed(self.hover_point)
-        return (f"{proposed.value():.2f} m", proposed.midpoint())
+        return (fmt_len(proposed.value()), proposed.midpoint())
 
     def _proposed(self, cursor: QVector3D) -> Dimension:
         """The dimension the current cursor would place (preview and

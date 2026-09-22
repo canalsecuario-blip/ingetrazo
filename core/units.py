@@ -60,3 +60,105 @@ def format_length(metres: float, units: str = "m", decimals: int = 2) -> str:
         return f"{sign}{feet}'{txt}\""
     factor = {"m": 1.0, "cm": 100.0, "mm": 1000.0}.get(u, 1.0)
     return f"{metres * factor:.{n}f} {u if u in ('m', 'cm', 'mm') else 'm'}"
+
+
+# ---- The model's units (issue #33, @pacaeiro) -------------------------------
+#
+# «Myself, when doing architecture I work in meters and with mechanical
+# pieces all the work is in millimeters.» The document carries the unit a
+# bare number is typed in and every readout is shown in (``Scene.units``);
+# the live scene is bound here once so tools and panels — which mostly have
+# no scene at hand — format through ``fmt_len``/``fmt_area``.
+
+DEFAULT_MODEL_UNITS = {"length": "m", "precision": 2}
+
+UNIT_LABELS = {
+    "m": "Metros (m)", "cm": "Centímetros (cm)", "mm": "Milímetros (mm)",
+    "in": "Pulgadas decimales (in)", "ft": "Pies decimales (ft)",
+    "ft-in": "Pies y pulgadas (1\'6\")", "in-frac": "Pulgadas fraccionarias",
+    "ft-in-frac": "Pies y pulgadas fraccionarias",
+}
+
+#: Metres per typed unit when the number carries no unit of its own.
+_BARE_SCALE = {"m": 1.0, "cm": 0.01, "mm": 0.001, "in": IN_M, "ft": FT_M,
+               "ft-in": IN_M, "in-frac": IN_M, "ft-in-frac": IN_M}
+
+_SCENE = None
+
+
+def bind_scene(scene) -> None:
+    """The scene whose ``units`` the formatters read (the viewport's; a
+    document loads INTO that object, so one binding lasts the session)."""
+    global _SCENE
+    _SCENE = scene
+
+
+def model_units_of(scene) -> dict:
+    """The validated units of a scene — or of a raw document payload (a
+    dict), which is how the .igz loader reads them."""
+    if isinstance(scene, dict):
+        u = scene.get("units")
+    else:
+        u = getattr(scene, "units", None) if scene is not None else None
+    if isinstance(u, dict) and u.get("length") in _BARE_SCALE:
+        return {"length": u["length"], "precision": int(u.get("precision", 2))}
+    return dict(DEFAULT_MODEL_UNITS)
+
+
+def model_units() -> dict:
+    return model_units_of(_SCENE)
+
+
+def model_unit() -> str:
+    return model_units()["length"]
+
+
+def model_precision() -> int:
+    return model_units()["precision"]
+
+
+def unit_label(code: str) -> str:
+    return UNIT_LABELS.get(code, code)
+
+
+def bare_number_scale() -> float:
+    """Metres per unit for a number typed without a unit: ``2`` is 2 m in
+    a metric document and 2 mm in a millimetre one."""
+    return _BARE_SCALE.get(model_unit(), 1.0)
+
+
+def fmt_len(metres: float) -> str:
+    """A length in the model's units and precision — the one formatter
+    every readout uses (tool labels, Entity Info, status bar)."""
+    return format_length(float(metres), model_unit(), model_precision())
+
+
+def fmt_num(metres: float) -> str:
+    """The number alone, for ``a × b`` pairs; imperial forms keep their
+    marks because the mark IS the unit."""
+    u = model_unit()
+    if u in ("m", "cm", "mm"):
+        factor = {"m": 1.0, "cm": 100.0, "mm": 1000.0}[u]
+        return f"{float(metres) * factor:.{model_precision()}f}"
+    return fmt_len(metres)
+
+
+def fmt_pair(a: float, b: float) -> str:
+    """``3.00 × 2.00 m`` (metric: one unit at the end) or
+    ``3'0" × 2'0"`` (imperial: each number carries its mark)."""
+    u = model_unit()
+    if u in ("m", "cm", "mm"):
+        return f"{fmt_num(a)} × {fmt_len(b)}"
+    return f"{fmt_len(a)} × {fmt_len(b)}"
+
+
+def fmt_area(square_metres: float) -> str:
+    """An area in the model's units squared."""
+    u = model_unit()
+    n = model_precision()
+    if u in ("m", "cm", "mm"):
+        factor = {"m": 1.0, "cm": 1e4, "mm": 1e6}[u]
+        return f"{float(square_metres) * factor:.{n}f} {u}²"
+    if u == "ft" or u.startswith("ft"):
+        return f"{float(square_metres) / (FT_M * FT_M):.{n}f} ft²"
+    return f"{float(square_metres) / (IN_M * IN_M):.{n}f} in²"

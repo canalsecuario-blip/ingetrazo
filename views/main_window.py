@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from core.i18n import available_languages, current_language, set_language, tr
+from core.units import fmt_pair
 from views.filedialogs import file_dialogs
 from core.version import __version__
 from core.group import Group
@@ -902,6 +903,12 @@ class MainWindow(QMainWindow):
         window_menu.addAction(self._act_sidebar)
 
         window_menu.addSeparator()
+        units_action = QAction(tr("Model Units…"), self)
+        units_action.setToolTip(tr(
+            "The unit lengths are typed and shown in — metres for a "
+            "building, millimetres for a machined part."))
+        units_action.triggered.connect(self._on_model_units)
+        window_menu.addAction(units_action)
         prefs_action = QAction(tr("Preferences…"), self)
         prefs_action.triggered.connect(self._on_preferences)
         window_menu.addAction(prefs_action)
@@ -1113,6 +1120,54 @@ class MainWindow(QMainWindow):
             self._place_clean_screen_exit()
             self._place_sidebar_handle()
         return super().eventFilter(obj, event)
+
+    def _on_model_units(self) -> None:
+        """Window ▸ Model Units (issue #33, @pacaeiro: «when doing
+        architecture I work in meters and with mechanical pieces all the
+        work is in millimeters»). The unit a bare number is typed in and
+        every readout is shown in — it travels in the document. The
+        dimension style follows it, and can still be set apart in its own
+        panel."""
+        from PySide6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox,
+                                       QFormLayout, QSpinBox)
+        from core import units as _units
+        scene = self.viewport.scene
+        current = _units.model_units_of(scene)
+        dlg = QDialog(self)
+        dlg.setWindowTitle(tr("Model Units"))
+        form = QFormLayout(dlg)
+        combo = QComboBox()
+        for code in _units.UNIT_CHOICES:
+            combo.addItem(_units.unit_label(code), code)
+        idx = combo.findData(current.get("length", "m"))
+        combo.setCurrentIndex(max(0, idx))
+        spin = QSpinBox()
+        spin.setRange(0, 6)
+        spin.setValue(int(current.get("precision", 2)))
+        form.addRow(tr("Length unit"), combo)
+        form.addRow(tr("Decimals"), spin)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(dlg.accept)
+        buttons.rejected.connect(dlg.reject)
+        form.addRow(buttons)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        chosen = {"length": str(combo.currentData()),
+                  "precision": int(spin.value())}
+        if chosen == current:
+            return
+        scene.units = chosen
+        style = getattr(scene, "dimension_style", None)
+        if isinstance(style, dict):
+            style["units"] = chosen["length"]
+            style["decimals"] = chosen["precision"]
+        scene.version += 1
+        self.viewport.update()
+        self.statusBar().showMessage(tr(
+            "Model units: {unit}, {n} decimals",
+            unit=_units.unit_label(chosen["length"]), n=chosen["precision"]),
+            4000)
 
     def _on_preferences(self) -> None:
         """Window ▸ Preferences: the scattered QSettings in one dialog."""
@@ -3894,8 +3949,7 @@ class MainWindow(QMainWindow):
             TransformImagePlaneCommand(image, u=u, v=v))
         self.viewport.update()
         self.statusBar().showMessage(
-            tr("Image resized to {w:.2f} × {h:.2f} m",
-               w=u.length(), h=v.length()), 4000)
+            tr("Image resized to {size}", size=fmt_pair(u.length(), v.length())), 4000)
 
     def _on_image_opacity(self) -> None:
         """Fade a reference image so the model and its lines read over it

@@ -60,6 +60,7 @@ from georef.tiles import DEFAULT_SOURCE_ID, PRESETS, TileLayer, custom_source
 from tools.paint import PaintTool
 
 from core.paths import app_root
+from core.units import fmt_area, fmt_len
 
 _TEX_DIR = app_root() / "resources" / "textures"
 #: RAL Classic — the paint standard a drawing can be specified in. Its names
@@ -2340,9 +2341,9 @@ class EntityInfoPanel(QWidget):
                         f"{tr('Material')}: {mat}")
             if isinstance(e, Edge):
                 return (f"<b>{tr('Edge')}</b><br>"
-                        f"{tr('Length')}: {(e.b - e.a).length():.3f} m")
+                        f"{tr('Length')}: {fmt_len((e.b - e.a).length())}")
             if isinstance(e, Dimension):
-                return f"<b>{tr('Dimension')}</b><br>{tr('Measure')}: {e.value():.3f} m"
+                return f"<b>{tr('Dimension')}</b><br>{tr('Measure')}: {fmt_len(e.value())}"
             if isinstance(e, GeoPath):
                 return self._describe_geopath(e)
             if isinstance(e, Group):
@@ -2377,14 +2378,14 @@ class EntityInfoPanel(QWidget):
         kind = tr("Polygon") if path.closed else tr("Route")
         rows = [f"<b>{kind}</b>",
                 f"{tr('Vertices')}: {len(path.points)}",
-                f"{tr('Perimeter')}: {path.perimeter():.2f} m"]
+                f"{tr('Perimeter')}: {fmt_len(path.perimeter())}"]
         if path.closed:
             area = path.area()
             rows.append(f"{tr('Area (plan)')}: {area:.2f} m² "
                         f"({area / 10000:.4f} ha)")
             sa = path.surface_area()
             if sa is not None:
-                rows.append(f"{tr('Area (3D terrain)')}: {sa:.2f} m²")
+                rows.append(f"{tr('Area (3D terrain)')}: {fmt_area(sa)}")
         return "<br>".join(rows)
 
     @staticmethod

@@ -42,6 +42,7 @@ from PySide6.QtWidgets import (
 from core import bim
 from core.i18n import tr
 from tools.base import Tool
+from core.units import fmt_area
 
 
 # ---------------------------------------------------------------------------
@@ -184,12 +185,12 @@ def _stats_to_text(stats: dict) -> str:
     for m in s["textures"]:
         label = m.get("mat") or m["name"]
         lines.append(f"  {label}: {m['faces']} {tr('faces')}, "
-                     f"{m['area']:.2f} m²")
+                     f"{fmt_area(m['area'])}")
     for m in s["colors"]:
         r, g, b = (int(round(c * 255)) for c in m["rgb"][:3])
         label = m.get("mat") or f"rgb({r},{g},{b})"
         lines.append(f"  {label}: {m['faces']} {tr('faces')}, "
-                     f"{m['area']:.2f} m²")
+                     f"{fmt_area(m['area'])}")
     if not s["textures"] and not s["colors"]:
         lines.append("  " + tr("(none)"))
 
@@ -205,7 +206,7 @@ def _stats_to_text(stats: dict) -> str:
             vol = (f"{o['volume']:.3f} m³" if o["volume"] is not None
                    else "—")
             lines.append(f"  {o['class']}  {o['name']}: "
-                         f"{o['area']:.2f} m², {vol}")
+                         f"{fmt_area(o['area'])}, {vol}")
 
     lines += [
         "",
@@ -384,7 +385,7 @@ class ModelInfoDialog(QDialog):
             self._mat_table.setItem(
                 i, 1, QTableWidgetItem(f"{m['faces']:,}"))
             self._mat_table.setItem(
-                i, 2, QTableWidgetItem(f"{m['area']:.2f} m²"))
+                i, 2, QTableWidgetItem(f"{fmt_area(m['area'])}"))
         self._mat_table.resizeRowsToContents()
 
         layers = s["layers"]
@@ -413,7 +414,7 @@ class ModelInfoDialog(QDialog):
             self._bim_table.setItem(i, 0, QTableWidgetItem(o["class"]))
             self._bim_table.setItem(i, 1, QTableWidgetItem(o["name"]))
             self._bim_table.setItem(
-                i, 2, QTableWidgetItem(f"{o['area']:.2f} m²"))
+                i, 2, QTableWidgetItem(f"{fmt_area(o['area'])}"))
             vol = (f"{o['volume']:.3f} m³" if o["volume"] is not None
                    else tr("(not watertight)"))
             self._bim_table.setItem(i, 3, QTableWidgetItem(vol))

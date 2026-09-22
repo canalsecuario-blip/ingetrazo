@@ -21,6 +21,7 @@ from core.history import AddGeoPathCommand, MoveGeoPathNodeCommand
 from core.i18n import tr
 from georef.geopath import GeoPath
 from tools.base import Tool, ToolContext
+from core.units import fmt_len
 
 _CLOSE_PX = 10  # click within this of the first node closes the loop
 _NODE_PX = 9    # grab an existing node within this pixel radius
@@ -190,20 +191,20 @@ class GeoPathTool(Tool):
         if not self.nodes:
             if elevation is None:
                 return None
-            return (f"{elevation:.2f} m", self.hover_point)
+            return (fmt_len(elevation), self.hover_point)
 
         d = self.hover_point - self.nodes[-1]
         mid = (self.nodes[-1] + self.hover_point) * 0.5
         run = d.length()
         if elevation is None:
-            return (f"{run:.2f} m", mid)
+            return (fmt_len(run), mid)
 
         # Tracing with ground under both ends: length, drop and grade — the
         # three numbers a road or canal alignment is judged on, without
         # leaving the tool to open the profile.
         start_z = self._start_elevation
         if start_z is None or run < 1e-6:
-            return (f"{run:.2f} m  ·  {elevation:.2f} m", mid)
+            return (fmt_len(run) + "  ·  " + fmt_len(elevation), mid)
         rise = elevation - start_z
         grade = rise / run * 100.0
         return (f"{run:.2f} m  ·  {elevation:.2f} m  ·  {rise:+.2f} m ({grade:+.1f}%)",

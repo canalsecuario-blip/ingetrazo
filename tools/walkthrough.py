@@ -34,6 +34,7 @@ from PySide6.QtGui import QVector3D
 
 from core.i18n import tr
 from tools.base import Tool, ToolContext
+from core.units import fmt_len
 
 #: SketchUp's default eye height, 5' 6".
 DEFAULT_EYE_HEIGHT = 1.68
@@ -105,7 +106,7 @@ class _EyeTool(Tool):
         vp = getattr(self, "_viewport", None)
         if vp is None:
             return None
-        return (f"{vp.camera.eye().z():.2f} m", None)
+        return (fmt_len(vp.camera.eye().z()), None)
 
     def drag_plane(self, viewport):
         """Look Around and Walk read the cursor in PIXELS; the viewport
@@ -149,7 +150,7 @@ class PositionCameraTool(_EyeTool):
         self._dragged = False
 
     def value_label(self):
-        return (f"{eye_height():.2f} m", None)
+        return (fmt_len(eye_height()), None)
 
     def drag_plane(self, viewport):
         return None                   # the click needs a real point to stand on

@@ -25,6 +25,7 @@ from core.history import AddImagePlaneCommand
 from core.image_plane import ImagePlane
 from core.triangulate import plane_axes
 from tools.base import Tool, ToolContext
+from core.units import fmt_pair
 
 
 class ImageTool(Tool):
@@ -127,7 +128,7 @@ class ImageTool(Tool):
         if not self.armed or self.start_point is None or self.hover_point is None:
             return None
         u, v = self._frame(self.start_point, self.hover_point)
-        text = f"{u.length():.2f} × {v.length():.2f} m"
+        text = fmt_pair(u.length(), v.length())
         if self._free_aspect:
             text += "  (libre)"
         return (text, self.start_point + (u + v) * 0.5)

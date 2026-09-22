@@ -96,6 +96,10 @@ class Scene:
     #: @pacaeiro, issue #60: «If I do a New drawing, or open a drawing, the
     #: Camera stays in the position where it was before».
     camera_home: dict | None = None
+    #: The model's units (issue #33): the unit a bare number is typed in and
+    #: every length is shown in, plus the decimals. Travels in the .igz;
+    #: read through ``core.units`` (``fmt_len`` & co.).
+    units: dict = field(default_factory=lambda: {"length": "m", "precision": 2})
     dimension_style: dict = field(default_factory=lambda: {
         "decimals": 2, "units": "m", "font_size": 9, "color": [45, 55, 75],
         "norma": "iso", "base_step_mm": 8.0, "ends": "arrow"})
@@ -508,6 +512,7 @@ class Scene:
             self.version += 1
         # Outside the guard: an empty document has a camera to forget too.
         self.camera_home = None
+        self.units = {"length": "m", "precision": 2}
 
     # ---- Queries ------------------------------------------------------------
     def iter_world_faces(self):

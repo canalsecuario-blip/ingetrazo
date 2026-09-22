@@ -34,6 +34,7 @@ from core.history import (DeleteEdgesCommand, RebuildPlanarFacesCommand,
                           TagCurveCommand)
 from core.triangulate import plane_axes
 from tools.base import AxisMagnet, PlaneLock, Tool, ToolContext
+from core.units import fmt_len
 
 _SEGMENTS = 16  # polyline segments approximating the arc
 
@@ -725,12 +726,12 @@ class ArcTool(AxisMagnet, PlaneLock, Tool):
         mid = (self.start_point + self.end_point) * 0.5
         if self._snap_bulge is not None:
             if self._bulge_kind == "half":
-                return (tr("Half circle") + f"  {abs(self._snap_bulge):.2f} m", mid)
+                return (tr("Half circle") + "  " + fmt_len(abs(self._snap_bulge)), mid)
             if self._bulge_kind == "fillet":
-                return (tr("Tangent to edge") + f"  {abs(self._snap_bulge):.2f} m", mid)
-            return (tr("Tangent at vertex") + f"  {abs(self._snap_bulge):.2f} m", mid)
+                return (tr("Tangent to edge") + "  " + fmt_len(abs(self._snap_bulge)), mid)
+            return (tr("Tangent at vertex") + "  " + fmt_len(abs(self._snap_bulge)), mid)
         b = self._bulge_for(self.hover_point)
-        return (f"Bulge {abs(b):.2f} m", mid)
+        return ("Bulge " + fmt_len(abs(b)), mid)
 
     # ---- Internals ----------------------------------------------------------
     def _axes(self) -> tuple[QVector3D, QVector3D]:
@@ -982,7 +983,7 @@ class CenterArcTool(AxisMagnet, PlaneLock, Tool):
             return None
         if self.arm_point is None:
             r = (self.hover_point - self.start_point).length()
-            return (f"R {r:.2f} m", self.hover_point)
+            return ("R " + fmt_len(r), self.hover_point)
         return (f"{self._sweep_to(self.hover_point):+.1f}°", self.hover_point)
 
     def vcb_caption(self) -> str:

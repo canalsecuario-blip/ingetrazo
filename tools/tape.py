@@ -34,6 +34,7 @@ from core.guide import Guide
 from core.history import AddGuideCommand
 from core.i18n import tr
 from tools.base import Tool, ToolContext
+from core.units import fmt_len
 
 _AXES = {"x": (1.0, 0.0, 0.0), "y": (0.0, 1.0, 0.0), "z": (0.0, 0.0, 1.0)}
 
@@ -274,7 +275,7 @@ class TapeMeasureTool(Tool):
         else:
             d = (self.hover_point - self.start_point).length()
         mid = (self.start_point + self.hover_point) * 0.5
-        return (f"{d:.2f} m", mid)
+        return (fmt_len(d), mid)
 
     # ---- Internals ----------------------------------------------------------
     def _edge_dir(self) -> QVector3D:

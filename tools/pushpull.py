@@ -72,6 +72,7 @@ from core.topology import (
     refine_loop_with_points,
 )
 from tools.base import Tool, ToolContext
+from core.units import fmt_len
 
 
 def _project_loop_2d(loop, normal):
@@ -712,7 +713,7 @@ class PushPullTool(Tool):
         if not self.dragging or self._anchor is None:
             return None
         midpoint = self._anchor + self._normal * (self.extrusion * 0.5)
-        return (f"{abs(self.extrusion):.2f} m", midpoint)
+        return (fmt_len(abs(self.extrusion)), midpoint)
 
     # ---- Internals ----------------------------------------------------------
     def _compute_inward_limit(self, scene) -> None:

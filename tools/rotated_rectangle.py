@@ -26,6 +26,7 @@ from core.i18n import tr
 from core.history import AddFaceCommand
 from core.triangulate import plane_axes
 from tools.base import AxisMagnet, face_the_plane, PlaneLock, Tool, ToolContext
+from core.units import fmt_len, fmt_pair
 
 
 class RotatedRectangleTool(AxisMagnet, PlaneLock, Tool):
@@ -176,12 +177,12 @@ class RotatedRectangleTool(AxisMagnet, PlaneLock, Tool):
         if self.base_point is None:
             length = (self.hover_point - self.start_point).length()
             mid = (self.start_point + self.hover_point) * 0.5
-            return (f"{length:.2f} m", mid)
+            return (fmt_len(length), mid)
         w, angle = self._width_and_angle(self.hover_point, self._locked)
         length = (self.base_point - self.start_point).length()
         c = self._corners(w, angle)
         mid = (self.start_point + c[2]) * 0.5 if c else self.base_point
-        texto = f"{length:.2f} × {abs(w):.2f} m"
+        texto = fmt_pair(length, abs(w))
         if abs(angle) > 0.05:
             texto += f"   {angle:.0f}°"
         return (texto, mid)

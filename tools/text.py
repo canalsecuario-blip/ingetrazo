@@ -15,6 +15,7 @@ from core.history import AddTextLabelCommand
 from core.i18n import tr
 from core.textlabel import TextLabel
 from tools.base import AxisMagnet, Tool, ToolContext
+from core.units import fmt_area, fmt_len
 
 
 class TextTool(AxisMagnet, Tool):
@@ -73,7 +74,7 @@ class TextTool(AxisMagnet, Tool):
         except Exception:
             edge = None
         if edge is not None:
-            return f"{(QVector3D(edge.b) - QVector3D(edge.a)).length():.2f} m"
+            return fmt_len((QVector3D(edge.b) - QVector3D(edge.a)).length())
         try:
             face = viewport.pick_face_any(sx, sy)
         except Exception:
@@ -82,7 +83,7 @@ class TextTool(AxisMagnet, Tool):
             f = face[0] if isinstance(face, tuple) else face
             area = getattr(f, "area", None)
             if callable(area):
-                return f"{f.area():.2f} m²"
+                return fmt_area(f.area())
         p = ctx.world
         return f"({p.x():.2f}, {p.y():.2f}, {p.z():.2f})"
 

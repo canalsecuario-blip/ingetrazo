@@ -15,6 +15,17 @@ follow [SemVer](https://semver.org).
   was before»). El `.igz` guarda la cámara con la que se guardó y al abrirlo
   se ve lo que veía su autor; un documento nuevo vuelve a la vista por
   defecto. Los `.igz` anteriores abren como hasta ahora.
+- **Unidades del modelo** (issue #33, @pacaeiro: «when doing architecture I
+  work in meters and with mechanical pieces all the work is in
+  millimeters»). **Ventana ▸ Unidades del modelo…**: metros, centímetros,
+  milímetros, pulgadas, pies, pies y pulgadas (decimales o fraccionarias) y
+  los decimales. La unidad viaja en el documento y manda en las dos
+  direcciones: un número tecleado **sin unidad** está en ella (`2` son 2 mm
+  en un documento en milímetros; `2m` sigue siendo 2 m), y todos los
+  rótulos —herramientas, Info de entidad, barra de estado, resumen por
+  materiales— se muestran en ella. El estilo de cota la sigue al cambiarla
+  (y se puede apartar en su panel). Los documentos anteriores abren en
+  metros.
 - **Rectángulo desde el centro** (issue #39, @pacaeiro): con la
   herramienta activa, **Ctrl** alterna entre esquina→esquina opuesta y
   centro→esquina, como Mover/Copiar; el sello del lápiz cambia (dos iconos,

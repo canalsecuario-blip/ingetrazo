@@ -306,7 +306,8 @@ class Dimension:
         return (self.b - self.a).length()
 
     def label(self) -> str:
-        return f"{self.value():.2f} m"
+        from core.units import fmt_len
+        return fmt_len(self.value())
 
     def perpendicular_offset(self) -> QVector3D:
         """The offset with any component ALONG the measured segment
