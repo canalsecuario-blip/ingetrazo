@@ -15,6 +15,10 @@ follow [SemVer](https://semver.org).
   was before»). El `.igz` guarda la cámara con la que se guardó y al abrirlo
   se ve lo que veía su autor; un documento nuevo vuelve a la vista por
   defecto. Los `.igz` anteriores abren como hasta ahora.
+- **Barra de progreso al abrir un `.igz`** (issue #59, @pacaeiro: «if the
+  file is big the user feels that the program has frozen»). Los mismos
+  hitos que ya enseñaba la importación de `.skp`: leyendo, texturas,
+  geometría, grupos. Un documento pequeño no llega a verla.
 - **Planos de sección** (issue #62, @pacaeiro): la herramienta **termina
   tras colocar uno** y vuelve a Seleccionar; el cuadro del nombre trae «No
   volver a preguntar» (y Preferencias ▸ General lo reactiva); y un plano

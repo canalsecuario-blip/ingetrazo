@@ -67,3 +67,28 @@ def test_open_restores_the_authors_view_and_new_resets_it(tmp_path):
     finally:
         win._saved_version = win.viewport.scene.version
         win.close()
+
+
+def test_the_loader_reports_progress(tmp_path):
+    """Issue #59: opening a document reports milestones for the bar."""
+    from PySide6.QtGui import QMatrix4x4
+    from core.group import Group
+    from core.mesh import Mesh
+    scene = Scene()
+    for i in range(3):
+        m = Mesh()
+        m.add_face([QVector3D(i, 0, 0), QVector3D(i + 1, 0, 0),
+                    QVector3D(i + 1, 1, 0), QVector3D(i, 1, 0)])
+        g = Group(m, f"g{i}")
+        g.xform = QMatrix4x4()
+        scene.groups.append(g)
+    path = tmp_path / "grupos.igz"
+    igz.save_scene(scene, path)
+    seen = []
+    back = Scene()
+    igz.load_into(back, path, progress=lambda f, t: seen.append((f, t)))
+    fracs = [f for f, _t in seen]
+    assert fracs == sorted(fracs) and fracs[0] < 0.1 and fracs[-1] >= 0.95
+    assert any("groups" in t.lower() for _f, t in seen)
+    assert len(back.groups) == 3
+    igz.load_into(Scene(), path)                      # no callback: as before

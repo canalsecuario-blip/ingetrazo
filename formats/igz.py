@@ -500,8 +500,12 @@ def _unpack_photo_mesh(payload: dict, archive):
     return unpack_mesh(meta, read_blob)
 
 
-def load_into(scene, path: Path) -> None:
-    """Replace ``scene`` contents with what's stored at ``path``."""
+def load_into(scene, path: Path, progress=None) -> None:
+    """Replace ``scene`` contents with what's stored at ``path``.
+
+    ``progress(fraction, text)``, when given, is called at the loader's
+    milestones so the window can show a bar: a big document took seconds
+    with nothing on screen and read as frozen (issue #59, @pacaeiro)."""
     import gc
 
     # Mass object construction ahead — see formats.skp.apply_payload: the
@@ -509,17 +513,23 @@ def load_into(scene, path: Path) -> None:
     _gc_was_enabled = gc.isenabled()
     gc.disable()
     try:
-        _load_into_inner(scene, path)
+        _load_into_inner(scene, path, progress)
     finally:
         if _gc_was_enabled:
             gc.enable()
 
 
-def _load_into_inner(scene, path: Path) -> None:
+def _load_into_inner(scene, path: Path, progress=None) -> None:
+    def tick(frac, text):
+        if progress is not None:
+            progress(frac, text)
+
+    tick(0.05, "Reading the document…")
     data, archive = _read_document(path)
     survey = None
     try:
         if archive is not None:
+            tick(0.2, "Unpacking textures…")
             _unpack_textures(data.get("scene", {}), archive)
             # Rebuilt here, while the archive is still open — it closes below
             # and the survey's blobs live inside it.
@@ -545,6 +555,7 @@ def _load_into_inner(scene, path: Path) -> None:
     scene.photo_mesh = survey
     scene.tile_layer = None
 
+    tick(0.35, "Building geometry…")
     _load_mesh(scene.mesh, payload)
     raw_layers = payload.get("layers")
     if raw_layers:
@@ -619,8 +630,12 @@ def _load_into_inner(scene, path: Path) -> None:
                         for c in raw.get("children", []) or [])
         return group
 
-    for raw in payload.get("groups", []):
+    raw_groups = payload.get("groups", []) or []
+    for i, raw in enumerate(raw_groups):
+        if i % 50 == 0:
+            tick(0.6 + 0.35 * i / max(1, len(raw_groups)), "Placing groups…")
         scene.groups.append(_group_from(raw))
+    tick(0.96, "Finishing…")
     if names:
         from core.group import reserve_group_names
         reserve_group_names(names)   # new groups never reuse a stored "Group N"

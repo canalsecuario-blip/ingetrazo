@@ -2823,12 +2823,18 @@ class MainWindow(QMainWindow):
             recovered = answer == QMessageBox.Yes
             if not recovered:
                 autosave.clear(path)
+        # A bar while it loads (issue #59, @pacaeiro): a big document took
+        # seconds with nothing on screen, «feeling of freeze». Small ones
+        # never show it (the dialog waits 400 ms before appearing).
+        dlg, cb = self._import_progress(tr("Opening {name}…", name=path.name))
         try:
             igz_format.load_into(self.viewport.scene,
-                                 slot if recovered else path)
+                                 slot if recovered else path, progress=cb)
         except Exception as exc:  # noqa: BLE001 - surface any IO/parse error to the user
+            dlg.close()
             QMessageBox.critical(self, tr("Open failed"), str(exc))
             return False
+        dlg.close()
         self.viewport.history.clear()
         self.viewport.reset_texture_cache()
         self._apply_camera_home()
