@@ -98,6 +98,12 @@ hiddenimports += [
     # sees them and they were left out: the AI assistant died on load with
     # "cannot import name 'ai' from 'core'" in every packaged build.
     'core.ai',
+    # The recipe book both AI doors read. It reaches the bundle only
+    # through a plugin (the assistant) and a by-path script (the MCP
+    # server), so analysis never sees it — and its absence is SILENT: the
+    # server falls back to a short string and the model goes back to
+    # probing the API, which is the very waste it exists to stop.
+    'core.ai_recipes',
     'core.bim',
     'tools.place_group',
     'tools.paste',
@@ -264,7 +270,7 @@ mcp_a = Analysis(
     pathex=[str(ROOT)],
     binaries=[],
     datas=[],
-    hiddenimports=[],
+    hiddenimports=['core.ai_recipes'],       # its recipe book, read at import
     hookspath=[],
     runtime_hooks=[],
     excludes=excludes,

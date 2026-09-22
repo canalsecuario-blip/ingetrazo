@@ -171,6 +171,29 @@ def _self_check() -> int:
         if not ok:
             problems.append(label)
 
+    # ``ingetrazo --mcp`` runs scripts/ingetrazo_mcp.py by path, and that
+    # server reads its recipe book from core.ai_recipes. The Flatpak of
+    # 0.4.9 shipped without scripts/ at all: the app ran, and the MCP door
+    # was simply dead — the same family as the skp scaffold below. A recipe
+    # book that fails to import is worse than missing, because the server
+    # still answers and the model goes back to probing the API by hand.
+    script = root / "scripts" / "ingetrazo_mcp.py"
+    ok = script.is_file()
+    print(f"  MCP server     : {'found' if ok else 'MISSING'}  {script}")
+    if not ok:
+        problems.append("MCP server")
+    try:
+        from core.ai_recipes import reference
+
+        text = reference()
+        ok = "revolve(" in text and "house(" in text
+        where = f"{len(text)} chars"
+    except Exception as exc:  # noqa: BLE001 - unimportable in this bundle
+        ok, where = False, f"({exc})"
+    print(f"  AI recipe book : {'found' if ok else 'MISSING'}  {where}")
+    if not ok:
+        problems.append("AI recipe book")
+
     # The .skp writer builds every file on top of openskp's bundled blank
     # (``_scaffold/blank_v17.skp``, package data PyInstaller doesn't collect
     # by itself): a bundle without it starts fine and dies on Export ▸

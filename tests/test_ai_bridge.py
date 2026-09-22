@@ -187,3 +187,51 @@ def test_the_mcp_script_ships_with_the_app_and_the_flag_finds_it():
     spec = (app_root() / "ingetrazo.spec").read_text()
     assert "('scripts/ingetrazo_mcp.py',   'scripts')" in spec
     assert "name='ingetrazo-mcp'" in spec and "console=True" in spec
+
+
+def test_the_mcp_door_hands_the_model_the_same_recipe_book_as_the_assistant():
+    """The 2026-09-21 measurement: Antigravity built the dining table
+    correctly in 81 calls, 46 of them introspection (``dir``, ``inspect``,
+    ``dis``), because ``run_python``'s description taught ``mesh.add_face``
+    and nothing else while the in-app assistant's prompt taught the whole
+    recipe book. One text, both doors."""
+    import ingetrazo_mcp as mcp
+    from core import ai_recipes
+
+    run_python = next(t for t in mcp.TOOLS if t["name"] == "run_python")
+    description = run_python["description"]
+    for recipe in ("revolve(", "extrude(", "prism(", "wall(", "house("):
+        assert recipe in description, recipe
+    # The two things the model paid the most turns to rediscover.
+    assert 'f.attrs["color"]' in description
+    assert "METROS" in description
+    # And what it should not have spent turns on at all.
+    assert "NO explores la API" in description
+
+    # The handshake states the stance before any tool is listed.
+    init = mcp.handle({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+                       "params": {}})
+    instructions = init["result"]["instructions"]
+    assert "Sumari" in instructions          # the scale figure, not the model
+    assert ai_recipes.RECIPES in instructions
+
+    # Same source as the assistant's prompt: teach a helper once.
+    from plugins.ai_assistant import SYSTEM_PROMPT
+
+    assert ai_recipes.RECIPES in SYSTEM_PROMPT
+    assert ai_recipes.SCOPE in SYSTEM_PROMPT
+    # Each door names its own unit of execution.
+    assert "Cada bloque es UN paso de undo" in SYSTEM_PROMPT
+    assert "Cada llamada es UN paso de undo" in description
+
+
+def test_the_packaged_app_would_notice_a_missing_recipe_book():
+    """``--check`` is where a packaging slip is supposed to speak up: the
+    Flatpak of 0.4.9 shipped without ``scripts/`` and the MCP door was dead
+    with the app running fine. Same family as the .skp scaffold."""
+    import main
+
+    source = Path(main.__file__).read_text(encoding="utf-8")
+    check = source[source.index("def _self_check"):source.index("def main()")]
+    assert "ingetrazo_mcp.py" in check
+    assert "ai_recipes" in check
