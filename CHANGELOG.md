@@ -7,6 +7,19 @@ follow [SemVer](https://semver.org).
 ## [Sin publicar]
 
 ### Añadido
+- **Archivo ▸ Abrir recientes**: los últimos diez documentos `.igz`
+  abiertos o guardados, con «Limpiar lista»; los que ya no existen
+  desaparecen solos.
+- **El documento recuerda su cámara** (issue #60, @pacaeiro: «If I do a
+  New drawing, or open a drawing, the Camera stays in the position where it
+  was before»). El `.igz` guarda la cámara con la que se guardó y al abrirlo
+  se ve lo que veía su autor; un documento nuevo vuelve a la vista por
+  defecto. Los `.igz` anteriores abren como hasta ahora.
+- **Planos de sección** (issue #62, @pacaeiro): la herramienta **termina
+  tras colocar uno** y vuelve a Seleccionar; el cuadro del nombre trae «No
+  volver a preguntar» (y Preferencias ▸ General lo reactiva); y un plano
+  perpendicular a un eje se dibuja **del color de ese eje** (rojo, verde,
+  azul; los oblicuos siguen neutros).
 - **Interfaz en portugués de Brasil** (PR #54, @dafrobozao): 1 260 textos,
   tercer idioma del programa y el primero aportado desde fuera. Se elige en
   Ventana ▸ Idioma ▸ «Português (Brasil)», y un sistema en portugués

@@ -103,6 +103,12 @@ class SectionPlaneTool(Tool):
             "Section plane placed — double-click toggles the cut; "
             "Move/Rotate reposition it"), 4000)
         viewport.update()
+        # One plane per pick-up, then back to Select — SketchUp's tool ends
+        # after placing (issue #62, @pacaeiro: «There's no need to create
+        # several section planes continually»).
+        back = getattr(window, "_activate_tool", None)
+        if callable(back):
+            back("select")
 
     def on_cancel(self, viewport) -> None:
         viewport.update()

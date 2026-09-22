@@ -5638,14 +5638,26 @@ class Viewport(QOpenGLWidget):
                 px.append((a, b))
             if not ok:
                 continue
+            # A plane square to an axis wears that axis's colour (issue
+            # #62, @pacaeiro's aesthetic suggestion): red / green / blue
+            # tells at a glance which way it cuts; an oblique one stays
+            # neutral. Selection orange still wins.
+            axis_col = None
+            n = sp.normal
+            for comp, rgb in ((n.x(), (0.86, 0.22, 0.22)),
+                              (n.y(), (0.18, 0.62, 0.24)),
+                              (n.z(), (0.20, 0.36, 0.86))):
+                if abs(comp) > 0.995:
+                    axis_col = QColor.fromRgbF(*rgb)
             if sp in selection:
                 col = QColor(243, 115, 41)
                 width = 2
             elif sp.active:
-                col = QColor(45, 55, 75)
+                col = axis_col or QColor(45, 55, 75)
                 width = 2
             else:
-                col = QColor(150, 155, 162)
+                col = (axis_col.lighter(135) if axis_col is not None
+                       else QColor(150, 155, 162))
                 width = 1.4
             # SketchUp draws the frame edges dashed.
             pen = QPen(col, width, Qt.DashLine)

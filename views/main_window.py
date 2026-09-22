@@ -284,6 +284,7 @@ class MainWindow(QMainWindow):
             return                      # try again next tick
         from core import autosave
         try:
+            self.viewport.scene.camera_home = self._camera_dict()
             autosave.write(self.viewport.scene, self._current_path)
         except Exception:  # noqa: BLE001 — recovery must never break modeling
             return
@@ -1271,6 +1272,13 @@ class MainWindow(QMainWindow):
         open_action.triggered.connect(self._on_open)
         actions.append(open_action)
 
+        # The last documents, one click away (asked for since the 0.4.x
+        # triage; SketchUp's File ▸ Open Recent). Filled when shown, so a
+        # file deleted meanwhile just drops off the list.
+        self._recent_menu = QMenu(tr("Open Recent"), self)
+        self._recent_menu.aboutToShow.connect(self._fill_recent_menu)
+        actions.append(self._recent_menu.menuAction())
+
         recover_action = QAction(tr("Recover a discarded auto-save…"), self)
         recover_action.setToolTip(tr(
             "Auto-saved copies retired when a session was closed without "
@@ -1743,9 +1751,14 @@ class MainWindow(QMainWindow):
 
     def prompt_section_name(self, plane) -> None:
         """SketchUp's post-placement prompt: name + symbol (cancel keeps
-        the defaults; the placement itself is already committed)."""
-        from PySide6.QtWidgets import (QDialog, QDialogButtonBox, QFormLayout,
-                                       QLineEdit)
+        the defaults; the placement itself is already committed). «Don't
+        ask again» keeps the defaults from then on — many users never name
+        a section (issue #62, @pacaeiro); Preferences ▸ General turns the
+        prompt back on."""
+        if str(QSettings().value("section/ask_name", "1")) == "0":
+            return
+        from PySide6.QtWidgets import (QCheckBox, QDialog, QDialogButtonBox,
+                                       QFormLayout, QLineEdit)
         dlg = QDialog(self)
         dlg.setWindowTitle(tr("Name Section Plane"))
         form = QFormLayout(dlg)
@@ -1754,6 +1767,10 @@ class MainWindow(QMainWindow):
         sym_edit.setMaxLength(3)
         form.addRow(tr("Name"), name_edit)
         form.addRow(tr("Symbol"), sym_edit)
+        no_more = QCheckBox(tr("Don't ask again — keep the default name "
+                               "and symbol (Preferences ▸ General turns "
+                               "this back on)"))
+        form.addRow("", no_more)
         buttons = QDialogButtonBox(
             QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(dlg.accept)
@@ -1762,6 +1779,8 @@ class MainWindow(QMainWindow):
         if dlg.exec() == QDialog.Accepted:
             plane.name = name_edit.text().strip() or plane.name
             plane.symbol = sym_edit.text().strip() or plane.symbol
+            if no_more.isChecked():
+                QSettings().setValue("section/ask_name", "0")
             self.viewport.update()
 
     def _selected_section_planes(self) -> list:
@@ -2614,6 +2633,49 @@ class MainWindow(QMainWindow):
             self.viewport.notify_scene_changed()
 
     # ---- File handling ------------------------------------------------------
+    # ---- The document's camera (issue #60) ---------------------------------
+    _CAMERA_FIELDS = ("distance", "yaw", "pitch", "fov_deg", "perspective")
+
+    def _camera_dict(self) -> dict:
+        """The live camera as the document keeps it (SketchUp saves the
+        camera in the file; @pacaeiro, issue #60)."""
+        cam = self.viewport.camera
+        t = cam.target
+        out = {"target": [float(t.x()), float(t.y()), float(t.z())]}
+        for k in self._CAMERA_FIELDS:
+            out[k] = getattr(cam, k)
+        return out
+
+    def _apply_camera_home(self) -> None:
+        """Look at what the document's author was looking at; a document
+        from before the camera was saved keeps the view as it is."""
+        home = getattr(self.viewport.scene, "camera_home", None)
+        if not isinstance(home, dict):
+            return
+        cam = self.viewport.camera
+        t = home.get("target")
+        if isinstance(t, (list, tuple)) and len(t) == 3:
+            from PySide6.QtGui import QVector3D
+            cam.target = QVector3D(*[float(v) for v in t])
+        for k in self._CAMERA_FIELDS:
+            if k in home:
+                try:
+                    setattr(cam, k, type(getattr(cam, k))(home[k]))
+                except (TypeError, ValueError):
+                    pass
+        self.viewport.update()
+
+    def _reset_camera_home(self) -> None:
+        """A new drawing opens on the default view (iso, 20 m out), not on
+        wherever the previous one was left (issue #60)."""
+        from core.camera import OrbitCamera
+        fresh = OrbitCamera()
+        cam = self.viewport.camera
+        cam.target = fresh.target
+        for k in self._CAMERA_FIELDS:
+            setattr(cam, k, getattr(fresh, k))
+        self.viewport.update()
+
     def _on_new(self) -> None:
         self.viewport.end_group_edit()
         if not self._confirm_discard(tr("Discard current drawing?")):
@@ -2626,6 +2688,7 @@ class MainWindow(QMainWindow):
         scene.clear()
         scene.version += 1
         self.viewport.history.clear()
+        self._reset_camera_home()
         # Document boundary: the old drawing's textures go back to the driver.
         self.viewport.reset_texture_cache()
         self._current_path = None
@@ -2662,6 +2725,55 @@ class MainWindow(QMainWindow):
         self._update_title()
         self.statusBar().showMessage(tr(
             "Recovered copy loaded — use Save As to keep it."), 6000)
+
+    # ---- Recent files -------------------------------------------------------
+    _RECENT_MAX = 10
+
+    @staticmethod
+    def _recent_paths() -> list:
+        raw = QSettings().value("recent_files", []) or []
+        if isinstance(raw, str):
+            raw = [raw]
+        return [str(x) for x in raw if str(x).strip()]
+
+    def _remember_recent(self, path) -> None:
+        """Put ``path`` at the top of File ▸ Open Recent (native documents
+        only: an import is not a document you reopen)."""
+        if path is None or Path(path).suffix.lower() != ".igz":
+            return
+        key = str(Path(path).resolve())
+        recent = [x for x in self._recent_paths() if x != key]
+        recent.insert(0, key)
+        QSettings().setValue("recent_files", recent[: self._RECENT_MAX])
+
+    def _fill_recent_menu(self) -> None:
+        menu = self._recent_menu
+        menu.clear()
+        alive = [x for x in self._recent_paths() if Path(x).exists()]
+        if not alive:
+            none = menu.addAction(tr("(no recent documents)"))
+            none.setEnabled(False)
+            return
+        for i, entry in enumerate(alive, 1):
+            p = Path(entry)
+            act = menu.addAction(f"&{i}  {p.name}  —  {p.parent}")
+            act.setToolTip(str(p))
+            act.triggered.connect(lambda _c=False, q=p: self._open_recent(q))
+        menu.addSeparator()
+        clear = menu.addAction(tr("Clear list"))
+        clear.triggered.connect(
+            lambda: QSettings().setValue("recent_files", []))
+
+    def _open_recent(self, path: Path) -> None:
+        if not path.exists():
+            QMessageBox.warning(self, tr("Open Recent"),
+                                tr("{name} is no longer there.", name=path.name))
+            return
+        self.viewport.end_group_edit()
+        if not self._confirm_discard(
+                tr("Discard current drawing and open another?")):
+            return
+        self.open_path(path)
 
     def _on_open(self) -> None:
         self.viewport.end_group_edit()
@@ -2719,7 +2831,9 @@ class MainWindow(QMainWindow):
             return False
         self.viewport.history.clear()
         self.viewport.reset_texture_cache()
+        self._apply_camera_home()
         self._current_path = path
+        self._remember_recent(path)
         self._import_name = None
         self._autosaved_version = None
         # A recovered drawing is NOT the file on disk yet: keep it dirty so
@@ -2810,6 +2924,7 @@ class MainWindow(QMainWindow):
                 self.statusBar().showMessage(
                     tr("Could not write the backup copy."), 4000)
         try:
+            self.viewport.scene.camera_home = self._camera_dict()
             stats = igz_format.save_scene(self.viewport.scene, path) or {}
         except Exception as exc:  # noqa: BLE001
             QMessageBox.critical(self, tr("Save failed"), str(exc))
@@ -2835,6 +2950,7 @@ class MainWindow(QMainWindow):
                 tr("Saved — {n} texture(s) packed into the document.",
                    n=embedded), 4000)
         self._current_path = path
+        self._remember_recent(path)
         self._saved_version = self.viewport.scene.version
         self._update_title()
 

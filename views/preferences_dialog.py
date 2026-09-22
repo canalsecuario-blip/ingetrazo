@@ -100,6 +100,12 @@ class PreferencesDialog(QDialog):
         self._backup.setChecked(str(st.value("general/backup", "1")) != "0")
         form.addRow("", self._backup)
 
+        self._ask_section = QCheckBox(tr(
+            "Ask for a name and symbol when placing a section plane"))
+        self._ask_section.setChecked(
+            str(st.value("section/ask_name", "1")) != "0")
+        form.addRow("", self._ask_section)
+
         self._invert = QCheckBox(tr("Invert mouse wheel zoom"))
         self._invert.setChecked(str(st.value("nav/invert_wheel", "0"))
                                 != "0")
@@ -242,6 +248,8 @@ class PreferencesDialog(QDialog):
                     "1" if self._autosave.isChecked() else "0")
         st.setValue("general/autosave_min", self._autosave_min.value())
         st.setValue("general/backup", "1" if self._backup.isChecked() else "0")
+        st.setValue("section/ask_name",
+                    "1" if self._ask_section.isChecked() else "0")
         st.setValue("general/platform", self._platform.currentData())
         setup = getattr(self._window, "_setup_autosave", None)
         if callable(setup):

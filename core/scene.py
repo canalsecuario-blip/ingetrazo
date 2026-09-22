@@ -90,6 +90,12 @@ class Scene:
     #: before the choice existed: a file without the key opens with it)
     #: or ``none``. Asked for by a user of DriveMeca's video («los
     #: extremos no tiene para cambiarla», 2026-09-20).
+    #: The camera the document was last saved with — target, distance, yaw,
+    #: pitch, fov, perspective — so opening it shows what its author saw
+    #: (SketchUp keeps the camera in the file). ``None`` = never saved.
+    #: @pacaeiro, issue #60: «If I do a New drawing, or open a drawing, the
+    #: Camera stays in the position where it was before».
+    camera_home: dict | None = None
     dimension_style: dict = field(default_factory=lambda: {
         "decimals": 2, "units": "m", "font_size": 9, "color": [45, 55, 75],
         "norma": "iso", "base_step_mm": 8.0, "ends": "arrow"})
@@ -500,6 +506,8 @@ class Scene:
             self.show_hidden_objects = False
             self.show_hidden_geometry = False
             self.version += 1
+        # Outside the guard: an empty document has a camera to forget too.
+        self.camera_home = None
 
     # ---- Queries ------------------------------------------------------------
     def iter_world_faces(self):

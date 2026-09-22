@@ -344,6 +344,9 @@ def save_scene(scene, path: Path) -> dict:
     style = getattr(scene, "dimension_style", None)
     if style:
         payload["dimension_style"] = dict(style)
+    cam = getattr(scene, "camera_home", None)
+    if isinstance(cam, dict):
+        payload["camera"] = dict(cam)      # what the author was looking at
     scales = getattr(scene, "custom_scales", None)
     if scales:
         payload["custom_scales"] = [float(n) for n in scales]
@@ -635,6 +638,8 @@ def _load_into_inner(scene, path: Path) -> None:
     style = payload.get("dimension_style")
     scene.dimension_style.update(
         {"ends": "tick", **(style if isinstance(style, dict) else {})})
+    cam = payload.get("camera")
+    scene.camera_home = dict(cam) if isinstance(cam, dict) else None
     scales = payload.get("custom_scales")
     if isinstance(scales, list):
         scene.custom_scales = [float(n) for n in scales
