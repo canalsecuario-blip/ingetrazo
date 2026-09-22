@@ -6,6 +6,18 @@ follow [SemVer](https://semver.org).
 
 ## [Sin publicar]
 
+### Arreglado
+- **La ventana del puente MCP daba un comando que no sobrevivía a la
+  sesión en los paquetes de Linux.** Con el AppImage enseñaba la ruta del
+  montaje temporal (`/tmp/.mount_…`), que muere al cerrar la app; con el
+  Flatpak, una ruta de dentro del sandbox que el anfitrión no puede
+  ejecutar, y además el Flatpak no llevaba el servidor dentro. Ahora dice
+  `<ruta del .AppImage> --mcp`, `flatpak run com.ingetrazo.IngeTrazo
+  --mcp` o `/snap/bin/ingetrazo --mcp` según el paquete, el Flatpak
+  incluye `scripts/`, y la ventana trae la línea de **Antigravity CLI**
+  (`agy mcp add ingetrazo -- …`) junto a la de Claude Code. Lo encontró
+  Marco montando Antigravity para el tutorial.
+
 ### Cambiado
 - **La ventana del puente MCP nombra a Antigravity CLI, no a Gemini CLI.**
   Google cerró el 18-06-2026 el acceso gratuito con cuenta de Google a

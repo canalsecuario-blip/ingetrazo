@@ -208,17 +208,34 @@ class _Bridge(QObject):
 
 
 def mcp_command(platform: str | None = None, frozen: bool | None = None,
-                executable: str | None = None, root: Path | None = None) -> list[str]:
+                executable: str | None = None, root: Path | None = None,
+                env: dict | None = None) -> list[str]:
     """The command an MCP client must run to reach this IngeTrazo — the
     packaged app carries the server, so nobody needs Python installed:
     ``ingetrazo-mcp.exe`` beside the app on Windows, ``<ingetrazo> --mcp``
-    for the Linux/macOS packages, and the script itself from a checkout."""
+    for the Linux/macOS packages, and the script itself from a checkout.
+
+    The Linux packages need the command that is valid FROM THE HOST and
+    OUTLIVES this run, not ``sys.executable``: an AppImage mounts itself
+    under a fresh ``/tmp/.mount_*`` each launch (the path the dialog used
+    to print died with the session), a Flatpak's executable lives inside
+    the sandbox (``flatpak run <id> --mcp`` is the door), and a snap is
+    reached through ``/snap/bin``. Marco found the gap setting Antigravity
+    up for the tutorial (2026-09-21)."""
     from pathlib import PurePosixPath, PureWindowsPath
     platform = platform or sys.platform
     frozen = bool(getattr(sys, "frozen", False)) if frozen is None else frozen
     executable = executable or sys.executable
+    env = os.environ if env is None else env
     windows = platform.startswith("win")
     PathOf = PureWindowsPath if windows else PurePosixPath   # host-agnostic
+    if not windows:
+        if env.get("APPIMAGE"):
+            return [env["APPIMAGE"], "--mcp"]
+        if env.get("FLATPAK_ID"):
+            return ["flatpak", "run", env["FLATPAK_ID"], "--mcp"]
+        if env.get("SNAP_NAME"):
+            return [f"/snap/bin/{env['SNAP_NAME']}", "--mcp"]
     if frozen:
         exe = PathOf(executable)
         if windows:
@@ -265,10 +282,12 @@ def connect_instructions(port: int, platform: str | None = None, **kw) -> str:
     return (
         tr("The AI bridge is listening on 127.0.0.1:{port}. Connect ANY MCP "
            "client — MCP is an open standard: Claude Code, Claude Desktop, "
-           "Cursor, VS Code, Windsurf, Gemini CLI, Codex CLI…", port=port)
+           "Cursor, VS Code, Windsurf, Antigravity CLI, Codex CLI…", port=port)
         + "\n\n"
         + tr("Claude Code (in a terminal):") + "\n"
         + f"    claude mcp add ingetrazo -- {quoted}\n\n"
+        + tr("Antigravity CLI (Google; in a terminal):") + "\n"
+        + f"    agy mcp add ingetrazo -- {quoted}\n\n"
         + tr("Claude Desktop: add this to {path} and restart Claude Desktop:",
              path=desktop_config_path(platform)) + "\n"
         + json.dumps(config, indent=2) + "\n\n"

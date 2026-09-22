@@ -149,6 +149,38 @@ def test_the_packaged_app_tells_windows_users_the_exe_to_run():
     assert json.loads(snippet)["mcpServers"]["ingetrazo"]["command"].endswith("ingetrazo-mcp.exe")
 
 
+def test_the_linux_packages_print_a_command_that_outlives_the_session():
+    # The dialog used to print sys.executable — under an AppImage that is
+    # /tmp/.mount_XXXX/…, gone at the next launch; under a Flatpak it is a
+    # sandbox path the host cannot run. Marco hit both setting Antigravity
+    # up for the tutorial (2026-09-21).
+    from plugins.ai_bridge import mcp_command, connect_instructions
+    mount = "/tmp/.mount_IngeTrJk3f/usr/bin/ingetrazo"
+    assert mcp_command("linux", frozen=True, executable=mount,
+                       env={"APPIMAGE": "/home/ana/Apps/IngeTrazo-0.4.9-x86_64.AppImage"}) == \
+        ["/home/ana/Apps/IngeTrazo-0.4.9-x86_64.AppImage", "--mcp"]
+    assert mcp_command("linux", frozen=False, root=Path("/app/ingetrazo"),
+                       env={"FLATPAK_ID": "com.ingetrazo.IngeTrazo"}) == \
+        ["flatpak", "run", "com.ingetrazo.IngeTrazo", "--mcp"]
+    assert mcp_command("linux", frozen=True, executable="/snap/ingetrazo/12/opt/ingetrazo/ingetrazo",
+                       env={"SNAP_NAME": "ingetrazo"}) == ["/snap/bin/ingetrazo", "--mcp"]
+    # an empty environment falls back to the plain rules
+    assert mcp_command("linux", frozen=True, executable="/opt/it/ingetrazo", env={}) == \
+        ["/opt/it/ingetrazo", "--mcp"]
+    text = connect_instructions(4763, "linux", frozen=False, root=Path("/app/ingetrazo"),
+                                env={"FLATPAK_ID": "com.ingetrazo.IngeTrazo"})
+    assert "claude mcp add ingetrazo -- flatpak run com.ingetrazo.IngeTrazo --mcp" in text
+
+
+def test_the_flatpak_ships_the_mcp_script():
+    # `flatpak run <id> --mcp` runs scripts/ingetrazo_mcp.py from /app; the
+    # manifest must copy scripts/ with the rest of the tree.
+    from core.paths import app_root
+    manifest = (app_root() / "packaging" / "flatpak" / "com.ingetrazo.IngeTrazo.yml").read_text()
+    line = next(l for l in manifest.splitlines() if "cp -a main.py" in l)
+    assert " scripts " in line + " "
+
+
 def test_the_mcp_script_ships_with_the_app_and_the_flag_finds_it():
     from core.paths import app_root
     assert (app_root() / "scripts" / "ingetrazo_mcp.py").is_file()
