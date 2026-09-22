@@ -373,11 +373,15 @@ def build_add_edges(
 def divide_edges(mesh, edges, n: int) -> int:
     """SketchUp's Divide (issue #63, @pacaeiro): split each selected edge —
     or, for an edge of a curve, the whole curve — into ``n`` pieces of
-    equal length. A straight edge gets n−1 new vertices; a curve (arc,
-    circle) is measured along its chain and cut where the k/n marks fall,
-    the pieces keeping the curve's identity so it still selects as one
-    contour. Faces the edges bound take the new vertices in their loops
-    (``Mesh.split_edge``). Returns the number of cuts made."""
+    equal length. A straight edge gets n−1 new vertices. A curve (arc,
+    circle) is measured along its chain, cut where the k/n marks fall, and
+    comes out as ``n`` INDEPENDENT arcs — each piece its own curve, each
+    selectable on its own, exactly what SketchUp does (a circle divided in
+    four is four quarter arcs; Marco, 2026-09-21: «hazlo como SketchUp»).
+    A mark that lands on an existing facet vertex cuts nothing there but
+    still parts the curve. Faces the edges bound take the new vertices in
+    their loops (``Mesh.split_edge``). Returns the number of cuts made."""
+    from core.mesh import Mesh, edge_flags, stamp_edge_flags
     n = int(n)
     if n < 2:
         return 0
@@ -386,65 +390,84 @@ def divide_edges(mesh, edges, n: int) -> int:
     for edge in list(edges):
         if id(edge) in done:
             continue
-        chain = mesh.curve_edges(edge) if getattr(edge, "curve", None) is not None else [edge]
-        chain = _order_chain(chain, edge)
-        for e in chain:
+        is_curve = getattr(edge, "curve", None) is not None
+        chain = mesh.curve_edges(edge) if is_curve else [edge]
+        walk = _order_chain(chain, edge)
+        for e, _, _ in walk:
             done.add(id(e))
-        lengths = [(e.b - e.a).length() for e in chain]
-        total = sum(lengths)
+        total = sum((vt.position - vf.position).length() for _, vf, vt in walk)
         if total < 1e-9:
             continue
         step = total / n
-        marks = [step * k for k in range(1, n)]
+        # The facets of each of the n pieces, in walking order; a piece's
+        # index is the k/n span its facets fall in.
+        pieces: list = [[] for _ in range(n)]
+
+        def piece_of(s0: float, s1: float) -> int:
+            return max(0, min(n - 1, int(((s0 + s1) * 0.5) // step)))
+
         walked = 0.0
-        for seg, ln in zip(chain, lengths):
+        for e, v_from, v_to in walk:
+            a, b = QVector3D(v_from.position), QVector3D(v_to.position)
+            ln = (b - a).length()
             if ln < 1e-12:
                 continue
-            a, b = QVector3D(seg.a), QVector3D(seg.b)
-            local = [m - walked for m in marks if walked + 1e-9 < m < walked + ln - 1e-9]
-            walked += ln
-            if not local:
-                continue
-            curve = getattr(seg, "curve", None)
-            soft = getattr(seg, "soft", False)
-            rest = seg
-            start = 0.0
-            for t in local:
-                frac = (t - start) / (ln - start)
-                point = a + (b - a) * ((t) / ln)
+            flags = edge_flags(e)
+            inside = [k for k in range(1, n)
+                      if walked + 1e-9 < step * k < walked + ln - 1e-9]
+            rest, rest_from, rest_start = e, v_from, walked
+            for k in inside:
+                at = step * k
+                point = a + (b - a) * ((at - walked) / ln)
                 e0, e1 = mesh.split_edge(rest, point)
                 if e0 is e1:
                     break
-                for piece in (e0, e1):
-                    if curve is not None:
-                        piece.curve = curve
-                    if soft and hasattr(piece, "soft"):
-                        piece.soft = soft
-                rest = e1
+                # split_edge hands the halves back in v0→v1 order of the
+                # facet, which need not be the walking order: pick by the
+                # vertex we came from.
+                first = e0 if rest_from in (e0.v0, e0.v1) else e1
+                second = e1 if first is e0 else e0
+                for half in (first, second):
+                    stamp_edge_flags(half, flags)
+                pieces[piece_of(rest_start, at)].append(first)
+                rest, rest_from, rest_start = second, first.other(rest_from), at
                 cuts += 1
+            pieces[piece_of(rest_start, walked + ln)].append(rest)
+            walked += ln
+        if is_curve:
+            for facets in pieces:
+                if not facets:
+                    continue
+                cid = Mesh.next_curve_id()
+                for f in facets:
+                    f.curve = cid
     return cuts
 
 
 def _order_chain(chain, seed):
-    """The edges of a curve in walking order, starting at one end (or at
-    ``seed`` for a closed loop) so the k/n marks land where SketchUp's do."""
+    """The edges of a curve in walking order as ``(edge, v_from, v_to)``
+    triples, starting at one end (or at ``seed.v0`` for a closed loop) so
+    the k/n marks land where SketchUp's do. The orientation matters: a
+    facet's own ``v0→v1`` may run against the walk, and a mark measured
+    along the wrong way lands mirrored inside the facet."""
     if len(chain) <= 1:
-        return list(chain)
+        e = chain[0]
+        return [(e, e.v0, e.v1)]
     by_vertex: dict = {}
     for e in chain:
         for v in (e.v0, e.v1):
             by_vertex.setdefault(id(v), (v, []))[1].append(e)
     ends = [v for v, es in by_vertex.values() if len(es) == 1]
-    start_v = ends[0] if ends else seed.v0
-    ordered, seen, v = [], set(), start_v
+    v = ends[0] if ends else seed.v0
+    ordered, seen = [], set()
     while True:
         nxt = next((e for e in by_vertex[id(v)][1] if id(e) not in seen), None)
         if nxt is None:
             break
         seen.add(id(nxt))
-        ordered.append(nxt)
-        v = nxt.other(v)
+        w = nxt.other(v)
+        ordered.append((nxt, v, w))
+        v = w
         if len(ordered) == len(chain):
             break
-    # Orient each edge's a/b along the walk for the length bookkeeping.
     return ordered
