@@ -96,6 +96,9 @@ hiddenimports += collect_submodules('ezdxf')
 # manifold3d (Solid Tools) is imported inside core.solids' functions — one
 # self-contained native extension module (libstdc++/libm/libc only).
 hiddenimports += ['manifold3d', 'core.solids', 'tools.solid_tools']
+# Copy/Paste between windows (#76): imported lazily by the viewport and
+# the main window.
+hiddenimports += ['formats.clip']
 hiddenimports += [
     # The bundled plugins import these at RUN time, so static analysis never
     # sees them and they were left out: the AI assistant died on load with

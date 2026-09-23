@@ -1976,5 +1976,7 @@
  "Axes changed": "Ejes cambiados",
  "Red axis": "Eje rojo",
  "Green axis": "Eje verde",
- "Select one group or component first": "Selecciona antes un grupo o componente"
+ "Select one group or component first": "Selecciona antes un grupo o componente",
+ "New Window": "Nueva ventana",
+ "Could not start another IngeTrazo window.": "No se pudo abrir otra ventana de IngeTrazo."
 }

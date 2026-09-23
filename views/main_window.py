@@ -1300,6 +1300,13 @@ class MainWindow(QMainWindow):
         new_action.triggered.connect(self._on_new)
         actions.append(new_action)
 
+        # A second IngeTrazo beside this one: each window is its own
+        # document, and Copy/Paste now crosses between them (issue #76).
+        window_action = QAction(tr("New Window"), self)
+        window_action.setShortcut(QKeySequence("Ctrl+Shift+N"))
+        window_action.triggered.connect(self._on_new_window)
+        actions.append(window_action)
+
         open_action = QAction(tr("Open…"), self)
         open_action.setShortcut(QKeySequence.Open)
         open_action.triggered.connect(self._on_open)
@@ -2187,7 +2194,8 @@ class MainWindow(QMainWindow):
             act_clear.triggered.connect(self.viewport.update)
             menu.addSeparator()
 
-        if getattr(self.viewport, "clipboard", None):
+        from formats import clip as clip_transfer
+        if getattr(self.viewport, "clipboard", None) or clip_transfer.available():
             menu.addAction(tr("Paste"), self._on_paste)
         menu.addAction(tr("Zoom Extents"), self._on_zoom_extents)
         menu.addSeparator()
@@ -2478,6 +2486,19 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(msg, 3000)
 
     def _on_paste(self) -> None:
+        # A copy made in ANOTHER IngeTrazo window wins over this window's
+        # older one, as a system clipboard does (issue #76).
+        from formats import clip as clip_transfer
+        try:
+            other = clip_transfer.foreign()
+        except Exception:  # noqa: BLE001 - a bad clipboard must not break Paste
+            other = None
+        if other is not None:
+            old = self.viewport.clipboard
+            drop = getattr(self.viewport, "_drop_clip_protos", None)
+            if old and callable(drop):
+                drop(old)
+            self.viewport.clipboard = other
         if self.viewport.clipboard is None:
             return
         self.viewport.set_active_tool(PasteTool())
@@ -2508,7 +2529,7 @@ class MainWindow(QMainWindow):
             bounds = survey.bounds()
             if bounds[0] is None:
                 return
-        self.viewport.camera.fit_to(bounds[0], bounds[1])
+        self.viewport.camera.fit_box(bounds[0], bounds[1])
         self.viewport.update()
 
     def _ensure_composer(self):
@@ -2790,6 +2811,31 @@ class MainWindow(QMainWindow):
         for k in self._CAMERA_FIELDS:
             setattr(cam, k, getattr(fresh, k))
         self.viewport.update()
+
+    @staticmethod
+    def _new_window_command() -> list[str]:
+        """How to start another IngeTrazo from this one. Each package needs
+        its own way: the AppImage's mount and the Flatpak sandbox both go
+        away with the process that owns them, so the new window must get
+        its own rather than run from ours."""
+        import os
+        import sys
+        from core.paths import app_root, is_frozen
+        flag = "--new-window"        # skip the single-instance handover
+        if os.environ.get("APPIMAGE"):
+            return [os.environ["APPIMAGE"], flag]
+        if os.environ.get("FLATPAK_ID"):
+            return ["flatpak-spawn", "ingetrazo", flag]
+        if is_frozen():
+            return [sys.executable, flag]
+        return [sys.executable, str(app_root() / "main.py"), flag]
+
+    def _on_new_window(self) -> None:
+        from PySide6.QtCore import QProcess
+        cmd = self._new_window_command()
+        if not QProcess.startDetached(cmd[0], cmd[1:]):
+            QMessageBox.warning(self, tr("New Window"),
+                                tr("Could not start another IngeTrazo window."))
 
     def _on_new(self) -> None:
         self.viewport.end_group_edit()

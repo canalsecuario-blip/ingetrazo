@@ -10883,6 +10883,11 @@ class ComposerWindow(QMainWindow):
         # with shadows; the live viewport gets its own settings back.
         shadows = getattr(scene, "shadows", None)
         keep_shadows = shadows.to_dict() if shadows is not None else None
+        # ``Scene.bounds()`` caches by version, and swapping layer
+        # visibility here does not bump it: a bounds read during the frame
+        # would outlive it, and Zoom Extents would frame the sheet's view
+        # instead of the live model. Forget it on the way in and out.
+        scene._bounds_cache = None
         try:
             apply_frame_camera(cam, frame, saved_view, scene)
             apply_frame_shadows(frame, scene)
@@ -10892,6 +10897,7 @@ class ComposerWindow(QMainWindow):
              cam.perspective, cam.aspect, cam.up) = keep[:8]
             for ly, visible in keep[8]:
                 ly.visible = visible
+            scene._bounds_cache = None
             if hasattr(scene, "set_active_section"):
                 scene.set_active_section(keep_section[0])
                 scene.show_section_planes = keep_section[1]

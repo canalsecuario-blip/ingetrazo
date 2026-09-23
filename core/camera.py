@@ -234,6 +234,89 @@ class OrbitCamera:
         self.distance = max(diag * margin / (2.0 * math.tan(fov_rad / 2.0)),
                             MIN_DISTANCE)
 
+    def fit_box(self, min_pt: QVector3D, max_pt: QVector3D,
+                margin: float = 1.1) -> None:
+        """Zoom Extents: frame the box as the camera looks at it NOW.
+
+        ``fit_to`` frames the box's bounding SPHERE, which does not depend
+        on the view — so after an orbit or a standard view it gave back the
+        very same target and distance, and a second Zoom Extents did
+        nothing even with the model a fraction of the screen (Marco: «a
+        veces no hace efecto, en determinadas posiciones»). Here the eight
+        corners are measured along the camera's right and up, so the model
+        fills the window in this orientation and for this window shape;
+        in perspective the camera also backs off by how far the box comes
+        toward it, so the near side is not cut by the frame."""
+        f = self.forward()
+        r = QVector3D.crossProduct(f, self.up_vector())
+        if r.lengthSquared() < 1e-18:
+            self.fit_to(min_pt, max_pt)
+            return
+        r = r.normalized()
+        u = QVector3D.crossProduct(r, f)
+        xs = (min_pt.x(), max_pt.x())
+        ys = (min_pt.y(), max_pt.y())
+        zs = (min_pt.z(), max_pt.z())
+        corners = [QVector3D(x, y, z) for x in xs for y in ys for z in zs]
+        center = (min_pt + max_pt) * 0.5
+        pr = [QVector3D.dotProduct(c - center, r) for c in corners]
+        pu = [QVector3D.dotProduct(c - center, u) for c in corners]
+        target = center + r * ((max(pr) + min(pr)) * 0.5) \
+            + u * ((max(pu) + min(pu)) * 0.5)
+        half_w = (max(pr) - min(pr)) * 0.5
+        half_h = (max(pu) - min(pu)) * 0.5
+        t = math.tan(math.radians(self.fov_deg) / 2.0)
+        aspect = self.aspect if self.aspect > 1e-6 else 1.0
+        half = max(half_h, half_w / aspect, MIN_DISTANCE) * margin
+        distance = half / t
+        if self.perspective:
+            toward = max(-QVector3D.dotProduct(c - target, f)
+                         for c in corners)
+            distance += max(toward, 0.0)
+        self.target = target
+        self.distance = min(max(distance, MIN_DISTANCE), MAX_DISTANCE)
+        if self.perspective:
+            self._settle_perspective_fit(corners, margin)
+
+    def _settle_perspective_fit(self, corners, margin: float) -> None:
+        """The perspective estimate above backs off for the NEAREST corner
+        as if every corner were that close, and centres the box in space,
+        not on screen — a deep box came out at 60 % of the window and low.
+        Measure the real projection: slide the target so the box is centred
+        on screen, then walk the distance in until its wider half-span sits
+        at ``1 / margin`` of the window — never past a corner reaching the
+        camera."""
+        from PySide6.QtGui import QVector4D
+        goal = 1.0 / margin
+        t = math.tan(math.radians(self.fov_deg) / 2.0)
+        for _ in range(8):
+            mvp = self.projection_matrix() * self.view_matrix()
+            xs, ys = [], []
+            for c in corners:
+                p = mvp.map(QVector4D(c.x(), c.y(), c.z(), 1.0))
+                if p.w() <= 1e-9:
+                    return
+                xs.append(p.x() / p.w())
+                ys.append(p.y() / p.w())
+            cx = (max(xs) + min(xs)) * 0.5
+            cy = (max(ys) + min(ys)) * 0.5
+            reach = max((max(xs) - min(xs)) * 0.5, (max(ys) - min(ys)) * 0.5)
+            if reach <= 0.0:
+                return
+            if abs(reach - goal) < 0.005 and abs(cx) < 0.005 and abs(cy) < 0.005:
+                return
+            f = self.forward()
+            r = QVector3D.crossProduct(f, self.up_vector()).normalized()
+            u = QVector3D.crossProduct(r, f)
+            half_h = self.distance * t
+            self.target = self.target + r * (cx * half_h * self.aspect) \
+                + u * (cy * half_h)
+            nearest = max(-QVector3D.dotProduct(c - self.target, f)
+                          for c in corners)
+            gap = self.distance - nearest       # eye to the nearest corner
+            self.distance = min(max(nearest + gap * reach / goal,
+                                    MIN_DISTANCE), MAX_DISTANCE)
+
     # Yaw / pitch presets for standard architectural views (Z-up convention).
     # Top and Bottom are EXACTLY vertical: at 89° the parallel projection
     # showed every vertical edge as a short line and a plan came out a

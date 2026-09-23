@@ -352,15 +352,21 @@ def main() -> int:
     # any socket trouble just launches a normal standalone instance.
     from PySide6.QtNetwork import QLocalServer, QLocalSocket
     _SOCKET = "ingetrazo-single-instance"
-    arg = sys.argv[1] if len(sys.argv) > 1 else ""
+    # File ▸ New Window starts a second IngeTrazo with --new-window: it must
+    # NOT hand over to the running one like a double-click does, or the
+    # new window never appears (issue #76).
+    new_window = "--new-window" in sys.argv[1:]
+    args = [a for a in sys.argv[1:] if a != "--new-window"]
+    arg = args[0] if args else ""
     if not arg and app.pending_open_path is not None:
         # A cold macOS launch by double-click: no argv, the path arrived as
         # the FileOpen event queued before `open_window` was set above.
         arg = str(app.pending_open_path)
         app.pending_open_path = None
     probe = QLocalSocket()
-    probe.connectToServer(_SOCKET)
-    if probe.waitForConnected(200):
+    if not new_window:
+        probe.connectToServer(_SOCKET)
+    if not new_window and probe.waitForConnected(200):
         probe.write((arg + "\n").encode("utf-8"))
         probe.flush()
         probe.waitForBytesWritten(300)
@@ -374,10 +380,14 @@ def main() -> int:
     # No responsive server — become one. A stale socket (crash / unresponsive
     # peer) is cleared by removeServer before listen; if even that fails we
     # run as a plain window with no server, still fully functional.
-    server = QLocalServer()
-    QLocalServer.removeServer(_SOCKET)
-    if not server.listen(_SOCKET):
-        server = None
+    # An extra window stays out of it: the first one keeps answering
+    # double-clicks, and this one must not tear down its socket.
+    server = None
+    if not new_window:
+        server = QLocalServer()
+        QLocalServer.removeServer(_SOCKET)
+        if not server.listen(_SOCKET):
+            server = None
 
     def _handle_second_launch():
         conn = server.nextPendingConnection()

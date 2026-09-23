@@ -9747,6 +9747,10 @@ class Viewport(QOpenGLWidget):
             drop(old_clip)
         self.clipboard = {"faces": face_data, "edges": edge_data,
                           "groups": group_data, "ref": ref}
+        # Also on the system clipboard, so another IngeTrazo window can
+        # paste it (issue #76); encoded only if that window asks.
+        from formats import clip as clip_transfer
+        clip_transfer.publish(self.clipboard)
         return True
 
     def _seed_proto_chunk(self, mesh, src_group) -> None:

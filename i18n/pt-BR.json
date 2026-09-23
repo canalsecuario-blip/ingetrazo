@@ -1315,5 +1315,7 @@
  "Axes changed": "Eixos alterados",
  "Red axis": "Eixo vermelho",
  "Green axis": "Eixo verde",
- "Select one group or component first": "Selecione antes um grupo ou componente"
+ "Select one group or component first": "Selecione antes um grupo ou componente",
+ "New Window": "Nova janela",
+ "Could not start another IngeTrazo window.": "Não foi possível abrir outra janela do IngeTrazo."
 }

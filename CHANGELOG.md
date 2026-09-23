@@ -4,6 +4,24 @@ All notable changes to IngeTrazo are documented here.
 Format inspired by [Keep a Changelog](https://keepachangelog.com); versions
 follow [SemVer](https://semver.org).
 
+## [Sin publicar]
+
+### Añadido
+- **Copiar y pegar entre ventanas** (#76, @pacaeiro): lo copiado en un
+  IngeTrazo se pega en otro abierto al lado, con sus materiales, texturas,
+  grupos y componentes. **Archivo ▸ Nueva ventana** (Ctrl+Mayús+N) abre un
+  segundo IngeTrazo para tener dos diseños lado a lado.
+
+### Corregido
+- **Zoom extensión a veces no hacía nada.** Encuadraba la esfera que
+  envuelve al modelo, que no depende de hacia dónde miras: tras orbitar o
+  pasar a una vista estándar, repetirlo daba la misma cámara y el modelo
+  podía quedar en un 10 % de la pantalla (una torre vista desde arriba).
+  Ahora encuadra el modelo tal como lo ve la cámara en ese momento y según
+  la forma de la ventana, que en vertical además lo cortaba por los lados.
+  Y una lámina renderizada ya no le deja a Zoom extensión los límites de
+  su propia vista.
+
 ## [0.5.0] — 2026-09-23
 
 **Sólidos, ejes locales y Mac.** Las herramientas de sólidos de SketchUp
