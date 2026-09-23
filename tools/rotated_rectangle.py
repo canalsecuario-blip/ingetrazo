@@ -4,10 +4,17 @@
 
 Three clicks, SketchUp-style:
 1. first corner — which also captures the plane,
-2. second corner — sets the base edge's **direction and length** (the rotation),
-3. move to set the perpendicular width, click to commit.
+2. second corner — sets the base edge's **direction and length** (the
+   rotation), with a protractor drawn at the first corner: near its rim the
+   direction snaps to 15° ticks; the VCB takes ``length`` or
+   ``length;angle`` (angle from the plane's first axis),
+3. the width and its angle around the base edge, with a second protractor
+   square to that edge at the second corner (15° ticks near its rim; Shift
+   holds the angle); the VCB takes ``width`` or ``width;angle``.
 
-The width can also be typed in the VCB after the base edge is set.
+The two protractors are @pacaeiro's issue #70 — «a "Protractor" inside it,
+to help drawing the rectangle» — which is SketchUp's own tool: IngeTrazo
+had the geometry of step 3 but drew neither instrument.
 
 The plane is the whole point of the tool and it used to be missing:
 ``work_plane`` was declared, reset and read, but never assigned, so ``_perp``
@@ -19,6 +26,7 @@ Rectangle and the arcs do (Marco, 2026-09-10: «sospecho que no es igual»).
 """
 from __future__ import annotations
 
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QVector3D
 
 from core.edits import build_add_edges
@@ -27,6 +35,7 @@ from core.history import AddFaceCommand
 from core.triangulate import plane_axes
 from tools.base import AxisMagnet, face_the_plane, PlaneLock, Tool, ToolContext
 from core.units import fmt_len, fmt_pair
+from tools.protractor import DISC_PX, TICK_DEG
 
 
 class RotatedRectangleTool(AxisMagnet, PlaneLock, Tool):
@@ -35,7 +44,10 @@ class RotatedRectangleTool(AxisMagnet, PlaneLock, Tool):
 
     name = "Rotated Rect"
     shortcut = "K"
-    vcb_label = "Width; angle"
+
+    @property
+    def vcb_label(self) -> str:  # type: ignore[override]
+        return "Length; angle" if self.base_point is None else "Width; angle"
 
     def magnet_on(self) -> bool:
         # The base edge is a direction from the first corner; the height
@@ -54,6 +66,12 @@ class RotatedRectangleTool(AxisMagnet, PlaneLock, Tool):
         self.angle: float = 0.0
         #: Dirección impuesta por el bloqueo de eje, cacheada en el hover.
         self._locked: QVector3D | None = None
+        #: Protractor state (#70): world radius of the fixed-screen-size
+        #: disc, whether the cursor is near its rim (15° ticks), and the
+        #: width angle Shift holds.
+        self._disc_r = 1.0
+        self._near_disc = False
+        self._held_angle: float | None = None
 
     # ---- Lifecycle ----------------------------------------------------------
     def on_activate(self, viewport) -> None:
@@ -87,7 +105,8 @@ class RotatedRectangleTool(AxisMagnet, PlaneLock, Tool):
                 ctx.viewport.update()
             return
         locked = self.locked_dir(ctx.viewport)
-        width, self.angle = self._width_and_angle(ctx.world, locked)
+        width, self.angle = self._width_and_angle(self._width_cursor(ctx),
+                                                  locked)
         if locked is not None and width < self._MIN_WIDTH \
                 and self.hover_point is not None:
             # Con un eje bloqueado, el motor de snap todavía puede entregar en
@@ -110,16 +129,35 @@ class RotatedRectangleTool(AxisMagnet, PlaneLock, Tool):
             self._commit(ctx.viewport, corners)
 
     def on_hover(self, ctx: ToolContext) -> None:
-        self.hover_point = ctx.world
+        self.hover_point = (self._width_cursor(ctx)
+                            if self.base_point is not None else ctx.world)
         # Cacheado para la vista previa y el rótulo, que no reciben viewport.
         self._locked = self.locked_dir(ctx.viewport)
+        if self.start_point is not None and self.base_point is None:
+            self._disc_metrics(ctx, self.start_point, self._normal())
+            if self._near_disc:
+                # Near the first protractor the edge turns in 15° steps.
+                d = self._in_plane(ctx.world - self.start_point)
+                if d.length() > 1e-9:
+                    deg = round(self._edge_angle(d) / TICK_DEG) * TICK_DEG
+                    self.hover_point = (self.start_point
+                                        + self._dir_at(deg) * d.length())
         if self.base_point is not None:
+            edge = (self.base_point - self.start_point).normalized()
+            self._disc_metrics(ctx, self.base_point, edge)
+            shift = bool(ctx.modifiers & Qt.ShiftModifier)
+            if not shift:
+                self._held_angle = None
+            elif self._held_angle is None:
+                self._held_angle = self.angle     # Shift holds the angle
+            if self._held_angle is not None:
+                self._locked = self._width_dir(self._held_angle)
             # El ángulo que se está ENSEÑANDO queda guardado. Antes solo lo
             # guardaba el tercer clic, así que escribir el ancho en el cuadro
             # —que no pasa por on_click— construía el rectángulo con el
             # ángulo viejo, es decir 0: la vista previa mostraba 90° y salía
             # tumbado (Marco, 2026-09-10, visto en la traza en vivo).
-            _w, angulo = self._width_and_angle(ctx.world, self._locked)
+            _w, angulo = self._width_and_angle(self.hover_point, self._locked)
             if _w > self._MIN_WIDTH:
                 self.angle = angulo
         ctx.viewport.update()
@@ -129,7 +167,11 @@ class RotatedRectangleTool(AxisMagnet, PlaneLock, Tool):
         standing perpendicular to the base plane — SketchUp's «Anchura,
         Ángulo», which is the only way to raise a rectangle whose base edge
         lies flat."""
-        if self.base_point is None or self.hover_point is None:
+        if self.start_point is None:
+            return False
+        if self.base_point is None:
+            return self._on_edge_value(viewport, value)
+        if self.hover_point is None:
             return False
         if isinstance(value, tuple):
             if len(value) != 2:
@@ -137,7 +179,7 @@ class RotatedRectangleTool(AxisMagnet, PlaneLock, Tool):
             width, angle = value
             if width <= 0.0:
                 return False
-            self.angle = float(angle)
+            self.angle = _degrees(angle)
             corners = self._corners(float(width))
         else:
             if value == 0.0:
@@ -164,20 +206,30 @@ class RotatedRectangleTool(AxisMagnet, PlaneLock, Tool):
         if self.start_point is None or self.hover_point is None:
             return []
         if self.base_point is None:
-            return [(self.start_point, self.hover_point)]   # drawing the base
+            # Drawing the base edge, over the first protractor (#70).
+            u, v = plane_axes(self._normal())
+            return ([(self.start_point, self.hover_point)]
+                    + self._disc(self.start_point, u, v))
         width, angle = self._width_and_angle(self.hover_point, self._locked)
         c = self._corners(width, angle)
+        # The second protractor: square to the base edge at its end, zero
+        # along the plane (the rectangle lying flat), 90° standing up.
+        disc = self._disc(self.base_point, self._perp(), self._normal())
         if not c:
-            return [(self.start_point, self.base_point)]
-        return [(c[i], c[(i + 1) % 4]) for i in range(4)]
+            return [(self.start_point, self.base_point)] + disc
+        return [(c[i], c[(i + 1) % 4]) for i in range(4)] + disc
 
     def value_label(self):
         if self.start_point is None or self.hover_point is None:
             return None
         if self.base_point is None:
-            length = (self.hover_point - self.start_point).length()
+            d = self.hover_point - self.start_point
             mid = (self.start_point + self.hover_point) * 0.5
-            return (fmt_len(length), mid)
+            texto = fmt_len(d.length())
+            flat = self._in_plane(d)
+            if flat.length() > 1e-9:
+                texto += f"   {self._edge_angle(flat):.0f}°"
+            return (texto, mid)
         w, angle = self._width_and_angle(self.hover_point, self._locked)
         length = (self.base_point - self.start_point).length()
         c = self._corners(w, angle)
@@ -264,6 +316,8 @@ class RotatedRectangleTool(AxisMagnet, PlaneLock, Tool):
         angle = math.degrees(math.atan2(
             QVector3D.dotProduct(d, self._normal()),
             QVector3D.dotProduct(d, perp)))
+        if self._near_disc and forced is None:
+            angle = round(angle / TICK_DEG) * TICK_DEG   # the 15° ticks
         for target in (-180.0, -90.0, 0.0, 90.0, 180.0):
             if abs(angle - target) <= self._ANGLE_SNAP:
                 angle = target
@@ -321,6 +375,125 @@ class RotatedRectangleTool(AxisMagnet, PlaneLock, Tool):
         self._reset()
         viewport.update()
 
+    # ---- Protractors (#70) --------------------------------------------------
+    #: Snaps that name a real point of the model: the width goes there.
+    #: Everything else (the drawing plane, a face, an axis direction) only
+    #: says where the cursor is, and is read on the protractor's plane.
+    _POINT_SNAPS = frozenset({"endpoint", "midpoint", "intersection",
+                              "on_edge", "close", "origin", "center",
+                              "centre", "on_line"})
+
+    def _width_cursor(self, ctx: ToolContext) -> QVector3D:
+        """Where the cursor is for the width: on the second protractor's
+        plane (square to the base edge, through its end), as SketchUp reads
+        it. The snap engine answers on the drawing plane, so the width
+        could only lie in it — 0° or 180° — unless the view happened to
+        look along the edge (Marco, 2026-09-23: «me fuerza a 180° a no ser
+        que cambie un poco la vista»)."""
+        snap = getattr(ctx, "snap", None)
+        if snap is not None and getattr(snap, "kind", "none") in self._POINT_SNAPS:
+            return ctx.world
+        ray = getattr(ctx.viewport, "_pixel_to_ray", None)
+        if ray is None:
+            return ctx.world
+        origin, direction = ray(ctx.screen.x(), ctx.screen.y())
+        if origin is None or direction is None:
+            return ctx.world
+        n = (self.base_point - self.start_point).normalized()
+        denom = QVector3D.dotProduct(direction, n)
+        if abs(denom) < 0.02:
+            # The protractor seen edge-on: its plane gives no point, the
+            # drawing plane's answer is the best there is.
+            return ctx.world
+        t = QVector3D.dotProduct(self.base_point - origin, n) / denom
+        if t <= 0.0:
+            return ctx.world
+        return origin + direction * t
+
+    def _in_plane(self, d: QVector3D) -> QVector3D:
+        n = self._normal()
+        return d - n * QVector3D.dotProduct(d, n)
+
+    def _edge_angle(self, d: QVector3D) -> float:
+        """Direction of the base edge in the plane, degrees from its first
+        axis (0..360) — what the first protractor reads."""
+        import math
+        u, v = plane_axes(self._normal())
+        deg = math.degrees(math.atan2(QVector3D.dotProduct(d, v),
+                                      QVector3D.dotProduct(d, u)))
+        return deg % 360.0
+
+    def _dir_at(self, deg: float) -> QVector3D:
+        import math
+        u, v = plane_axes(self._normal())
+        a = math.radians(deg)
+        return (u * math.cos(a) + v * math.sin(a)).normalized()
+
+    def _on_edge_value(self, viewport, value) -> bool:
+        """The base edge typed: ``length`` along the cursor's direction, or
+        ``length;angle`` with the angle read on the first protractor."""
+        if isinstance(value, tuple):
+            if len(value) != 2:
+                return False
+            length, angle = float(value[0]), _degrees(value[1])
+            direction = self._dir_at(angle)
+        else:
+            length = float(value)
+            d = (self.hover_point - self.start_point
+                 if self.hover_point is not None else QVector3D())
+            direction = (d.normalized() if d.length() > 1e-9
+                         else self._dir_at(0.0))
+        if length == 0.0:
+            return False
+        if length < 0.0:
+            length, direction = -length, -direction
+        self.base_point = self.start_point + direction * length
+        if self._perp().lengthSquared() < 1e-12:
+            self.base_point = None
+            return False
+        viewport.update()
+        return True
+
+    def _disc_metrics(self, ctx: ToolContext, centre: QVector3D,
+                      axis: QVector3D) -> None:
+        """Fixed screen size for the disc, and whether the cursor is near
+        enough to snap to its ticks — the Protractor tool's rule."""
+        import math
+        w2p = getattr(ctx.viewport, "_world_to_pixel", None)
+        self._near_disc = False
+        if w2p is None:
+            return
+        u, _v = plane_axes(axis)
+        p0, p1 = w2p(centre), w2p(centre + u)
+        if p0 is None or p1 is None:
+            return
+        px = math.hypot(p1[0] - p0[0], p1[1] - p0[1])
+        if px > 1e-6:
+            self._disc_r = DISC_PX / px
+        self._near_disc = (math.hypot(ctx.screen.x() - p0[0],
+                                      ctx.screen.y() - p0[1])
+                           <= DISC_PX * 1.25)
+
+    def _disc(self, centre: QVector3D, u: QVector3D, v: QVector3D) -> list:
+        """A protractor disc in the plane (u, v): rim and ticks every 15°,
+        long ones every 90°, zero on ``u``."""
+        import math
+        if u.length() < 1e-9 or v.length() < 1e-9:
+            return []
+        r = self._disc_r
+
+        def rim(t: float, k: float = 1.0) -> QVector3D:
+            return centre + (u * math.cos(t) + v * math.sin(t)) * (r * k)
+
+        n = 48
+        pts = [rim(2 * math.pi * k / n) for k in range(n)]
+        segs = [(pts[k], pts[(k + 1) % n]) for k in range(n)]
+        for k in range(int(360 / TICK_DEG)):
+            t = math.radians(k * TICK_DEG)
+            inner = 0.75 if k * TICK_DEG % 90 == 0 else 0.86
+            segs.append((rim(t, inner), rim(t)))
+        return segs
+
     def _reset(self) -> None:
         self.start_point = None
         self.base_point = None
@@ -328,3 +501,14 @@ class RotatedRectangleTool(AxisMagnet, PlaneLock, Tool):
         self.clear_plane_lock()
         self.angle = 0.0
         self._locked = None
+        self._near_disc = False
+        self._held_angle = None
+
+
+def _degrees(value) -> float:
+    """An angle typed in the VCB. The parser reads every bare field as a
+    LENGTH in the document's unit, so in a millimetre model «90» arrived as
+    0.09 — undo that scale; an angle has no unit."""
+    from core.units import bare_number_scale
+    scale = bare_number_scale()
+    return float(value) / scale if scale else float(value)

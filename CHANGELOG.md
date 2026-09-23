@@ -18,6 +18,15 @@ follow [SemVer](https://semver.org).
   cuentagotas lo toma de una cara sin pintar, y pintar con él quita el
   material de la cara, de su revés o de un grupo entero.
 
+- **Rectángulo rotado con transportadores**, como SketchUp (#70,
+  @pacaeiro): uno en la primera esquina para la dirección de la primera
+  arista (marcas cada 15° cerca del borde; el cuadro acepta `largo` o
+  `largo;ángulo`) y otro perpendicular a esa arista para el ancho y su
+  inclinación, que ahora se lee sobre el plano del transportador — antes
+  solo salía tumbado (0°/180°) salvo cambiando la vista. Shift fija la
+  inclinación. De paso, un ángulo tecleado en un documento en milímetros
+  ya no se lee como longitud (`3;90` daba 0,09°).
+
 ### Cambiado
 - **Alt alterna el cuentagotas de Pintar**, como SketchUp desde 2021.1:
   un toque lo activa y se queda hasta tomar un material (entonces vuelve
