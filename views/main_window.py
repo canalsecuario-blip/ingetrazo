@@ -1272,7 +1272,7 @@ class MainWindow(QMainWindow):
             "<h3>IngeTrazo</h3>"
             f"<p>{tr('Version')} {__version__}</p>"
             f"{gl_html}"
-            f"<p>{tr('Free 3D modeler for architecture, civil engineering and 3D printing.')}</p>"
+            f"<p>{tr('Free 3D modeler for architecture, engineering and 3D design.')}</p>"
             f"<p>{tr('Created by')} <b>Marco Sumari Tellez</b><br>"
             f"{tr('Civil Engineer — Arequipa, Peru')}</p>"
             # The people outside the project whose work is IN it. A draftsman

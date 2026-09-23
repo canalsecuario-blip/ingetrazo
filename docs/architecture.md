@@ -14,8 +14,8 @@ ingetrazo/
 ├── georef/            ← real-world location: tiles, DEM, projections
 ├── styles/            ← visual style presets (shader modes)
 ├── materials/         ← material library and editor
-├── analysis/          ← 3D-printing checks (manifold, thickness, overhangs)
-├── formats/           ← import / export for OBJ, COLLADA, glTF, STL, 3MF, IFC
+├── analysis/          ← (future) 3D-printing checks: manifold, thickness, overhangs
+├── formats/           ← import / export for OBJ, COLLADA, glTF, STL, IFC (3MF planned)
 ├── i18n/              ← UI translations (en, es, ...)
 ├── resources/         ← shaders, icons, fonts, stylesheets
 └── tests/             ← automated tests

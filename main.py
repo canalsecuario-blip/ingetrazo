@@ -1,6 +1,6 @@
 """IngeTrazo entry point.
 
-Free 3D modeler for architecture, civil engineering, and 3D printing.
+Free 3D modeler for architecture, engineering and 3D design.
 Part of the IngePresupuestos ecosystem (modeling → quantity takeoff → budget).
 
 Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.

@@ -4,8 +4,8 @@
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
   <name>IngeTrazo</name>
-  <summary>SketchUp-style 3D modeler for civil engineering</summary>
-  <summary xml:lang="es">Modelador 3D estilo SketchUp para ingeniería civil</summary>
+  <summary>SketchUp-style 3D modeler for architecture, engineering and design</summary>
+  <summary xml:lang="es">Modelador 3D estilo SketchUp para arquitectura, ingeniería y diseño</summary>
   <developer id="com.ingetrazo">
     <name>Marco Sumari Tellez</name>
   </developer>

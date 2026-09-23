@@ -1,6 +1,6 @@
 # IngeTrazo
 
-**A free, SketchUp-inspired 3D modeler for architecture, civil engineering, and 3D printing — built natively for Linux.**
+**A free, SketchUp-inspired 3D modeler for architecture, engineering and 3D design — built natively for Linux.**
 
 ![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)
 ![Status: usable](https://img.shields.io/badge/status-usable%20·%200.3.x-brightgreen)
@@ -8,7 +8,8 @@
 ![Made in Peru](https://img.shields.io/badge/made%20in-Peru%20%F0%9F%87%B5%F0%9F%87%AA-red)
 
 IngeTrazo brings SketchUp-style *push/pull* modeling to Linux — where there is
-almost no native CAD for civil engineers and architects. It is freeform at the
+almost no native CAD for civil engineers and architects, and for anyone who
+designs in 3D (furniture, objects, scenes, models). It is freeform at the
 core (draw anything, like sketching by hand) with an **optional BIM tagging
 layer** planned on top: mark geometry as `IfcWall` / `IfcSlab` / `IfcColumn`,
 export to IFC, and close the loop **model → tag → quantity takeoff → budget**
@@ -131,8 +132,9 @@ welcome arch with all its rebar (also attached to every release as
   (see [Acknowledgements](#acknowledgements)).
 - **Files** — native `.igz` save/open (self-contained: textures travel inside
   the document), **import OBJ and COLLADA `.dae`**, **export STL, OBJ,
-  COLLADA and glTF/GLB** (STL for slicers; glTF with PBR materials and
-  geolocation).
+  COLLADA and glTF/GLB** (glTF with PBR materials and geolocation; STL
+  goes to a slicer as is — dedicated 3D-printing tools are planned for the
+  future).
 - **Layers & Scenes** — visibility/lock tags (plans emerge from one model)
   and saved views (camera + per-layer visibility), both imported from `.skp`.
 - **BIM tagging + IFC export** — tag freeform geometry with IFC classes
@@ -253,8 +255,8 @@ provided derivative works stay under the same license.
 ## En español
 
 **IngeTrazo** es un modelador 3D libre estilo SketchUp para arquitectura,
-ingeniería civil e impresión 3D, **hecho nativo para Linux** — donde casi no
-hay CAD para nuestra carrera. Es freeform en el núcleo (trazás lo que quieras,
+ingeniería y diseño 3D, **hecho nativo para Linux** — donde casi no
+hay CAD para nuestra carrera ni para quien diseña en 3D. Es freeform en el núcleo (trazás lo que quieras,
 como dibujando a mano) con una capa **BIM opcional** planeada encima: taggeás la
 geometría como `IfcWall` / `IfcSlab` / `IfcColumn`, exportás a IFC y cerrás el
 loop **modelar → taggear → metrar → presupuestar** junto a
