@@ -69,7 +69,7 @@ anything is missing.
 
 ```bash
 git clone https://github.com/ingelibre/ingetrazo.git
-cd ingetrazo/app
+cd ingetrazo
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 python main.py

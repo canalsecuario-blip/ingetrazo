@@ -6444,6 +6444,8 @@ class Viewport(QOpenGLWidget):
             if result is None:
                 return
             text, mid_world = result
+            if mid_world is None:        # VCB-only value (Walkthrough eye height)
+                return
         else:
             segments = tool.rubber_band_lines()
             if len(segments) != 1:
