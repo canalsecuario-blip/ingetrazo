@@ -355,4 +355,40 @@ def _interior_point(loop: list):
     ax, ay = loop[0]
     bx, by = loop[1]
     mx, my = (ax + bx) / 2, (ay + by) / 2
-    return (mx * 0.999 + cx * 0.001, my * 0.999 + cy * 0.001)
+    p = (mx * 0.999 + cx * 0.001, my * 0.999 + cy * 0.001)
+    if _point_in_polygon(p, loop):
+        return p
+    # That nudge goes toward the vertex average, which for a C or an L can
+    # be across the void: the "interior" point landed in the notch (issue
+    # found through Rafael's door, revision 4). Scan for a real one.
+    q = scan_interior_point(loop)
+    return q if q is not None else p
+
+
+def scan_interior_point(outer: list, holes=()):
+    """A point well inside ``outer`` and outside every hole, or None.
+
+    A horizontal line halfway between two consecutive vertex heights crosses
+    the region in spans; the middle of the widest span (measured against
+    the band's height too) is as far from every boundary as such a simple
+    probe gets, whatever the shape — a C, an L, a ring."""
+    loops = [outer, *holes]
+    ys = sorted({p[1] for lp in loops for p in lp})
+    best = None
+    for y0, y1 in zip(ys, ys[1:]):
+        if y1 - y0 < 1e-9:
+            continue
+        y = (y0 + y1) / 2
+        xs = []
+        for lp in loops:
+            n = len(lp)
+            for i in range(n):
+                (ax, ay), (bx, by) = lp[i], lp[(i + 1) % n]
+                if (ay > y) != (by > y):
+                    xs.append(ax + (y - ay) * (bx - ax) / (by - ay))
+        xs.sort()
+        for a, b in zip(xs[0::2], xs[1::2]):
+            w = min(b - a, y1 - y0)
+            if best is None or w > best[0]:
+                best = (w, ((a + b) / 2, y))
+    return best[1] if best else None

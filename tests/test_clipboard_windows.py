@@ -96,3 +96,11 @@ def test_a_new_window_from_the_repo_runs_main_py(monkeypatch):
     monkeypatch.delenv("FLATPAK_ID", raising=False)
     cmd = MainWindow._new_window_command()
     assert cmd[-2].endswith("main.py") and cmd[-1] == "--new-window"
+
+
+def test_quitting_leaves_the_copy_as_plain_data(app):
+    clip.publish(_clip())
+    clip.flush()
+    md = QApplication.clipboard().mimeData()
+    assert not isinstance(md, clip.ClipMime)
+    assert clip.decode(md.data(clip.MIME).data()) is not None

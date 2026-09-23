@@ -620,6 +620,37 @@ def _first_point_from_point(
                       guide_color=AXIS_COLORS[axis])
 
 
+def _edge_from_point_crossing(
+    edge, ref, cx, cy, world_to_pixel, threshold_px, is_occluded=None,
+) -> Optional[SnapResult]:
+    """Where an axis line through ``ref`` (the acquired point) crosses
+    ``edge``, when that crossing is within the snap radius of the cursor —
+    a green 'from point' on the edge with the axis-coloured guide back to
+    ``ref``. ``None`` when no axis line meets the edge near the cursor."""
+    best = None
+    for axis, a in _AXIS_VECTORS.items():
+        hit = _line_segment_intersection(ref, a, edge.a, edge.b)
+        if hit is None or (hit - ref).length() < 1e-4:
+            continue
+        hp = world_to_pixel(hit)
+        if hp is None:
+            continue
+        d = math.hypot(hp[0] - cx, hp[1] - cy)
+        if d > threshold_px:
+            continue
+        if is_occluded is not None and is_occluded(hit):
+            continue
+        if best is None or d < best[0]:
+            best = (d, hit, axis)
+    if best is None:
+        return None
+    _, hit, axis = best
+    return SnapResult(hit, "from_point", COLOR_ENDPOINT,
+                      guide=(QVector3D(ref), hit),
+                      guide_color=AXIS_COLORS[axis],
+                      context=getattr(edge, "context", None))
+
+
 def _in_plane_with_point_snap(
     ref, candidate, plane_normal, cx, cy, world_to_pixel, threshold_px,
     is_occluded=None,
@@ -697,7 +728,8 @@ def _in_plane_with_point_snap(
 
 
 def _extension_snap(
-    candidate_world, cx, cy, scene, world_to_pixel, et, start_point, is_occluded
+    candidate_world, cx, cy, scene, world_to_pixel, et, start_point, is_occluded,
+    project_onto_line=None,
 ) -> Optional[SnapResult]:
     """Extension / intersection inference: when the draw direction is collinear
     with an edge and the cursor is on that edge's *continuation* (beyond its
@@ -712,15 +744,47 @@ def _extension_snap(
     if draw.length() < 1e-6:
         return None
     draw = draw.normalized()
+    # The draw direction above comes from where the cursor ray meets the
+    # scene. Over empty sky that is on the draw; over a face it is a point
+    # on the wall BEHIND, and the direction is nonsense — the extension of
+    # a sloped roof edge showed only with nothing behind it («a veces te
+    # bloquea y a veces no, depende de cómo te orientes», Rafael, revision
+    # 4, 03:56). So when the 3D test fails the same question is asked on
+    # screen, where the cursor really is, and the point is taken on the
+    # edge's line under the cursor ray instead of on that far wall.
+    sp = world_to_pixel(start_point) if project_onto_line is not None else None
+    sdx = sdy = 0.0
+    if sp is not None:
+        sdx, sdy = cx - sp[0], cy - sp[1]
+    sdl = math.hypot(sdx, sdy)
     best_ext = None  # (dist, proj, from_end, edge, dir)
     for edge in scene.edges:
         ab = edge.b - edge.a
         if ab.length() < 1e-9:
             continue
         u = ab.normalized()
+        at = candidate_world
         if abs(QVector3D.dotProduct(draw, u)) < 0.966:  # ~15°: drawing along it
-            continue
-        t = QVector3D.dotProduct(candidate_world - edge.a, u)
+            # The on-screen reading is only for EXTENDING this edge from its
+            # own line (the start sits on it, as Rafael's did at the eave):
+            # a merely parallel edge, or one that runs toward the camera and
+            # shows as a stub, has no trustworthy screen direction — letting
+            # those in handed a midpoint over to an «extension» 5.8 m deep
+            # (snap matrix, front camera).
+            if sdl < 4.0:
+                continue
+            off = start_point - edge.a
+            if (off - u * QVector3D.dotProduct(off, u)).length() > 1e-3:
+                continue
+            pa, pb = world_to_pixel(edge.a), world_to_pixel(edge.b)
+            if pa is None or pb is None:
+                continue
+            edx, edy = pb[0] - pa[0], pb[1] - pa[1]
+            edl = math.hypot(edx, edy)
+            if edl < 20.0 or abs(sdx * edx + sdy * edy) < 0.966 * sdl * edl:
+                continue
+            at = project_onto_line(edge.a, u)
+        t = QVector3D.dotProduct(at - edge.a, u)
         if -1e-6 <= t <= ab.length() + 1e-6:
             continue  # on the segment itself
         proj = edge.a + u * t
@@ -801,6 +865,12 @@ def _from_point_snap(
     if extra_point is not None:
         refs.append((extra_point, "from_point", COLOR_ENDPOINT))
     for edge in scene.edges:
+        if getattr(edge, "figure", False):
+            # A face-me figure is scenery, not drawing: its feet snap when you
+            # point at them, but no line of the drawing lines up with it
+            # (Rafael, revision 4, 04:08: the scale figure pulled «from
+            # point» guides metres away from the roof he was drawing).
+            continue
         refs.append((edge.a, "from_point", COLOR_ENDPOINT))
         refs.append((edge.b, "from_point", COLOR_ENDPOINT))
         refs.append(((edge.a + edge.b) * 0.5, "midpoint", COLOR_MIDPOINT))
@@ -1408,7 +1478,8 @@ def compute_snap(
     #     Runs before 'from point' so extending a line wins over a corner line-up.
     if allow_axis:
         ext = _extension_snap(
-            candidate_world, cx, cy, scene, world_to_pixel, et, start_point, is_occluded
+            candidate_world, cx, cy, scene, world_to_pixel, et, start_point,
+            is_occluded, project_onto_line=project_onto_line,
         )
         if ext is not None:
             return ext
@@ -1476,6 +1547,17 @@ def compute_snap(
             best_edge = (d, on_pt, edge)
     if best_edge is not None:
         _d, on_pt, edge = best_edge
+        if allow_axis and acquired_point is not None:
+            # On an edge AND lined up with the acquired point: the one point
+            # of the edge that is both. The edge used to win outright, the
+            # dotted «from point» line vanished as the cursor reached the
+            # wall and the length jumped with every pixel — «hasta el final
+            # no me llega» (Rafael, revision 4, 01:30).
+            cross = _edge_from_point_crossing(
+                edge, acquired_point, cx, cy, world_to_pixel, threshold_px,
+                is_occluded)
+            if cross is not None:
+                return cross
         if getattr(edge, "guide", False):
             return SnapResult(on_pt, "on_line", COLOR_ON_EDGE)   # a guide line
         return SnapResult(on_pt, "on_edge", COLOR_ON_EDGE,

@@ -43,3 +43,17 @@ def _world_drawing_axes():
     axes.sync(None)
     yield
     axes.sync(None)
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Leave no Python-owned clipboard entry (``formats.clip.ClipMime``) in
+    Qt's clipboard while the interpreter tears down — a Copy in a test puts
+    one there, and the CI run of 9393ef5 passed and then segfaulted on exit."""
+    try:
+        from PySide6.QtWidgets import QApplication
+        if QApplication.instance() is not None:
+            from formats import clip
+            clip.flush()
+            QApplication.clipboard().clear()
+    except Exception:  # noqa: BLE001 - teardown must not fail the run
+        pass

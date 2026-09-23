@@ -150,13 +150,15 @@ class _SnapEdge:
     marks the degenerate one that carries a circle's centre."""
 
     __slots__ = ("a", "b", "center", "component_origin", "arc_midpoint",
-                 "guide", "in_group", "context", "group")
+                 "guide", "in_group", "context", "group", "figure")
 
     def __init__(self, a, b, center: bool = False, component_origin: bool = False,
                  arc_midpoint: bool = False, guide: bool = False,
-                 in_group: bool = False, context=None, group=None) -> None:
+                 in_group: bool = False, context=None, group=None,
+                 figure: bool = False) -> None:
         self.a = a
         self.b = b
+        self.figure = figure                       # a face-me figure's feet
         self.center = center
         self.component_origin = component_origin   # a group's insertion point
         self.arc_midpoint = arc_midpoint           # the middle of an arc's sweep
@@ -397,6 +399,35 @@ def _axes_vertices(spacing: float, pos_len: float = 1.0e5):
                            ox - dx * t1, oy - dy * t1, oz - dz * t1])
         spans[name] = (start, len(coords) // 3 - start)
     return coords, spans
+
+
+def _box_dash_vertices(corners, spacing: float):
+    """The twelve edges of a box (``corners`` in ``oriented_box_corners``
+    order) as world-space dashes for the GL pass — so the part behind the
+    geometry is hidden like any line, the way guides are (issue #23). The
+    edit box used to be painted in the QPainter overlay, which has no depth:
+    inside a cube its back edges showed through the faces (Marco, 23-09)."""
+    coords = array("f")
+    spacing = max(spacing, 1e-4)
+    dash = spacing * 0.5
+    for i in range(8):
+        for bit in (1, 2, 4):
+            j = i | bit
+            if j == i:
+                continue
+            a, b = corners[i], corners[j]
+            d = b - a
+            length = d.length()
+            if length < 1e-9:
+                continue
+            u = d / length
+            t = 0.0
+            while t < length:
+                t1 = min(t + dash, length)
+                p, q = a + u * t, a + u * t1
+                coords.extend([p.x(), p.y(), p.z(), q.x(), q.y(), q.z()])
+                t += spacing
+    return coords
 
 
 def _guide_vertices(guides, spacing: float, selection=(), centre=None,
@@ -1822,6 +1853,26 @@ class Viewport(QOpenGLWidget):
                     else:
                         self._set_color(0.27, 0.35, 0.47, 1.0)
                     self._gl.glDrawArrays(GL_LINES, start, count)
+                self._gl.glDepthMask(GL_TRUE)
+                self._guides_vao.release()
+
+        # The dashed box of the group being edited, depth-tested like the
+        # guides (it shares their buffer): the part behind the geometry is
+        # hidden instead of showing through it.
+        box = (self._edit_group_box_corners()
+               if self.plano_style is None and self.style_override is None
+               else None)
+        if box is not None:
+            dist = max(float(self.camera.distance), 1e-3)
+            data = _box_dash_vertices(box, dist * 0.012).tobytes()
+            if data:
+                self._guides_vbo.bind()
+                self._guides_vbo.allocate(data, len(data))
+                self._guides_vbo.release()
+                self._guides_vao.bind()
+                self._gl.glDepthMask(GL_FALSE)
+                self._set_color(90 / 255, 110 / 255, 140 / 255, 1.0)
+                self._gl.glDrawArrays(GL_LINES, 0, len(data) // 12)
                 self._gl.glDepthMask(GL_TRUE)
                 self._guides_vao.release()
 
@@ -4257,32 +4308,49 @@ class Viewport(QOpenGLWidget):
         if not hide_rest:
             draw_groups = [g for g in placements
                            if self._draws_in_edit_context(g)] + draw_groups
-        gcache = getattr(self, "_edge_groups_cache", None)
-        if gcache is None or gcache[0] != gkey:
-            group_parts: list = []
-            group_spans: list = []            # (bbox, start RELATIVE, n)
-            split_rel = None
-            rel = 0
-            for g in draw_groups:
-                if (split_rel is None
-                        and self.scene.edit_group is not None
-                        and not self._draws_in_edit_context(g)):
-                    # Where the surroundings end and the subject begins.
-                    # This used to key on `g is scene.edit_group`, which
-                    # never matched when the group being edited was a nested
-                    # placement (the list holds its proxy) — and with no
-                    # split, NOTHING faded.
-                    split_rel = rel
+        # While a group is open, only the SURROUNDINGS are cached on the
+        # epoch. The epoch leaves the open mesh's serial out on purpose (it
+        # is the loose mesh, and counting it re-keyed every cache on every
+        # drag frame), so a cached subject never saw its own edits: what
+        # you drew inside a group or component was not drawn until you
+        # left it (Rafael, revision 4: «no se ven las líneas»). The subject
+        # is re-read each sync instead — its chunk is cached per group and
+        # revalidated by the mesh serial, so that is a lookup, not a build.
+        editing = self.scene.edit_group is not None
+        head = ([g for g in draw_groups if self._draws_in_edit_context(g)]
+                if editing else draw_groups)
+        subject = ([g for g in draw_groups
+                    if not self._draws_in_edit_context(g)]
+                   if editing else [])
+
+        def _collect(groups, rel):
+            parts: list = []
+            spans: list = []                  # (bbox, start RELATIVE, n)
+            for g in groups:
                 if (self.scene.entity_visible(g) and id(g) not in pv
                         and not getattr(g, "billboard", False)
                         and not self._instanced_eligible(g)):
                     ch = self._group_chunk(g)
-                    group_parts.append(ch["edges"])
+                    parts.append(ch["edges"])
                     n = len(ch["edges"]) // 12
-                    group_spans.append((ch.get("bbox"), rel, n))
+                    spans.append((ch.get("bbox"), rel, n))
                     rel += n
-            gcache = self._edge_groups_cache = (gkey, group_parts, group_spans, split_rel)
-        _gk, group_parts, group_spans, split_rel = gcache
+            return parts, spans, rel
+
+        gcache = getattr(self, "_edge_groups_cache", None)
+        if gcache is None or gcache[0] != gkey:
+            head_parts, head_spans, head_n = _collect(head, 0)
+            gcache = self._edge_groups_cache = (gkey, head_parts, head_spans,
+                                                head_n)
+        _gk, head_parts, head_spans, head_n = gcache
+        # Where the surroundings end and the subject begins. This used to
+        # key on `g is scene.edit_group`, which never matched when the group
+        # being edited was a nested placement (the list holds its proxy) —
+        # and with no split, NOTHING faded.
+        split_rel = head_n if editing else None
+        subj_parts, subj_spans, _n = _collect(subject, head_n)
+        group_parts = head_parts + subj_parts
+        group_spans = head_spans + subj_spans
         edge_parts += group_parts
         edge_spans += [(bb, loose_n + start, n) for bb, start, n in group_spans]
         if self._edit_split_e is None and split_rel is not None:
@@ -5417,7 +5485,6 @@ class Viewport(QOpenGLWidget):
         hook = getattr(self.active_tool, "draw_overlay", None)
         if callable(hook):
             hook(self, painter)
-        self._draw_edit_group_box(painter)
 
         # Terrain-surface fills (draped / flat) under the georef paths — Track G.
         self._draw_geo_surfaces(painter)
@@ -5649,33 +5716,22 @@ class Viewport(QOpenGLWidget):
             painter.setPen(QPen(color))
             painter.drawText(QPointF(px + 10, py + 16), label)
 
-    def _draw_edit_group_box(self, painter: QPainter) -> None:
-        """Dashed bounding box around the group being edited — the visual cue
-        that you are INSIDE it (SketchUp draws the same box)."""
+    def _edit_group_box_corners(self):
+        """The eight corners of the dashed box around the group being edited
+        — the visual cue that you are INSIDE it (SketchUp draws the same
+        box) — or None. Drawn in the GL pass, depth-tested."""
         group = self.scene.edit_group
         if group is None:
-            return
+            return None
         if not group.mesh.vertices and not getattr(group, "children", None):
-            return          # nothing to wrap
+            return None     # nothing to wrap
         # A CONTAINER's own mesh is usually empty — its geometry is in its
         # children — so testing that mesh alone left you inside a group with
         # no box at all, the one cue that tells you where you are.
         # In the group's OWN axes, like the selection cue: on a rotated
         # object a world-aligned box reads as skewed and wraps mostly air.
         from core.group import oriented_box_corners
-        corners = oriented_box_corners(*self._group_obb(group))
-        pix = [self._world_to_pixel(c) for c in corners]
-        if any(p is None for p in pix):
-            return
-        pen = QPen(QColor(90, 110, 140), 1, Qt.DashLine)
-        painter.setPen(pen)
-        # Box edges: corner indices differing in exactly one axis bit.
-        for i in range(8):
-            for bit in (1, 2, 4):
-                j = i | bit
-                if j != i:
-                    painter.drawLine(int(pix[i][0]), int(pix[i][1]),
-                                     int(pix[j][0]), int(pix[j][1]))
+        return oriented_box_corners(*self._group_obb(group))
 
     # ---- Section planes (SketchUp sections) ----------------------------------
     def _set_section_clip(self, on: bool) -> None:
@@ -8720,11 +8776,15 @@ class Viewport(QOpenGLWidget):
         return mids
 
     def _billboard_snap_edges(self) -> list:
-        """Pseudo-edges for face-me billboards: the base edge and the vertical
-        centre axis of the quad AS DRAWN this frame — so a figure's feet (its
-        anchor point), base corners and head snap like real geometry when
-        placing or measuring against it. The group a transform tool is
-        currently dragging is excluded (it would snap to itself)."""
+        """The one snap a face-me billboard offers: its FEET, the anchor
+        point, as a degenerate pseudo-edge (a point, like a guide point) —
+        enough to place a figure or measure from where it stands. It used
+        to offer its base edge and vertical axis too (corners, midpoints,
+        head, and two whole lines to ride), and the scale figure beside the
+        origin stole the inference from the drawing around it («me está
+        cogiendo el paisano», Rafael, revision 4; Marco: «siempre toma
+        protagonismo»). The group a transform tool is currently dragging is
+        excluded (it would snap to itself)."""
         moving = getattr(self.active_tool, "_group", None)
         out: list = []
         for g in self._placements():
@@ -8736,10 +8796,8 @@ class Viewport(QOpenGLWidget):
             if quad is None:
                 continue
             c = quad[0]
-            base_mid = (c[0] + c[1]) * 0.5
-            top_mid = (c[2] + c[3]) * 0.5
-            out.append(_SnapEdge(QVector3D(c[0]), QVector3D(c[1])))
-            out.append(_SnapEdge(base_mid, top_mid))
+            feet = (c[0] + c[1]) * 0.5
+            out.append(_SnapEdge(QVector3D(feet), QVector3D(feet), figure=True))
         return out
 
     def _snap_scene(self, px: Optional[float] = None,
@@ -9896,7 +9954,11 @@ class Viewport(QOpenGLWidget):
                 path=self.edit_path_text()), 4000)
         else:
             self.flash_status(tr("Left the group"), 2000)
-        self.update()
+        # Leaving re-shares a component: the trays (Components' «In the
+        # model» list, Entity Info) must hear it now, not at the next edit —
+        # the list read «no components yet» with the house on screen
+        # (Rafael, revision 4, 06:18).
+        self.notify_scene_changed()
 
     # ---- Rest-of-model context while editing a group -------------------------
     @property

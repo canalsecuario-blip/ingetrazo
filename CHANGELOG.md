@@ -21,6 +21,33 @@ follow [SemVer](https://semver.org).
   dibujo, si es plano).
 
 ### Corregido
+- **Lo que dibujas dentro de un grupo o componente se ve al momento**
+  (Rafael, revisión 4). Las líneas nuevas no aparecían hasta salir del
+  grupo: la parte del dibujo que guarda las aristas de los grupos no se
+  enteraba de los cambios en el grupo abierto. Pasaba desde la 0.4.0.
+- **Una puerta que arranca del suelo ya atraviesa el muro** (Rafael,
+  revisión 4). Al empujarla, la cara de abajo del muro queda en forma de
+  «C», y el motor probaba un punto que podía caer en el hueco de la C:
+  creía que esa cara estaba fuera del sólido, la borraba y el empuje se
+  rechazaba, dejando un nicho ciego. Dependía del orden interno de las
+  caras, por eso a veces funcionaba y a veces no, con o sin booleanas.
+- **El muñeco de escala solo ofrece el punto de sus pies** para enganchar,
+  y ya no sirve de referencia para «Desde el punto»: sus esquinas, cabeza y
+  ejes robaban las inferencias del dibujo cercano.
+- **Sobre una arista, «Desde el punto» ya no se pierde** (Rafael, revisión 4:
+  «hasta el final no me llega»): con un punto adquirido, la arista ofrece el
+  punto alineado con él en vez de «En arista» a secas.
+- **La prolongación de una arista aparece aunque haya una pared detrás del
+  cursor** (Rafael: «a veces te bloquea y a veces no»). Se decidía con el
+  punto de esa pared; ahora se mira también en pantalla, solo al prolongar
+  la arista desde su propia línea. Medido en el arnés de inferencias
+  (997 920 casos): cambian 1120, ninguno le quita un punto con nombre.
+- **Al cerrar la ventana, lo copiado sigue en el portapapeles** para pegarlo
+  en otra ventana; de paso se evita un cierre brusco del proceso.
+- Faltaba traducir el mensaje de la Cinta «Punto guía a … con su segmento»,
+  y el panel «En el modelo» no se refrescaba al salir de un grupo.
+- **«Deshacer grupo» se llama ahora «Explotar»**, como en SketchUp: el
+  nombre anterior se confundía con Deshacer.
 - **Redondeo 3D daba «Conflicting cuts» en un cubo girado y aplastado**
   (#74, @pacaeiro). Al girar la pieza fuera de los ejes, las dos aristas de
   cada esquina calculaban el mismo punto con una milésima de milímetro de

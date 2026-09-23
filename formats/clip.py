@@ -134,7 +134,33 @@ def publish(clip: dict) -> None:
     app = QApplication.instance()
     if app is None:
         return
+    if not getattr(app, "_clip_flush_hooked", False):
+        app._clip_flush_hooked = True
+        app.aboutToQuit.connect(flush)
     QApplication.clipboard().setMimeData(ClipMime(clip))
+
+
+def flush() -> None:
+    """On quit, trade our lazy offer for plain data: the copy then survives
+    this window closing (another window can still paste it), and no Python
+    subclass is left inside Qt's clipboard while the interpreter tears down
+    — the CI run of 9393ef5 passed every test and still exited with a
+    segfault."""
+    from PySide6.QtWidgets import QApplication
+    if QApplication.instance() is None:
+        return
+    cb = QApplication.clipboard()
+    md = cb.mimeData()
+    if not isinstance(md, ClipMime):
+        return
+    try:
+        data = md.retrieveData(MIME, None)
+    except Exception:  # noqa: BLE001 - quitting: never raise from here
+        data = None
+    plain = QMimeData()
+    if data is not None and len(data):
+        plain.setData(MIME, data)
+    cb.setMimeData(plain)
 
 
 def foreign() -> dict | None:

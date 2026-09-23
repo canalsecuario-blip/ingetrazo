@@ -191,7 +191,13 @@ def _region_test_point(outer_xy, holes_xy):
     region (a cap with a skylight) falls in the hole, which would misread it as
     outside the solid; this nudges in from an outer edge instead when needed."""
     p = _interior_point(outer_xy)
-    if not any(_point_in_polygon(p, h) for h in holes_xy):
+    # Verified, not assumed: for a C-shaped region (a door cut through the
+    # bottom ring of a wall) the old point could fall in the notch, the
+    # region read as outside the solid and the whole bottom face was
+    # dropped — the push was then refused as breaking the solid, and the
+    # door would not go through (Rafael, revision 4).
+    if _point_in_polygon(p, outer_xy) and not any(
+            _point_in_polygon(p, h) for h in holes_xy):
         return p
     n = len(outer_xy)
     for i in range(n):
@@ -208,7 +214,9 @@ def _region_test_point(outer_xy, holes_xy):
             _point_in_polygon(q, h) for h in holes_xy
         ):
             return q
-    return p
+    from core.arrangement import scan_interior_point
+    q = scan_interior_point(outer_xy, holes_xy)
+    return q if q is not None else p
 
 
 def _on_seg2(p, a, b, tol: float = _TOL / 2) -> bool:

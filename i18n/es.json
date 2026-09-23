@@ -438,7 +438,7 @@
  "Eraser": "Borrador",
  "Error: {err}": "Error: {err}",
  "Esri World Imagery (satellite)": "Esri World Imagery (satélite)",
- "Explode Group": "Deshacer grupo",
+ "Explode Group": "Explotar",
  "Export": "Exportar",
  "Export CSV…": "Exportar CSV…",
  "Export IFC": "Exportar IFC",
@@ -1984,5 +1984,6 @@
  "Oriented {n} face(s) like the selected one.": "{n} cara(s) orientada(s) como la seleccionada.",
  "The connected faces already match.": "Las caras conectadas ya están orientadas igual.",
  "The selected faces must lie on one plane.": "Las caras seleccionadas deben estar en un mismo plano.",
- "Rebuilt {n} face(s) on the selected plane.": "{n} cara(s) reconstruida(s) en el plano seleccionado."
+ "Rebuilt {n} face(s) on the selected plane.": "{n} cara(s) reconstruida(s) en el plano seleccionado.",
+ "Guide point at {d} m, with its segment": "Punto guía a {d} m, con su segmento"
 }
