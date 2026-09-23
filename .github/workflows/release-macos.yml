@@ -1,0 +1,56 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Build the macOS .dmg on a tag and attach it to the release (PR #64,
+# @felixriestra: packaging/build-macos-app.sh wraps the onedir as
+# IngeTrazo.app and the .app in a drag-to-Applications .dmg).
+#
+# Its own workflow so a Mac-side failure never holds up the Linux and
+# Windows assets. Apple Silicon (arm64) only for now; unsigned — the first
+# launch is right-click ▸ Open, as the README says.
+name: release-macos
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:        # exercise the build without a tag (artifact only)
+
+permissions:
+  contents: write           # to upload the .dmg to the release
+
+jobs:
+  dmg:
+    name: .app + .dmg (arm64)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Python packages
+        run: |
+          python -m pip install --upgrade pip
+          grep -vE '^\s*pytest\b' requirements.txt > reqs.txt
+          python -m pip install -r reqs.txt pyinstaller
+
+      - name: Build IngeTrazo.app and the .dmg
+        env:
+          PYTHON: python
+        run: packaging/build-macos-app.sh dist
+
+      - name: The bundle finds everything it needs
+        run: dist/IngeTrazo.app/Contents/MacOS/ingetrazo --check
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ingetrazo-macos-dmg
+          path: dist/*.dmg
+
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 \
+            || gh release create "${GITHUB_REF_NAME}" --title "IngeTrazo ${GITHUB_REF_NAME}" --generate-notes
+          gh release upload "${GITHUB_REF_NAME}" dist/*.dmg --clobber
