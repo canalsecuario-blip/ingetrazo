@@ -1978,5 +1978,9 @@
  "Green axis": "Eje verde",
  "Select one group or component first": "Selecciona antes un grupo o componente",
  "New Window": "Nueva ventana",
- "Could not start another IngeTrazo window.": "No se pudo abrir otra ventana de IngeTrazo."
+ "Could not start another IngeTrazo window.": "No se pudo abrir otra ventana de IngeTrazo.",
+ "Orient Faces": "Orientar caras",
+ "Select the one face the others should match.": "Selecciona la cara a la que deben igualarse las demás.",
+ "Oriented {n} face(s) like the selected one.": "{n} cara(s) orientada(s) como la seleccionada.",
+ "The connected faces already match.": "Las caras conectadas ya están orientadas igual."
 }

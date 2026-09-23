@@ -11,6 +11,10 @@ follow [SemVer](https://semver.org).
   IngeTrazo se pega en otro abierto al lado, con sus materiales, texturas,
   grupos y componentes. **Archivo ▸ Nueva ventana** (Ctrl+Mayús+N) abre un
   segundo IngeTrazo para tener dos diseños lado a lado.
+- **Orientar caras** (#77, @pacaeiro), como en SketchUp: clic derecho sobre
+  una cara ▸ Orientar caras, y todas las conectadas se voltean para mirar
+  hacia el mismo lado que ella. Vale para sólidos y para superficies
+  abiertas; se detiene donde tres caras comparten una arista.
 
 ### Corregido
 - **Zoom extensión a veces no hacía nada.** Encuadraba la esfera que

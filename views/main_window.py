@@ -735,6 +735,10 @@ class MainWindow(QMainWindow):
         reverse_action.triggered.connect(self._on_reverse_faces)
         edit_menu.addAction(reverse_action)
 
+        orient_action = QAction(tr("Orient Faces"), self)
+        orient_action.triggered.connect(self._on_orient_faces)
+        edit_menu.addAction(orient_action)
+
         heal_action = QAction(tr("Heal Overlapping Faces"), self)
         heal_action.triggered.connect(self._on_heal_overlaps)
         edit_menu.addAction(heal_action)
@@ -2111,6 +2115,7 @@ class MainWindow(QMainWindow):
             # which is where anyone looks for it. It lived only in the Edit
             # menu and Marco could not find it (2026-09-10).
             menu.addAction(tr("Reverse Faces"), self._on_reverse_faces)
+            menu.addAction(tr("Orient Faces"), self._on_orient_faces)
             face = self._single_textured_face()
             if face is not None:
                 # SketchUp's Texture submenu, on a face with an image.
@@ -2466,6 +2471,27 @@ class MainWindow(QMainWindow):
         self.viewport.update()
         self.statusBar().showMessage(
             tr("Reversed {n} face(s).", n=len(faces)), 3000)
+
+    def _on_orient_faces(self) -> None:
+        """SketchUp's Orient Faces (issue #77): every face connected to the
+        chosen one turns to wind like it — its front side is the one the
+        rest take."""
+        from core.history import FlipFacesCommand
+        from core.mesh import Face as MeshFace
+        from core.orient_faces import faces_to_flip
+        faces = [e for e in self.viewport.scene.selection
+                 if isinstance(e, MeshFace)]
+        if len(faces) != 1:
+            self.statusBar().showMessage(
+                tr("Select the one face the others should match."), 3000)
+            return
+        flip = faces_to_flip(faces[0])
+        if flip:
+            self.viewport.history.execute(FlipFacesCommand(flip))
+            self.viewport.update()
+        self.statusBar().showMessage(
+            tr("Oriented {n} face(s) like the selected one.", n=len(flip))
+            if flip else tr("The connected faces already match."), 3000)
 
     def _on_heal_overlaps(self) -> None:
         cmd = HealOverlapsCommand()
