@@ -212,3 +212,32 @@ def test_the_strip_inherits_a_material_shared_by_both_faces():
     apply_fillet(m, plan)
     strips = m.faces[6:]
     assert all(not f.attrs for f in strips)
+
+
+def test_a_turned_and_squashed_cube_rounds_all_twelve_edges():
+    """Issue #74 (@pacaeiro): a 2 m cube turned off the axes and squashed
+    to half its height failed on every corner with «Conflicting cuts». Its
+    corners are reached through float32 normals, so the two edges of one
+    corner put the same tangent point 1e-6 m apart — exactly the old
+    same-point tolerance. It must round like the straight cube, in any
+    order of the edges."""
+    import random
+    from PySide6.QtGui import QMatrix4x4
+    xf = QMatrix4x4()
+    xf.translate(8.5, -3.0, 0.4)
+    xf.scale(1.0, 1.0, 0.5)                  # squashed AFTER the turn
+    xf.rotate(33.0, QVector3D(0.3, 1.0, 0.45))
+    src = box(2.0, 2.0, 2.0)
+    rng = random.Random(74)
+    for _ in range(5):
+        m = Mesh()
+        for f in src.faces:
+            m.add_face([xf.map(v) for v in f.vertices])
+        edges = list(m.edges)
+        rng.shuffle(edges)
+        before = abs(signed_volume(m))
+        plan = plan_fillet(m, edges, 0.2, 8)
+        assert not isinstance(plan, str), plan
+        apply_fillet(m, plan)
+        assert is_closed(m)
+        assert 0.85 * before < abs(signed_volume(m)) < before

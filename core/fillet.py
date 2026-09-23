@@ -40,6 +40,20 @@ MIN_ANGLE_DEG = 2.0
 PLANE_TOL = 1e-4
 
 
+#: Two computed points closer than this are the SAME point. The mesh stores
+#: float32, so a box turned and squashed off the axes reaches its corners
+#: through normals that carry ~1e-6 of noise: at 1e-6 the two edges of one
+#: corner disagreed by 1.0–1.2e-6 m and every corner read as «conflicting
+#: cuts» (issue #74, @pacaeiro). A hundredth of a millimetre is far above
+#: that noise and far below any real difference between two cuts — the
+#: patch matching further down already uses it.
+_SAME = 1e-5
+
+
+def _same(a: QVector3D, b: QVector3D) -> bool:
+    return (a - b).length() < _SAME
+
+
 def _key(p: QVector3D) -> tuple[int, int, int]:
     return (round(p.x() * 1e5), round(p.y() * 1e5), round(p.z() * 1e5))
 
@@ -243,12 +257,12 @@ def plan_fillet(mesh, edges, radius: float, segments: int = 8):
             return True
         # Merge: the same single point is fine; a section beats a point
         # that lies on it; anything else is a conflict.
-        if len(pts) == 1 and any((p - pts[0]).length() < 1e-6 for p in cur):
+        if len(pts) == 1 and any(_same(p, pts[0]) for p in cur):
             return True
-        if len(cur) == 1 and any((p - cur[0]).length() < 1e-6 for p in pts):
+        if len(cur) == 1 and any(_same(p, cur[0]) for p in pts):
             replace[key] = [QVector3D(p) for p in pts]
             return True
-        if len(cur) == len(pts) and all((a - b).length() < 1e-6 for a, b in zip(cur, pts)):
+        if len(cur) == len(pts) and all(_same(a, b) for a, b in zip(cur, pts)):
             return True
         return False
 

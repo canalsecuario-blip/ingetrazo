@@ -17,6 +17,12 @@ follow [SemVer](https://semver.org).
   abiertas; se detiene donde tres caras comparten una arista.
 
 ### Corregido
+- **Redondeo 3D daba «Conflicting cuts» en un cubo girado y aplastado**
+  (#74, @pacaeiro). Al girar la pieza fuera de los ejes, las dos aristas de
+  cada esquina calculaban el mismo punto con una milésima de milímetro de
+  diferencia por redondeo numérico, justo lo que el programa tomaba como
+  dos puntos distintos. Ahora redondea igual que el cubo recto, en
+  cualquier orden de aristas.
 - **Zoom extensión a veces no hacía nada.** Encuadraba la esfera que
   envuelve al modelo, que no depende de hacia dónde miras: tras orbitar o
   pasar a una vista estándar, repetirlo daba la misma cámara y el modelo
