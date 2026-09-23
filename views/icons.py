@@ -1506,7 +1506,165 @@ def _look_around(p, ink):
         p.drawLine(QPointF(ax, ay), QPointF(bx, by))
 
 
+
+# ---- Solid Tools (SketchUp's toolbar, redrawn) ------------------------------
+# SketchUp's vocabulary — two overlapping squares, what the result KEEPS
+# drawn solid and filled, what goes away dotted — in IngeTrazo's colours:
+# the theme's ink for the outline and the orange accent for the fill, like
+# every other toolbar here (Marco, 2026-09-23: SketchUp's blue «no hace
+# juego con el tema de iconos de IngeTrazo»).
+_SA = QRectF(7, 7, 23, 23)          # first solid (upper left)
+_SB = QRectF(18, 18, 23, 23)        # second solid (lower right)
+
+
+def _solid_path(*rects):
+    from PySide6.QtGui import QPainterPath
+    path = QPainterPath()
+    for r in rects:
+        path.addRect(r)
+    return path
+
+
+def _solid_keep(p, ink, path, alpha: int = 150):
+    acc = _accent()
+    p.save()
+    pen = QPen(ink, 2.6)
+    pen.setJoinStyle(Qt.MiterJoin)
+    p.setPen(pen)
+    p.setBrush(QColor(acc.red(), acc.green(), acc.blue(), alpha))
+    p.drawPath(path)
+    p.restore()
+
+
+def _dotted(ink, width: float) -> QPen:
+    """Square dots a dot's width apart (SketchUp's «goes away»), in a
+    lighter ink so they read as absent."""
+    faint = QColor(ink)
+    faint.setAlpha(150)
+    pen = QPen(faint, width)
+    pen.setCapStyle(Qt.FlatCap)
+    pen.setJoinStyle(Qt.MiterJoin)
+    pen.setDashPattern([1.0, 1.0])
+    return pen
+
+
+def _solid_gone(p, ink, rect):
+    p.save()
+    p.setPen(_dotted(ink, 2.4))
+    p.setBrush(Qt.NoBrush)
+    p.drawRect(rect)
+    p.restore()
+
+
+def _solid_seam(p, ink, rect):
+    """The inner edges that go away, dotted across the overlap."""
+    p.save()
+    p.setPen(_dotted(ink, 2.0))
+    p.setBrush(Qt.NoBrush)
+    p.drawRect(rect)
+    p.restore()
+
+
+def _solid_outer_shell(p, ink):
+    _solid_keep(p, ink, _solid_path(_SA).united(_solid_path(_SB)))
+    _solid_seam(p, ink, _SA.intersected(_SB))
+
+
+def _solid_union(p, ink):
+    shell = _solid_path(_SA).united(_solid_path(_SB))
+    void = QRectF(29, 29, 7, 7)                 # the kept inner void
+    _solid_keep(p, ink, shell.subtracted(_solid_path(void)))
+    p.save()
+    p.setPen(QPen(ink, 2.0))
+    p.setBrush(Qt.NoBrush)
+    p.drawRect(void)
+    p.restore()
+
+
+def _solid_subtract(p, ink):
+    _solid_gone(p, ink, _SA)
+    _solid_keep(p, ink, _solid_path(_SB).subtracted(_solid_path(_SA)))
+
+
+def _solid_trim(p, ink):
+    _solid_keep(p, ink, _solid_path(_SA).subtracted(_solid_path(_SB)))
+    _solid_keep(p, ink, _solid_path(_SB))
+    p.save()
+    p.setPen(_dotted(ink, 2.0))
+    ov = _SA.intersected(_SB)
+    p.drawLine(QPointF(ov.left(), ov.bottom()), QPointF(ov.right(), ov.bottom()))
+    p.drawLine(QPointF(ov.right(), ov.top()), QPointF(ov.right(), ov.bottom()))
+    p.restore()
+
+
+def _solid_intersect(p, ink):
+    _solid_gone(p, ink, _SA)
+    _solid_gone(p, ink, _SB)
+    _solid_keep(p, ink, _solid_path(_SA.intersected(_SB)))
+
+
+def _solid_split(p, ink):
+    a, b = _solid_path(_SA), _solid_path(_SB)
+    _solid_keep(p, ink, a.subtracted(b), 60)
+    _solid_keep(p, ink, b.subtracted(a), 60)
+    _solid_keep(p, ink, _solid_path(_SA.intersected(_SB)), 190)
+
+
+_SOLID_ICONS = {
+    "outer_shell": _solid_outer_shell, "solid_union": _solid_union,
+    "solid_subtract": _solid_subtract, "solid_trim": _solid_trim,
+    "solid_intersect": _solid_intersect, "solid_split": _solid_split,
+}
+
+
+def solid_cursor(state: str):
+    """SketchUp's Solid Tools pointer: an arrow with a red circle-and-slash
+    over anything that is not a solid, and a «1» or «2» in a circle over a
+    solid, for the pick it will be."""
+    from PySide6.QtGui import QCursor, QPainterPath, QPixmap
+    key = ("solid", state)
+    cached = _cursor_cache.get(key)
+    if cached is not None:
+        return cached
+    size = 32
+    pm = QPixmap(size, size)
+    pm.fill(Qt.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.Antialiasing, True)
+    arrow = QPainterPath()
+    arrow.moveTo(1, 1)
+    arrow.lineTo(1, 17)
+    arrow.lineTo(5, 13)
+    arrow.lineTo(8, 20)
+    arrow.lineTo(10.5, 19)
+    arrow.lineTo(7.5, 12)
+    arrow.lineTo(13, 12)
+    arrow.closeSubpath()
+    p.setPen(QPen(Qt.white, 1.2))
+    p.setBrush(Qt.black)
+    p.drawPath(arrow)
+    c = QPointF(22, 22)
+    if state == "no":
+        p.setBrush(Qt.NoBrush)
+        p.setPen(QPen(QColor(220, 40, 40), 2.4))
+        p.drawEllipse(c, 7, 7)
+        p.drawLine(QPointF(17, 17), QPointF(27, 27))
+    else:
+        p.setPen(QPen(Qt.black, 1.6))
+        p.setBrush(Qt.white)
+        p.drawEllipse(c, 7.5, 7.5)
+        font = p.font()
+        font.setPixelSize(11)
+        font.setBold(True)
+        p.setFont(font)
+        p.drawText(QRectF(14.5, 14.5, 15, 15), Qt.AlignCenter, state)
+    p.end()
+    cur = QCursor(pm, 1, 1)
+    _cursor_cache[key] = cur
+    return cur
+
 _DRAW = {
+    **_SOLID_ICONS,
     "select": _select, "line": _line, "freehand": _freehand,
     "side_collapse": _side_collapse,
     "overflow_h": _overflow_h, "overflow_v": _overflow_v,

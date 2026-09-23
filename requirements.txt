@@ -18,13 +18,16 @@ openskp @ git+https://github.com/iamahsanmehmood/openskp@291700bc213655a00461838
 # Pure Python, MIT — the same parser IngeCAD reads its documents with, so
 # the two projects share one set of format scars.
 ezdxf>=1.4.4
+# Solid booleans (Tools ▸ Outer Shell / Solid Tools, core/solids.py).
+# Apache-2.0, the kernel of OpenSCAD and Blender's booleans; native wheels
+# for Linux x86_64/aarch64, Windows and macOS, cp310–cp314.
+manifold3d>=3.5.3
 
 # --- Development ---
 pytest>=8.0
 
 # --- Planned (NOT yet required; do not install on Python 3.14 — no wheels) ---
 # ifcopenshell   # IFC import/export (BIM bridge with IngePresupuestos)
-# manifold3d     # robust boolean operations
 # pyassimp       # COLLADA/glTF import
 # Note: georef tiles + DEM need NO extra pip — QNetworkAccessManager/QImage (Qt)
 # fetch tiles, NumPy decodes the DEM. pyproj/mercantile/rasterio intentionally

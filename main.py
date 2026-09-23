@@ -185,6 +185,17 @@ def _self_check() -> int:
     if not ok:
         problems.append("mapbox_earcut")
 
+    # The Solid Tools' boolean kernel, another native extension imported
+    # only when a tool runs — a bundle without it fails at the first click.
+    try:
+        import manifold3d  # noqa: F401
+        ok, where = True, getattr(manifold3d, "__file__", "?")
+    except Exception as exc:  # noqa: BLE001
+        ok, where = False, f"({exc})"
+    print(f"  manifold3d     : {'found' if ok else 'MISSING'}  {where}")
+    if not ok:
+        problems.append("manifold3d")
+
     # The .skp fallback converter is optional (user-installed, runs under
     # Wine); report presence without failing on absence.
     wine = shutil.which("wine")

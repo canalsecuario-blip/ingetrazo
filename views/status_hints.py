@@ -16,6 +16,18 @@ from core.i18n import tr
 #: Tool key → hint per phase. A plain string is the same hint always.
 HINTS: dict = {
     "select": "Shift = add/remove, Ctrl = add. Double-click a group to edit it.",
+    "outer_shell": ("Click a solid group or component (1).",
+                    "Click another solid (2) — and more to add them."),
+    "solid_union": ("Click a solid group or component (1).",
+                    "Click another solid (2) — and more to add them."),
+    "solid_subtract": ("Click the solid that cuts (1).",
+                       "Click the solid to cut (2). The first one goes away."),
+    "solid_trim": ("Click the solid that cuts (1).",
+                   "Click the solid to cut (2). The first one stays."),
+    "solid_intersect": ("Click a solid group or component (1).",
+                        "Click another solid (2): only what they share stays."),
+    "solid_split": ("Click a solid group or component (1).",
+                    "Click another solid (2): three pieces come out."),
     "eraser": "Drag over edges to erase them. Shift = hide instead.",
     "paint": "Click a face to paint it. Alt = sample the material under the cursor.",
     "line": ("Click the start point. Arrows lock an axis, Shift locks the inference.",

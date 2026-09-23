@@ -2399,6 +2399,11 @@ class EntityInfoPanel(QWidget):
             if isinstance(e, GeoPath):
                 return self._describe_geopath(e)
             if isinstance(e, Group):
+                # SketchUp's «Solid Group» / «Solid Component» with its
+                # volume, the Solid Tools' own test (core.solids).
+                vol = self._solid_volume(e)
+                solid = (f"<br>{tr('Volume')}: {vol:.3f} m³"
+                         if vol is not None else "")
                 if e.is_instance():
                     # SketchUp's Entity Info tells a component from a group and
                     # says how many copies share the definition. Without it the
@@ -2406,11 +2411,15 @@ class EntityInfoPanel(QWidget):
                     # that flattened components impossible to spot.
                     kin = sum(1 for g in self._window.viewport.scene.groups
                               if g.mesh is e.mesh)
-                    return (f"<b>{tr('Component')}</b><br>"
+                    title = (tr("Solid Component") if vol is not None
+                             else tr("Component"))
+                    return (f"<b>{title}</b><br>"
                             f"{tr('Name')}: {e.name}<br>"
                             f"{tr('Faces')}: {len(e.mesh.faces)}<br>"
-                            f"{tr('In model')}: {kin}")
-                return f"<b>{tr('Group')}</b><br>{tr('Faces')}: {len(e.mesh.faces)}"
+                            f"{tr('In model')}: {kin}{solid}")
+                title = tr("Solid Group") if vol is not None else tr("Group")
+                return (f"<b>{title}</b><br>"
+                        f"{tr('Faces')}: {len(e.mesh.faces)}{solid}")
             return f"<b>{tr('1 entity')}</b>"
         counts = {"faces": 0, "edges": 0, "dimensions": 0, "groups": 0}
         for e in sel:
@@ -2424,6 +2433,18 @@ class EntityInfoPanel(QWidget):
                 counts["groups"] += 1
         parts = [f"{n} {tr(k)}" for k, n in counts.items() if n]
         return f"<b>{tr('Selection')}</b><br>" + ", ".join(parts)
+
+    def _solid_volume(self, group):
+        """Cached per scene version: the panel refreshes on every change and
+        the check walks the whole mesh."""
+        from core.solids import solid_volume
+        version = self._window.viewport.scene.version
+        cache = getattr(self, "_solid_cache", None)
+        if cache is None or cache[0] != version:
+            cache = self._solid_cache = (version, {})
+        if id(group) not in cache[1]:
+            cache[1][id(group)] = solid_volume(group)
+        return cache[1][id(group)]
 
     @staticmethod
     def _describe_geopath(path) -> str:

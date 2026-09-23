@@ -126,6 +126,10 @@ class MainWindow(QMainWindow):
             "walk": WalkTool(),
             "look_around": LookAroundTool(),
         }
+        # SketchUp's Solid Tools (tools/solid_tools.py, core/solids.py).
+        from tools.solid_tools import SOLID_TOOLS
+        for key, cls in SOLID_TOOLS:
+            self._tools[key] = cls()
         # Tag each tool with its icon key so the viewport can turn the mouse
         # pointer into the tool's icon (SketchUp-style cursors).
         for key, tool in self._tools.items():
@@ -464,6 +468,10 @@ class MainWindow(QMainWindow):
             ("modify", tr("Modify"), ["pushpull", "move", "rotate", "scale", "flip", "followme", "offset", "fillet"]),
             ("annotate", tr("Annotate"), ["tape", "protractor", "dimension", "text", "geopath"]),
             ("sections", tr("Sections"), ["section"]),
+            # SketchUp's Solid Tools toolbar, in its help's order.
+            ("solids", tr("Solid Tools"),
+             ["outer_shell", "solid_union", "solid_subtract", "solid_trim",
+              "solid_intersect", "solid_split"]),
             # SketchUp's Walkthrough toolbar, in its order.
             ("walkthrough", tr("Walkthrough"),
              ["position_camera", "walk", "look_around"]),
@@ -685,6 +693,11 @@ class MainWindow(QMainWindow):
         explode_action.triggered.connect(self._on_explode_group)
         edit_menu.addAction(explode_action)
 
+        # SketchUp's Edit ▸ Intersect Faces (core/intersect.py).
+        self._intersect_menu = QMenu(tr("Intersect Faces"), edit_menu)
+        self._fill_intersect_menu(self._intersect_menu)
+        edit_menu.addMenu(self._intersect_menu)
+
         convert_path_action = QAction(tr("Convert Path to Geometry"), self)
         convert_path_action.triggered.connect(self._on_convert_geopath)
         edit_menu.addAction(convert_path_action)
@@ -863,6 +876,15 @@ class MainWindow(QMainWindow):
             for key in keys:
                 tools_menu.addAction(self._tool_actions[key])
             tools_menu.addSeparator()
+        # SketchUp: Tools ▸ Outer Shell, and Tools ▸ Solid Tools ▸ the rest.
+        tools_menu.addAction(self._tool_actions["outer_shell"])
+        solids_menu = QMenu(tr("Solid Tools"), tools_menu)
+        for key in ("solid_intersect", "solid_union", "solid_subtract",
+                    "solid_trim", "solid_split"):
+            solids_menu.addAction(self._tool_actions[key])
+        tools_menu.addMenu(solids_menu)
+        self._solids_menu = solids_menu        # a QMenu dies with its locals
+        tools_menu.addSeparator()
         action_3dtext = QAction(tool_icon("text3d"), tr("3D Text…"), self)
         action_3dtext.triggered.connect(self._on_insert_3d_text)
         tools_menu.addAction(action_3dtext)
@@ -1676,6 +1698,33 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(
             tr("{n} groups merged into one", n=len(groups)), 3000)
 
+    def _fill_intersect_menu(self, menu) -> None:
+        from core.intersect import WITH_CONTEXT, WITH_MODEL, WITH_SELECTION
+        for mode, label in ((WITH_MODEL, tr("With Model")),
+                            (WITH_SELECTION, tr("With Selection")),
+                            (WITH_CONTEXT, tr("With Context"))):
+            menu.addAction(label, lambda m=mode: self._on_intersect_faces(m))
+
+    def _on_intersect_faces(self, mode: str) -> None:
+        """SketchUp's Intersect Faces: edges wherever the selection's faces
+        cross the others (core/intersect.py), added to the context being
+        edited — they split its faces there — in one undo step."""
+        from core.edits import build_add_edges
+        from core.intersect import segments_for
+        scene = self.viewport.scene
+        if not scene.selection:
+            self.viewport.flash_status(tr("Select faces or groups first"))
+            return
+        segs = segments_for(scene, mode)
+        if not segs:
+            self.viewport.flash_status(tr("No faces cross the selection"))
+            return
+        self.viewport.history.execute(
+            build_add_edges(scene, segs, detect_faces=True))
+        self.viewport.flash_status(
+            tr("{n} intersection edges added", n=len(segs)), 3000)
+        self.viewport.update()
+
     def _on_explode_group(self) -> None:
         if self.viewport.scene.edit_group is not None:
             self.viewport.flash_status(tr(
@@ -2098,6 +2147,21 @@ class MainWindow(QMainWindow):
             if any(isinstance(e, Group)
                    and getattr(e, "xform", None) is not None for e in sel):
                 menu.addAction(tr("Make Unique"), self._on_make_unique)
+            # SketchUp offers the Solid Tools on a selection of solids.
+            from core.solids import is_solid
+            solid = [e for e in sel if isinstance(e, Group) and is_solid(e)]
+            if len(solid) >= 2 and len(solid) == len(groups):
+                menu.addAction(tool_icon("outer_shell"), tr("Outer Shell"),
+                               lambda: self._activate_tool("outer_shell"))
+                sm = menu.addMenu(tr("Solid Tools"))
+                keys = ["solid_intersect", "solid_union"]
+                if len(solid) == 2:
+                    keys.append("solid_split")
+                for key in keys:
+                    sm.addAction(tool_icon(key), tr(self._tools[key].name),
+                                 lambda k=key: self._activate_tool(k))
+        if any(isinstance(e, Face) for e in sel) or has_group:
+            self._fill_intersect_menu(menu.addMenu(tr("Intersect Faces")))
         if has_mesh or has_group:
             menu.addAction(tr("Cut"), lambda: self.viewport.cut_selection())
             menu.addAction(tr("Copy"), lambda: self.viewport.copy_selection())

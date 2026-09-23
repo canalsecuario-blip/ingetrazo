@@ -93,6 +93,9 @@ hiddenimports = [
 # collect_submodules because ezdxf lazy-loads its own internals too.
 from PyInstaller.utils.hooks import collect_submodules
 hiddenimports += collect_submodules('ezdxf')
+# manifold3d (Solid Tools) is imported inside core.solids' functions — one
+# self-contained native extension module (libstdc++/libm/libc only).
+hiddenimports += ['manifold3d', 'core.solids', 'tools.solid_tools']
 hiddenimports += [
     # The bundled plugins import these at RUN time, so static analysis never
     # sees them and they were left out: the AI assistant died on load with

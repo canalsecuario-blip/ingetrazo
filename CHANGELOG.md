@@ -7,6 +7,20 @@ follow [SemVer](https://semver.org).
 ## [Sin publicar]
 
 ### Añadido
+- **Herramientas de sólidos, como SketchUp** (pedidas por Rafael y en la
+  #61): Revestimiento exterior, Unión, Sustraer, Recortar, Intersecar y
+  Dividir sobre grupos y componentes sólidos. Barra propia, Herramientas ▸
+  Revestimiento exterior / Herramientas de sólidos, y el clic derecho sobre
+  una selección de sólidos. Clic en el sólido 1 y luego en el 2 (en
+  Sustraer y Recortar el primero es el que corta), o preselección; el
+  cursor dice «1», «2» o «no es un sólido». El resultado es siempre un
+  grupo, cada cara conserva su material y las del corte toman el del
+  cortador; un paso de deshacer. Info de entidad muestra «Grupo sólido» y
+  su volumen. Motor: manifold3d (Apache-2.0), dependencia nueva.
+- **Intersecar caras** (Edición ▸ Intersecar caras ▸ Con el modelo / Con la
+  selección / Con el contexto, y en el clic derecho): aristas donde se
+  cruzan las caras, en el contexto que se está editando, partiendo sus
+  caras — la forma clásica de SketchUp de recortar sin sólidos.
 - **Tema claro, y tema que sigue al sistema.** Preferencias ▸ General ▸
   **Tema**: Oscuro (el de siempre, sigue por defecto), Claro, o Igual que
   el sistema — este toma el modo claro u oscuro del escritorio (GNOME, KDE,
