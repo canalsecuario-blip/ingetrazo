@@ -307,3 +307,45 @@ coll = COLLECT(
     upx_exclude=[],
     name='ingetrazo',
 )
+
+# ── macOS: wrap the onedir COLLECT as a double-clickable .app ────────────────
+# ingetrazo-mcp rides along inside Contents/MacOS/ as a sibling binary (same
+# onedir the other platforms ship); nothing launches it but a stdio-speaking
+# MCP client that already knows its path, so it does not need its own bundle.
+if sys.platform == 'darwin':
+    from core.version import __version__ as _version
+    mac_icon = ROOT / 'resources' / 'icons' / 'ingetrazo.icns'
+    app = BUNDLE(
+        coll,
+        name='IngeTrazo.app',
+        icon=str(mac_icon) if mac_icon.exists() else None,
+        bundle_identifier='com.ingetrazo.IngeTrazo',
+        info_plist={
+            'CFBundleName': 'IngeTrazo',
+            'CFBundleDisplayName': 'IngeTrazo',
+            'CFBundleShortVersionString': _version,
+            'CFBundleVersion': _version,
+            'NSHighResolutionCapable': True,
+            # PyInstaller's own Info.plist template defaults this to True,
+            # which makes macOS treat the bundle as agent-only: no Dock icon,
+            # no window, no menu bar — a GUI app must say so explicitly.
+            'LSBackgroundOnly': False,
+            'NSHumanReadableCopyright': 'GPL-3.0-or-later — Marco Sumari Tellez and IngeTrazo contributors',
+            # .igz / .skp double-click-to-open, same association the other
+            # platforms register (packaging/ingetrazo.desktop, the .iss).
+            'CFBundleDocumentTypes': [
+                {
+                    'CFBundleTypeName': 'IngeTrazo document',
+                    'CFBundleTypeExtensions': ['igz'],
+                    'CFBundleTypeRole': 'Editor',
+                    'LSHandlerRank': 'Owner',
+                },
+                {
+                    'CFBundleTypeName': 'SketchUp document',
+                    'CFBundleTypeExtensions': ['skp'],
+                    'CFBundleTypeRole': 'Editor',
+                    'LSHandlerRank': 'Alternate',
+                },
+            ],
+        },
+    )
