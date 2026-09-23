@@ -151,10 +151,15 @@ def _repolish(app) -> None:
     ``setPalette`` does not reach them (the tray headers stayed light grey on
     the light theme). Re-setting the sheet re-polishes the widget and its
     children with the palette now in force."""
-    for w in app.allWidgets():
-        sheet = w.styleSheet()
-        if sheet:
-            w.setStyleSheet(sheet)
+    from PySide6.QtWidgets import QWidget
+    for top in app.topLevelWidgets():
+        # Walk the live tree, not allWidgets(): that flat set can still list
+        # a widget whose C++ half is gone (the test suite managed it with
+        # dialogs whose parent was collected), and wrapping it segfaults.
+        for w in [top, *top.findChildren(QWidget)]:
+            sheet = w.styleSheet()
+            if sheet:
+                w.setStyleSheet(sheet)
 
 
 def _redraw_icons(app) -> None:

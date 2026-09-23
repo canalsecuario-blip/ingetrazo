@@ -113,7 +113,8 @@ def test_dialog_reloads_saved_values(settings_file):
     st.setValue("import/dxf_unit", "in")
     st.setValue("ia/proveedor", "auto")
     st.sync()
-    dlg = PreferencesDialog(_Win())
+    win = _Win()                 # referenced: see the theme test below
+    dlg = PreferencesDialog(win)
     assert dlg._dxf_unit.currentData() == "in"
     assert dlg._provider.currentData() == "auto"
 
@@ -159,7 +160,11 @@ def test_theme_choice_applies_at_once(settings_file):
     app = QApplication.instance()
     before = theme.saved_theme()
     try:
-        dlg = PreferencesDialog(_Win())
+        # Keep the parent referenced: a bare ``_Win()`` is collected at
+        # once and takes the dialog (its child, tabs and all) with it —
+        # the use-after-free behind the suite's exit segfault.
+        win = _Win()
+        dlg = PreferencesDialog(win)
         dlg._theme.setCurrentIndex(dlg._theme.findData(theme.LIGHT))
         dlg.accept()
         assert theme.saved_theme() == theme.LIGHT
