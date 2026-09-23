@@ -519,6 +519,37 @@ def _placement(entry, group):
     return _instance_placement(group.xform)
 
 
+def _local_group(g, faces, kids):
+    """``(placement, local_faces, local_kids)`` for a classic group with its
+    own axes, or ``None`` to write it as before (world coordinates, no
+    placement). Its faces are re-expressed in the axes' coordinates, and
+    anything placed inside it takes the inverse on the left."""
+    axes = getattr(g, "axes", None)
+    if axes is None or axes.isIdentity():
+        return None
+    inv, ok = axes.inverted()
+    if not ok:
+        return None
+    from core.group import transformed_mesh
+    local = transformed_mesh(g.mesh, inv)
+    if len(local.faces) != len(g.mesh.faces):
+        return None                         # a face did not survive the map
+    index = {id(f): i for i, f in enumerate(g.mesh.faces)}
+    try:
+        local_faces = [local.faces[index[id(f)]] for f in faces]
+    except KeyError:
+        return None
+    local_kids = []
+    for di, c in kids:
+        xf = getattr(c, "xform", None)
+        if getattr(c, "billboard", False) or xf is None:
+            return None                     # figures keep the old path
+        moved = _Copy(inv * xf, c.name)
+        moved.layer = getattr(c, "layer", None)
+        local_kids.append((di, moved))
+    return _instance_placement(axes), local_faces, local_kids
+
+
 class _Copy:
     """A placement synthesised for a copy of a shared piece (see
     :func:`_share_repeats`): what ``_placement`` needs of a group."""
@@ -1246,8 +1277,19 @@ def _write_skp(scene, path, openskp, SkpWriteError, stage_dir: Path) -> None:
         handles.append(defn)
 
     for g, kids, faces in classic:
+        # A group that knows its own axes (issue #44) goes out the way
+        # SketchUp keeps groups: geometry in its local coordinates, the
+        # axes as the placement — so it opens in SketchUp turned the way
+        # it is, with its bounding box and axes on it.
+        placed = _local_group(g, faces, kids)
+        if placed is not None:
+            placement, faces, kids = placed
+            kw = {"translation": placement[0], "matrix3x3": placement[1]}
+        else:
+            kw = {}
         with builder.add_group(
                 g.name, layer=layer_handles.get(getattr(g, "layer", None)),
+                **kw,
                 **_opt_material(builder.add_group,
                                 _container_material(g))) as grp:
             for face in faces:

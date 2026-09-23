@@ -347,3 +347,46 @@ def test_the_tool_takes_origin_red_and_green():
     o, x, y, z = frame_axes(group_frame(g))
     assert _close(o, V(2, 0)) and _close(x, V(0, 1))
     assert _close(y, V(-1, 0)) and _close(z, V(0, 0, 1))
+
+
+# ---- Phase 5: the .skp keeps a group turned -------------------------------------
+
+def test_a_turned_group_survives_the_skp_round_trip(tmp_path):
+    __import__("pytest").importorskip("openskp")
+    from formats.skp import load_skp
+    from formats.skp_out import save_skp
+    scene = Scene()
+    hist = History(scene)
+    g = _slab()
+    scene.groups.append(g)
+    hist.execute(RotateGroupCommand(g, V(0, 0), V(0, 0, 1), 30.0))
+    hist.execute(MoveGroupCommand(g, V(4, 1, 0)))
+    before = _world_pts(g)
+    path = tmp_path / "girado.skp"
+    save_skp(scene, str(path))
+    back = Scene()
+    load_skp(back, str(path))
+    assert len(back.groups) == 1
+    h = back.groups[0]
+    assert _world_pts(h) == before                       # same place
+    a = math.radians(30)
+    o, x, _y, _z = frame_axes(group_frame(h))
+    assert _close(x, V(math.cos(a), math.sin(a)), 1e-4)  # same axes
+    assert _close(o, frame_axes(group_frame(g))[0], 1e-4)
+
+
+def test_a_flattened_skp_group_keeps_its_instance_axes():
+    """The groups the .skp import flattens into world coordinates (tagged
+    subtrees, containers of shared children) still face the way their
+    SketchUp instance did."""
+    from formats import skp as skp_format
+    turn = _frame_at(V(3, 0), 30.0)
+    square = [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (1.0, 1.0, 0.0), (0.0, 1.0, 0.0)]
+    pts = [tuple(turn.map(V(*p)).toTuple()) for p in square]
+    payload = {"groups": [{"name": "girado", "faces": [(pts, [], {})],
+                           "soft_edges": [],
+                           "axes": [float(x) for x in turn.data()]}]}
+    scene = Scene()
+    skp_format.apply_payload(scene, payload)
+    g = scene.groups[0]
+    assert g.axes == turn and g.xform is None

@@ -369,6 +369,16 @@ def _apply_payload_inner(scene, payload) -> str:
             g = Group(mesh, name=gp.get("name"))
             if gp.get("layer"):
                 g.layer = gp["layer"]
+            axes = gp.get("axes")
+            if isinstance(axes, list) and len(axes) == 16:
+                # The SketchUp instance's transformation, kept as the
+                # group's own axes (issue #44) — its mesh stays in world
+                # coordinates. Column-major, as QMatrix4x4.data() wrote it.
+                from PySide6.QtGui import QMatrix4x4
+                m = QMatrix4x4(*[axes[c * 4 + r] for r in range(4)
+                                 for c in range(4)])
+                if not m.isIdentity():
+                    g.axes = m
             if gp.get("billboard"):
                 # Image-entity cutout (photo person/animal/tree): the real
                 # geometry turns toward the camera each frame, like the DAE

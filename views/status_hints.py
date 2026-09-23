@@ -17,7 +17,7 @@ from core.i18n import tr
 HINTS: dict = {
     "select": "Shift = add/remove, Ctrl = add. Double-click a group to edit it.",
     "change_axes": ("Click the new origin.",
-                    "Click along the new red axis, then the green direction."),
+                    "Click the red direction, then the green one."),
     "outer_shell": ("Click a solid group or component (1).",
                     "Click another solid (2) — and more to add them."),
     "solid_union": ("Click a solid group or component (1).",

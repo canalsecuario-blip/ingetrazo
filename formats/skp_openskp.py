@@ -1065,7 +1065,10 @@ def _adapt(model, name: str, skp_path=None):
                      layer_uses=layer_uses)
             if sub:
                 gp = {"name": getattr(child, "name", None) or name,
-                      "faces": sub, "soft_edges": sub_edges}
+                      "faces": sub, "soft_edges": sub_edges,
+                      # The instance's own axes (issue #44): flattened into
+                      # world coordinates, it still faces the way it did.
+                      "axes": [float(x) for x in placed.data()]}
                 if lay:
                     gp["layer"] = lay
                 groups.append(gp)
@@ -1086,7 +1089,8 @@ def _adapt(model, name: str, skp_path=None):
         if sub:
             groups.append({"name": getattr(child, "name", None) or name,
                            "faces": sub, "soft_edges": sub_edges,
-                           "layer": lay})
+                           "layer": lay,
+                           "axes": [float(x) for x in placed.data()]})
 
     # Image entities → their own groups; cutout images (real alpha) become
     # face-me billboards that turn toward the camera, opaque photos stay
