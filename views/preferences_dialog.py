@@ -70,6 +70,19 @@ class PreferencesDialog(QDialog):
         self._lang.setCurrentIndex(max(0, self._lang.findData(pending)))
         form.addRow(tr("Language:"), self._lang)
 
+        from views.theme import DARK, LIGHT, SYSTEM, saved_theme
+        self._theme = QComboBox()
+        for key, label in ((DARK, tr("Dark")), (LIGHT, tr("Light")),
+                           (SYSTEM, tr("Same as the system"))):
+            self._theme.addItem(label, key)
+        self._theme.setCurrentIndex(max(0, self._theme.findData(
+            saved_theme())))
+        self._theme.setToolTip(tr(
+            "Colours of menus, panels and toolbars. «Same as the system» "
+            "switches along with the desktop's light or dark mode. The 3D "
+            "view keeps its own style. Applies at once."))
+        form.addRow(tr("Theme:"), self._theme)
+
         self._rest = QComboBox()
         for key, label in _REST_MODES:
             self._rest.addItem(tr(label), key)
@@ -289,6 +302,14 @@ class PreferencesDialog(QDialog):
                 QMessageBox.information(
                     self, tr("Language changed"),
                     tr("Restart IngeTrazo to apply the new language."))
+
+        # Theme: applies at once (a no-op re-apply is cheap).
+        from views.theme import apply_theme, save_theme, saved_theme
+        theme = self._theme.currentData()
+        if theme != saved_theme():
+            save_theme(theme)
+            from PySide6.QtWidgets import QApplication
+            apply_theme(QApplication.instance(), theme)
 
         # Rest-of-model mode: through the viewport (it persists the setting),
         # then the Camera menu checkmark follows.

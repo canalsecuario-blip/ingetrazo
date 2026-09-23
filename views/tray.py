@@ -49,6 +49,7 @@ from PySide6.QtWidgets import (
 )
 
 from core.i18n import tr
+from views.theme import style as theme_style
 from views.filedialogs import file_dialogs
 from core.mesh import Edge, Face
 from core.group import Group
@@ -447,7 +448,7 @@ class BaseMapPanel(QWidget):
 
         self._attribution = QLabel("")
         self._attribution.setWordWrap(True)
-        self._attribution.setStyleSheet("color:#9aa3b2; font-size:10px; margin-top:4px;")
+        theme_style(self._attribution, "color:{muted}; font-size:10px; margin-top:4px;")
         grid.addWidget(self._attribution, 18, 0, 1, 2)
 
         self._restore_saved_source()
@@ -1250,7 +1251,7 @@ class MaterialsPanel(QWidget):
 
     def _heading(self, text: str) -> QLabel:
         lbl = QLabel(text)
-        lbl.setStyleSheet("color:#9aa3b2; margin-top:6px; font-size:11px;")
+        theme_style(lbl, "color:{muted}; margin-top:6px; font-size:11px;")
         return lbl
 
     # ---- Library (categorised, SketchUp-style) -------------------------------
@@ -2046,7 +2047,7 @@ class ShadowsPanel(QWidget):
         for initial in tr("J F M A M J J A S O N D").split():
             lbl = QLabel(initial)
             lbl.setAlignment(Qt.AlignCenter)
-            lbl.setStyleSheet("color:#5a6472; font-size: 10px;")
+            theme_style(lbl, "color:{muted}; font-size: 10px;")
             months.addWidget(lbl, 1)
         grid.addLayout(months, 3, 0, 1, 2)
 
@@ -2066,11 +2067,11 @@ class ShadowsPanel(QWidget):
 
         span = QHBoxLayout()
         self._sunrise_lbl = QLabel("")
-        self._sunrise_lbl.setStyleSheet("color:#5a6472; font-size: 10px;")
+        theme_style(self._sunrise_lbl, "color:{muted}; font-size: 10px;")
         span.addWidget(self._sunrise_lbl)
         span.addStretch(1)
         self._sunset_lbl = QLabel("")
-        self._sunset_lbl.setStyleSheet("color:#5a6472; font-size: 10px;")
+        theme_style(self._sunset_lbl, "color:{muted}; font-size: 10px;")
         span.addWidget(self._sunset_lbl)
         grid.addLayout(span, 5, 1)
 
@@ -2090,7 +2091,7 @@ class ShadowsPanel(QWidget):
 
         self._site = QLabel("")
         self._site.setWordWrap(True)
-        self._site.setStyleSheet("color:#5a6472; font-size: 11px;")
+        theme_style(self._site, "color:{muted}; font-size: 11px;")
         grid.addWidget(self._site, 8, 0, 1, 2)
 
         self._locate_btn = QPushButton(tr("Add location…"))

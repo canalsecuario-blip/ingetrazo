@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from core.i18n import available_languages, current_language, set_language, tr
+from views.theme import style as theme_style
 from core.units import fmt_pair
 from views.filedialogs import file_dialogs
 from core.version import __version__
@@ -1400,7 +1401,7 @@ class MainWindow(QMainWindow):
         # goes on a plan, into a GPS, and into a report. Only shown once the
         # scene has a datum — there is no coordinate without one.
         self._coord_label = QLabel("")
-        self._coord_label.setStyleSheet("color:#5a6472; padding:0 8px;")
+        theme_style(self._coord_label, "color:{muted}; padding:0 8px;")
         bar.addPermanentWidget(self._coord_label)
 
         # SketchUp-style Measurements box (VCB), pinned bottom-right: a caption
@@ -1409,7 +1410,7 @@ class MainWindow(QMainWindow):
         self._vcb_buffer = ""
         self._vcb_live = ""
         self._vcb_name = QLabel("")
-        self._vcb_name.setStyleSheet("color:#5a6472; padding:0 4px;")
+        theme_style(self._vcb_name, "color:{muted}; padding:0 4px;")
         self._vcb_value = QLabel("")
         self._vcb_value.setMinimumWidth(130)
         self._vcb_value.setAlignment(Qt.AlignRight | Qt.AlignVCenter)

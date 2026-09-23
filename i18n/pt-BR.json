@@ -1258,5 +1258,10 @@
  "Text ({proyecto}, {escala}, {fecha}… are filled in for you):": "Texto ({proyecto}, {escala}, {fecha}… são preenchidos automaticamente para você):",
  "Templates…": "Modelos…",
  "Save this sheet as a template, start a new sheet from one, or pick the template every new sheet uses.": "Salvar esta folha como um modelo, iniciar uma nova folha a partir de um, ou escolher o modelo que cada nova folha utilizará.",
- "Dynamic fields for texts and the title block: {proyecto} {autor} {lamina} {escala} {escena} {fecha} {archivo} {hoja} {total}": "Campos dinâmicos para os textos e o carimbo: {proyecto} {autor} {lamina} {escala} {escena} {fecha} {archivo} {hoja} {total}"
+ "Dynamic fields for texts and the title block: {proyecto} {autor} {lamina} {escala} {escena} {fecha} {archivo} {hoja} {total}": "Campos dinâmicos para os textos e o carimbo: {proyecto} {autor} {lamina} {escala} {escena} {fecha} {archivo} {hoja} {total}",
+ "Theme:": "Tema:",
+ "Same as the system": "Igual ao sistema",
+ "Light": "Claro",
+ "Dark": "Escuro",
+ "Colours of menus, panels and toolbars. «Same as the system» switches along with the desktop's light or dark mode. The 3D view keeps its own style. Applies at once.": "Cores de menus, painéis e barras de ferramentas. «Igual ao sistema» muda junto com o modo claro ou escuro da área de trabalho. A vista 3D mantém seu próprio estilo. Aplica-se na hora."
 }

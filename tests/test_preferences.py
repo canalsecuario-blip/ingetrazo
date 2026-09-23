@@ -152,3 +152,18 @@ def test_toolbar_icon_size_lives_in_preferences_and_reaches_every_toolbar(settin
         assert toolbar_icon_px() == 40
     finally:
         monkeypatch.undo()
+
+
+def test_theme_choice_applies_at_once(settings_file):
+    from views import theme
+    app = QApplication.instance()
+    before = theme.saved_theme()
+    try:
+        dlg = PreferencesDialog(_Win())
+        dlg._theme.setCurrentIndex(dlg._theme.findData(theme.LIGHT))
+        dlg.accept()
+        assert theme.saved_theme() == theme.LIGHT
+        assert app.palette().window().color().lightness() > 128
+    finally:
+        theme.save_theme(before)
+        theme.apply_theme(app, theme.DARK)

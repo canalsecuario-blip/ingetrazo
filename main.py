@@ -34,48 +34,10 @@ elif sys.stderr is not None:
 # when Mutter/Qt update; no app-side workaround cured it (see CLAUDE.md).
 
 from PySide6.QtCore import QLocale, QSettings, Qt
-from PySide6.QtGui import QColor, QPalette, QSurfaceFormat
+from PySide6.QtGui import QSurfaceFormat
 from PySide6.QtWidgets import QApplication
 
 from core import i18n
-
-
-def _apply_dark_theme(app: QApplication) -> None:
-    """Force dark UI chrome regardless of the desktop theme.
-
-    The 3D viewport is dark by design; light menus and title bar clash with
-    it. ``setColorScheme`` drives the platform pieces (Wayland client-side
-    title bar, native menus); the Fusion style + palette cover every widget
-    so the look does not depend on whatever desktop theme is installed
-    (matches IngeCAD's main.py — keep both in sync).
-    """
-    app.styleHints().setColorScheme(Qt.ColorScheme.Dark)
-    app.setStyle("Fusion")
-
-    window = QColor(45, 45, 48)
-    base = QColor(37, 37, 40)
-    text = QColor(224, 224, 224)
-    disabled = QColor(128, 128, 128)
-    highlight = QColor(42, 93, 143)
-
-    p = QPalette()
-    p.setColor(QPalette.Window, window)
-    p.setColor(QPalette.WindowText, text)
-    p.setColor(QPalette.Base, base)
-    p.setColor(QPalette.AlternateBase, window)
-    p.setColor(QPalette.Text, text)
-    p.setColor(QPalette.PlaceholderText, disabled)
-    p.setColor(QPalette.Button, window)
-    p.setColor(QPalette.ButtonText, text)
-    p.setColor(QPalette.BrightText, QColor(255, 96, 96))
-    p.setColor(QPalette.ToolTipBase, QColor(58, 58, 61))
-    p.setColor(QPalette.ToolTipText, text)
-    p.setColor(QPalette.Highlight, highlight)
-    p.setColor(QPalette.HighlightedText, QColor(255, 255, 255))
-    p.setColor(QPalette.Link, QColor(74, 163, 224))
-    for role in (QPalette.WindowText, QPalette.Text, QPalette.ButtonText, QPalette.HighlightedText):
-        p.setColor(QPalette.Disabled, role, disabled)
-    app.setPalette(p)
 
 
 def _init_language() -> None:
@@ -324,7 +286,10 @@ def main() -> int:
     # waits for the launched app to appear) never tied it to the launcher.
     import os as _os
     app.setDesktopFileName(_os.environ.get("FLATPAK_ID") or "ingetrazo")
-    _apply_dark_theme(app)
+    # Light or dark chrome: follows the desktop by default, live
+    # (Preferences ▸ General ▸ Theme pins one). See views/theme.py.
+    from views.theme import apply_theme
+    apply_theme(app)
     _init_language()
     # Long hints wrap into a box instead of a strip across the window.
     from views.tooltips import WrappingToolTips

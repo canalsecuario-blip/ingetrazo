@@ -6,7 +6,19 @@ follow [SemVer](https://semver.org).
 
 ## [Sin publicar]
 
+### Añadido
+- **Tema claro, y tema que sigue al sistema.** Preferencias ▸ General ▸
+  **Tema**: Oscuro (el de siempre, sigue por defecto), Claro, o Igual que
+  el sistema — este toma el modo claro u oscuro del escritorio (GNOME, KDE,
+  Windows 10/11 y macOS) y cambia en vivo cuando el usuario lo cambia, sin
+  reiniciar. El visor 3D conserva su estilo y la lámina sigue siendo papel;
+  el fondo detrás de la hoja se aclara en el tema claro.
+
 ### Arreglado
+- **macOS: el visor fallaba en cada cuadro con la herramienta Paseo** (#67):
+  la etiqueta de la altura de ojos no tiene punto 3D y el visor intentaba
+  proyectarla igual. Y el README decía `cd ingetrazo/app`, carpeta que no
+  existe en el repositorio.
 - **La ventana del puente MCP daba un comando que no sobrevivía a la
   sesión en los paquetes de Linux.** Con el AppImage enseñaba la ruta del
   montaje temporal (`/tmp/.mount_…`), que muere al cerrar la app; con el

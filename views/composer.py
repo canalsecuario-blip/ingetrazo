@@ -15,9 +15,10 @@ import datetime
 import math
 from typing import Optional
 
-from PySide6.QtCore import QPoint, QPointF, QRectF, QSize, Qt, QTimer
+from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, QSize, Qt, QTimer
 from PySide6.QtGui import (QBrush, QColor, QFont, QImage, QKeySequence,
-                           QPageLayout, QPageSize, QPainter, QPdfWriter,
+                           QPageLayout, QPageSize, QPainter, QPalette,
+                           QPdfWriter,
                            QPen, QShortcut, QTransform, QVector3D)
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox,
                                QFileDialog, QFormLayout, QGraphicsItem,
@@ -39,6 +40,7 @@ from core.composition import (COMMON_SCALES, NEW_FRAME_STYLE, PAPER_SIZES_MM, RE
                               format_scale, parse_scale,
                               readable_deg, snap_mm)
 from core.i18n import tr
+from views.theme import style as theme_style
 from core.composition import pen_px
 from core.saved_views import apply_shadow_state, georef_objects
 from PySide6.QtWidgets import QGraphicsLineItem, QGridLayout, QWidget as _QWidget  # noqa: E402
@@ -5044,6 +5046,21 @@ class ComposerWindow(QMainWindow):
     right. Compositions live in ``scene.compositions`` and persist in the
     .igz; every mutation goes through the composer's own undo history."""
 
+    def _apply_desk_colour(self) -> None:
+        """The desk behind the sheet: slate on the dark chrome, a soft grey
+        on the light one — slate there glared against the white paper
+        (Marco, 2026-09-22)."""
+        dark = self.palette().color(QPalette.Window).lightness() < 128
+        self._view.setBackgroundBrush(QColor(70, 76, 84) if dark
+                                      else QColor(200, 204, 210))
+
+    def changeEvent(self, event) -> None:
+        # The chrome flipped light/dark (views/theme.py): the desk follows.
+        if event.type() in (QEvent.ApplicationPaletteChange,
+                            QEvent.PaletteChange) and hasattr(self, "_view"):
+            self._apply_desk_colour()
+        super().changeEvent(event)
+
     def __init__(self, main_window) -> None:
         super().__init__(main_window)
         self.setWindowFlag(Qt.Window, True)
@@ -5094,8 +5111,8 @@ class ComposerWindow(QMainWindow):
         view = ComposerCanvasView(self.canvas, self)
         view.setRenderHints(QPainter.Antialiasing
                             | QPainter.SmoothPixmapTransform)
-        view.setBackgroundBrush(QColor(70, 76, 84))
         self._view = view
+        self._apply_desk_colour()
         # Factory arrangement (Marco, 2026-09-14: «como están organizados
         # ahora es la que será por defecto»): the sheet-item tools down the
         # left; along the top, Sheet, then Draw, then Arrange — shown.
@@ -5310,6 +5327,7 @@ class ComposerWindow(QMainWindow):
         self._tool_actions = {}
         for mode, icon_key, tip, _drag in self.TOOLS:
             act = QAction(tool_icon(icon_key), tr(tip), self)
+            act.setProperty("icon_key", icon_key)   # redrawn on theme change
             act.setCheckable(True)
             act.setChecked(mode == "select")
             act.triggered.connect(
@@ -5771,7 +5789,7 @@ class ComposerWindow(QMainWindow):
             "{autor} {lamina} {escala} {escena} {fecha} {archivo} {hoja} "
             "{total}"))
         fields_note.setWordWrap(True)
-        fields_note.setStyleSheet("color: #8a94a0; font-size: 11px;")
+        theme_style(fields_note, "color:{muted}; font-size: 11px;")
         dis_lay.addWidget(fields_note)
 
         # Page
@@ -5969,6 +5987,7 @@ class ComposerWindow(QMainWindow):
 
         def act(icon, text, tip, slot):
             a = QAction(tool_icon(icon), text, self)
+            a.setProperty("icon_key", icon)
             a.setToolTip(tip)
             a.triggered.connect(lambda _c: slot())
             tb.addAction(a)
@@ -8636,6 +8655,7 @@ class ComposerWindow(QMainWindow):
         from views.icons import tool_icon
         for icon, label, slot in self._arrange_entries():
             act = QAction(tool_icon(icon), label, self)
+            act.setProperty("icon_key", icon)
             act.setToolTip(label)
             act.triggered.connect(lambda _c, s=slot: s())
             tb.addAction(act)
@@ -11694,7 +11714,9 @@ class ComposerWindow(QMainWindow):
             panel.hide()
         btn = getattr(self, "_sidebar_handle", None)
         if btn is not None:
-            btn.setIcon(tool_icon("side_collapse" if on else "side_expand"))
+            key = "side_collapse" if on else "side_expand"
+            btn.setIcon(tool_icon(key))
+            btn.setProperty("icon_key", key)
             QTimer.singleShot(0, self._place_sidebar_handle)
 
     def _build_sidebar_handle(self) -> None:
@@ -11710,6 +11732,7 @@ class ComposerWindow(QMainWindow):
         btn.setFixedSize(14, 56)
         btn.setIconSize(QSize(12, 12))
         btn.setIcon(tool_icon("side_collapse"))
+        btn.setProperty("icon_key", "side_collapse")
         btn.setToolTip(self._act_sidebar.toolTip())
         btn.setCursor(Qt.PointingHandCursor)
         btn.setAutoRaise(True)

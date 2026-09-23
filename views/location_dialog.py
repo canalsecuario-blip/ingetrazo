@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
 )
 
 from core.i18n import tr
+from views.theme import style as theme_style
 from georef.datum import utm_forward, utm_inverse, zone_for_lon
 from georef.geocode import Geocoder, IpLocator
 from georef.tiles import PRESETS, deg2num, num2deg
@@ -365,7 +366,7 @@ class LocationDialog(QDialog):
         self._status = QLabel(tr("The centre pin will be the model's "
                                  "ORIGIN (0,0) — put it exactly on your "
                                  "site."))
-        self._status.setStyleSheet("color:#7a828f; font-size:11px;")
+        theme_style(self._status, "color:{muted}; font-size:11px;")
         root.addWidget(self._status)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
