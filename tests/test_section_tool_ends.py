@@ -77,3 +77,32 @@ def test_the_name_prompt_can_be_switched_off():
         QSettings().setValue("section/ask_name", "1")
         win._saved_version = win.viewport.scene.version
         win.close()
+
+
+# ---- #62, second round -------------------------------------------------
+
+def test_the_floating_plane_wears_the_inference_colours():
+    from core.snap import AXIS_COLORS, COLOR_REFERENCE
+    tool = SectionPlaneTool()
+    for axis, n in (("x", QVector3D(1, 0, 0)), ("y", QVector3D(0, -1, 0)),
+                    ("z", QVector3D(0, 0, 1))):
+        tool._normal = n
+        assert tool.wireframe_color[:3] == tuple(AXIS_COLORS[axis][:3])
+    tool._normal = QVector3D(1, 1, 0).normalized()     # a face off the axes
+    assert tool.wireframe_color[:3] == tuple(COLOR_REFERENCE)
+
+
+def test_placing_a_plane_switches_the_cuts_back_on():
+    scene = Scene()
+    scene.show_section_cuts = False
+    scene.show_section_planes = False
+    win = _Win()
+    synced = []
+    win._sync_section_menu = lambda: synced.append(True)
+    vp = _Vp(scene, win)
+    tool = SectionPlaneTool()
+    tool.on_click(ToolContext(viewport=vp, world=QVector3D(0, 0, 1),
+                              screen=QPointF(0, 0), modifiers=Qt.NoModifier,
+                              snap=None))
+    assert scene.show_section_cuts and scene.show_section_planes
+    assert synced                                     # the menu checkmarks follow

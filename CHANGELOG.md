@@ -13,8 +13,36 @@ follow [SemVer](https://semver.org).
   Windows 10/11 y macOS) y cambia en vivo cuando el usuario lo cambia, sin
   reiniciar. El visor 3D conserva su estilo y la lámina sigue siendo papel;
   el fondo detrás de la hoja se aclara en el tema claro.
+- **Material «por defecto» (sin material) en Pintar** (#47, @pacaeiro):
+  un cuadro partido crema/gris-azul junto a «Activo» lo elige, el
+  cuentagotas lo toma de una cara sin pintar, y pintar con él quita el
+  material de la cara, de su revés o de un grupo entero.
+
+### Cambiado
+- **Alt alterna el cuentagotas de Pintar**, como SketchUp desde 2021.1:
+  un toque lo activa y se queda hasta tomar un material (entonces vuelve
+  al balde) o hasta otro toque. Mantener Alt y hacer clic también muestrea;
+  Alt+Tab no cuenta. El puntero lo sigue siempre, también cuando la barra
+  de menús se quedó con el teclado (#47).
+- **Explotar quita UN nivel** (#72, @pacaeiro): los grupos y componentes
+  anidados salen enteros, en su sitio y seleccionados, en vez de
+  deshacerse también; uno sin pintura propia toma la del contenedor.
+- **Planos de sección** (#62, @pacaeiro): al colocarlos llevan el color de
+  la inferencia (rojo/verde/azul según el eje, magenta si no), el activo se
+  ve naranja y los demás gris claro (el seleccionado, con marco continuo),
+  y colocar uno vuelve a encender los cortes si estaban apagados.
 
 ### Arreglado
+- **Las caras de un cilindro casi no se podían seleccionar** (#71,
+  @pacaeiro): las costuras suaves, que no se dibujan, y las aristas del
+  otro lado del sólido se llevaban el clic — a zoom normal, el 100 % del
+  costado. Un clic ya solo toma aristas que se ven.
+- **Al explotar un grupo pintado, el revés de sus caras perdía la
+  pintura** (#47).
+- **La goma no borraba textos** (#66, @pacaeiro): ahora los borra por las
+  letras o por la guía, y los resalta antes del clic.
+- **Preferencias ▸ Unidades salía en español con la interfaz en inglés**
+  (#65, @pacaeiro): los nombres de las unidades se traducen.
 - **macOS: el visor fallaba en cada cuadro con la herramienta Paseo** (#67):
   la etiqueta de la altura de ojos no tiene punto 3D y el visor intentaba
   proyectarla igual. Y el README decía `cd ingetrazo/app`, carpeta que no

@@ -75,7 +75,8 @@ def _plog(tag: str, ms: float, extra: str = "", floor: float = 50.0) -> None:
                      f"{tag} {ms:.0f}ms"
                      f"{' ' + extra if extra else ''}\n")
 
-from PySide6.QtCore import QEvent, Qt, QPointF, QRectF, QTimer, Signal
+from PySide6.QtCore import (QEvent, QObject, Qt, QPointF, QRectF, QTimer,
+                            Signal)
 from PySide6.QtGui import (
     QColor,
     QFont,
@@ -602,6 +603,83 @@ def _parse_length_field(field: str):
     return sign * num * scale
 
 
+class _AltWatch(QObject):
+    """Hears Alt at APPLICATION level, without taking it, for the Paint
+    tool's eyedropper pointer (@pacaeiro, #47: «press Alt and release it —
+    icon changed but we're still on Paint mode»). The viewport's own key
+    events miss every other tap: the first release hands keyboard focus to
+    the menu bar, so the next press lands there. The function followed (it
+    reads the mouse event's modifiers); only the pointer lagged.
+
+    ONE filter for the whole application, telling every live viewport: an
+    application filter runs on every event, and one per viewport made the
+    test suite crawl (hundreds of viewports alive)."""
+
+    _instance = None
+
+    def __init__(self, app) -> None:
+        super().__init__(app)
+        import weakref
+        self._viewports = weakref.WeakSet()
+        self._clean = False       # Alt down, nothing else pressed since
+
+    @classmethod
+    def watch(cls, viewport) -> None:
+        from PySide6.QtWidgets import QApplication
+        app = QApplication.instance()
+        if app is None:
+            return
+        if cls._instance is None:
+            cls._instance = cls(app)
+            app.installEventFilter(cls._instance)
+            # Off before Python tears itself down: Qt keeps delivering
+            # events (deferred deletes) through an application filter while
+            # the interpreter is half gone — the suite segfaulted on exit.
+            import atexit
+            atexit.register(cls._unwatch)
+        cls._instance._viewports.add(viewport)
+
+    @classmethod
+    def _unwatch(cls) -> None:
+        inst, cls._instance = cls._instance, None
+        if inst is None:
+            return
+        from PySide6.QtWidgets import QApplication
+        app = QApplication.instance()
+        try:
+            if app is not None:
+                app.removeEventFilter(inst)
+        except RuntimeError:
+            pass
+
+    def eventFilter(self, obj, ev) -> bool:
+        t = ev.type()
+        if t == QEvent.MouseButtonPress:
+            # Alt+click is a sample of its own, not a tap.
+            self._clean = False
+            return False
+        if t != QEvent.KeyPress and t != QEvent.KeyRelease:
+            return False
+        if ev.isAutoRepeat():
+            return False
+        if ev.key() != Qt.Key_Alt:
+            if t == QEvent.KeyPress:
+                self._clean = False           # Alt+Tab, Alt+F… is no tap
+            return False
+        down = t == QEvent.KeyPress
+        tap = not down and self._clean
+        self._clean = down
+        for vp in list(self._viewports):
+            try:
+                if down != vp._alt_down:
+                    vp._apply_alt_cursor(down)
+                if tap and vp._alt_tapped():
+                    tap = False       # the eyedropper state is shared: once
+            except RuntimeError:          # the C++ side already went
+                pass
+        return False
+
+
 class Viewport(QOpenGLWidget):
     """OpenGL viewport with orbital camera, grid, XYZ axes, tools and snapping."""
 
@@ -712,6 +790,8 @@ class Viewport(QOpenGLWidget):
         #: A bare Alt is down and nothing else has happened since — the tap
         #: that cycles the mode on release (issue #26).
         self._alt_tap = False
+        self._alt_down = False
+        _AltWatch.watch(self)
         # Sticky inference lock (Shift): (direction, color) captured from the
         # active inference, held until Shift is released.
         self._shift_lock: Optional[tuple] = None
@@ -5621,9 +5701,9 @@ class Viewport(QOpenGLWidget):
                 c + u * half_u + v * half_v, c - u * half_u + v * half_v]
 
     def _draw_section_planes(self, painter: QPainter) -> None:
-        """The section plane OBJECTS (frame + corner brackets + symbol),
-        SketchUp-style: grey when inactive, ink when active, selection
-        orange when selected. Hidden by View ▸ Section Planes."""
+        """The section plane OBJECTS (frame + corner brackets + symbol):
+        orange when active, light grey when not, a solid heavier frame when
+        selected. Hidden by View ▸ Section Planes."""
         planes = getattr(self.scene, "section_planes", None)
         if not planes or not getattr(self.scene, "show_section_planes", True):
             return
@@ -5646,29 +5726,23 @@ class Viewport(QOpenGLWidget):
                 px.append((a, b))
             if not ok:
                 continue
-            # A plane square to an axis wears that axis's colour (issue
-            # #62, @pacaeiro's aesthetic suggestion): red / green / blue
-            # tells at a glance which way it cuts; an oblique one stays
-            # neutral. Selection orange still wins.
-            axis_col = None
-            n = sp.normal
-            for comp, rgb in ((n.x(), (0.86, 0.22, 0.22)),
-                              (n.y(), (0.18, 0.62, 0.24)),
-                              (n.z(), (0.20, 0.36, 0.86))):
-                if abs(comp) > 0.995:
-                    axis_col = QColor.fromRgbF(*rgb)
-            if sp in selection:
+            # Active or not, at a glance (@pacaeiro, #62, second round): the
+            # ACTIVE plane in orange, every other one light grey — the axis
+            # colours of 0.4.9 said which way a plane cut, which stops
+            # meaning anything once it is rotated. Orange is also the
+            # selection's colour, so a selected plane draws its frame SOLID
+            # and heavier instead of dashed.
+            selected = sp in selection
+            if sp.active:
                 col = QColor(243, 115, 41)
-                width = 2
-            elif sp.active:
-                col = axis_col or QColor(45, 55, 75)
-                width = 2
+                width = 2.0
             else:
-                col = (axis_col.lighter(135) if axis_col is not None
-                       else QColor(150, 155, 162))
+                col = QColor(178, 182, 188)
                 width = 1.4
+            if selected:
+                width += 1.2
             # SketchUp draws the frame edges dashed.
-            pen = QPen(col, width, Qt.DashLine)
+            pen = QPen(col, width, Qt.SolidLine if selected else Qt.DashLine)
             painter.setPen(pen)
             for a, b in px:
                 painter.drawLine(QPointF(*a), QPointF(*b))
@@ -8022,8 +8096,10 @@ class Viewport(QOpenGLWidget):
         ea: list = []
         eb: list = []
         esel: list = []
+        esoft: list = []
         for e in scene.edges:
             edges.append(e)
+            esoft.append(bool(getattr(e, "soft", False)))
             ea.append([e.a.x(), e.a.y(), e.a.z()])
             eb.append([e.b.x(), e.b.y(), e.b.z()])
             # A hidden EDGE (Hide on raw geometry, a smoothed surface's
@@ -8053,6 +8129,7 @@ class Viewport(QOpenGLWidget):
             edge_a=np.asarray(ea, dtype=np.float64) if edges else None,
             edge_b=np.asarray(eb, dtype=np.float64) if edges else None,
             edge_sel=np.asarray(esel, dtype=bool) if edges else None,
+            edge_soft=np.asarray(esoft, dtype=bool) if edges else None,
             gedge_a=gedge_a,
             gedge_b=gedge_b,
             gedge_gi=gedge_gi,
@@ -8192,6 +8269,20 @@ class Viewport(QOpenGLWidget):
 
     def pick_edge(self, screen_x: float, screen_y: float):
         """Return the edge closest to ``(screen_x, screen_y)`` within threshold."""
+        return self._pick_edge(screen_x, screen_y, visible_only=False)
+
+    def pick_visible_edge(self, screen_x: float, screen_y: float):
+        """The edge a CLICK means: like :meth:`pick_edge`, but an edge the
+        user cannot see never wins — a soft edge (the seams of a smooth
+        surface, which are not drawn) unless hidden geometry is shown, and
+        an edge behind the model. SketchUp's rule, and what made a
+        cylinder's side unclickable (@pacaeiro, issue #71: the invisible
+        seams, front and back, took up to 90 % of the side at normal zoom).
+        Tools that want the tube's seam as a reference keep pick_edge."""
+        return self._pick_edge(screen_x, screen_y, visible_only=True)
+
+    def _pick_edge(self, screen_x: float, screen_y: float,
+                   visible_only: bool):
         import numpy as np
         idx = self._pick_index()
         if idx.edge_a is None:
@@ -8199,6 +8290,10 @@ class Viewport(QOpenGLWidget):
         ax, ay, oka = self._project_px(idx.edge_a)
         bx, by, okb = self._project_px(idx.edge_b)
         ok = oka & okb & idx.edge_sel
+        soft = getattr(idx, "edge_soft", None)
+        if (visible_only and soft is not None
+                and not getattr(self.scene, "show_hidden_geometry", False)):
+            ok &= ~soft
         sp = _active_cut(self.scene)
         if sp is not None:
             n = np.array([sp.normal.x(), sp.normal.y(), sp.normal.z()])
@@ -8215,8 +8310,20 @@ class Viewport(QOpenGLWidget):
                     0.0, 1.0)
         d = np.hypot(ax + t * dx - screen_x, ay + t * dy - screen_y)
         d = np.where(ok, d, np.inf)
-        i = int(np.argmin(d))
-        return idx.edges[i] if d[i] < self.pick_threshold_px else None
+        if not visible_only:
+            i = int(np.argmin(d))
+            return idx.edges[i] if d[i] < self.pick_threshold_px else None
+        # Nearest first, skipping the ones hidden behind the model; a few
+        # tries are plenty (the threshold holds only a handful).
+        for i in np.argsort(d)[:8]:
+            i = int(i)
+            if not d[i] < self.pick_threshold_px:
+                return None
+            e = idx.edges[i]
+            p = self.edge_point_under_cursor(e, screen_x, screen_y)
+            if p is None or not self._is_occluded(p):
+                return e
+        return None
 
     def pick_dimension(self, screen_x: float, screen_y: float):
         """Return the dimension whose lines (extension + dimension line) are
@@ -8258,7 +8365,13 @@ class Viewport(QOpenGLWidget):
         font = QFont()
         font.setPointSize(int(style.get("font_size", 9)))
         font.setBold(True)
-        fm = QFontMetrics(font)
+        # Measured on THIS widget, as the painter that draws the labels
+        # does: bare QFontMetrics(font) reads the primary screen's DPI, and
+        # on a scaled display the glyph box it gave missed the letters
+        # (Marco, 2026-09-23: the eraser only took a text by its leader).
+        from PySide6.QtGui import QPaintDevice
+        fm = (QFontMetrics(font, self) if isinstance(self, QPaintDevice)
+              else QFontMetrics(font))        # the test stubs bind this
         best, best_d = None, self.pick_threshold_px * 2.0
         for lab in labels:
             if not self.scene.entity_selectable(lab):   # hidden / locked
@@ -10003,6 +10116,11 @@ class Viewport(QOpenGLWidget):
 
     def mouseMoveEvent(self, ev) -> None:
         self._input_t = _time_mod.monotonic()   # P0: input→paint latency
+        # An Alt released while another window had the keyboard never
+        # reaches any filter here; the pointer re-reads it on the move.
+        alt = bool(ev.modifiers() & Qt.AltModifier)
+        if alt != self._alt_down:
+            self._apply_alt_cursor(alt)
         if self._last_pos is not None:
             p = ev.position().toPoint()
             dx = p.x() - self._last_pos.x()
@@ -10650,6 +10768,25 @@ class Viewport(QOpenGLWidget):
         fn = getattr(win, "_update_status_hint", None)
         if fn is not None:
             fn()
+
+    def _alt_tapped(self) -> bool:
+        """A clean Alt tap (press and release, nothing in between) toggles
+        Paint's eyedropper and it STAYS until one sample is taken or Alt is
+        tapped again — SketchUp since 2021.1 (Marco, 2026-09-23: «se alterna
+        con Alt, no es que se mantenga presionado»). Holding Alt and
+        clicking still samples, as before."""
+        if self.nav_mode is not None or getattr(
+                self.active_tool, "icon", None) != "paint":
+            return False
+        from tools.paint import PaintTool
+        win = self.window()
+        act = getattr(win, "_act_eyedropper", None)
+        if act is not None:
+            act.setChecked(not act.isChecked())   # the button shows it too
+        else:
+            PaintTool.sample_armed = not PaintTool.sample_armed
+        self._apply_tool_cursor()
+        return True
 
     def _apply_alt_cursor(self, down: bool) -> None:
         """Refresh the pointer for an Alt state change (Paint <-> eyedropper);

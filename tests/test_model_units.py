@@ -93,3 +93,24 @@ def test_the_viewport_binds_its_scene_and_the_dialog_reads_it():
     vp.scene.units = {"length": "in", "precision": 1}
     assert units.fmt_len(0.0254) == '1.0"'
     units.bind_scene(None)
+
+
+def test_unit_labels_speak_the_ui_language():
+    """@pacaeiro, issue #65: with the UI in English the Length unit combo
+    listed «Metros», «Pulgadas decimales»… — the labels were Spanish."""
+    from core import i18n, units
+    before = i18n.current_language()
+    try:
+        i18n.set_language("en")
+        assert units.unit_label("m") == "Metres (m)"
+        assert units.unit_label("ft-in-frac") == "Fractional feet and inches"
+        i18n.set_language("es")
+        assert units.unit_label("m") == "Metros (m)"
+        i18n.set_language("pt-BR")
+        assert units.unit_label("in") == "Polegadas decimais (in)"
+        for code in units.UNIT_LABELS:     # every label has its translation
+            for lang in ("es", "pt-BR"):
+                i18n.set_language(lang)
+                assert units.unit_label(code) != units.UNIT_LABELS[code]
+    finally:
+        i18n.set_language(before)

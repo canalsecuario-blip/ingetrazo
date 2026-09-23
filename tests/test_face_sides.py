@@ -81,6 +81,7 @@ def _estado_limpio():
     PaintTool.current_texture_plane = None
     PaintTool.current_opacity = None
     PaintTool.current_color = (0.80, 0.45, 0.30)
+    PaintTool.current_is_default = False
 
 
 # ---- la regla ---------------------------------------------------------------
@@ -378,3 +379,42 @@ def test_una_instancia_espejada_conserva_el_frente_de_sus_caras():
     db = np.frombuffer(ch["dback"], np.float32).reshape(-1, 3, 3)
     for t in db:
         assert np.cross(t[1] - t[0], t[2] - t[0])[2] > 0
+
+
+# ---- @pacaeiro, #47 punto 2: el material «por defecto» (sin material)
+
+def test_el_cuentagotas_toma_el_sin_material_y_pintarlo_lo_quita():
+    vp = _Visor()
+    limpia = _quad(vp.scene.mesh)
+    roja = vp.scene.mesh.add_face([V(10, 0), V(14, 0), V(14, 4), V(10, 4)])
+    roja.attrs.update(color=[1.0, 0.0, 0.0], mat="Ladrillo", opacity=0.5)
+    _click(vp, limpia, Qt.AltModifier)                # muestrea «sin material»
+    assert PaintTool.current_is_default is True
+    _click(vp, roja)                                  # y lo pinta: se lo quita
+    assert not {"color", "texture", "mat", "opacity"} & set(roja.attrs)
+    vp.history.undo()
+    assert roja.attrs["color"] == [1.0, 0.0, 0.0] and roja.attrs["mat"] == "Ladrillo"
+    _click(vp, roja, Qt.AltModifier)                  # un material de verdad
+    assert PaintTool.current_is_default is False
+
+
+def test_sin_material_en_el_reves_lo_devuelve_al_por_defecto():
+    vp = _Visor(desde_abajo=True)
+    f = _quad(vp.scene.mesh)
+    f.attrs["back"] = {"color": [0.0, 0.0, 1.0]}
+    PaintTool.current_is_default = True
+    _click(vp, f)
+    assert "back" not in f.attrs
+
+
+def test_con_el_cuentagotas_en_el_puntero_el_clic_muestrea():
+    """Marco, 2026-09-23: con Alt sostenido «a veces pinta». Si el puntero
+    muestra el cuentagotas, el clic toma el material aunque el evento del
+    ratón llegue sin Alt en sus modificadores."""
+    vp = _Visor()
+    f = _quad(vp.scene.mesh)
+    f.attrs["color"] = [0.0, 1.0, 0.0]
+    vp._alt_down = True                     # el puntero ya es cuentagotas
+    _click(vp, f)                           # evento sin modificadores
+    assert PaintTool.current_color == (0.0, 1.0, 0.0)
+    assert f.attrs["color"] == [0.0, 1.0, 0.0]   # no pintó

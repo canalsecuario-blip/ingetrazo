@@ -303,20 +303,33 @@ def test_box_selection_reaches_nested_geometry():
     assert _box_group_fast(vp, top, (0, 0, 10, 10), True) is None
 
 
-def test_explode_brings_the_nested_geometry_out():
+def test_explode_removes_one_level():
+    """SketchUp's Explode dissolves ONE level (@pacaeiro, issue #72: «the
+    inside groups explode as well»). The top's own quad goes loose; the
+    nested component comes out whole, carrying the top's placement, and its
+    own children stay inside it. The shared prototype is never touched."""
     from core.history import ExplodeGroupCommand, History
 
     scene = Scene()
-    top, _ = _tree()
+    top, proto = _tree()
+    mid = top.children[0]
     scene.groups.append(top)
     h = History(scene)
     h.execute(ExplodeGroupCommand(top))
-    assert not scene.groups
-    assert len(scene.mesh.faces) == 4              # nothing left behind
-    xs = sorted({round(v.position.x()) for v in scene.mesh.vertices})
-    assert xs == [0, 1, 10, 11]                    # the far leaf came out too
+    assert scene.groups == [mid]
+    assert len(scene.mesh.faces) == 1              # only the top's own quad
+    assert {round(v.position.z()) for v in scene.mesh.vertices} == {1000}
+    assert (mid.xform(0, 3), mid.xform(1, 3), mid.xform(2, 3)) == (0, 100, 1000)
+    assert mid.mesh is proto and len(mid.children) == 2
+    assert all(g.mesh is proto for g, _ in iter_placements(mid))
+    assert scene.selection == {mid}                # what came out is selected
     h.undo()
-    assert len(scene.groups) == 1 and not scene.mesh.faces
+    assert scene.groups == [top] and not scene.mesh.faces
+    assert top.children == [mid]
+    assert (mid.xform(0, 3), mid.xform(1, 3), mid.xform(2, 3)) == (0, 100, 0)
+    h.redo()
+    assert scene.groups == [mid]
+    assert (mid.xform(0, 3), mid.xform(1, 3), mid.xform(2, 3)) == (0, 100, 1000)
 
 
 def test_the_selection_box_follows_a_moved_group():

@@ -1925,5 +1925,13 @@
  "Same as the system": "Igual que el sistema",
  "Light": "Claro",
  "Dark": "Oscuro",
- "Colours of menus, panels and toolbars. «Same as the system» switches along with the desktop's light or dark mode. The 3D view keeps its own style. Applies at once.": "Colores de menús, paneles y barras de herramientas. «Igual que el sistema» cambia junto con el modo claro u oscuro del escritorio. El visor 3D conserva su propio estilo. Se aplica al instante."
+ "Colours of menus, panels and toolbars. «Same as the system» switches along with the desktop's light or dark mode. The 3D view keeps its own style. Applies at once.": "Colores de menús, paneles y barras de herramientas. «Igual que el sistema» cambia junto con el modo claro u oscuro del escritorio. El visor 3D conserva su propio estilo. Se aplica al instante.",
+ "Metres (m)": "Metros (m)",
+ "Centimetres (cm)": "Centímetros (cm)",
+ "Millimetres (mm)": "Milímetros (mm)",
+ "Decimal inches (in)": "Pulgadas decimales (in)",
+ "Decimal feet (ft)": "Pies decimales (ft)",
+ "Feet and inches (1'6\")": "Pies y pulgadas (1'6\")",
+ "Fractional inches": "Pulgadas fraccionarias",
+ "Fractional feet and inches": "Pies y pulgadas fraccionarias"
 }

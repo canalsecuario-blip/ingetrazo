@@ -7,8 +7,9 @@ marking everything the cursor sweeps over (shown highlighted red), and release
 erases the whole stroke as ONE undo step. Erasing an edge takes its faces with
 it (and rubbing out a divider between coplanar faces merges them back — the
 EraseSelectionCommand semantics). A segment of a drawn curve (circle/arc)
-erases its whole contour, curves being single entities. Guides, dimensions and
-georef paths are erased too. Esc cancels the in-progress stroke.
+erases its whole contour, curves being single entities. Guides, dimensions,
+leader texts and georef paths are erased too (texts: @pacaeiro, issue #66).
+Esc cancels the in-progress stroke.
 
 Shift held at press starts a HIDE stroke instead (SketchUp's Shift+eraser):
 the swept edges are hidden, not erased — still one undo step. Only edges and
@@ -32,11 +33,13 @@ from core.history import (
     DeleteGeoPathsCommand,
     DeleteGroupCommand,
     DeleteGuidesCommand,
+    DeleteTextLabelsCommand,
     EraseSelectionCommand,
     HideCommand,
     HideEdgesCommand,
 )
 from core.mesh import Edge
+from core.textlabel import TextLabel
 from georef.geopath import GeoPath
 from tools.base import Tool, ToolContext
 
@@ -74,9 +77,15 @@ class EraserTool(Tool):
             self._mark(viewport, ctx.screen.x(), ctx.screen.y())
         else:
             # Preview what a click would take (curve segments show as their
-            # whole contour, like Select).
-            edge = viewport.pick_edge(ctx.screen.x(), ctx.screen.y())
-            viewport.set_hover(edge)
+            # whole contour, like Select); a text's glyphs first, as the
+            # click takes them first.
+            pick_label = getattr(viewport, "pick_text_label", None)
+            label = (pick_label(ctx.screen.x(), ctx.screen.y(),
+                                rect_only=True)
+                     if pick_label is not None else None)
+            viewport.set_hover(label if label is not None else
+                               viewport.pick_edge(ctx.screen.x(),
+                                                  ctx.screen.y()))
         viewport.update()
 
     def on_release(self, viewport) -> None:
@@ -106,6 +115,7 @@ class EraserTool(Tool):
         guides = [m for m in marked if isinstance(m, Guide)]
         dims = [m for m in marked if isinstance(m, Dimension)]
         paths = [m for m in marked if isinstance(m, GeoPath)]
+        labels = [m for m in marked if isinstance(m, TextLabel)]
         cmds = []
         if edges:
             cmds.append(EraseSelectionCommand(edges, []))
@@ -116,6 +126,8 @@ class EraserTool(Tool):
             cmds.append(DeleteDimensionsCommand(dims))
         if paths:
             cmds.append(DeleteGeoPathsCommand(paths))
+        if labels:
+            cmds.append(DeleteTextLabelsCommand(labels))
         if cmds:
             viewport.history.execute(
                 cmds[0] if len(cmds) == 1 else CompoundCommand(cmds))
@@ -140,6 +152,8 @@ class EraserTool(Tool):
                 segs.append(m.line_points())
             elif isinstance(m, GeoPath):
                 segs.extend(m.segments())
+            elif isinstance(m, TextLabel):
+                segs.append((m.anchor, m.position()))
         return segs
 
     # ---- Internals ----------------------------------------------------------
@@ -163,6 +177,14 @@ class EraserTool(Tool):
 
     def _mark(self, viewport, sx: float, sy: float) -> None:
         self._viewport = viewport
+        pick_label = getattr(viewport, "pick_text_label", None)
+        if pick_label is not None and not self._hide:
+            # The text block overdraws all geometry, so the glyphs outrank
+            # every 3D pick — the same order as Select.
+            label = pick_label(sx, sy, rect_only=True)
+            if label is not None:
+                self.marked.add(label)
+                return
         edge = viewport.pick_edge(sx, sy)
         if edge is not None:
             # A curve is one entity: marking a segment marks its contour.
@@ -186,6 +208,11 @@ class EraserTool(Tool):
         dim = viewport.pick_dimension(sx, sy)
         if dim is not None:
             self.marked.add(dim)
+            return
+        # The label's thin leader keeps the normal, post-edge priority.
+        label = pick_label(sx, sy) if pick_label is not None else None
+        if label is not None:
+            self.marked.add(label)
             return
         path = viewport.pick_geopath(sx, sy)
         if path is not None:

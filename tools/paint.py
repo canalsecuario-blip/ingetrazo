@@ -8,8 +8,10 @@ Behavior (SketchUp's Paint Bucket, ``B``):
   A.3), so it survives push/pull and the plane rebuild.
 - If the clicked face is part of the current face selection, the whole
   selection is painted in one undoable step (paint many at once).
-- **Alt**+click samples the face's material into the current one (SketchUp's
-  eyedropper): image, applied size, rotation, translucency and the material
+- **Alt** switches to the eyedropper, SketchUp's way since 2021.1: a tap
+  TOGGLES it and it stays until one face is sampled (then back to the
+  bucket) or Alt is tapped again; holding Alt and clicking samples too. The
+  sample takes the face's material into the current one: image, applied size, rotation, translucency and the material
   identity all travel, so the next click reproduces that material on another
   face. A face carrying an explicit world→UV map (an imported texture, or one
   positioned by hand) hands that map on only to faces on the SAME plane, where
@@ -166,6 +168,11 @@ class PaintTool(Tool):
     # carries one. Only faces on that plane inherit the map; see the module
     # docstring. ``None`` = the texture has no map of its own to hand on.
     current_texture_plane: tuple | None = None
+    # SketchUp's «Default» material (no material): the eyedropper picks it
+    # up from an unpainted side, the tray offers it, and painting with it
+    # REMOVES the paint (@pacaeiro, #47 point 2). While it is set the
+    # colour/texture fields above are ignored.
+    current_is_default: bool = False
 
     def on_activate(self, viewport) -> None:
         pass
@@ -185,7 +192,11 @@ class PaintTool(Tool):
         back_side = clicked_back_side(vp, face, group,
                                       ctx.screen.x(), ctx.screen.y())
 
-        if (ctx.modifiers & Qt.AltModifier) or PaintTool.sample_armed:
+        # The pointer is the promise: whenever it shows the eyedropper — Alt
+        # held, or tapped (a toggle, as SketchUp) — the click samples.
+        alt = (bool(ctx.modifiers & Qt.AltModifier)
+               or bool(getattr(vp, "_alt_down", False)))
+        if alt or PaintTool.sample_armed:
             # Eyedropper: adopt the face's material (texture if it has one, else
             # colour) as the current paint material — identity included, so
             # sampling "Concreto visto" paints "Concreto visto". The side
@@ -202,6 +213,8 @@ class PaintTool(Tool):
                     src = back
                 elif back is not True:
                     src = {}
+            from core.materials import has_own_material
+            PaintTool.current_is_default = not has_own_material(src)
             tex = src.get("texture")
             if tex is not None:
                 PaintTool.current_texture = dict(tex)
@@ -251,7 +264,9 @@ class PaintTool(Tool):
                 vp.history.execute(CompoundCommand([
                     SetFaceMaterialTagCommand(
                         [], mat.name if mat is not None else None, mat),
-                    SetGroupMaterialCommand(obj, self._current_as_material()),
+                    SetGroupMaterialCommand(
+                        obj, None if PaintTool.current_is_default
+                        else self._current_as_material()),
                 ]))
                 flash = getattr(vp, "flash_status", None)
                 if callable(flash):
@@ -268,6 +283,21 @@ class PaintTool(Tool):
         faces = (sel_faces if face in sel_faces
                  else vp.scene.mesh.surface_of(face))
         mat = PaintTool.current_material
+        if PaintTool.current_is_default:
+            # «No material»: the clicked side goes back to the default —
+            # nothing written, so a container's paint can dress it again.
+            if back_side:
+                cmd = SetFaceBackCommand(faces, None)
+            else:
+                cmd = CompoundCommand([
+                    SetFaceColorCommand(faces, None),
+                    SetFaceTextureCommand(faces, None),
+                    SetFaceOpacityCommand(faces, None),
+                    SetFaceMaterialTagCommand(faces, None, None),
+                ])
+            vp.history.execute(cmd)
+            vp.update()
+            return
         if back_side:
             # The back gets its own material and nothing else changes:
             # the front keeps what it had. The material still registers

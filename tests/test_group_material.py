@@ -314,3 +314,58 @@ def test_the_instanced_pool_splits_a_painted_instance_from_its_siblings():
         pooled.setdefault((id(g.mesh), material_sig(paint)), []).append(g)
     assert len(pooled) == 2                          # two pools, one prototype
     assert vp._instanced_eligible(a) and vp._instanced_eligible(b)
+
+
+def test_exploding_a_group_of_groups_lifts_them_whole():
+    """@pacaeiro, issue #72: «Make cube and group. Copy the cube (group) to
+    the side. Group those 2 cubes. Explode the bigger group. The inside
+    groups explode as well.» They must come out as the two groups, where
+    they were, and an unpainted one wears the paint the container gave it."""
+    from core.edits import build_add_edges
+    from core.history import (InsertGroupCommand, MakeGroupCommand,
+                              MakeNestedGroupCommand, MoveGroupCommand)
+    from core.group import world_mesh
+    scene = Scene()
+    hist = History(scene)
+    sq = [V(0, 0), V(1, 0), V(1, 1), V(0, 1)]
+    hist.execute(build_add_edges(
+        scene, [(sq[i], sq[(i + 1) % 4]) for i in range(4)], detect_faces=True))
+    hist.execute(MakeGroupCommand(list(scene.mesh.faces),
+                                  list(scene.mesh.edges)))
+    a = scene.groups[0]
+    b = copy_group(a, V(3, 0))
+    hist.execute(InsertGroupCommand(b))
+    b.material = {"color": [0.0, 0.0, 1.0]}          # painted itself
+    hist.execute(MakeNestedGroupCommand([], [], [a, b]))
+    big = scene.groups[0]
+    hist.execute(MoveGroupCommand(big, V(0, 5)))
+    hist.execute(SetGroupMaterialCommand(big, dict(RED)))
+
+    def xs_ys(g):
+        vs = world_mesh(g).vertices
+        return (sorted({round(v.position.x(), 6) for v in vs}),
+                sorted({round(v.position.y(), 6) for v in vs}))
+
+    hist.execute(ExplodeGroupCommand(big))
+    assert scene.groups == [a, b]
+    assert not scene.mesh.faces                      # nothing went loose
+    assert xs_ys(a) == ([0.0, 1.0], [5.0, 6.0])      # where the move left it
+    assert xs_ys(b) == ([3.0, 4.0], [5.0, 6.0])
+    assert a.material["color"] == [1.0, 0.0, 0.0]    # took the container's
+    assert b.material["color"] == [0.0, 0.0, 1.0]    # kept its own
+    hist.undo()
+    assert scene.groups == [big] and big.children == [a, b]
+    assert a.material is None and xs_ys(a)[1] == [0.0, 1.0]
+
+
+def test_explode_keeps_the_container_paint_on_the_back_too():
+    """@pacaeiro, #47 point 3: inside the painted group both sides wore it;
+    after Explode the backs fell back to the default."""
+    scene = Scene()
+    hist = History(scene)
+    g, _blue = _two_face_group(scene)
+    g.material = dict(RED)
+    hist.execute(ExplodeGroupCommand(g))
+    red = [f for f in scene.mesh.faces
+           if f.attrs.get("color") == [1.0, 0.0, 0.0]]
+    assert red and all(f.attrs.get("back") for f in red)

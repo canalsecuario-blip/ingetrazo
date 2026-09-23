@@ -230,7 +230,11 @@ class SelectTool(Tool):
             if label is not None:
                 return label
         group = viewport.pick_group(screen_x, screen_y)
-        edge = viewport.pick_edge(screen_x, screen_y)
+        # Only an edge the user can SEE takes the click (issue #71): the
+        # hidden seams of a smooth surface, or edges behind the model, left
+        # a cylinder's side all but unclickable.
+        pick_visible = getattr(viewport, "pick_visible_edge", None)
+        edge = (pick_visible or viewport.pick_edge)(screen_x, screen_y)
         if group is not None and edge is not None:
             # A loose line drawn ON a group's face (or crossing in front of
             # it) is the deliberate target — SketchUp picks the thin edge

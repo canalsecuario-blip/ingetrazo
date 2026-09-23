@@ -148,6 +148,23 @@ def _color_pixmap(rgb, size=_SWATCH) -> QPixmap:
     return pm
 
 
+def _default_pixmap(size=_SWATCH) -> QPixmap:
+    """SketchUp's «Default» material swatch: the front's cream and the
+    back's blue-grey split on the diagonal."""
+    from PySide6.QtGui import QPainter, QPolygonF
+    from PySide6.QtCore import QPointF
+    pm = QPixmap(size, size)
+    pm.fill(QColor.fromRgbF(0.96, 0.95, 0.925))
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.Antialiasing, True)
+    p.setPen(Qt.NoPen)
+    p.setBrush(QColor(164, 176, 196))
+    p.drawPolygon(QPolygonF([QPointF(size, 0), QPointF(size, size),
+                             QPointF(0, size)]))
+    p.end()
+    return pm
+
+
 def _texture_pixmap(path, size=_SWATCH) -> QPixmap | None:
     img = QImage(str(path))
     if img.isNull():
@@ -1126,6 +1143,13 @@ class MaterialsPanel(QWidget):
         self._preview.setFrameShape(QFrame.Box)
         row.addWidget(self._preview)
         row.addStretch(1)
+        # SketchUp's «Default» swatch: paints the material OFF a side.
+        default_btn = _swatch_button(
+            _default_pixmap(),
+            tr("Default material (no material) — paint with it to remove "
+               "a face's or an object's material"))
+        default_btn.clicked.connect(self._apply_default)
+        row.addWidget(default_btn)
         root.addLayout(row)
 
         # SketchUp's "edit material": tile width/height + rotation, tucked
@@ -1472,6 +1496,7 @@ class MaterialsPanel(QWidget):
 
     # ---- Apply / add --------------------------------------------------------
     def _apply_color(self, rgb, name: str | None = None) -> None:
+        PaintTool.current_is_default = False
         PaintTool.current_color = tuple(rgb)
         PaintTool.current_texture = None
         PaintTool.current_opacity = None
@@ -1620,6 +1645,7 @@ class MaterialsPanel(QWidget):
                        opacity: float | None = None) -> None:
         w = sw if sw is not None else (size or self._tile_size)
         h = sh if sh is not None else (size or self._tile_size)
+        PaintTool.current_is_default = False
         PaintTool.current_texture = {"path": path, "sw": w, "sh": h,
                                      "rot": 0.0}
         PaintTool.current_opacity = opacity
@@ -1664,7 +1690,23 @@ class MaterialsPanel(QWidget):
             self._load_texture_fields()
         self._refresh_preview()
 
+    def _apply_default(self) -> None:
+        """SketchUp's «Default» material: paint with it to take a side's
+        material off (@pacaeiro, #47)."""
+        PaintTool.current_is_default = True
+        PaintTool.current_texture = None
+        PaintTool.current_texture_plane = None
+        PaintTool.current_opacity = None
+        PaintTool.current_material = None
+        self._window._activate_tool("paint")
+        self._refresh_preview()
+
     def _refresh_preview(self) -> None:
+        if PaintTool.current_is_default:
+            self._preview.setPixmap(_default_pixmap())
+            self._preview.setToolTip(tr("Default material (no material)"))
+            return
+        self._preview.setToolTip("")
         if PaintTool.current_texture is not None:
             pm = _texture_pixmap(PaintTool.current_texture["path"])
             if pm is not None:

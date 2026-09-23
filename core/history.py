@@ -3086,72 +3086,92 @@ class SetGroupMaterialCommand(Command):
 
 
 class ExplodeGroupCommand(Command):
-    """Dissolve a group: merge its geometry back into the loose mesh (welding to
-    whatever it touches). Snapshot undo restores the loose mesh and the group."""
+    """Dissolve ONE level of a group: its own geometry merges back into the
+    loose mesh (welding to whatever it touches) and the groups and
+    components nested in it come out whole, as top-level objects in its
+    place — SketchUp's Explode (@pacaeiro, issue #72: «the inside groups
+    explode as well»). Snapshot undo restores the loose mesh, the group and
+    each lifted child's placement."""
 
     def __init__(self, group: Group) -> None:
         self.group = group
         self.snapshot: Optional[dict] = None
         self.index: Optional[int] = None
+        self._lifted: list = []          # (child, xform, mesh, material)
+        self._selection = None
 
     def do(self, scene) -> None:
+        from core.materials import effective_attrs
         m = scene.mesh
+        g = self.group
         self.snapshot = m.capture_state()
-        self.index = scene.groups.index(self.group)
-        from core.group import iter_placements
-        # Every placement the group holds, each through its own composed
-        # matrix — exploding only the top-level mesh would drop a component's
-        # nested geometry on the floor.
-        places = list(iter_placements(self.group))
+        self.index = scene.groups.index(g)
+        self._selection = set(scene.selection)
+        P = getattr(g, "xform", None)
+        paint = getattr(g, "material", None)
 
-        def _W(xf):
-            def W(p):
-                # Instance prototypes hold LOCAL coords — explode in world.
-                return xf.map(p) if xf is not None else QVector3D(p)
-            return W
+        def W(p):
+            # Instance prototypes hold LOCAL coords — explode in world.
+            return P.map(p) if P is not None else QVector3D(p)
 
-        for pg, xf in places:
-            W = _W(xf)
-            for f in pg.mesh.faces:
-                nf = m.add_face([W(v) for v in f.vertices],
-                                [[W(v) for v in h] for h in f.holes] or None)
-                if f.attrs:
-                    nf.attrs.update(dict(f.attrs))   # colour/texture travel out
-                # A default face kept the group's paint while inside; it
-                # keeps it on the way out too (SketchUp; issue #47, rule d).
-                paint = (getattr(pg, "material", None)
-                         or getattr(self.group, "material", None))
-                if paint and not has_own_material(f.attrs):
-                    for key in ("color", "texture", "opacity", "mat"):
-                        if paint.get(key) is not None:
-                            nf.attrs[key] = (dict(paint[key])
-                                             if isinstance(paint[key], dict)
-                                             else paint[key])
-            for e in pg.mesh.edges:
-                v0, v1 = m.vertex_at(W(e.a)), m.vertex_at(W(e.b))
-                if v0 is None or v1 is None or m.find_edge(v0, v1) is None:
-                    m.add_edge(W(e.a), W(e.b))
+        for f in g.mesh.faces:
+            nf = m.add_face([W(v) for v in f.vertices],
+                            [[W(v) for v in h] for h in f.holes] or None)
+            # What the face showed inside is what it keeps outside: its own
+            # paint, or — a default face — the group's on BOTH sides
+            # (SketchUp; issue #47: the back used to fall back to default).
+            drawn = effective_attrs(dict(f.attrs or {}), paint)
+            for key, val in drawn.items():
+                nf.attrs[key] = dict(val) if isinstance(val, dict) else val
+        for e in g.mesh.edges:
+            v0, v1 = m.vertex_at(W(e.a)), m.vertex_at(W(e.b))
+            if v0 is None or v1 is None or m.find_edge(v0, v1) is None:
+                m.add_edge(W(e.a), W(e.b))
         # Edge flags travel back out of the group (the mirror of
         # MakeGroupCommand): an exploded cylinder must stay smooth, its rims
         # keep selecting as whole curves, and a hidden edge stay hidden.
-        for pg, xf in places:
-            W = _W(xf)
-            for e in pg.mesh.edges:
-                if edge_is_plain(e):
-                    continue
-                v0, v1 = m.vertex_at(W(e.a)), m.vertex_at(W(e.b))
-                k = (m.find_edge(v0, v1)
-                     if v0 is not None and v1 is not None else None)
-                if k is not None:
-                    stamp_edge_flags(k, edge_flags(e))
+        for e in g.mesh.edges:
+            if edge_is_plain(e):
+                continue
+            v0, v1 = m.vertex_at(W(e.a)), m.vertex_at(W(e.b))
+            k = (m.find_edge(v0, v1)
+                 if v0 is not None and v1 is not None else None)
+            if k is not None:
+                stamp_edge_flags(k, edge_flags(e))
         m.resplit_curves()
-        scene.groups.remove(self.group)
-        scene.selection.discard(self.group)
+
+        # The nested objects come out one level up, whole: their placement
+        # composes with the parent's (a shared prototype is never touched),
+        # and an unpainted child takes the parent's paint, as its default
+        # faces were already drawn with it.
+        kids = list(getattr(g, "children", None) or [])
+        self._lifted = [(c, c.xform, c.mesh, c.material) for c in kids]
+        for c in kids:
+            if P is not None:
+                if c.xform is not None:
+                    c.xform = P * c.xform
+                else:
+                    from core.group import transformed_mesh
+                    c.mesh = transformed_mesh(c.mesh, P)
+            if c.material is None and paint:
+                c.material = {k: (dict(v) if isinstance(v, dict) else v)
+                              for k, v in paint.items()}
+        scene.groups.remove(g)
+        scene.groups[self.index:self.index] = kids
+        scene.selection.discard(g)
+        if kids:
+            scene.selection = set(kids)   # SketchUp selects what came out
         scene.version += 1
 
     def undo(self, scene) -> None:
+        for c, xform, mesh, material in self._lifted:
+            if c in scene.groups:
+                scene.groups.remove(c)
+            c.xform, c.mesh, c.material = xform, mesh, material
         scene.mesh.restore_state(self.snapshot)
         scene.groups.insert(self.index, self.group)
+        if self._selection is not None:
+            scene.selection = set(self._selection)
         scene.version += 1
 
 

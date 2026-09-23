@@ -31,7 +31,17 @@ _AXES = {"x": QVector3D(1, 0, 0), "y": QVector3D(0, 1, 0),
 class SectionPlaneTool(Tool):
     name = "Section Plane"
     uses_snap = True
-    wireframe_color = (0.16, 0.55, 0.45, 1.0)   # SketchUp's greenish glyph
+
+    @property
+    def wireframe_color(self):  # type: ignore[override]
+        """The floating plane wears the inference colours (@pacaeiro, #62):
+        red/green/blue square to an axis, magenta on any other plane."""
+        from tools.base import PlaneLock
+        axis = PlaneLock.plane_color(self._current_normal())
+        if axis is not None:
+            return axis
+        from core.snap import COLOR_REFERENCE
+        return (*COLOR_REFERENCE, 1.0)
 
     def __init__(self) -> None:
         self.hover_point: QVector3D | None = None
@@ -93,9 +103,19 @@ class SectionPlaneTool(Tool):
         count = len(planes) + 1
         plane = SectionPlane(ctx.world, n, name=tr("Section {n}", n=count),
                              symbol=next_symbol(planes))
+        window = viewport.window() if hasattr(viewport, "window") else None
+        # A new plane is placed to be SEEN: cuts and planes switched off
+        # come back on (@pacaeiro, #62: «user sees immediately the result»).
+        sc = viewport.scene
+        if not (getattr(sc, "show_section_cuts", True)
+                and getattr(sc, "show_section_planes", True)):
+            sc.show_section_cuts = True
+            sc.show_section_planes = True
+            sync = getattr(window, "_sync_section_menu", None)
+            if callable(sync):
+                sync()
         viewport.history.execute(PlaceSectionPlaneCommand(plane))
         # SketchUp prompts for a name and symbol right after placing.
-        window = viewport.window() if hasattr(viewport, "window") else None
         prompt = getattr(window, "prompt_section_name", None)
         if prompt is not None:
             prompt(plane)

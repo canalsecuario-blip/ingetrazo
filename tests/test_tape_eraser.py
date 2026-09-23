@@ -184,3 +184,49 @@ def test_shift_stroke_hides_the_group_instead():
     assert g in scene.groups and getattr(g, "hidden", False) is True
     vp.history.undo()
     assert getattr(g, "hidden", False) is False
+
+
+# ---- @pacaeiro, issue #66: «ERASE tool cannot erase Text»
+
+class _LabelPickingViewport(_GroupPickingViewport):
+    """A leader text's glyphs under the cursor, over a group."""
+
+    def __init__(self, scene, group, label):
+        super().__init__(scene, group)
+        self._label = label
+
+    def pick_text_label(self, x, y, rect_only=False):
+        return self._label
+
+
+def test_the_eraser_erases_a_leader_text_before_what_is_behind_it():
+    from core.textlabel import TextLabel
+    from tools.eraser import EraserTool
+    scene = Scene()
+    g = _grouped_square(scene)
+    lab = TextLabel(V(1, 1), V(1, 1, 1), "Muro")
+    scene.text_labels.append(lab)
+    vp = _LabelPickingViewport(scene, g, lab)
+    tool = EraserTool()
+    tool._stroke = True
+    tool._mark(vp, 10.0, 10.0)
+    assert tool.marked == {lab}          # the glyphs outrank the group
+    tool.on_release(vp)
+    assert scene.text_labels == [] and g in scene.groups
+    vp.history.undo()
+    assert scene.text_labels == [lab]
+
+
+def test_a_hide_stroke_leaves_texts_alone():
+    from core.textlabel import TextLabel
+    from tools.eraser import EraserTool
+    scene = Scene()
+    g = _grouped_square(scene)
+    lab = TextLabel(V(1, 1), V(1, 1, 1), "Muro")
+    scene.text_labels.append(lab)
+    vp = _LabelPickingViewport(scene, g, lab)
+    tool = EraserTool()
+    tool._stroke = True
+    tool._hide = True
+    tool._mark(vp, 10.0, 10.0)
+    assert lab not in tool.marked

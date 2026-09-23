@@ -72,11 +72,13 @@ def format_length(metres: float, units: str = "m", decimals: int = 2) -> str:
 
 DEFAULT_MODEL_UNITS = {"length": "m", "precision": 2}
 
+# English source strings, translated where they are shown (issue #65: the
+# labels were written in Spanish, so an English UI showed Spanish).
 UNIT_LABELS = {
-    "m": "Metros (m)", "cm": "Centímetros (cm)", "mm": "Milímetros (mm)",
-    "in": "Pulgadas decimales (in)", "ft": "Pies decimales (ft)",
-    "ft-in": "Pies y pulgadas (1\'6\")", "in-frac": "Pulgadas fraccionarias",
-    "ft-in-frac": "Pies y pulgadas fraccionarias",
+    "m": "Metres (m)", "cm": "Centimetres (cm)", "mm": "Millimetres (mm)",
+    "in": "Decimal inches (in)", "ft": "Decimal feet (ft)",
+    "ft-in": "Feet and inches (1\'6\")", "in-frac": "Fractional inches",
+    "ft-in-frac": "Fractional feet and inches",
 }
 
 #: Metres per typed unit when the number carries no unit of its own.
@@ -118,7 +120,8 @@ def model_precision() -> int:
 
 
 def unit_label(code: str) -> str:
-    return UNIT_LABELS.get(code, code)
+    from core.i18n import tr
+    return tr(UNIT_LABELS[code]) if code in UNIT_LABELS else code
 
 
 def bare_number_scale() -> float:
