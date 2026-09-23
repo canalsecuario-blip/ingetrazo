@@ -4,9 +4,20 @@ All notable changes to IngeTrazo are documented here.
 Format inspired by [Keep a Changelog](https://keepachangelog.com); versions
 follow [SemVer](https://semver.org).
 
-## [Sin publicar]
+## [0.5.0] — 2026-09-23
+
+**Sólidos, ejes locales y Mac.** Las herramientas de sólidos de SketchUp
+(Revestimiento exterior, Unión, Sustraer, Recortar, Intersecar, Dividir) e
+Intersecar caras, pedidas por Rafael; los ejes locales de grupos y
+componentes, el pendiente grande de @pacaeiro (#44), con Cambiar ejes y el
+`.skp` que los conserva; la tanda de pacaeiro del 22 de septiembre;
+el tema claro o el del sistema; y la primera versión empaquetada para
+macOS, gracias a @felixriestra.
 
 ### Añadido
+- **Versión para macOS** (PR #64, @felixriestra): un `IngeTrazo.app`
+  empaquetado en `.dmg` para Apple Silicon, que abre `.igz` y `.skp` con
+  doble clic. Sin firma de Apple: la primera vez, clic derecho ▸ Abrir.
 - **Ejes locales en grupos y componentes, como SketchUp** (#44, @pacaeiro):
   cada grupo recuerda hacia dónde mira cuando se mueve, gira, escala,
   voltea, copia o explota, y se guarda en el `.igz`. Al entrar a editarlo
