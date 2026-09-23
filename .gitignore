@@ -71,3 +71,6 @@ vendor/libredwg/*
 vendor/libredwg/bin/*
 !vendor/libredwg/bin/dwg2dxf
 !vendor/libredwg/SOURCES.md
+
+# Notas de trabajo locales del asistente (no se publican)
+CLAUDE.md
