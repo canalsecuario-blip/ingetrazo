@@ -1906,6 +1906,8 @@
  "Position Camera": "Situar cámara",
  "Look Around": "Mirar alrededor",
  "Walk": "Caminar",
+ "First Person": "Primera persona",
+ "W/A/S/D = walk, Q/E = down/up, drag = look. Shift = run, Alt = through walls.": "W/A/S/D = caminar, Q/E = bajar/subir, arrastra = mirar. Mayús = correr, Alt = atravesar paredes.",
  "Walkthrough": "Paseo",
  "Eye height": "Altura del ojo",
  "Height offset": "Desplazamiento en altura",

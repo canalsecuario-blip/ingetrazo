@@ -19,6 +19,17 @@ follow [SemVer](https://semver.org).
   caras seleccionadas en un mismo plano, rehace solo ese plano aunque el
   resto del modelo sea 3D. Sin selección hace lo de siempre (todo el
   dibujo, si es plano).
+- **Primera persona: pasear el modelo como en un videojuego**, junto a
+  Caminar y no en su lugar (Cámara ▸ Primera persona y la barra Paseo).
+  W/A/S/D caminan y se mueven de lado, Q/E bajan y suben, Mayús corre y
+  Alt atraviesa paredes; arrastrar con el botón derecho (o el izquierdo)
+  gira la cabeza a un ritmo fijo por píxel. Paredes, escalones y altura
+  del ojo son los de Caminar. Mientras la herramienta está activa, esas
+  seis letras son suyas y no cambian de herramienta; con Ctrl siguen
+  siendo atajos (Ctrl+S guarda). El puntero se oculta al mirar y, donde
+  la plataforma lo permite, vuelve a su sitio tras cada movimiento —
+  en Wayland no se puede mover, así que al llegar al borde se suelta y
+  se vuelve a arrastrar.
 
 ### Corregido
 - **Lo que dibujas dentro de un grupo o componente se ve al momento**

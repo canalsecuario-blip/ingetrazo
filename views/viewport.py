@@ -986,6 +986,9 @@ class Viewport(QOpenGLWidget):
         # Camera navigation state (middle button)
         self._last_pos = None
         self._pan_mode = False
+        # A mouse-look drag for a tool with ``on_look`` (First Person):
+        # (button, last local point) while a button is held, else None.
+        self._look_drag = None
         # SketchUp-style navigation mode for trackpad users with no middle
         # mouse button: when set ("orbit" / "pan"), a left-drag drives the
         # camera instead of the active tool. None means a drawing tool is in
@@ -10081,6 +10084,11 @@ class Viewport(QOpenGLWidget):
         # second click of a line) the tool is still busy and nothing moves.
         self._release_linear_mode()
         self._input_t = _time_mod.monotonic()   # P0: input→paint latency
+        if (ev.button() in (Qt.LeftButton, Qt.RightButton)
+                and self.nav_mode is None and self._look_drag is None
+                and callable(getattr(self.active_tool, "on_look", None))):
+            self._begin_look(ev)
+            return
         if ev.button() == Qt.MiddleButton:
             self._last_pos = ev.position().toPoint()
             self._pan_mode = bool(ev.modifiers() & Qt.ShiftModifier)
@@ -10215,6 +10223,36 @@ class Viewport(QOpenGLWidget):
             return
         self._dispatch_tool_click(ev, double=True)
 
+    # ---- Mouse look (a tool with ``on_look``: First Person) -----------------
+    @staticmethod
+    def _can_warp_pointer() -> bool:
+        """Whether the pointer can be put back after each look move. Wayland
+        does not let a client move it; there the look is a plain drag."""
+        from PySide6.QtGui import QGuiApplication
+        name = QGuiApplication.platformName().lower()
+        return not (name.startswith("wayland") or name in ("offscreen",
+                                                            "minimal"))
+
+    def _begin_look(self, ev) -> None:
+        self._look_drag = (ev.button(), ev.position().toPoint())
+        self.setCursor(Qt.BlankCursor)
+
+    def _look_move(self, ev) -> None:
+        button, last = self._look_drag
+        p = ev.position().toPoint()
+        dx, dy = p.x() - last.x(), p.y() - last.y()
+        if dx or dy:
+            self.active_tool.on_look(self, dx, dy)
+        if (dx or dy) and self._can_warp_pointer():
+            from PySide6.QtGui import QCursor
+            QCursor.setPos(self.mapToGlobal(last))
+            p = last
+        self._look_drag = (button, p)
+
+    def _end_look(self) -> None:
+        self._look_drag = None
+        self._apply_tool_cursor()
+
     def mouseMoveEvent(self, ev) -> None:
         self._input_t = _time_mod.monotonic()   # P0: input→paint latency
         # An Alt released while another window had the keyboard never
@@ -10222,6 +10260,11 @@ class Viewport(QOpenGLWidget):
         alt = bool(ev.modifiers() & Qt.AltModifier)
         if alt != self._alt_down:
             self._apply_alt_cursor(alt)
+        if self._look_drag is not None:
+            if callable(getattr(self.active_tool, "on_look", None)):
+                self._look_move(ev)
+                return
+            self._end_look()                    # the tool changed mid-drag
         if self._last_pos is not None:
             p = ev.position().toPoint()
             dx = p.x() - self._last_pos.x()
@@ -10409,6 +10452,9 @@ class Viewport(QOpenGLWidget):
     BOX_DRAG_THRESHOLD_PX = 4.0
 
     def mouseReleaseEvent(self, ev) -> None:
+        if self._look_drag is not None and ev.button() == self._look_drag[0]:
+            self._end_look()
+            return
         if ev.button() == Qt.MiddleButton:
             self._last_pos = None
             self._pan_mode = False
@@ -10576,6 +10622,11 @@ class Viewport(QOpenGLWidget):
         # shortcuts swallow them — otherwise typing "2m" would fire the Move
         # tool instead of finishing the length. Bare letters with no buffer
         # still reach the shortcuts.
+        # A tool that plays letters as keys (First Person's W/A/S/D) takes
+        # them from the window's tool shortcuts while it is active.
+        if ev.type() == QEvent.ShortcutOverride and self._tool_claims_key(ev):
+            ev.accept()
+            return True
         if ev.type() == QEvent.ShortcutOverride and self._value_buffer:
             t = ev.text().lower()
             if t and (t.isdigit() or t in (".", ",", ";", " ", "-", ":",
@@ -10585,7 +10636,17 @@ class Viewport(QOpenGLWidget):
                 return True
         return super().event(ev)
 
+    def _tool_claims_key(self, ev) -> bool:
+        claims = getattr(self.active_tool, "claims_key", None)
+        return callable(claims) and bool(claims(ev.key(), ev.modifiers()))
+
     def keyPressEvent(self, ev) -> None:
+        # Held keys (First Person): the press and the release are the
+        # tool's; auto-repeat says nothing new.
+        if self._tool_claims_key(ev):
+            if not ev.isAutoRepeat():
+                self.active_tool.on_key(self, ev.key(), ev.modifiers())
+            return
         # 0. Shift state change → refresh snap immediately so the user sees
         #    the contextual lock take effect without moving the mouse.
         if ev.key() == Qt.Key_Shift and not ev.isAutoRepeat():
@@ -10900,6 +10961,12 @@ class Viewport(QOpenGLWidget):
             self._apply_tool_cursor()
 
     def keyReleaseEvent(self, ev) -> None:
+        release = getattr(self.active_tool, "on_key_release", None)
+        if callable(release):
+            if ev.isAutoRepeat() and self._tool_claims_key(ev):
+                return
+            if not ev.isAutoRepeat() and release(self, ev.key()):
+                return
         if ev.key() == Qt.Key_Alt and not ev.isAutoRepeat():
             self._apply_alt_cursor(False)
             if self._alt_tap:
@@ -10921,6 +10988,10 @@ class Viewport(QOpenGLWidget):
         claim on it lapses (issue #26)."""
         self._alt_tap = False
         self._alt_down = False        # its release will not reach us either
+        # Nor will the release of a held walking key (First Person).
+        lost = getattr(self.active_tool, "on_focus_out", None)
+        if callable(lost):
+            lost(self)
         super().focusOutEvent(ev)
 
     # Inferences whose direction can be captured by a Shift lock.

@@ -1663,6 +1663,26 @@ def solid_cursor(state: str):
     _cursor_cache[key] = cur
     return cur
 
+
+def _first_person(p, ink):
+    # First Person: the W/A/S/D keycaps as a game shows them, an inverted
+    # T, with W — walk forward — in the accent. Big caps and no legends:
+    # letters and anything smaller blur away at 24 px.
+    size, gap = 13.5, 2.5
+    x0 = 24.0 - size * 1.5 - gap
+    top = 24.0 - size - gap / 2.0
+    bottom = top + size + gap
+    caps = [(x0 + size + gap, top, True),
+            (x0, bottom, False), (x0 + size + gap, bottom, False),
+            (x0 + 2 * (size + gap), bottom, False)]
+    for x, y, lead in caps:
+        cap = QPainterPath()
+        cap.addRoundedRect(QRectF(x, y, size, size), 3.0, 3.0)
+        p.setPen(_rpen(ink, 2.4))
+        p.setBrush(_accent() if lead else Qt.NoBrush)
+        p.drawPath(cap)
+
+
 _DRAW = {
     **_SOLID_ICONS,
     "select": _select, "line": _line, "freehand": _freehand,
@@ -1703,7 +1723,7 @@ _DRAW = {
     "section_fill": _section_fill,
     "zoom": _zoom, "zoom_window": _zoom_window,
     "position_camera": _position_camera, "walk": _walk,
-    "look_around": _look_around,
+    "look_around": _look_around, "first_person": _first_person,
     "zoom_extents": _zoom_extents, "view_iso": _view_iso,
     # Standard views — a house drawn from each viewpoint (SketchUp-style).
     "view_top": _view_top,
@@ -1770,6 +1790,7 @@ _CURSOR_HOTSPOTS = {
     "position_camera": (24, 44),    # the tripod's foot: where you stand
     "walk": (24, 24),
     "look_around": (24, 26),        # the pupil
+    "first_person": (24, 24),
 }
 
 

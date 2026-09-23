@@ -268,7 +268,7 @@ def test_the_three_tools_are_in_the_camera_menu_and_the_walkthrough_toolbar():
     try:
         assert "walkthrough" in win.toolbars
         keys = [a.text() for a in win.toolbars["walkthrough"].actions()]
-        assert keys == ["Position Camera", "Walk", "Look Around"]
+        assert keys == ["Position Camera", "Walk", "Look Around", "First Person"]
         camera_menu = [m for m in win.menuBar().findChildren(type(win.menuBar().actions()[0].menu()))
                        if m.title() == "Camera"][0]
         texts = [a.text() for a in camera_menu.actions()]
