@@ -15,6 +15,10 @@ follow [SemVer](https://semver.org).
   una cara ▸ Orientar caras, y todas las conectadas se voltean para mirar
   hacia el mismo lado que ella. Vale para sólidos y para superficies
   abiertas; se detiene donde tres caras comparten una arista.
+- **Reconstruir caras (planas) sobre la selección** (#73, @pacaeiro): con
+  caras seleccionadas en un mismo plano, rehace solo ese plano aunque el
+  resto del modelo sea 3D. Sin selección hace lo de siempre (todo el
+  dibujo, si es plano).
 
 ### Corregido
 - **Redondeo 3D daba «Conflicting cuts» en un cubo girado y aplastado**

@@ -1982,5 +1982,7 @@
  "Orient Faces": "Orientar caras",
  "Select the one face the others should match.": "Selecciona la cara a la que deben igualarse las demás.",
  "Oriented {n} face(s) like the selected one.": "{n} cara(s) orientada(s) como la seleccionada.",
- "The connected faces already match.": "Las caras conectadas ya están orientadas igual."
+ "The connected faces already match.": "Las caras conectadas ya están orientadas igual.",
+ "The selected faces must lie on one plane.": "Las caras seleccionadas deben estar en un mismo plano.",
+ "Rebuilt {n} face(s) on the selected plane.": "{n} cara(s) reconstruida(s) en el plano seleccionado."
 }

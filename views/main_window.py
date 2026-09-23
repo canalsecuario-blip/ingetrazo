@@ -2502,6 +2502,27 @@ class MainWindow(QMainWindow):
             else tr("No overlapping faces found."), 3000)
 
     def _on_rebuild_planar(self) -> None:
+        # With faces selected, rebuild just THEIR plane — the per-plane
+        # rebuild every stroke already runs — so a 3D model keeps the tool
+        # (issue #73, @pacaeiro). Nothing selected: the whole flat drawing,
+        # as before.
+        from core.mesh import Face as MeshFace
+        picked = [e for e in self.viewport.scene.selection
+                  if isinstance(e, MeshFace)]
+        if picked:
+            plane = self._common_plane(picked)
+            if plane is None:
+                self.statusBar().showMessage(tr(
+                    "The selected faces must lie on one plane."), 3000)
+                return
+            from core.history import RebuildPlaneFacesCommand
+            cmd = RebuildPlaneFacesCommand(*plane)
+            self.viewport.history.execute(cmd)
+            self.viewport.update()
+            self.statusBar().showMessage(tr(
+                "Rebuilt {n} face(s) on the selected plane.", n=cmd.rebuilt),
+                3000)
+            return
         cmd = RebuildPlanarFacesCommand()
         self.viewport.history.execute(cmd)
         self.viewport.update()
@@ -2510,6 +2531,24 @@ class MainWindow(QMainWindow):
         else:
             msg = tr("Rebuilt {n} face(s) from the edge graph.", n=cmd.rebuilt)
         self.statusBar().showMessage(msg, 3000)
+
+    @staticmethod
+    def _common_plane(faces):
+        """(origin, unit normal) of the plane every face lies on, or None."""
+        from PySide6.QtGui import QVector3D
+        n = faces[0].normal()
+        length = n.length()
+        if length < 1e-9:
+            return None
+        n = n / length
+        o = QVector3D(faces[0].loop[0].position)
+        tol = 1e-4                  # RebuildPlaneFacesCommand's own
+        for f in faces:
+            for loop in [f.loop, *f.hole_loops]:
+                for v in loop:
+                    if abs(QVector3D.dotProduct(v.position - o, n)) > tol:
+                        return None
+        return o, n
 
     def _on_paste(self) -> None:
         # A copy made in ANOTHER IngeTrazo window wins over this window's
