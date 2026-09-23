@@ -377,14 +377,24 @@ def _axes_vertices(spacing: float, pos_len: float = 1.0e5):
     # weight — SketchUp's negative axes read as fine dotted lines.
     dash = spacing * 0.18
     n = 520                          # dashes → reach = spacing*n past the model
-    for name, (dx, dy, dz) in _AXIS_DIRS.items():
+    # The DRAWING axes (core.axes): the world's at the top level, the open
+    # group's own — at its origin — inside it (SketchUp, issue #44).
+    from core import axes as _axes
+    o = _axes.ORIGIN
+    ox, oy, oz = o.x(), o.y(), o.z()
+    for name in ("x", "y", "z"):
+        if _axes.is_world():
+            dx, dy, dz = _AXIS_DIRS[name]
+        else:
+            dx, dy, dz = _axes.as_tuple(name)
         start = len(coords) // 3
-        coords.extend([0.0, 0.0, 0.0, dx * pos_len, dy * pos_len, dz * pos_len])
+        coords.extend([ox, oy, oz, ox + dx * pos_len, oy + dy * pos_len,
+                       oz + dz * pos_len])
         for k in range(n):
             t0 = k * spacing
             t1 = t0 + dash
-            coords.extend([-dx * t0, -dy * t0, -dz * t0,
-                           -dx * t1, -dy * t1, -dz * t1])
+            coords.extend([ox - dx * t0, oy - dy * t0, oz - dz * t0,
+                           ox - dx * t1, oy - dy * t1, oz - dz * t1])
         spans[name] = (start, len(coords) // 3 - start)
     return coords, spans
 
@@ -1206,8 +1216,15 @@ class Viewport(QOpenGLWidget):
         self.update()                               # repaint the widget
         return image
 
+    def _sync_axes(self) -> None:
+        """Make the drawing axes the current context's (issue #44) — the
+        world's at the top level, the open group's own inside it."""
+        from core import axes as _axes
+        _axes.sync(getattr(self.scene, "drawing_frame", None))
+
     def paintGL(self) -> None:
         self._tick = getattr(self, "_tick", 0) + 1     # a new epoch memo
+        self._sync_axes()
         if self._gl is None or self._program is None:
             return
         _pt0 = _time_mod.perf_counter() if _PERF else 0.0
@@ -8843,10 +8860,17 @@ class Viewport(QOpenGLWidget):
             cache[id(group)] = (key, obb)
             return obb
         entry = self._group_chunk(group)
+        # The box follows the group's axes (issue #44), and Change Axes can
+        # turn them without touching one vertex — so the cached box is only
+        # good for the frame it was measured on.
+        from core.group import group_frame
+        fr = group_frame(group)
+        fkey = tuple(fr.data()) if fr is not None else None
         obb = entry.get("obb")
-        if obb is not None:
+        if obb is not None and entry.get("obb_frame") == fkey:
             return obb
         obb = entry["obb"] = self._compute_obb(group)
+        entry["obb_frame"] = fkey
         return obb
 
     def _proto_points_cache(self, group) -> dict:
@@ -8906,11 +8930,18 @@ class Viewport(QOpenGLWidget):
 
     @staticmethod
     def _compute_obb(group, protos=None):
-        from core.group import (frame_from_points, oriented_bounds,
-                                placement_points)
+        from core.group import (frame_axes, frame_from_points, group_frame,
+                                oriented_bounds, placement_points)
         # The corners come from the POINTS — never from a merged copy of the
         # component (see ``placement_points``).
         pos = placement_points(group, protos)
+        frame = group_frame(group)
+        if frame is not None:
+            # A group that knows its own axes is boxed on them — SketchUp's
+            # selection box and Scale grips follow the object's axes
+            # (issue #44), turned however the object is.
+            _o, x, y, z = frame_axes(frame)
+            return oriented_bounds(None, (x, y, z), points=pos)
         world = oriented_bounds(None, points=pos)         # world axes
         own = oriented_bounds(None, frame_from_points(pos if len(pos) else None),
                               points=pos)
@@ -9107,8 +9138,10 @@ class Viewport(QOpenGLWidget):
         if name is None:
             return snap
         from core.snap import AXIS_COLORS
-        axis = QVector3D(*_AXIS_DIRS[name])
-        foot = axis * QVector3D.dotProduct(snap.point, axis)
+        from core import axes as _axes
+        axis = _axes.axis(name)
+        o = _axes.origin()
+        foot = o + axis * QVector3D.dotProduct(snap.point - o, axis)
         return SnapResult(foot, "on_axis", AXIS_COLORS[name], axis=name)
 
     def pick_axis(self, screen_x: float, screen_y: float):
@@ -9117,10 +9150,12 @@ class Viewport(QOpenGLWidget):
         (Rafael, Revisión 3: in SketchUp «pinchas el eje y sacas una guía
         paralela a 20 m del origen» before anything is drawn)."""
         from core.guide import GUIDE_HALF_LEN
+        from core import axes as _axes
         best, best_d = None, self.pick_threshold_px
-        for name, (dx, dy, dz) in _AXIS_DIRS.items():
-            d = QVector3D(dx, dy, dz) * GUIDE_HALF_LEN
-            seg = self._clip_segment_front(-d, d)
+        o = _axes.origin()
+        for name in ("x", "y", "z"):
+            d = _axes.axis(name) * GUIDE_HALF_LEN
+            seg = self._clip_segment_front(o - d, o + d)
             if seg is None:
                 continue
             pa = self._world_to_pixel(seg[0])
@@ -10702,6 +10737,7 @@ class Viewport(QOpenGLWidget):
     def _refresh_snap(self) -> None:
         """Re-run snap with the last known cursor position. Used when modifier
         state changes (axis lock, reference mode, Shift) without mouse motion."""
+        self._sync_axes()
         self.update()
         if (
             self._last_mouse_pos is None
@@ -11052,6 +11088,7 @@ class Viewport(QOpenGLWidget):
 
     # ---- Helpers ------------------------------------------------------------
     def _build_ctx(self, ev) -> Optional[ToolContext]:
+        self._sync_axes()
         p = ev.position().toPoint()
         px_x, px_y = p.x(), p.y()
         world_raw = self._world_from_pixel(px_x, px_y)

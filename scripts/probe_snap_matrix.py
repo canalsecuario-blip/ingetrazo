@@ -67,7 +67,13 @@ CAMERAS = [
 #: ANOTHER — perpendicular or opposite — at that corner's height. Every
 #: earlier scene was flat, so no cell of any earlier baseline ever had a
 #: vertical face under the cursor with a reference on a different plane.
-SCENES = ("empty", "corner", "midline", "walls")
+#: The last three, 2026-09-23, for issue #44 (local axes): a group, a
+#: component and a subgroup inside a container, each TURNED 30° about Z and
+#: 20° about X and open for editing, with a face and an edge of their own
+#: near the start point. Until they existed no cell ever drew inside a
+#: turned context, so the grid could not tell world axes from local ones.
+SCENES = ("empty", "corner", "midline", "walls",
+          "edit-group", "edit-comp", "edit-nested")
 
 TOOLS = ("line", "rectangle", "circle", "arc", "move", "pushpull")
 
@@ -122,6 +128,8 @@ def _round(v: float) -> float:
 
 def _build_scene(vp, kind: str) -> None:
     from core.scene import Scene
+    if getattr(vp.scene, "edit_group", None) is not None:
+        vp.end_group_edit()
     vp.scene = Scene()
     if kind == "midline":
         # Runs through ACQUIRED, so the alignment line from it lies along
@@ -150,7 +158,57 @@ def _build_scene(vp, kind: str) -> None:
                     P(1.5, 1.5, 3.0), P(1.5, -1.5, 3.0)])
         m.add_face([P(1.5, 1.5, 0.0), P(-1.5, 1.5, 0.0),
                     P(-1.5, 1.5, 3.0), P(1.5, 1.5, 3.0)])
+    if kind in ("edit-group", "edit-comp", "edit-nested"):
+        _build_turned_edit(vp, kind)
     vp.scene.version += 1
+
+
+def _turn() -> "QMatrix4x4":
+    from PySide6.QtGui import QMatrix4x4
+    m = QMatrix4x4()
+    m.rotate(30.0, 0.0, 0.0, 1.0)
+    m.rotate(20.0, 1.0, 0.0, 0.0)
+    return m
+
+
+def _build_turned_edit(vp, kind: str) -> None:
+    """A turned context open for editing: its own slab (a face) and an
+    edge 1.5 m out along its local +X, both built in local coordinates and
+    placed by the turn — the geometry a local-axes change must answer to."""
+    from core.group import Group
+    from core.mesh import Mesh
+    P = QVector3D
+    local = Mesh()
+    local.add_face([P(-1.0, -1.0, 0.0), P(1.0, -1.0, 0.0),
+                    P(1.0, 1.0, 0.0), P(-1.0, 1.0, 0.0)])
+    local.add_edge(P(1.5, 0.0, 0.0), P(3.0, 0.0, 0.0))
+    turn = _turn()
+    if kind == "edit-comp":
+        g = Group(local, name="turned component")
+        g.xform = turn
+        vp.scene.groups.append(g)
+        vp.begin_group_edit(g)
+        return
+    # A classic group TURNED the way a user turns one — the Rotate command
+    # twice about the origin — so it remembers its axes the way the program
+    # keeps them (a mesh built already turned would be a group that was
+    # never rotated, whose axes are the world's).
+    from core.history import RotateGroupCommand
+    g = Group(local, name="turned group")
+    vp.scene.groups.append(g)
+    vp.history.execute(RotateGroupCommand(g, P(0, 0, 0), P(1, 0, 0), 20.0))
+    vp.history.execute(RotateGroupCommand(g, P(0, 0, 0), P(0, 0, 1), 30.0))
+    vp.scene.groups.remove(g)
+    if kind == "edit-group":
+        vp.scene.groups.append(g)
+        vp.begin_group_edit(g)
+        return
+    # edit-nested: the turned group inside a container, entered two levels
+    box = Group(Mesh(), name="container")
+    box.adopt([g])
+    vp.scene.groups.append(box)
+    vp.begin_group_edit(box)
+    vp.begin_group_edit(g)
 
 
 def _reset_tool(vp, start: QVector3D | None) -> object | None:

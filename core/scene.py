@@ -267,12 +267,21 @@ class Scene:
             self.end_group_edit()
         anterior = self.mesh
         self._edit_share = None
+        # The context's own axes (issue #44), read BEFORE anything below
+        # rewrites the placement: SketchUp draws inside a group on the
+        # group's axes, level by level.
+        from core.group import group_frame
+        frame = group_frame(group)
         if getattr(group, "children", None):
             # A container: its children stay children. What CANNOT stay is a
             # transform on it, because the tools work in world coordinates —
             # so the matrix is pushed down into the children and into its own
             # mesh, which leaves every world position exactly where it was.
             self._bake_container_xform(group)
+            if frame is not None:
+                # Its matrix went down into the children and its mesh is in
+                # world coordinates now: the axes stay, as world axes.
+                group.axes = frame
         elif getattr(group, "xform", None) is not None:
             # A component instance: the tools work in world coordinates, so
             # the session edits a world-space COPY of the definition. On
@@ -288,7 +297,8 @@ class Scene:
         if not self._edit_stack:
             self._loose_mesh = anterior
         self._edit_stack.append(
-            {"group": group, "mesh": anterior, "share": self._edit_share})
+            {"group": group, "mesh": anterior, "share": self._edit_share,
+             "frame": frame})
         self.mesh = group.mesh
         self.edit_group = group
         self.selection.clear()
@@ -390,6 +400,16 @@ class Scene:
         proto.restore_state(local.capture_state())
         group.mesh = proto
         group.xform = xform
+
+    @property
+    def drawing_frame(self):
+        """The axes drawing happens on (issue #44): the world's (``None``)
+        at the top level, the open group's own axes inside it — a world
+        matrix whose columns are red, green, blue and whose translation is
+        the origin. Read by :mod:`core.axes`."""
+        if self._edit_stack:
+            return self._edit_stack[-1].get("frame")
+        return None
 
     @property
     def loose_mesh(self):

@@ -1965,5 +1965,16 @@
  "With Context": "Con el contexto",
  "Select faces or groups first": "Selecciona antes caras o grupos",
  "No faces cross the selection": "Ninguna cara cruza la selección",
- "{n} intersection edges added": "{n} aristas de intersección añadidas"
+ "{n} intersection edges added": "{n} aristas de intersección añadidas",
+ "Change Axes": "Cambiar ejes",
+ "Click the new origin": "Haz clic en el nuevo origen",
+ "Click the new origin.": "Haz clic en el nuevo origen.",
+ "Click along the new red axis, then the green direction.": "Haz clic a lo largo del nuevo eje rojo y luego en la dirección verde.",
+ "Click along the new red axis": "Haz clic a lo largo del nuevo eje rojo",
+ "Click to set the green direction": "Haz clic para fijar la dirección verde",
+ "The green direction cannot run along red — click off the red axis": "La dirección verde no puede ir sobre la roja: haz clic fuera del eje rojo",
+ "Axes changed": "Ejes cambiados",
+ "Red axis": "Eje rojo",
+ "Green axis": "Eje verde",
+ "Select one group or component first": "Selecciona antes un grupo o componente"
 }

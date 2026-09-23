@@ -197,8 +197,9 @@ class PlaceGroupTool(Tool):
             # world position, so the map has to travel with the geometry —
             # otherwise the image stays where the component was built and
             # the piece arrives wearing whatever happens to fall on it.
-            from core.group import _remap_uvws
+            from core.group import _remap_uvws, carry_axes
             _remap_uvws(self._group.mesh, self._pose_matrix(shift))
+            carry_axes(self._group, self._pose_matrix(shift))   # #44
         group = self._group
         self._group = None
         ctx.viewport.history.execute(InsertGroupCommand(group))

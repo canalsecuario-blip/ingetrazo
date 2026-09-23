@@ -93,6 +93,16 @@ def project_to_view_plane(point: QVector3D, ref: QVector3D,
     if forward.length() < 1e-9:
         return point
     f = forward.normalized()
+    from core import axes as _axes
+    if not _axes.is_world():
+        # Inside a turned group the standard views face ITS axes (#44).
+        lf = _axes.to_local(f)
+        comps = [(abs(lf.x()), "x"), (abs(lf.y()), "y"), (abs(lf.z()), "z")]
+        best, name = max(comps)
+        if best < threshold:
+            return point
+        a = _axes.AXES[name]
+        return point + a * QVector3D.dotProduct(ref - point, a)
     ax, ay, az = abs(f.x()), abs(f.y()), abs(f.z())
     if max(ax, ay, az) < threshold:
         return point
@@ -119,6 +129,16 @@ def first_point_work_plane(forward: QVector3D, scene_center: QVector3D,
     if forward.length() < 1e-9:
         return None
     f = forward.normalized()
+    from core import axes as _axes
+    if not _axes.is_world():
+        lf = _axes.to_local(f)
+        comps = [(abs(lf.x()), "x"), (abs(lf.y()), "y"), (abs(lf.z()), "z")]
+        best, name = max(comps)
+        if best < threshold:
+            return None
+        a = _axes.axis(name)
+        sign = 1.0 if QVector3D.dotProduct(f, a) > 0 else -1.0
+        return scene_center, a * sign
     if max(abs(f.x()), abs(f.y()), abs(f.z())) < threshold:
         return None                     # oblique view — not axis-aligned
     # snap the normal to the exact dominant axis so the plane is clean
@@ -169,6 +189,9 @@ def _detect_axis_alignment(
     if length < 1e-6:
         return None
     cos_thresh = math.cos(math.radians(angle_deg))
+    from core import axes as _axes
+    if not _axes.is_world():
+        delta = _axes.to_local(delta)     # the context's own axes (#44)
     nx = abs(delta.x()) / length
     ny = abs(delta.y()) / length
     nz = abs(delta.z()) / length
@@ -251,7 +274,8 @@ def _direction_from_edge(edge, mode: str,
     if direction.length() < 1e-6:
         return None
     if mode == "perpendicular":
-        normal = plane_normal if plane_normal is not None else QVector3D(0, 0, 1)
+        from core.axes import AXES
+        normal = plane_normal if plane_normal is not None else QVector3D(AXES["z"])
         perp = QVector3D.crossProduct(normal, direction)
         if perp.length() < 1e-9:
             return None          # the edge stands square to the plane
@@ -270,11 +294,9 @@ ProjectOntoLine = Callable[[QVector3D, QVector3D], QVector3D]
 
 
 # Unit vectors for each world axis, used by the axis lock paths.
-_AXIS_VECTORS = {
-    "x": QVector3D(1.0, 0.0, 0.0),
-    "y": QVector3D(0.0, 1.0, 0.0),
-    "z": QVector3D(0.0, 0.0, 1.0),
-}
+# The SAME dict as core.axes.AXES (updated in place): the world's axes at
+# the top level, the open group's own inside it (issue #44).
+from core.axes import AXES as _AXIS_VECTORS  # noqa: E402
 
 
 def _closest_on_segment_2d(

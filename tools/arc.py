@@ -32,7 +32,7 @@ from PySide6.QtCore import Qt
 from core.edits import build_add_edges
 from core.history import (DeleteEdgesCommand, RebuildPlanarFacesCommand,
                           TagCurveCommand)
-from core.triangulate import plane_axes
+from core.axes import plane_axes  # drawing axes (#44)
 from tools.base import AxisMagnet, PlaneLock, Tool, ToolContext
 from core.units import fmt_len
 

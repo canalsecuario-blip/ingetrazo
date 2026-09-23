@@ -45,7 +45,7 @@ from core.history import (
 )
 from core.i18n import tr
 from core.mesh import Edge, Face, Mesh
-from core.triangulate import plane_axes
+from core.axes import plane_axes  # drawing axes (#44)
 from tools.base import ToolContext
 from tools.move import gather_targets
 from tools.protractor import ProtractorBase

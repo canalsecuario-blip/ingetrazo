@@ -32,8 +32,8 @@ from core.i18n import tr
 from core.mesh import Edge, Face, Mesh
 from tools.base import Tool, ToolContext
 
-_AXES = {"x": QVector3D(1, 0, 0), "y": QVector3D(0, 1, 0),
-         "z": QVector3D(0, 0, 1)}
+# The drawing axes (core.axes): the open group's own inside it (#44).
+from core.axes import AXES as _AXES  # noqa: E402
 _PLANE_RGBA = {"x": (216, 56, 68), "y": (40, 158, 90), "z": (52, 102, 198)}
 
 

@@ -130,6 +130,10 @@ class MainWindow(QMainWindow):
         from tools.solid_tools import SOLID_TOOLS
         for key, cls in SOLID_TOOLS:
             self._tools[key] = cls()
+        # Right-click ▸ Change Axes (issue #44) — no toolbar button, as in
+        # SketchUp.
+        from tools.change_axes import ChangeAxesTool
+        self._tools["change_axes"] = ChangeAxesTool()
         # Tag each tool with its icon key so the viewport can turn the mouse
         # pointer into the tool's icon (SketchUp-style cursors).
         for key, tool in self._tools.items():
@@ -1698,6 +1702,14 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(
             tr("{n} groups merged into one", n=len(groups)), 3000)
 
+    def _on_change_axes(self, group) -> None:
+        """Right-click ▸ Change Axes: three clicks give the group or
+        component new local axes (tools/change_axes.py)."""
+        tool = self._tools["change_axes"]
+        tool.target = group
+        self._activate_tool("change_axes")
+        self.viewport.flash_status(tr("Click the new origin"), 4000)
+
     def _fill_intersect_menu(self, menu) -> None:
         from core.intersect import WITH_CONTEXT, WITH_MODEL, WITH_SELECTION
         for mode, label in ((WITH_MODEL, tr("With Model")),
@@ -2147,6 +2159,9 @@ class MainWindow(QMainWindow):
             if any(isinstance(e, Group)
                    and getattr(e, "xform", None) is not None for e in sel):
                 menu.addAction(tr("Make Unique"), self._on_make_unique)
+            if len(groups) == 1 and len(sel) == 1:
+                menu.addAction(tr("Change Axes"),
+                               lambda g=groups[0]: self._on_change_axes(g))
             # SketchUp offers the Solid Tools on a selection of solids.
             from core.solids import is_solid
             solid = [e for e in sel if isinstance(e, Group) and is_solid(e)]

@@ -30,3 +30,16 @@ _settings_dir = tempfile.mkdtemp(prefix="ingetrazo-tests-settings-")
 QSettings.setDefaultFormat(QSettings.IniFormat)
 for scope in (QSettings.UserScope, QSettings.SystemScope):
     QSettings.setPath(QSettings.IniFormat, scope, _settings_dir)
+
+
+import pytest  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _world_drawing_axes():
+    """The drawing axes are process-wide (core.axes, issue #44): a test that
+    leaves a turned group open must not tilt the next one's inferences."""
+    from core import axes
+    axes.sync(None)
+    yield
+    axes.sync(None)

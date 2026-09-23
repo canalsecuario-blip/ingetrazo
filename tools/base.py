@@ -29,9 +29,9 @@ from core.snap import SnapResult
 #: Right = red, Left = green, Up = blue), and the plane's everyday name.
 PLANE_LOCK_KEYS = {int(Qt.Key_Right): "x", int(Qt.Key_Left): "y",
                    int(Qt.Key_Up): "z"}
-PLANE_LOCK_AXES = {"x": QVector3D(1.0, 0.0, 0.0),
-                   "y": QVector3D(0.0, 1.0, 0.0),
-                   "z": QVector3D(0.0, 0.0, 1.0)}
+# The drawing axes (core.axes): the world's at the top level, the open
+# group's own inside it (issue #44). The same dict object, kept current.
+from core.axes import AXES as PLANE_LOCK_AXES  # noqa: E402
 PLANE_LOCK_NAMES = {"x": "YZ", "y": "XZ", "z": "XY"}
 
 
@@ -120,7 +120,8 @@ class PlaneLock:
             return self.work_plane
         if self.hover_plane is not None:
             return self.hover_plane
-        return QVector3D(0.0, 0.0, 0.0), QVector3D(0.0, 0.0, 1.0)
+        from core import axes
+        return axes.origin(), axes.axis("z")      # the context's ground
 
     #: Radius (circle) / half-side (rectangle) of the cursor preview, px.
     PREVIEW_PX = 22
@@ -135,21 +136,26 @@ class PlaneLock:
         if locked is not None:
             return locked
         plane = getattr(viewport, "_last_work_plane", None)
-        if plane is not None and abs(plane[1].normalized().z()) > 0.99:
+        from core import axes
+        if plane is not None and abs(QVector3D.dotProduct(
+                plane[1].normalized(), axes.AXES["z"])) > 0.99:
             near = getattr(viewport, "_near_horizon_vertical", None)
             vertical = near(point) if near is not None else None
             if vertical is not None:
                 return vertical
         if plane is not None:
             return QVector3D(point), plane[1]
-        return QVector3D(point), QVector3D(0.0, 0.0, 1.0)
+        return QVector3D(point), axes.axis("z")
 
     @staticmethod
     def plane_color(normal: QVector3D):
         """RGBA of the axis the plane is normal to (red = YZ, green = XZ,
         blue = XY), or ``None`` for a plane off the axes."""
         from core.snap import AXIS_COLORS
+        from core import axes
         n = normal.normalized()
+        if not axes.is_world():
+            n = axes.to_local(n)             # the context's own colours
         for axis, comp in (("x", n.x()), ("y", n.y()), ("z", n.z())):
             if abs(comp) > 0.99:
                 r, g, b = AXIS_COLORS[axis][:3]

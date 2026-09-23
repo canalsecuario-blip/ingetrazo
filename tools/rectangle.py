@@ -35,6 +35,9 @@ def _plane_axes(normal: QVector3D) -> tuple[QVector3D, QVector3D]:
     rectangle on the top of a box still feels axis-aligned, and on a
     vertical wall ``u`` runs horizontally and ``v`` runs up/down.
     """
+    from core import axes
+    if not axes.is_world():
+        return axes.plane_axes(normal)    # inside a turned group (#44)
     n = normal.normalized()
     ref = QVector3D(1.0, 0.0, 0.0)
     u = ref - n * QVector3D.dotProduct(ref, n)

@@ -1556,15 +1556,16 @@ class ScaleImagePlanesCommand(Command):
     factor mirrors the image through the anchor, as it does for geometry.
     """
 
-    def __init__(self, images, anchor: QVector3D, factor) -> None:
+    def __init__(self, images, anchor: QVector3D, factor, axes=None) -> None:
         self._images = list(images)
+        self.axes = axes
         self.anchor = QVector3D(anchor)
         # A float scales uniformly; a 3-tuple per axis (the grip box).
         self.factor = (tuple(float(f) for f in factor)
                        if isinstance(factor, (tuple, list)) else float(factor))
 
     def _apply(self, scene, factor: float) -> None:
-        m = scale_matrix(self.anchor, factor)
+        m = scale_matrix(self.anchor, factor, self.axes)
         for im in self._images:
             im.origin = m.map(im.origin)
             im.u = m.mapVector(im.u)
@@ -1943,6 +1944,8 @@ class FlipGroupsCommand(Command):
                 continue
             for v in list(g.mesh.vertices):
                 g.mesh.move_vertex(v, m.map(v.position) - v.position)
+            from core.group import carry_axes
+            carry_axes(g, m)                  # an involution, like the rest
             for f in g.mesh.faces:
                 f.loop.reverse()
                 for h in getattr(f, "hole_loops", []) or []:
@@ -2048,14 +2051,18 @@ class RotateGroupCommand(Command):
         gmesh = self.group.mesh
         if self._after is not None:  # redo
             gmesh.restore_state(self._after)
+            self.group.axes = self._axes_after
             scene.version += 1
             return
         self._before = gmesh.capture_state()
+        self._axes_before = self.group.axes
         m = rotation_matrix(self.center, self.axis, self.degrees)
         for v in list(gmesh.vertices):
             gmesh.move_vertex(v, m.map(v.position) - v.position)
-        from core.group import _remap_uvws
+        from core.group import _remap_uvws, carry_axes
         _remap_uvws(gmesh, m)                 # the texture turns with it
+        carry_axes(self.group, m)             # and so do its axes (#44)
+        self._axes_after = self.group.axes
         self._after = gmesh.capture_state()
         scene.version += 1
 
@@ -2067,15 +2074,32 @@ class RotateGroupCommand(Command):
             return
         if self._before is not None:
             self.group.mesh.restore_state(self._before)
+            self.group.axes = self._axes_before
             scene.version += 1
 
 
-def scale_matrix(center: QVector3D, factor):
+def scale_matrix(center: QVector3D, factor, axes=None):
     """Scale about ``center``: a float scales uniformly, a 3-tuple scales each
     axis by its own factor (SketchUp's edge/face grips). A negative factor
     mirrors through the centre along that axis (SketchUp allows it — dragging
-    a grip past its anchor, or typing -1)."""
+    a grip past its anchor, or typing -1).
+
+    ``axes`` = ``(red, green, blue)`` unit vectors: the three factors act
+    along THOSE instead of the world's — the grip box of a turned group, on
+    its own axes (issue #44). ``None`` is the world, exactly as before."""
     from PySide6.QtGui import QMatrix4x4
+    if axes is not None and isinstance(factor, (tuple, list)):
+        from core.axes import frame_matrix
+        rot = frame_matrix(QVector3D(0.0, 0.0, 0.0), *axes)
+        inv = rot.transposed()
+        s = QMatrix4x4()
+        s.scale(float(factor[0]), float(factor[1]), float(factor[2]))
+        m = QMatrix4x4()
+        m.translate(center)
+        m = m * rot * s * inv
+        back = QMatrix4x4()
+        back.translate(-center)
+        return m * back
     m = QMatrix4x4()
     m.translate(center)
     if isinstance(factor, (tuple, list)):
@@ -2103,10 +2127,11 @@ class ScaleVerticesCommand(Command):
     Move/RotateVerticesCommand."""
 
     def __init__(self, positions: Iterable[QVector3D], center: QVector3D,
-                 factor: float) -> None:
+                 factor: float, axes=None) -> None:
         self.src = [QVector3D(p) for p in positions]
         self.center = QVector3D(center)
         self.factor = factor
+        self.axes = axes
         self._before: Optional[dict] = None
         self._after: Optional[dict] = None
 
@@ -2116,7 +2141,7 @@ class ScaleVerticesCommand(Command):
             scene.version += 1
             return
         self._before = scene.mesh.capture_state()
-        m = scale_matrix(self.center, self.factor)
+        m = scale_matrix(self.center, self.factor, self.axes)
         rotate_points(scene, {_key(p) for p in self.src}, m)  # generic mapper
         fold_nonplanar_faces(scene.mesh)
         self._after = scene.mesh.capture_state()
@@ -2131,42 +2156,49 @@ class ScaleGroupCommand(Command):
     """Uniformly scale a whole group's isolated mesh about ``center``.
     Snapshot undo/redo on the group's own mesh."""
 
-    def __init__(self, group, center: QVector3D, factor: float) -> None:
+    def __init__(self, group, center: QVector3D, factor: float,
+                 axes=None) -> None:
         self.group = group
         self.center = QVector3D(center)
         self.factor = factor
+        self.axes = axes
         self._before: Optional[dict] = None
         self._after: Optional[dict] = None
 
     def do(self, scene) -> None:
         if getattr(self.group, "xform", None) is not None:
-            self.group.xform = scale_matrix(self.center,
-                                            self.factor) * self.group.xform
+            self.group.xform = scale_matrix(
+                self.center, self.factor, self.axes) * self.group.xform
             scene.version += 1
             return
         gmesh = self.group.mesh
         if self._after is not None:  # redo
             gmesh.restore_state(self._after)
+            self.group.axes = self._axes_after
             scene.version += 1
             return
         self._before = gmesh.capture_state()
-        m = scale_matrix(self.center, self.factor)
+        self._axes_before = self.group.axes
+        m = scale_matrix(self.center, self.factor, self.axes)
         for v in list(gmesh.vertices):
             gmesh.move_vertex(v, m.map(v.position) - v.position)
-        from core.group import _remap_uvws
+        from core.group import _remap_uvws, carry_axes
         _remap_uvws(gmesh, m)                 # the texture scales with it
+        carry_axes(self.group, m)             # the origin moves with it (#44)
+        self._axes_after = self.group.axes
         self._after = gmesh.capture_state()
         scene.version += 1
 
     def undo(self, scene) -> None:
         if getattr(self.group, "xform", None) is not None:
             self.group.xform = scale_matrix(
-                self.center,
-                invert_scale_factor(self.factor)) * self.group.xform
+                self.center, invert_scale_factor(self.factor),
+                self.axes) * self.group.xform
             scene.version += 1
             return
         if self._before is not None:
             self.group.mesh.restore_state(self._before)
+            self.group.axes = self._axes_before
             scene.version += 1
 
 
@@ -2702,16 +2734,41 @@ class MakeGroupCommand(Command):
         # The group is a fresh copy built from the captured positions. A
         # COMPONENT shifts them into local coordinates around the origin.
         origin = QVector3D(0.0, 0.0, 0.0)
-        if self._component:
-            pts = [p for loop, holes, _a in self._face_loops
-                   for lst in (loop, *holes) for p in lst]
-            pts += [p for pair in self._edge_ends for p in pair]
-            if pts:
+        # Made inside a turned group, the new one lines up with THAT
+        # context's axes (SketchUp; issue #44): its origin is the lowest
+        # corner measured along them, not along the world's.
+        frame = getattr(scene, "drawing_frame", None)
+        pts = [p for loop, holes, _a in self._face_loops
+               for lst in (loop, *holes) for p in lst]
+        pts += [p for pair in self._edge_ends for p in pair]
+        rot = None
+        if frame is not None and pts:
+            from core.group import frame_axes
+            fo, fx, fy, fz = frame_axes(frame)
+
+            def loc(p):
+                d = QVector3D(p) - fo
+                return (QVector3D.dotProduct(d, fx), QVector3D.dotProduct(d, fy),
+                        QVector3D.dotProduct(d, fz))
+            ls = [loc(p) for p in pts]
+            lo = (min(q[0] for q in ls), min(q[1] for q in ls),
+                  min(q[2] for q in ls))
+            corner = fo + fx * lo[0] + fy * lo[1] + fz * lo[2]
+            rot = (fx, fy, fz)
+        if self._component and pts:
+            if rot is not None:
+                origin = corner
+            else:
                 origin = QVector3D(min(p.x() for p in pts),
                                    min(p.y() for p in pts),
                                    min(p.z() for p in pts))
 
         def L(p):
+            if self._component and rot is not None:
+                d = QVector3D(p) - origin       # into the context's axes
+                return QVector3D(QVector3D.dotProduct(d, rot[0]),
+                                 QVector3D.dotProduct(d, rot[1]),
+                                 QVector3D.dotProduct(d, rot[2]))
             return QVector3D(p) - origin
 
         gmesh = Mesh()
@@ -2731,9 +2788,16 @@ class MakeGroupCommand(Command):
         self.group = Group(gmesh, name=self._name)
         if self._component:
             from PySide6.QtGui import QMatrix4x4
-            t = QMatrix4x4()
-            t.translate(origin)
-            self.group.xform = t
+            if rot is not None:
+                from core.axes import frame_matrix
+                self.group.xform = frame_matrix(origin, *rot)
+            else:
+                t = QMatrix4x4()
+                t.translate(origin)
+                self.group.xform = t
+        elif rot is not None:
+            from core.axes import frame_matrix
+            self.group.axes = frame_matrix(corner, *rot)
         # Remove the grouped geometry from the loose mesh.
         face_keysets = [frozenset(_key(p) for p in loop)
                         for loop, _h, _a in self._face_loops]
@@ -2880,6 +2944,8 @@ class InsertGroupCommand(Command):
                         self.group.xform = inv * self.group.xform
                     else:
                         self.group.mesh = transformed_mesh(self.group.mesh, inv)
+                        from core.group import carry_axes
+                        carry_axes(self.group, inv)
         else:
             owner = scene.groups
         owner.append(self.group)
@@ -3145,14 +3211,16 @@ class ExplodeGroupCommand(Command):
         # and an unpainted child takes the parent's paint, as its default
         # faces were already drawn with it.
         kids = list(getattr(g, "children", None) or [])
-        self._lifted = [(c, c.xform, c.mesh, c.material) for c in kids]
+        self._lifted = [(c, c.xform, c.mesh, c.material, c.axes)
+                        for c in kids]
         for c in kids:
             if P is not None:
                 if c.xform is not None:
                     c.xform = P * c.xform
                 else:
-                    from core.group import transformed_mesh
+                    from core.group import carry_axes, transformed_mesh
                     c.mesh = transformed_mesh(c.mesh, P)
+                    carry_axes(c, P)          # its axes come out with it
             if c.material is None and paint:
                 c.material = {k: (dict(v) if isinstance(v, dict) else v)
                               for k, v in paint.items()}
@@ -3164,10 +3232,10 @@ class ExplodeGroupCommand(Command):
         scene.version += 1
 
     def undo(self, scene) -> None:
-        for c, xform, mesh, material in self._lifted:
+        for c, xform, mesh, material, axes in self._lifted:
             if c in scene.groups:
                 scene.groups.remove(c)
-            c.xform, c.mesh, c.material = xform, mesh, material
+            c.xform, c.mesh, c.material, c.axes = xform, mesh, material, axes
         scene.mesh.restore_state(self.snapshot)
         scene.groups.insert(self.index, self.group)
         if self._selection is not None:
@@ -3199,6 +3267,8 @@ class MoveGroupCommand(Command):
             t = QMatrix4x4()
             t.translate(delta)
             _remap_uvws(self.group.mesh, t)   # the texture travels along
+            from core.group import carry_axes
+            carry_axes(self.group, t)         # and its axes (#44)
         scene.version += 1
 
     def do(self, scene) -> None:
@@ -3644,3 +3714,90 @@ class CompoundCommand(Command):
     def undo(self, scene) -> None:
         for cmd in reversed(self.commands):
             cmd.undo(scene)
+
+
+class ChangeAxesCommand(Command):
+    """SketchUp's Change Axes (issue #44): give ``group`` a new frame —
+    origin, red, green, blue as the world matrix ``frame`` — while nothing
+    moves in the world.
+
+    A classic group only swaps its ``axes`` (its mesh is in world
+    coordinates already). A component instance re-expresses its SHARED
+    definition in the new axes: the definition takes ``D = frame⁻¹ · xform``,
+    this instance's placement becomes ``frame``, and every other instance of
+    the definition takes ``D⁻¹`` on the right — so all of them now carry the
+    new axes and none of them moves (SketchUp: «changing one updates the
+    others»). Undo runs the inverse."""
+
+    def __init__(self, group, frame) -> None:
+        from PySide6.QtGui import QMatrix4x4
+        self.group = group
+        self.frame = QMatrix4x4(frame)
+        self._old_axes = None
+        self._d = None
+        self._instances: list = []
+
+    def _siblings(self, scene) -> list:
+        from core.group import iter_placements
+        proto = self.group.mesh
+        out, seen = [], set()
+        for top in scene.groups:
+            for g, _m in iter_placements(top):
+                if (g.mesh is proto and getattr(g, "xform", None) is not None
+                        and id(g) not in seen):
+                    seen.add(id(g))
+                    out.append(g)
+        if id(self.group) not in seen:
+            out.append(self.group)
+        return out
+
+    @staticmethod
+    def _reexpress(group, d) -> None:
+        """Map the definition's geometry (and nested placements) by ``d``."""
+        from core.group import transformed_mesh
+        proto = group.mesh
+        moved = transformed_mesh(proto, d)
+        proto.restore_state(moved.capture_state())
+        for child in getattr(group, "children", None) or []:
+            if child.xform is not None:
+                child.xform = d * child.xform
+
+    def do(self, scene) -> None:
+        g = self.group
+        if getattr(g, "xform", None) is None:
+            self._old_axes = g.axes
+            g.axes = self._copy(self.frame)
+            scene.version += 1
+            return
+        inv, ok = self.frame.inverted()
+        if not ok:
+            return
+        self._d = inv * g.xform
+        d_inv, ok2 = self._d.inverted()
+        if not ok2:
+            self._d = None
+            return
+        self._instances = self._siblings(scene)
+        self._reexpress(g, self._d)
+        for inst in self._instances:
+            inst.xform = inst.xform * d_inv
+        scene.version += 1
+
+    def undo(self, scene) -> None:
+        g = self.group
+        if getattr(g, "xform", None) is None and self._d is None:
+            g.axes = self._old_axes
+            scene.version += 1
+            return
+        if self._d is None:
+            return
+        d_inv, _ok = self._d.inverted()
+        self._reexpress(g, d_inv)
+        for inst in self._instances:
+            inst.xform = inst.xform * self._d
+        scene.version += 1
+
+    @staticmethod
+    def _copy(m):
+        from PySide6.QtGui import QMatrix4x4
+        return QMatrix4x4(m)

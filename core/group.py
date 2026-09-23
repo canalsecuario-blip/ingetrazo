@@ -44,7 +44,7 @@ def reserve_group_names(names) -> None:
 class Group:
     __slots__ = ("mesh", "name", "layer", "ifc", "billboard", "xform",
                  "children", "owner", "context", "text3d", "hidden", "uid",
-                 "material")
+                 "material", "axes")
 
     def __init__(self, mesh: Mesh | None = None, name: str | None = None) -> None:
         self.mesh = mesh if mesh is not None else Mesh()
@@ -106,6 +106,14 @@ class Group:
         # draw passes know they are the subject and not the surroundings.
         # ``None`` at the root and on anything outside the open context.
         self.context = None
+        #: The LOCAL AXES of a classic group (issue #44, @pacaeiro): where
+        #: its own red/green/blue sit in the world, as a matrix whose
+        #: columns are the axes and whose translation is the origin. A
+        #: classic group keeps its mesh in world coordinates, so without
+        #: this every Move/Rotate/Scale baked the turn into the vertices and
+        #: the group forgot which way it faced. ``None`` = the world axes.
+        #: A component instance does not use it: its ``xform`` IS its axes.
+        self.axes = None
 
     def adopt(self, children) -> None:
         """Take ``children`` as nested placements, guaranteeing the invariant
@@ -135,14 +143,70 @@ class Group:
         child geometry a second time."""
         if self.xform is None and not self.children:
             return
+        frame = group_frame(self)
         self.mesh = world_mesh(self)
         self.xform = None
+        self.axes = frame                   # baked, but it still faces its way
         self.children = []
 
     def __repr__(self) -> str:  # pragma: no cover - debug aid
         kind = " instance" if self.xform is not None else ""
         return (f"Group({self.name!r}{kind}: {len(self.mesh.faces)} faces, "
                 f"{len(self.mesh.edges)} edges)")
+
+
+# ---- Local axes (issue #44) ---------------------------------------------------
+
+def carry_axes(group, m) -> None:
+    """A classic group's geometry was just transformed by ``m`` in world
+    space: its axes go with it (the analogue of composing ``xform`` for an
+    instance). Instances are left alone — their ``xform`` already moved."""
+    if group is None or getattr(group, "xform", None) is not None:
+        return
+    from PySide6.QtGui import QMatrix4x4
+    base = group.axes if group.axes is not None else QMatrix4x4()
+    group.axes = m * base
+
+
+def group_frame(group):
+    """The world matrix of ``group``'s own axes, or ``None`` for the world
+    axes. ``axes`` lives in the space of the group's mesh, so the frame is
+    ``xform · axes``: an instance's placement, a classic group's stored
+    axes, or both when a classic group became an instance (a container's
+    child once the container is opened)."""
+    if group is None:
+        return None
+    xform = getattr(group, "xform", None)
+    axes = getattr(group, "axes", None)
+    if xform is None:
+        return axes
+    return xform if axes is None else xform * axes
+
+
+def frame_axes(m):
+    """``(origin, x, y, z)`` of a frame matrix, the three axes made unit and
+    square to each other (a scaled or skewed placement still draws
+    orthogonal axes; red first, green squared to it, blue from both — and
+    a mirrored placement keeps its handedness). ``m=None`` is the world."""
+    from PySide6.QtGui import QVector3D
+    if m is None:
+        return (QVector3D(0, 0, 0), QVector3D(1, 0, 0), QVector3D(0, 1, 0),
+                QVector3D(0, 0, 1))
+    o = m.map(QVector3D(0, 0, 0))
+    x = m.mapVector(QVector3D(1, 0, 0))
+    y = m.mapVector(QVector3D(0, 1, 0))
+    z = m.mapVector(QVector3D(0, 0, 1))
+    if x.length() < 1e-12:
+        x = QVector3D(1, 0, 0)
+    x = x.normalized()
+    y = y - x * QVector3D.dotProduct(y, x)
+    if y.length() < 1e-12:
+        y = QVector3D.crossProduct(z, x)
+    y = y.normalized()
+    zz = QVector3D.crossProduct(x, y).normalized()
+    if QVector3D.dotProduct(zz, z) < 0:
+        zz = -zz                           # a mirrored placement
+    return o, x, y, zz
 
 
 def make_billboard_group(image_path: str, height: float, name: str,
@@ -475,6 +539,8 @@ def copy_group(group, delta=None):
         g.xform = t * group.xform
     else:
         g = Group(transformed_mesh(group.mesh, t), name=group.name)
+        if getattr(group, "axes", None) is not None:
+            g.axes = t * group.axes
     g.layer = group.layer
     g.ifc = dict(group.ifc) if group.ifc else None
     g.billboard = group.billboard

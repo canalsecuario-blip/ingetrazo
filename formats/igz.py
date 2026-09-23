@@ -288,6 +288,11 @@ def save_scene(scene, path: Path) -> dict:
             # "Group 7". Older readers ignore the key.
             if getattr(g, "name", None):
                 entry["name"] = g.name
+            axes = getattr(g, "axes", None)
+            if axes is not None:
+                # A classic group's own axes (issue #44), column-major like
+                # "xform"; older readers ignore the key.
+                entry["axes"] = [float(x) for x in axes.data()]
             if getattr(g, "layer", None) is not None:
                 entry["layer"] = g.layer
             if getattr(g, "ifc", None):
@@ -614,6 +619,11 @@ def _load_into_inner(scene, path: Path, progress=None) -> None:
         else:
             group = Group(name=name)
             _load_mesh(group.mesh, raw)
+        if isinstance(raw.get("axes"), list) and len(raw["axes"]) == 16:
+            from PySide6.QtGui import QMatrix4x4
+            vals = [float(x) for x in raw["axes"]]
+            group.axes = QMatrix4x4(*[vals[col * 4 + row] for row in range(4)
+                                      for col in range(4)])
         if raw.get("layer"):
             group.layer = raw["layer"]
         if raw.get("ifc"):

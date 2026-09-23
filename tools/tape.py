@@ -36,7 +36,8 @@ from core.i18n import tr
 from tools.base import Tool, ToolContext
 from core.units import fmt_len
 
-_AXES = {"x": (1.0, 0.0, 0.0), "y": (0.0, 1.0, 0.0), "z": (0.0, 0.0, 1.0)}
+# The drawing axes (core.axes): the open group's own inside it (#44).
+from core.axes import AXES as _AXES  # noqa: E402
 
 
 class TapeMeasureTool(Tool):
@@ -167,7 +168,7 @@ class TapeMeasureTool(Tool):
             if (edge is None and kind == "on_axis" and ctx.snap is not None
                     and ctx.snap.axis in _AXES):
                 # The cue already found the axis and put the point ON it.
-                axis = QVector3D(*_AXES[ctx.snap.axis])
+                axis = QVector3D(_AXES[ctx.snap.axis])
                 edge = Guide(QVector3D(0, 0, 0), axis)
                 self.start_point = QVector3D(ctx.snap.point)
             if edge is None and not self._from_point:
@@ -179,7 +180,7 @@ class TapeMeasureTool(Tool):
                 name = (pick_axis(ctx.screen.x(), ctx.screen.y())
                         if pick_axis else None)
                 if name is not None:
-                    axis = QVector3D(*_AXES[name])
+                    axis = QVector3D(_AXES[name])
                     edge = Guide(QVector3D(0, 0, 0), axis)
                     self.start_point = axis * QVector3D.dotProduct(
                         ctx.world, axis)

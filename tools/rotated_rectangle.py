@@ -32,7 +32,7 @@ from PySide6.QtGui import QVector3D
 from core.edits import build_add_edges
 from core.i18n import tr
 from core.history import AddFaceCommand
-from core.triangulate import plane_axes
+from core.axes import plane_axes  # drawing axes (#44)
 from tools.base import AxisMagnet, face_the_plane, PlaneLock, Tool, ToolContext
 from core.units import fmt_len, fmt_pair
 from tools.protractor import DISC_PX, TICK_DEG
@@ -324,7 +324,8 @@ class RotatedRectangleTool(AxisMagnet, PlaneLock, Tool):
                 break
         return width, angle
 
-    _AXES = {"x": (1.0, 0.0, 0.0), "y": (0.0, 1.0, 0.0), "z": (0.0, 0.0, 1.0)}
+    #: The drawing axes (core.axes): the open group's own inside it (#44).
+    from core.axes import AXES as _AXES
 
     def locked_dir(self, viewport) -> QVector3D | None:
         """La dirección que el bloqueo de eje del viewport impone al ancho, o
@@ -343,7 +344,7 @@ class RotatedRectangleTool(AxisMagnet, PlaneLock, Tool):
         if edge.length() < 1e-9:
             return None
         edge = edge.normalized()
-        axis = QVector3D(*self._AXES[lock])
+        axis = QVector3D(self._AXES[lock])
         d = axis - edge * QVector3D.dotProduct(axis, edge)
         return d.normalized() if d.length() > 1e-6 else None
 

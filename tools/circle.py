@@ -49,7 +49,7 @@ def busy_plane(scene, new_points):
             return origin, normal
     return None
 from core.i18n import tr
-from core.triangulate import plane_axes
+from core.axes import plane_axes  # drawing axes (#44)
 from tools.base import AxisMagnet, PlaneLock, Tool, ToolContext
 
 

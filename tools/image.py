@@ -23,7 +23,7 @@ from PySide6.QtGui import QVector3D
 
 from core.history import AddImagePlaneCommand
 from core.image_plane import ImagePlane
-from core.triangulate import plane_axes
+from core.axes import plane_axes  # drawing axes (#44)
 from tools.base import Tool, ToolContext
 from core.units import fmt_pair
 

@@ -7,6 +7,16 @@ follow [SemVer](https://semver.org).
 ## [Sin publicar]
 
 ### Añadido
+- **Ejes locales en grupos y componentes, como SketchUp** (#44, @pacaeiro):
+  cada grupo recuerda hacia dónde mira cuando se mueve, gira, escala,
+  voltea, copia o explota, y se guarda en el `.igz`. Al entrar a editarlo
+  se ven SUS ejes, en su origen, y la inferencia de eje, las flechas, el
+  suelo, el rectángulo, círculos y arcos y las vistas estándar los siguen,
+  nivel por nivel en grupos anidados. Crear grupo o componente dentro de
+  uno girado sale alineado con él. El cuadro de selección y la caja de
+  Escala se alinean a los ejes del objeto. Clic derecho ▸ **Cambiar ejes**
+  (origen, rojo, verde) sin mover la geometría; en un componente cambia la
+  definición y todas sus copias se quedan en su sitio.
 - **Herramientas de sólidos, como SketchUp** (pedidas por Rafael y en la
   #61): Revestimiento exterior, Unión, Sustraer, Recortar, Intersecar y
   Dividir sobre grupos y componentes sólidos. Barra propia, Herramientas ▸

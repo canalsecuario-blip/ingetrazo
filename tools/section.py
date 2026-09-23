@@ -21,11 +21,11 @@ from PySide6.QtGui import QVector3D
 from core.history import PlaceSectionPlaneCommand
 from core.i18n import tr
 from core.section import SectionPlane, next_symbol
-from core.triangulate import plane_axes
+from core.axes import plane_axes  # drawing axes (#44)
 from tools.base import Tool, ToolContext
 
-_AXES = {"x": QVector3D(1, 0, 0), "y": QVector3D(0, 1, 0),
-         "z": QVector3D(0, 0, 1)}
+# The drawing axes (core.axes): the open group's own inside it (#44).
+from core.axes import AXES as _AXES  # noqa: E402
 
 
 class SectionPlaneTool(Tool):

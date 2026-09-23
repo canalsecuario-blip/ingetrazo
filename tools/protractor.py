@@ -42,14 +42,14 @@ from PySide6.QtGui import QVector3D
 from core.guide import Guide
 from core.history import AddGuideCommand, ChangeGuideCommand
 from core.snap import COLOR_AXIS_X, COLOR_AXIS_Y, COLOR_AXIS_Z
-from core.triangulate import plane_axes
+from core.axes import plane_axes  # drawing axes (#44)
 from tools.base import Tool, ToolContext
 
 # The disc keeps a fixed SCREEN size (SketchUp); ticks every 15 degrees.
 DISC_PX = 60.0
 TICK_DEG = 15.0
-_AXES = {"x": QVector3D(1, 0, 0), "y": QVector3D(0, 1, 0),
-         "z": QVector3D(0, 0, 1)}
+# The drawing axes (core.axes): the open group's own inside it (#44).
+from core.axes import AXES as _AXES  # noqa: E402
 _AXIS_RGBA = {"x": (*COLOR_AXIS_X, 1.0), "y": (*COLOR_AXIS_Y, 1.0),
               "z": (*COLOR_AXIS_Z, 1.0)}
 _OFF_AXIS_RGBA = (0.24, 0.27, 0.32, 1.0)
