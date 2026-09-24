@@ -178,3 +178,35 @@ def test_a_snapped_point_keeps_the_width_on_it():
     corner = V(2, 3, 0)
     tool.on_hover(_ctx_snap(vp, corner, "endpoint"))
     assert _close(tool.hover_point, corner)
+
+
+def test_shift_holds_the_base_edge_direction():
+    """@pacaeiro on #70, 0.5.1: «When we're orienting the 1st or 2nd points,
+    the protactor could react to Shift… That way we fix the orientation and
+    can give the distance». On the first protractor Shift keeps the base
+    edge's direction; only the length follows the cursor, and a typed
+    length goes along it."""
+    vp = _VP()
+    tool = _started(vp)
+    tool.on_hover(_ctx(vp, V(3, 3)))                       # 45°
+    tool.on_hover(_ctx(vp, V(3, 3), Qt.ShiftModifier))     # held
+    tool.on_hover(_ctx(vp, V(5, 1), Qt.ShiftModifier))     # cursor wanders
+    h = tool.hover_point
+    assert abs(h.x() - h.y()) < 1e-6 and h.x() > 0         # still at 45°
+    assert tool.on_value(vp, 2.0)                           # 2 m along it
+    b = tool.base_point
+    assert _close(b, V(2 / math.sqrt(2), 2 / math.sqrt(2)))
+
+
+def test_the_click_lands_on_the_held_line_and_releasing_frees_it():
+    vp = _VP()
+    tool = _started(vp)
+    tool.on_hover(_ctx(vp, V(4, 0), Qt.ShiftModifier))     # held along X
+    tool.on_hover(_ctx(vp, V(3, 2), Qt.ShiftModifier))
+    assert _close(tool.hover_point, V(3, 0))
+    tool.on_hover(_ctx(vp, V(3, 2)))                        # Shift up: free
+    assert _close(tool.hover_point, V(3, 2))
+    tool.on_hover(_ctx(vp, V(4, 0), Qt.ShiftModifier))
+    tool.on_hover(_ctx(vp, V(3, 2), Qt.ShiftModifier))
+    tool.on_click(_ctx(vp, V(3, 2), Qt.ShiftModifier))
+    assert _close(tool.base_point, V(3, 0))

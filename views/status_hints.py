@@ -38,7 +38,7 @@ HINTS: dict = {
     "rectangle": ("Click the first corner. Arrows pick the plane; Ctrl = centre.",
                   "Click the opposite corner, or type width;height and Enter."),
     "rotated_rect": ("Click the first corner of the base edge.",
-                     "Click the end of the base edge, then the height; or type it."),
+                     "Edge end, then width (or type them). Shift holds the direction."),
     "circle": ("Click the centre. Arrows pick the plane, Down = perpendicular to an edge. Type the sides first.",
                "Click the radius, or type it and Enter."),
     "polygon": ("Click the centre. Arrows pick the plane, Down = perpendicular to an edge. Type the sides first.",

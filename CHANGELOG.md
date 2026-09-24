@@ -24,12 +24,20 @@ follow [SemVer](https://semver.org).
   compositor, al modelo. En el compositor, **Ctrl+RePág / Ctrl+AvPág**
   pasan a la lámina anterior o siguiente, como las hojas de Calc. Al
   pasar el ratón por las pestañas Modelo y Lámina, un aviso lo recuerda.
+- **Rectángulo girado: Mayús fija la dirección de la arista base** (#70,
+  @pacaeiro), como ya fijaba el ángulo del ancho: con Mayús pulsada solo
+  la longitud sigue al cursor, y la longitud escrita va en esa dirección.
 - **La guía que vas a crear se ve antes del clic** (#89, @pacaeiro): con
   el Metro y el Transportador, la línea guía provisional sigue al ratón a
   trazos, como quedará. Ya se intentaba dibujar, pero en perspectiva una
   guía tiene un extremo detrás de la cámara y se descartaba entera.
 
 ### Corregido
+- **Compositor: «dos clics» vuelve a funcionar** (#95, @pacaeiro) al colocar
+  una vista, un rectángulo, una línea… Si la mano se movía unos píxeles al
+  soltar el primer clic, contaba como un arrastre diminuto: dejaba una vista
+  del tamaño mínimo y el segundo clic se perdía. Ahora manda la distancia de
+  arrastre del sistema.
 - **Un grupo de grupos es un grupo, no un componente** (#90, @fafecm). Al
   hacer Crear grupo con grupos dentro, el resultado se presentaba y se
   exportaba como componente, y Hacer único fundía sus subgrupos en una sola

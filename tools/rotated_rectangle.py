@@ -6,7 +6,8 @@ Three clicks, SketchUp-style:
 1. first corner — which also captures the plane,
 2. second corner — sets the base edge's **direction and length** (the
    rotation), with a protractor drawn at the first corner: near its rim the
-   direction snaps to 15° ticks; the VCB takes ``length`` or
+   direction snaps to 15° ticks, Shift holds the direction so only the
+   length follows the cursor; the VCB takes ``length`` or
    ``length;angle`` (angle from the plane's first axis),
 3. the width and its angle around the base edge, with a second protractor
    square to that edge at the second corner (15° ticks near its rim; Shift
@@ -72,6 +73,10 @@ class RotatedRectangleTool(AxisMagnet, PlaneLock, Tool):
         self._disc_r = 1.0
         self._near_disc = False
         self._held_angle: float | None = None
+        #: The base edge's direction Shift holds on the first protractor
+        #: (#70, @pacaeiro: «the protactor could react to Shift… That way
+        #: we fix the orientation and can give the distance»).
+        self._held_dir: QVector3D | None = None
 
     # ---- Lifecycle ----------------------------------------------------------
     def on_activate(self, viewport) -> None:
@@ -92,7 +97,13 @@ class RotatedRectangleTool(AxisMagnet, PlaneLock, Tool):
         if self.base_point is None:
             if (ctx.world - self.start_point).length() < 1e-6:
                 return
-            self.base_point = ctx.world
+            # With Shift holding the direction the corner is where the
+            # preview shows it — on the held line, not under the cursor.
+            self.base_point = (self.hover_point
+                               if self._held_dir is not None
+                               and self.hover_point is not None
+                               else ctx.world)
+            self._held_dir = None
             if self._perp().lengthSquared() < 1e-12:
                 # The base edge is perpendicular to the drawing plane, so
                 # there is no width direction left. Say it — going quiet
@@ -142,6 +153,19 @@ class RotatedRectangleTool(AxisMagnet, PlaneLock, Tool):
                     deg = round(self._edge_angle(d) / TICK_DEG) * TICK_DEG
                     self.hover_point = (self.start_point
                                         + self._dir_at(deg) * d.length())
+            if not (ctx.modifiers & Qt.ShiftModifier):
+                self._held_dir = None
+            else:
+                d = self._in_plane(self.hover_point - self.start_point)
+                if self._held_dir is None and d.length() > 1e-9:
+                    self._held_dir = d.normalized()      # Shift takes it
+                if self._held_dir is not None:
+                    # Only the length follows the cursor now — along the
+                    # held line, either way along it.
+                    along = QVector3D.dotProduct(
+                        ctx.world - self.start_point, self._held_dir)
+                    self.hover_point = (self.start_point
+                                        + self._held_dir * along)
         if self.base_point is not None:
             edge = (self.base_point - self.start_point).normalized()
             self._disc_metrics(ctx, self.base_point, edge)
@@ -504,6 +528,7 @@ class RotatedRectangleTool(AxisMagnet, PlaneLock, Tool):
         self._locked = None
         self._near_disc = False
         self._held_angle = None
+        self._held_dir = None
 
 
 def _degrees(value) -> float:

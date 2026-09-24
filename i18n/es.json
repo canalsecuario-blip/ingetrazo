@@ -1775,7 +1775,7 @@
  "Click the first corner. Arrows pick the plane; Ctrl = centre.": "Clic en la primera esquina. Las flechas eligen el plano; Ctrl = centro.",
  "Click the opposite corner, or type width;height and Enter.": "Clic en la esquina opuesta, o teclea ancho;alto y Enter.",
  "Click the first corner of the base edge.": "Clic en la primera esquina del lado base.",
- "Click the end of the base edge, then the height; or type it.": "Clic en el final del lado base y luego la altura; o tecléala.",
+ "Edge end, then width (or type them). Shift holds the direction.": "Fin de arista, luego ancho (o escríbelos). Mayús fija el rumbo.",
  "Click the centre. Arrows pick the plane; Down over an edge makes it perpendicular to the edge. Type the number of sides and Enter first, if you want.": "Clic en el centro. Las flechas eligen el plano; Abajo sobre una arista lo pone perpendicular a ella. Antes puedes teclear el número de lados y Enter.",
  "Click the radius, or type it and Enter.": "Clic en el radio, o tecléalo y Enter.",
  "Click the start point — on an edge to draw a tangent arc.": "Clic en el punto inicial; sobre una arista, el arco sale tangente.",

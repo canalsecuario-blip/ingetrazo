@@ -3813,6 +3813,13 @@ class CotaCanvasItem(_SheetItem):
         self._paint_selection(painter)
 
 
+def _drag_px() -> int:
+    """How far the pointer must travel for a press to count as a drag —
+    the platform's own setting (10 px by default)."""
+    from PySide6.QtWidgets import QApplication
+    return max(4, QApplication.startDragDistance())
+
+
 class ComposerCanvasView(QGraphicsView):
     """The page view: placement clicks/drags for the left-toolbar tools,
     live mm cursor readout, Ctrl+wheel zoom (QGIS habits)."""
@@ -4957,9 +4964,15 @@ class ComposerCanvasView(QGraphicsView):
             # A press-and-release on the same spot with a two-point tool is
             # the FIRST click of click-move-click: keep the rubber band (and
             # the snapping) alive until the second click.
+            # The system's drag distance, not 4 px: a hand that moved 5 px
+            # between press and release (a touchpad, a 120 % screen) made
+            # the FIRST click a tiny drag — a minimum-size frame dropped at
+            # once and the second click lost (#95, @pacaeiro: «The 2 clicks
+            # option do not work»).
             if (self.composer.tool_mode in self._two_point
                     and (event.position().toPoint() - self._press_vp
-                         ).manhattanLength() < 4):
+                         ).manhattanLength()
+                    < _drag_px()):
                 event.accept()
                 return
             end, _ = self._snapped(self.mapToScene(event.position().toPoint()))
