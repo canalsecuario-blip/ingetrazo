@@ -149,6 +149,20 @@ class Group:
         self.axes = frame                   # baked, but it still faces its way
         self.children = []
 
+    def make_unique(self) -> None:
+        """SketchUp's Make Unique: this instance stops sharing with its
+        siblings. Without nested placements it bakes into a classic group
+        (``materialize``); WITH them it keeps its placement and its tree —
+        a private copy of its own mesh and of every subgroup below it — so
+        the subgroups stay subgroups instead of being fused into one mesh
+        (issue #90, @fafecm: «it explodes all the subgroups within it»)."""
+        if not self.children:
+            self.materialize()
+            return
+        from PySide6.QtGui import QMatrix4x4
+        self.mesh = transformed_mesh(self.mesh, QMatrix4x4())
+        self.children = [_independent_copy(c) for c in self.children]
+
     def __repr__(self) -> str:  # pragma: no cover - debug aid
         kind = " instance" if self.xform is not None else ""
         return (f"Group({self.name!r}{kind}: {len(self.mesh.faces)} faces, "
@@ -556,6 +570,19 @@ def copy_group(group, delta=None):
     # Nested placements ride along untranslated: ``delta`` already moved the
     # parent, and a child's transform is relative to it.
     g.children = [copy_group(c) for c in (group.children or ())]
+    return g
+
+
+def _independent_copy(group):
+    """``copy_group`` without the sharing: every mesh in the subtree is a
+    copy of its own, so editing it never reaches the original's copies.
+    The copy keeps the uid — it REPLACES the original in its parent."""
+    from PySide6.QtGui import QMatrix4x4
+    g = copy_group(group)
+    if group.xform is not None:
+        g.mesh = transformed_mesh(group.mesh, QMatrix4x4())
+    g.uid = group.uid
+    g.children = [_independent_copy(c) for c in (group.children or ())]
     return g
 
 

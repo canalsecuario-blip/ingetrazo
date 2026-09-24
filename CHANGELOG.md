@@ -30,6 +30,10 @@ follow [SemVer](https://semver.org).
   guía tiene un extremo detrás de la cámara y se descartaba entera.
 
 ### Corregido
+- **Hacer único ya no explota los subgrupos** (#90, @fafecm): un componente
+  con grupos dentro se queda con su propia copia de todo el árbol, con los
+  subgrupos como subgrupos, y deja de compartir con las demás copias. Antes
+  la geometría de los hijos se fundía en una sola malla.
 - **La consola de Python sigue el tema** (#92, @xyont): con el tema claro
   tenía el fondo negro. Ahora usa colores claros (los de VS Code Light+), y
   cambia con el tema aunque esté abierta, incluido lo ya escrito.

@@ -2865,18 +2865,21 @@ class MakeUniqueCommand(Command):
         self._proto = None
         self._xform = None
         self._children = None
+        self._axes = None
 
     def do(self, scene) -> None:
         self._proto = self.group.mesh
         self._xform = self.group.xform
         self._children = self.group.children
-        self.group.materialize()
+        self._axes = self.group.axes
+        self.group.make_unique()
         scene.version += 1
 
     def undo(self, scene) -> None:
         self.group.mesh = self._proto
         self.group.xform = self._xform
         self.group.children = self._children or []
+        self.group.axes = self._axes
         scene.version += 1
 
 
