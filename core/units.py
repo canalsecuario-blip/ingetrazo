@@ -155,6 +155,14 @@ def fmt_pair(a: float, b: float) -> str:
     return f"{fmt_len(a)} × {fmt_len(b)}"
 
 
+def fmt_triple(a: float, b: float, c: float) -> str:
+    """``0.58 × 0.45 × 0.04 m`` — a part's length × width × thickness, in
+    the same idiom as :func:`fmt_pair`."""
+    if model_unit() in ("m", "cm", "mm"):
+        return f"{fmt_num(a)} × {fmt_num(b)} × {fmt_len(c)}"
+    return f"{fmt_len(a)} × {fmt_len(b)} × {fmt_len(c)}"
+
+
 def fmt_area(square_metres: float) -> str:
     """An area in the model's units squared."""
     u = model_unit()

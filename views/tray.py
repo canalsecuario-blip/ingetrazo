@@ -1126,6 +1126,211 @@ class ComponentsPanel(QWidget):
         self._window.viewport.update()
 
 
+class PartsPanel(QWidget):
+    """The parts of the selected component — SketchUp's Outliner, one level
+    deep, measured like a cut list.
+
+    Select a component made of parts (an imported model, or one regrouped
+    with Split into Pieces) and every part is a row: its name, the material
+    most of it wears and its size as length × width × thickness. Clicking a
+    row opens the component and selects that part, as double-clicking into
+    it would; the check shows or hides it; the name edits in place. Copy
+    cut list puts the parts on the clipboard as a table, identical parts
+    counted once with their quantity."""
+
+    def __init__(self, window) -> None:
+        super().__init__()
+        from PySide6.QtWidgets import (QCheckBox, QHBoxLayout, QPushButton,
+                                       QTreeWidget, QVBoxLayout)
+        self._window = window
+        self._updating = False
+        self._container = None
+        self._rows: list = []
+        self._cache: dict = {}
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(8, 6, 8, 8)
+        self._title = QLabel()
+        self._title.setWordWrap(True)
+        lay.addWidget(self._title)
+        self.tree = QTreeWidget()
+        self.tree.setColumnCount(3)
+        self.tree.setHeaderLabels([tr("Name"), tr("Size"), tr("Material")])
+        self.tree.setRootIsDecorated(False)
+        self.tree.setColumnWidth(0, 110)
+        self.tree.setColumnWidth(1, 130)
+        self.tree.setToolTip(tr(
+            "Click a part to select it inside the component; the check "
+            "shows or hides it; double-click the name to rename it"))
+        self.tree.itemClicked.connect(self._on_clicked)
+        self.tree.itemChanged.connect(self._on_item_changed)
+        lay.addWidget(self.tree)
+        row = QHBoxLayout()
+        self._split_btn = QPushButton(tr("Split into Pieces"))
+        self._split_btn.setToolTip(tr(
+            "Regroup the component by the solids that do not touch"))
+        self._split_btn.clicked.connect(self._on_split)
+        self._copy_btn = QPushButton(tr("Copy cut list"))
+        self._copy_btn.setToolTip(tr(
+            "Copy the parts as a table (quantity, parts, material, length, "
+            "width, thickness) — pastes into a spreadsheet"))
+        self._copy_btn.clicked.connect(self._on_copy)
+        row.addWidget(self._split_btn)
+        row.addStretch(1)
+        row.addWidget(self._copy_btn)
+        lay.addLayout(row)
+        self._by_material = QCheckBox(tr("Count identical parts only when "
+                                         "the material matches too"))
+        self._by_material.setChecked(True)
+        lay.addWidget(self._by_material)
+        self.refresh()
+
+    # ---- Model → view --------------------------------------------------------
+    def _scene(self):
+        return self._window.viewport.scene
+
+    def container(self):
+        """The component whose parts are listed: the one selected, or the
+        one open for editing while you work among its parts."""
+        from core.group import Group
+        scene = self._scene()
+        groups = [g for g in scene.selection if isinstance(g, Group)]
+        if len(groups) == 1 and groups[0].children:
+            return groups[0]
+        edit = scene.edit_group
+        if edit is not None and getattr(edit, "children", None):
+            return edit
+        if len(groups) == 1:
+            return groups[0]            # a plain group: offer Split
+        return None
+
+    def _row(self, part) -> dict:
+        """``part``'s row, measured once per version of its geometry — a
+        tray refresh follows every edit, and a part is only re-measured
+        when it itself changed."""
+        from core.group import iter_placements
+        from core.parts import part_rows
+        sig = tuple(
+            (id(g.mesh), getattr(g.mesh, "_mut_serial", 0),
+             tuple(m.data()) if m is not None else None,
+             id(getattr(g, "material", None)))
+            for g, m in iter_placements(part))
+        hit = self._cache.get(id(part))
+        if hit is not None and hit[0] == sig:
+            row = hit[1]
+        else:
+            holder = type("_Holder", (), {})()
+            holder.children = [part]
+            row = part_rows(holder)[0]
+            self._cache[id(part)] = (sig, row)
+        row = dict(row)
+        row["name"] = part.name
+        row["hidden"] = bool(getattr(part, "hidden", False))
+        return row
+
+    def refresh(self) -> None:
+        from PySide6.QtWidgets import QTreeWidgetItem
+        from core.units import fmt_triple
+        self._updating = True
+        self.tree.clear()
+        cont = self._container = self.container()
+        kids = list(getattr(cont, "children", None) or ())
+        alive = {id(k) for k in kids}
+        for key in [k for k in self._cache if k not in alive]:
+            del self._cache[key]
+        self._rows = [self._row(k) for k in kids]
+        scene = self._scene()
+        for row in self._rows:
+            item = QTreeWidgetItem([row["name"], fmt_triple(*row["size"]),
+                                    row["material"]])
+            item.setData(0, Qt.UserRole, row["part"])
+            item.setFlags(item.flags() | Qt.ItemIsUserCheckable
+                          | Qt.ItemIsEditable)
+            item.setCheckState(0, Qt.Unchecked if row["hidden"]
+                               else Qt.Checked)
+            item.setToolTip(0, tr("{n} faces", n=row["faces"]))
+            self.tree.addTopLevelItem(item)
+            if row["part"] in scene.selection:
+                item.setSelected(True)
+        if cont is None:
+            self._title.setText(tr(
+                "Select a component to see its parts."))
+        elif not kids:
+            self._title.setText(tr(
+                "«{name}» is one piece. Split into Pieces finds the solids "
+                "inside it that do not touch.", name=cont.name))
+        else:
+            self._title.setText(tr("<b>{name}</b> — {n} parts",
+                                   name=cont.name, n=len(kids)))
+        self.tree.setVisible(bool(kids))
+        self._copy_btn.setEnabled(bool(kids))
+        self._by_material.setVisible(bool(kids))
+        self._split_btn.setEnabled(cont is not None
+                                   and not getattr(cont, "billboard", False))
+        fit_rows(self.tree, max_rows=14)
+        self._updating = False
+
+    # ---- View → model --------------------------------------------------------
+    def _on_clicked(self, item, column) -> None:
+        """Open the component and select the part — the Outliner's click."""
+        part = item.data(0, Qt.UserRole)
+        cont = self._container
+        if part is None or cont is None or part.hidden:
+            return
+        vp = self._window.viewport
+        scene = self._scene()
+        if scene.edit_group is not cont:
+            vp.begin_group_edit(cont)
+        scene.selection.clear()
+        scene.selection.add(part)
+        scene.version += 1
+        vp.update()
+
+    def _on_item_changed(self, item, column) -> None:
+        if self._updating:
+            return
+        from core.history import HideCommand, RenameGroupCommand
+        part = item.data(0, Qt.UserRole)
+        if part is None:
+            return
+        history = self._window.viewport.history
+        name = item.text(0).strip()
+        if name and name != part.name:
+            history.execute(RenameGroupCommand(part, name))
+        hide = item.checkState(0) != Qt.Checked
+        if hide != bool(part.hidden):
+            history.execute(HideCommand([part], hidden=hide))
+        self._window.viewport.update()
+        self.refresh()
+
+    def _on_split(self) -> None:
+        cont = self._container
+        if cont is None:
+            return
+        scene = self._scene()
+        if scene.edit_group is cont:
+            # Split works on a closed component: step out of it, keep it
+            # selected, and split that.
+            self._window.viewport.end_group_edit()
+        scene.selection.clear()
+        scene.selection.add(cont)
+        self._window._on_split_into_pieces()
+        self.refresh()
+
+    def _on_copy(self) -> None:
+        from PySide6.QtGui import QGuiApplication
+        from core.parts import cut_list, cut_list_text
+        from core.units import fmt_len
+        lines = cut_list(self._rows,
+                         by_material=self._by_material.isChecked())
+        text = cut_list_text(lines, fmt_len, [
+            tr("Qty"), tr("Parts"), tr("Material"), tr("Length"),
+            tr("Width"), tr("Thickness")])
+        QGuiApplication.clipboard().setText(text)
+        self._window.viewport.flash_status(tr(
+            "Cut list copied: {n} lines, {parts} parts", n=len(lines),
+            parts=sum(ln["qty"] for ln in lines)), 4000)
+
+
 class MaterialsPanel(QWidget):
     """Swatch palette: pick a colour/texture to paint with."""
 
@@ -3123,6 +3328,7 @@ class Tray(QDockWidget):
         self.entity_info = EntityInfoPanel(window)
         self.materials = MaterialsPanel(window)
         self.components = ComponentsPanel(window)
+        self.parts = PartsPanel(window)
         self.layers = LayersPanel(window)
         self.scenes = ScenesPanel(window)
         # Styles, Shadows and Dimension style are NOT here: they live in
@@ -3134,6 +3340,7 @@ class Tray(QDockWidget):
             (tr("Scenes"), self.scenes),
             (tr("Materials"), self.materials),
             (tr("Components"), self.components),
+            (tr("Parts"), self.parts),
         ]))
 
     def on_scene_changed(self) -> None:
@@ -3151,6 +3358,7 @@ class Tray(QDockWidget):
         self.layers.refresh()
         self.scenes.refresh()
         self.components.refresh_in_model()
+        self.parts.refresh()
 
 
 class BimTray(QDockWidget):

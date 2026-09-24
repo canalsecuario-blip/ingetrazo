@@ -3281,6 +3281,51 @@ class ExplodeGroupCommand(Command):
         scene.version += 1
 
 
+class RenameGroupCommand(Command):
+    """Give a group, component or part a new name (the Parts tray's edit)."""
+
+    def __init__(self, group: Group, name: str) -> None:
+        self.group = group
+        self.name = name
+        self.old: Optional[str] = None
+
+    def do(self, scene) -> None:
+        self.old = self.group.name
+        self.group.name = self.name
+        scene.version += 1
+
+    def undo(self, scene) -> None:
+        self.group.name = self.old
+        scene.version += 1
+
+
+class SplitIntoPiecesCommand(Command):
+    """Replace what ``group`` holds with ``pieces`` (from
+    :func:`core.pieces.split_into_pieces`): the same geometry, now one child
+    group per physical piece. The group stays the object the user placed —
+    same matrix, name, layer and paint — so it moves, copies and exports as
+    before, and Explode sets the pieces free. Undo puts the old contents
+    back untouched (the split only ever built new meshes)."""
+
+    def __init__(self, group: Group, pieces: list) -> None:
+        self.group = group
+        self.pieces = list(pieces)
+        self.before: Optional[tuple] = None
+
+    def do(self, scene) -> None:
+        g = self.group
+        self.before = (g.mesh, list(g.children), g.xform)
+        from core.mesh import Mesh
+        g.mesh = Mesh()
+        g.adopt(self.pieces)
+        scene.version += 1
+
+    def undo(self, scene) -> None:
+        g = self.group
+        g.mesh, g.children, g.xform = self.before
+        scene.version += 1
+
+
 class MoveGroupCommand(Command):
     """Translate a whole group by ``delta`` (every vertex of its mesh). Because
     the group is isolated, this never drags the rest of the model."""
