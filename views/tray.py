@@ -1322,7 +1322,8 @@ class PartsPanel(QWidget):
         rename half-typed; only a different component, or a different set
         of parts, rebuilds."""
         from PySide6.QtWidgets import QAbstractItemView, QTreeWidgetItem
-        from core.units import fmt_triple
+        from core.parts import is_surface
+        from core.units import fmt_len_fine, fmt_triple
         if self.tree.state() == QAbstractItemView.EditingState:
             return                      # a rename in progress: leave it be
         self._updating = True
@@ -1346,9 +1347,21 @@ class PartsPanel(QWidget):
                 self.tree.addTopLevelItem(item)
                 self._items.append(item)
         for item, row in zip(self._items, self._rows):
-            for col, text in enumerate((row["name"],
-                                        fmt_triple(*row["size"], fine=True),
-                                        row["material"])):
+            if is_surface(row["size"]):
+                # No thickness: a skin, a decal, a pane drawn as one plane.
+                # Kept — it is what the model shows — but not read as a
+                # board with a thickness of 0.
+                length, width = row["size"][:2]
+                size = tr("{area} — surface", area=(
+                    f"{fmt_len_fine(length)} × {fmt_len_fine(width)}"))
+                item.setToolTip(1, tr(
+                    "No thickness: a surface drawn as a single plane (a "
+                    "skin, a decal, a glass pane). It stays in the model; "
+                    "the cut list marks it as a surface."))
+            else:
+                size = fmt_triple(*row["size"], fine=True)
+                item.setToolTip(1, "")
+            for col, text in enumerate((row["name"], size, row["material"])):
                 if item.text(col) != text:
                     item.setText(col, text)
             state = Qt.Unchecked if row["hidden"] else Qt.Checked
@@ -1580,7 +1593,7 @@ class PartsPanel(QWidget):
                          by_material=self._by_material.isChecked())
         text = cut_list_text(lines, fmt_len_fine, [
             tr("Qty"), tr("Parts"), tr("Material"), tr("Length"),
-            tr("Width"), tr("Thickness")])
+            tr("Width"), tr("Thickness")], surface=tr("surface"))
         QGuiApplication.clipboard().setText(text)
         self._window.viewport.flash_status(tr(
             "Cut list copied: {n} lines, {parts} parts", n=len(lines),

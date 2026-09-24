@@ -127,6 +127,18 @@ def part_rows(container) -> list:
     return rows
 
 
+#: Thinner than this, a part is a SURFACE: a skin, a decal, a pane drawn as
+#: one plane — geometry a person sees, with no thickness to cut (metres).
+SURFACE_BELOW = 0.0005
+
+
+def is_surface(size) -> bool:
+    """Whether a part of ``size`` (length, width, thickness) has no real
+    thickness. Such parts are kept — deleting them would leave a hole in
+    what the model shows — but a cut list must not read them as boards."""
+    return float(size[2]) < SURFACE_BELOW
+
+
 def cut_list(rows, precision_mm: float = 1.0,
              by_material: bool = True) -> list:
     """Rows merged into cut-list lines: parts of the same size (to
@@ -167,14 +179,18 @@ def _natural(name: str) -> tuple:
                  for t in re.split(r"(\d+)", name))
 
 
-def cut_list_text(lines, fmt_len, headers) -> str:
+def cut_list_text(lines, fmt_len, headers, surface: str = "surface") -> str:
     """The cut list as tab-separated text, one line per ``cut_list`` entry —
     what pastes straight into a spreadsheet. ``fmt_len`` formats a length in
-    metres (the model's units); ``headers`` are the six column titles."""
+    metres (the model's units); ``headers`` are the six column titles; a
+    part with no thickness (:func:`is_surface`) reads ``surface`` in the
+    thickness column instead of a zero."""
     out = ["\t".join(headers)]
     for ln in lines:
         length, width, thick = ln["size"]
         out.append("\t".join([str(ln["qty"]), ", ".join(ln["names"]),
                               ln["material"], fmt_len(length),
-                              fmt_len(width), fmt_len(thick)]))
+                              fmt_len(width),
+                              surface if is_surface(ln["size"])
+                              else fmt_len(thick)]))
     return "\n".join(out) + "\n"

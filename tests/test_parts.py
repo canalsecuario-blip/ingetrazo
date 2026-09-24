@@ -293,3 +293,41 @@ def test_part_sizes_resolve_the_millimetre_whatever_the_display_precision():
             "32 × 24 × 4 mm"
     finally:
         units.bind_scene(None)
+
+
+def _sheet(sx: float, sy: float) -> Mesh:
+    mesh = Mesh()
+    pts = [QVector3D(0, 0, 0), QVector3D(sx, 0, 0), QVector3D(sx, sy, 0),
+           QVector3D(0, sy, 0)]
+    mesh.add_face(pts)
+    mesh.add_face(list(reversed(pts)))
+    return mesh
+
+
+def test_a_part_with_no_thickness_is_a_surface_not_a_zero_board():
+    """A skin or a pane drawn as one plane is kept — it is what the model
+    shows — but the cut list must not list it as a 0-thick board."""
+    from core.parts import is_surface
+    holder = Group()
+    holder.adopt([_part(_sheet(0.6, 0.135), "baseboard skin"),
+                  _part(_box(0.6, 0.4, 0.018), "shelf")])
+    rows = part_rows(holder)
+    assert [is_surface(r["size"]) for r in rows] == [True, False]
+    text = cut_list_text(cut_list(rows), lambda m: f"{m * 1000:.0f}",
+                         ["Qty", "Parts", "Material", "L", "W", "T"])
+    lines = text.splitlines()
+    assert lines[1].split("\t")[-1] == "18"            # the shelf
+    assert lines[2].split("\t")[-1] == "surface"       # the skin
+
+
+def test_the_tray_shows_a_surface_as_an_area():
+    holder = Group(name="unit")
+    holder.adopt([_part(_sheet(0.6, 0.135), "skin"),
+                  _part(_box(0.6, 0.4, 0.018), "shelf")])
+    win, scene = _window_with(holder)
+    panel = win.tray.parts
+    panel.refresh()
+    assert panel.tree.topLevelItem(0).text(1).endswith("surface")
+    assert "×" in panel.tree.topLevelItem(1).text(1)
+    assert not panel.tree.topLevelItem(1).text(1).endswith("surface")
+    win._saved_version = scene.version

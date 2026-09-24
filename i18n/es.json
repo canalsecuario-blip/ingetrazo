@@ -2042,5 +2042,8 @@
  "Rename…": "Renombrar…",
  "Show": "Mostrar",
  "Show all parts": "Mostrar todas las partes",
- "Click a part to select it inside the component; the check shows or hides it. To rename: double-click the name, press F2, or right-click ▸ Rename": "Haz clic en una parte para seleccionarla dentro del componente; la casilla la muestra u oculta. Para renombrar: doble clic en el nombre, F2, o clic derecho ▸ Renombrar"
+ "Click a part to select it inside the component; the check shows or hides it. To rename: double-click the name, press F2, or right-click ▸ Rename": "Haz clic en una parte para seleccionarla dentro del componente; la casilla la muestra u oculta. Para renombrar: doble clic en el nombre, F2, o clic derecho ▸ Renombrar",
+ "{area} — surface": "{area} — superficie",
+ "surface": "superficie",
+ "No thickness: a surface drawn as a single plane (a skin, a decal, a glass pane). It stays in the model; the cut list marks it as a surface.": "Sin espesor: una superficie dibujada como un solo plano (un revestimiento, una calcomanía, un vidrio). Se queda en el modelo; la lista de corte la marca como superficie."
 }
