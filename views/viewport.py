@@ -108,6 +108,7 @@ from core.group import Group, copy_group, world_mesh
 from core.mesh import Edge, Face
 from core.history import EraseSelectionCommand, History
 from core.scene import Scene
+from core.style import DEFAULT_BACK_COLOR, effective_back_color
 from core.materials import material_sig as _material_sig
 from core.snap import SnapResult, _AXIS_VECTORS, compute_snap
 from core.texture import face_uv_axes
@@ -2951,10 +2952,11 @@ class Viewport(QOpenGLWidget):
             cache[path] = c
         return c
 
-    #: Back-face colour, SketchUp's blue-grey: a visible back face means
-    #: "you are looking at the inside" (or at a genuinely inverted face) —
-    #: honest feedback the winding-proof shading used to hide.
-    BACK_FACE_COLOR = (0.62, 0.70, 0.78)
+    #: Default back-face colour, SketchUp's blue-grey: a visible back face
+    #: means "you are looking at the inside" (or at a genuinely inverted
+    #: face) — honest feedback the winding-proof shading used to hide. The
+    #: active style's Back color overrides it (core/style.py).
+    BACK_FACE_COLOR = DEFAULT_BACK_COLOR
 
     def _set_color(self, r: float, g: float, b: float, a: float) -> None:
         self._program.setUniformValue(self._loc_color, QVector4D(r, g, b, a))
@@ -2965,10 +2967,11 @@ class Viewport(QOpenGLWidget):
                                       QVector4D(r, g, b, a))
 
     def _set_back_face_color(self) -> None:
-        # A scene may override the tint (adopted from an imported .skp's
-        # style, so unpainted faces read like they did for the author).
-        r, g, b = (getattr(self.scene, "back_face_color", None)
-                   or self.BACK_FACE_COLOR)
+        # The style's Back color wins; else the scene's adopted tint (from
+        # an imported .skp's style, so unpainted faces read like they did
+        # for the author); else the default blue-grey.
+        r, g, b = effective_back_color(
+            getattr(self.scene, "display_style", None), self.scene)
         self._program.setUniformValue(self._loc_back_color,
                                       QVector4D(r, g, b, 1.0))
 
