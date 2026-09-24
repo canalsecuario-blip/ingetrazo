@@ -77,6 +77,16 @@
   <url type="vcs-browser">https://github.com/ingelibre/ingetrazo</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.5.2" date="2026-09-24">
+      <description>
+        <p>A group of groups is a group again and Make Unique keeps the
+        subgroups; Make Component over several groups makes one; Ctrl+Tab
+        between the model and the sheets; Two-Point Perspective and Export
+        Current View as DXF; the guide the Tape and Protractor will leave
+        shows before the click; and a smoother sheet composer — cursors,
+        two-click placement, editing several dimensions at once.</p>
+      </description>
+    </release>
     <release version="0.5.1" date="2026-09-23">
       <description>
         <p>What you draw inside a group shows at once; a door drawn from

@@ -4,7 +4,15 @@ All notable changes to IngeTrazo are documented here.
 Format inspired by [Keep a Changelog](https://keepachangelog.com); versions
 follow [SemVer](https://semver.org).
 
-## [Sin publicar]
+## [0.5.2] — 2026-09-24
+
+**Grupos que son grupos, láminas más cómodas y la perspectiva de dos puntos.**
+Un grupo de grupos ya no se hace pasar por componente y Hacer único no
+explota los subgrupos (#90); Crear componente con varios grupos hace uno
+solo; Ctrl+Tab entre el modelo y las láminas; la perspectiva de dos puntos y
+la vista actual a DXF, de José Castro Basso; la guía provisional del Metro y
+el Transportador; y el compositor con cursores, dos clics y edición de
+varias cotas a la vez.
 
 ### Añadido
 - **Perspectiva de dos puntos** (José Castro Basso, FADU–UDELAR), como la
