@@ -45,6 +45,7 @@ def test_two_separate_solids_become_two_pieces():
     assert [len(f) for f, _e in parts] == [6, 6]
     pieces = split_into_pieces(Group(mesh))
     assert [p.name for p in pieces] == ["Piece 1", "Piece 2"]
+    assert not any(p.is_component() for p in pieces)   # groups (#90)
     assert all(len(p.mesh.faces) == 6 for p in pieces)
 
 

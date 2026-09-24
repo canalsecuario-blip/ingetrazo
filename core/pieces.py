@@ -396,6 +396,7 @@ def split_into_pieces(group) -> list:
         piece = Group(copy_part(faces, edges),
                       name=names[n - 1] or tr("Piece {n}", n=n))
         piece.xform = QMatrix4x4()
+        piece.component = False     # its own geometry: a group (issue #90)
         pieces.append(piece)
     return pieces
 

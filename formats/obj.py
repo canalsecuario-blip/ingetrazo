@@ -549,6 +549,9 @@ def _pieces_group(stem: str, pieces: dict, face_attrs, tick):
         drop_smoothing_groups(mesh)
         kid = Group(mesh, name=_piece_name(key, k))
         kid.xform = QMatrix4x4()
+        # A part is its own geometry, shared with nothing: a group inside
+        # the component, not a component of its own (issue #90).
+        kid.component = False
         kids.append(kid)
     container = Group(name=stem)
     container.adopt(kids)
