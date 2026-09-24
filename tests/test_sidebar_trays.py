@@ -61,3 +61,46 @@ def test_unfolding_the_sidebar_brings_back_the_tabs_behind(settings_file,
     win._set_sidebar_visible(True)
     for dock in win._sidebar_docks():
         assert not dock.isHidden(), dock.objectName()
+
+
+def _shown(win):
+    """The Window-menu checks follow the trays once the window is up."""
+    win.show()
+    for _ in range(5):
+        _app.processEvents()
+    return win
+
+
+def _close(win):
+    win._saved_version = win.viewport.scene.version
+    win.close()
+
+
+def test_every_tray_opens_at_start_up_unless_the_menu_closed_it(settings_file):
+    from views.main_window import MainWindow
+    win = _shown(MainWindow())
+    win.bim_tray.hide()                 # lost by a fold, not by the menu
+    win.georef_tray.toggleViewAction().trigger()    # closed from the menu
+    assert win.georef_tray.isHidden()
+    _close(win)                         # the layout is saved on close
+
+    win = _shown(MainWindow())
+    assert not win.tray.isHidden()
+    assert not win.bim_tray.isHidden()
+    assert win.georef_tray.isHidden()
+    win.georef_tray.toggleViewAction().trigger()    # back from the menu
+    _close(win)
+
+    win = _shown(MainWindow())
+    assert not any(d.isHidden() for d in win._sidebar_docks())
+    _close(win)
+
+
+def test_a_folded_sidebar_opens_unfolded(settings_file):
+    from views.main_window import MainWindow
+    win = _shown(MainWindow())
+    win._set_sidebar_visible(False)
+    _close(win)
+    win = _shown(MainWindow())
+    assert not any(d.isHidden() for d in win._sidebar_docks())
+    _close(win)

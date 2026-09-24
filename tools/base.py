@@ -451,6 +451,12 @@ class Tool(ABC):
         """
         return []
 
+
+    def guide_preview_lines(self):
+        """``[(a, b), ...]`` — the guide LINES this tool is about to leave,
+        drawn dashed like a real guide while the cursor moves (#89,
+        @pacaeiro). Long segments are fine: the viewport clips them."""
+        return []
     def preview_faces(self):
         """Return ``Face`` objects to render shaded as a live solid preview.
 

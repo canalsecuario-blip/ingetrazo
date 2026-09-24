@@ -1652,6 +1652,26 @@ class EditItemCommand(ComposerCommand):
             setattr(self.item, k, v)
 
 
+def _edits_of(cmd) -> list:
+    """The field edits a command is made of: itself, or a compound's."""
+    if isinstance(cmd, EditItemCommand):
+        return [cmd]
+    if isinstance(cmd, CompoundCommand) and cmd.commands and all(
+            isinstance(c, EditItemCommand) for c in cmd.commands):
+        return list(cmd.commands)
+    return []
+
+
+def _edit_signature(cmd):
+    """Which items and fields a field edit touches — two edits with the
+    same signature coalesce into one undo step (a retype, letter by
+    letter; the same retype over a multiple selection)."""
+    edits = _edits_of(cmd)
+    if not edits:
+        return None
+    return tuple((id(e.item), frozenset(e.after)) for e in edits)
+
+
 class ComposerHistory:
     """Undo/redo stacks for one composer session.
 
@@ -1670,11 +1690,12 @@ class ComposerHistory:
                 coalesce: bool = False) -> None:
         cmd.do()
         top = self._undo[-1] if self._undo else None
-        if (coalesce and isinstance(cmd, EditItemCommand)
-                and isinstance(top, EditItemCommand)
-                and top.item is cmd.item
-                and set(top.after) == set(cmd.after)):
-            top.after = dict(cmd.after)      # keep top's `before`
+        if (coalesce and top is not None
+                and _edit_signature(top) is not None
+                and _edit_signature(top) == _edit_signature(cmd)):
+            # keep top's `before`
+            for t, c in zip(_edits_of(top), _edits_of(cmd)):
+                t.after = dict(c.after)
         else:
             self._undo.append(cmd)
         self._redo.clear()

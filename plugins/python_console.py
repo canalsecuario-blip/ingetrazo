@@ -52,6 +52,33 @@ from views.filedialogs import file_dialogs
 from tools.base import Tool
 
 
+#: The console's colours by ROLE, for each theme: VS Code's Dark+ and
+#: Light+ (issue #92, @xyont: the light theme left the console black).
+_PALETTES = {
+    "dark": {"bg": "#1e1e1e", "fg": "#d4d4d4", "border": "#333333",
+             "input_bg": "#252526", "input_fg": "#f1f1f1",
+             "input_border": "#3c3c3c",
+             "out": "#d4d4d4", "title": "#569cd6", "muted": "#808080",
+             "help": "#ce9178", "error": "#f44747", "echo": "#4ec9b0",
+             "run": "#dcdcaa"},
+    "light": {"bg": "#ffffff", "fg": "#1f1f1f", "border": "#c8ccd2",
+              "input_bg": "#f5f6f8", "input_fg": "#1f1f1f",
+              "input_border": "#c8ccd2",
+              "out": "#1f1f1f", "title": "#0451a5", "muted": "#6a737d",
+              "help": "#a31515", "error": "#cd3131", "echo": "#267f99",
+              "run": "#795e26"},
+}
+
+
+def _palette() -> dict:
+    """The colours for the theme in force (the app palette's window)."""
+    from PySide6.QtGui import QGuiApplication, QPalette
+    app = QGuiApplication.instance()
+    dark = (app is None
+            or app.palette().color(QPalette.Window).lightness() < 128)
+    return _PALETTES["dark" if dark else "light"]
+
+
 class PythonConsoleDialog(QDialog):
     """Interactive Python REPL over the live document."""
 
@@ -61,6 +88,9 @@ class PythonConsoleDialog(QDialog):
         self._history: list[str] = []
         self._history_idx = 0
         self._scope: dict = {"__name__": "__console__"}
+        #: What the output shows, as (text, role): repainted in the other
+        #: palette when the theme changes with the console open.
+        self._lines: list[tuple[str, str]] = []
 
         self.setWindowTitle(tr("Python Console") + " — IngeTrazo")
         self.setMinimumSize(640, 480)
@@ -95,21 +125,17 @@ class PythonConsoleDialog(QDialog):
         self._output = QPlainTextEdit()
         self._output.setReadOnly(True)
         self._output.setFont(mono)
-        self._output.setStyleSheet(
-            "QPlainTextEdit { background-color: #1e1e1e; color: #d4d4d4; "
-            "border: 1px solid #333; border-radius: 4px; padding: 6px; }")
+        self._prompt = None
         layout.addWidget(self._output, stretch=1)
 
         row = QHBoxLayout()
         prompt = QLabel(">>>")
         prompt.setFont(mono)
-        prompt.setStyleSheet("color: #4ec9b0;")
+        self._prompt = prompt
         row.addWidget(prompt)
         self._input = QLineEdit()
         self._input.setFont(mono)
-        self._input.setStyleSheet(
-            "QLineEdit { background-color: #252526; color: #f1f1f1; "
-            "border: 1px solid #3c3c3c; border-radius: 4px; padding: 5px; }")
+
         self._input.setPlaceholderText(
             tr("Python code — Enter runs it, Up/Down browse history"))
         self._input.returnPressed.connect(self._on_execute)
@@ -119,6 +145,31 @@ class PythonConsoleDialog(QDialog):
         run_btn.clicked.connect(self._on_execute)
         row.addWidget(run_btn)
         layout.addLayout(row)
+        self._apply_colors()
+
+    def _apply_colors(self) -> None:
+        """The panes in the theme's palette, and the text already shown."""
+        c = _palette()
+        self._output.setStyleSheet(
+            f"QPlainTextEdit {{ background-color: {c['bg']}; "
+            f"color: {c['fg']}; border: 1px solid {c['border']}; "
+            "border-radius: 4px; padding: 6px; }")
+        self._prompt.setStyleSheet(f"color: {c['echo']};")
+        self._input.setStyleSheet(
+            f"QLineEdit {{ background-color: {c['input_bg']}; "
+            f"color: {c['input_fg']}; border: 1px solid {c['input_border']}; "
+            "border-radius: 4px; padding: 5px; }")
+        self._output.clear()
+        for text, role in self._lines:
+            self._write(text, c[role])
+
+    def changeEvent(self, event) -> None:
+        """Preferences ▸ Theme (or the desktop's scheme) changed."""
+        super().changeEvent(event)
+        if (event.type() == event.Type.PaletteChange
+                and getattr(self, "_colors_for", None) is not _palette()):
+            self._colors_for = _palette()
+            self._apply_colors()
 
     def eventFilter(self, obj, event):
         if obj is self._input and event.type() == event.Type.KeyPress:
@@ -141,7 +192,11 @@ class PythonConsoleDialog(QDialog):
             self._input.setText(self._history[self._history_idx])
 
     # ---- Output ------------------------------------------------------------
-    def _append_text(self, text: str, color_hex: str = "#d4d4d4") -> None:
+    def _append_text(self, text: str, role: str = "out") -> None:
+        self._lines.append((text, role))
+        self._write(text, _palette()[role])
+
+    def _write(self, text: str, color_hex: str) -> None:
         cursor = self._output.textCursor()
         cursor.movePosition(QTextCursor.End)
         self._output.setTextCursor(cursor)
@@ -154,11 +209,11 @@ class PythonConsoleDialog(QDialog):
         self._output.ensureCursorVisible()
 
     def _print_welcome(self) -> None:
-        self._append_text("IngeTrazo — " + tr("Python Console"), "#569cd6")
+        self._append_text("IngeTrazo — " + tr("Python Console"), "title")
         self._append_text(
             tr("Live objects: scene, mesh, viewport, window, selection, "
-               "groups, layers. Changes are undoable (Ctrl+Z)."), "#808080")
-        self._append_text("", "#808080")
+               "groups, layers. Changes are undoable (Ctrl+Z)."), "muted")
+        self._append_text("", "muted")
 
     def _print_help(self) -> None:
         self._append_text(
@@ -179,7 +234,7 @@ class PythonConsoleDialog(QDialog):
             "# paint the selection red (floats 0-1, the Paint idiom)\n"
             "for face in [e for e in selection if hasattr(e, 'loop')]:\n"
             "    face.attrs['color'] = (0.8, 0.1, 0.1)\n",
-            "#ce9178")
+            "help")
 
     # ---- Execution ---------------------------------------------------------
     def _refresh_scope(self) -> None:
@@ -259,13 +314,13 @@ class PythonConsoleDialog(QDialog):
         vp.notify_scene_changed()
 
         if out := out_buf.getvalue():
-            self._append_text(out.rstrip(), "#d4d4d4")
+            self._append_text(out.rstrip(), "out")
         if err := err_buf.getvalue():
-            self._append_text(err.rstrip(), "#f44747")
+            self._append_text(err.rstrip(), "error")
             if history.last_error is not None:
                 self._append_text(
                     tr("(rolled back — the document is unchanged)"),
-                    "#808080")
+                    "muted")
 
     def _on_execute(self) -> None:
         code = self._input.text().strip()
@@ -274,7 +329,7 @@ class PythonConsoleDialog(QDialog):
         self._input.clear()
         self._history.append(code)
         self._history_idx = len(self._history)
-        self._append_text(f">>> {code}", "#4ec9b0")
+        self._append_text(f">>> {code}", "echo")
         self._run_code(code, "<console>")
 
     def _on_run_script_file(self) -> None:
@@ -284,17 +339,18 @@ class PythonConsoleDialog(QDialog):
         if not path:
             return
         p = Path(path)
-        self._append_text(f"— {tr('running {name}', name=p.name)}", "#dcdcaa")
+        self._append_text(f"— {tr('running {name}', name=p.name)}", "run")
         try:
             source = p.read_text(encoding="utf-8")
         except OSError as exc:
-            self._append_text(str(exc), "#f44747")
+            self._append_text(str(exc), "error")
             return
         self._scope["__file__"] = str(p.resolve())
         self._run_code(source, str(p))
 
     def _on_clear(self) -> None:
         self._output.clear()
+        self._lines.clear()
         self._print_welcome()
 
 

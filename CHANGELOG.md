@@ -19,8 +19,20 @@ follow [SemVer](https://semver.org).
   dos puntos incluida— las líneas ocultas se calculan en la propia
   perspectiva y el dibujo se recorta a lo que muestra la ventana; lo que
   está a la distancia del punto de mira sale a tamaño real.
+- **Ctrl+Tab: del modelo a las láminas y vuelta** (#91, @pacaeiro). Desde
+  el modelo va a la última lámina abierta (o crea la primera); desde el
+  compositor, al modelo. En el compositor, **Ctrl+RePág / Ctrl+AvPág**
+  pasan a la lámina anterior o siguiente, como las hojas de Calc. Al
+  pasar el ratón por las pestañas Modelo y Lámina, un aviso lo recuerda.
+- **La guía que vas a crear se ve antes del clic** (#89, @pacaeiro): con
+  el Metro y el Transportador, la línea guía provisional sigue al ratón a
+  trazos, como quedará. Ya se intentaba dibujar, pero en perspectiva una
+  guía tiene un extremo detrás de la cámara y se descartaba entera.
 
 ### Corregido
+- **La consola de Python sigue el tema** (#92, @xyont): con el tema claro
+  tenía el fondo negro. Ahora usa colores claros (los de VS Code Light+), y
+  cambia con el tema aunque esté abierta, incluido lo ya escrito.
 - **«Añadir localización» ya abre el mapa** desde el panel de Sombras. En
   Wayland se quedaba cargando sin mostrar nada: el diálogo colgaba del menú
   desplegable de la barra. Ahora el menú se cierra y el diálogo sale sobre
@@ -31,6 +43,30 @@ follow [SemVer](https://semver.org).
   Ventana no dejaba recuperar las otras (salían en gris). Ahora vuelven
   todas las que estaban abiertas, y **Ventana ▸ Panel BIM** se suma a
   Panel de propiedades y Panel de terreno.
+- **Compositor: el panel cambia TODO lo seleccionado.** Con varias cotas
+  seleccionadas, poner la unidad en m (o el grosor, las flechas, el tamaño
+  del texto…) solo cambiaba una; ahora cambian todas las del mismo tipo, y
+  un solo Ctrl+Z las devuelve. Viaja solo lo que tocaste: cada una guarda
+  su texto y su sitio. Vale para textos, formas, vistas y demás.
+- **Compositor: Ctrl+clic suma o quita de la selección donde sea**, también
+  sobre el texto de una cota. Ahí la cota se seleccionaba y se volvía a
+  deseleccionar en el mismo clic, y un temblor del ratón movía el texto.
+  El panel sigue mostrando la primera elegida mientras siga seleccionada.
+- **Compositor: cada herramienta muestra su cursor** (#79, @pacaeiro):
+  mano para desplazar, lupa para el zoom, cruz para las que colocan o
+  dibujan. Tras pasar el ratón por un marco se quedaba la flecha de
+  Seleccionar.
+- **Compositor: una vista redimensionada se vuelve a pintar sola** (#80,
+  @pacaeiro) con el render automático activo, sin pulsar Actualizar.
+- **Compositor: una Planta sigue siendo una Planta** (#82, @pacaeiro): al
+  editar una vista fija (Planta, Frontal, Posterior, Izquierda, Derecha)
+  solo se desplaza, se hace zoom y se gira; ya no se puede orbitar y
+  dejarla distinta de lo que dice su panel. Ahí el botón central desplaza,
+  como en la lámina (#83). Isométrica, escenas y perspectivas siguen
+  orbitando.
+- **Los paneles Propiedades, BIM y Terreno se abren siempre al arrancar.**
+  Solo queda cerrado el que quites desde el menú Ventana, y así se
+  recuerda; una barra plegada al cerrar vuelve desplegada.
 
 ## [0.5.1] — 2026-09-23
 

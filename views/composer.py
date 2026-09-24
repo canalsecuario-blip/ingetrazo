@@ -2540,6 +2540,40 @@ class _SheetItem(QGraphicsItem):
 
     RESIZABLE = True
 
+    #: A Ctrl+click on this item is being taken as a selection toggle.
+    _ctrl_toggle = False
+
+    def _owns_ctrl_press(self, pos) -> bool:
+        """Whether a Ctrl+press at ``pos`` is this item's own gesture
+        rather than «add to / remove from the selection»."""
+        return False
+
+    def sceneEvent(self, event) -> bool:
+        """Ctrl+click = add to or remove from the selection, wherever the
+        item is hit (Marco, 24-09: selecting several cotas with Ctrl «es un
+        poco difícil»). A press on a cota's text or on a handle used to
+        select the item itself to start dragging it, and Qt's own Ctrl
+        toggle on release then took it straight back off; a one-pixel
+        wobble counted as a drag and toggled nothing. Taken whole here:
+        press toggles, the rest of the click is swallowed."""
+        t = event.type()
+        if (t == QEvent.GraphicsSceneMousePress
+                and event.button() == Qt.LeftButton
+                and event.modifiers() & Qt.ControlModifier
+                and getattr(self.composer, "tool_mode", "select") == "select"
+                and not self._owns_ctrl_press(event.pos())):
+            self._ctrl_toggle = True
+            self.setSelected(not self.isSelected())
+            event.accept()
+            return True
+        if self._ctrl_toggle and t in (QEvent.GraphicsSceneMouseMove,
+                                       QEvent.GraphicsSceneMouseRelease):
+            if t == QEvent.GraphicsSceneMouseRelease:
+                self._ctrl_toggle = False
+            event.accept()
+            return True
+        return super().sceneEvent(event)
+
     def __init__(self, composer: "ComposerWindow", model) -> None:
         super().__init__()
         self.composer = composer
@@ -3079,6 +3113,11 @@ class EtiquetaCanvasItem(_SheetItem):
                 "ax_mm": m.ax_mm, "ay_mm": m.ay_mm,
                 "anchor_uid": m.anchor_uid, "a_world": m.a_world,
                 "leaders": [dict(ld) for ld in (m.leaders or [])]}
+
+    def _owns_ctrl_press(self, pos) -> bool:
+        """Ctrl-drag on an arrow tip pulls a new leader (below)."""
+        return (not getattr(self.model, "locked", False)
+                and self._spot_at(pos) is not None)
 
     def mousePressEvent(self, event) -> None:
         note = getattr(self.composer, "note_drag_start", None)
@@ -4017,10 +4056,14 @@ class ComposerCanvasView(QGraphicsView):
                 mods = event.modifiers()
                 if event.button() == Qt.LeftButton and mods & Qt.ShiftModifier:
                     mode = "rotate"          # Shift+drag turns the drawing
-                elif (event.button() == Qt.MiddleButton
-                        or mods & Qt.ControlModifier):
+                elif ((event.button() == Qt.MiddleButton
+                        or mods & Qt.ControlModifier)
+                        and not self.composer.view_is_fixed(edit)):
                     mode = "orbit"
                 else:
+                    # A Top or a Front stays one: its panel says what it
+                    # shows, so the hand only slides it (#82, @pacaeiro)
+                    # — and the middle button pans, as on the sheet (#83).
                     mode = "pan"
                 self.composer.start_view_drag(
                     edit, pos, event.position().toPoint(),
@@ -4094,7 +4137,7 @@ class ComposerCanvasView(QGraphicsView):
                 event.button() == Qt.LeftButton and mode == "pan"):
             # Pan the sheet: the middle button anywhere, or the Pan tool.
             self._pan_last = event.position().toPoint()
-            self.setCursor(Qt.ClosedHandCursor)
+            self.viewport().setCursor(Qt.ClosedHandCursor)
             event.accept()
             return
         if mode == "zoom" and event.button() == Qt.LeftButton:
@@ -4287,6 +4330,13 @@ class ComposerCanvasView(QGraphicsView):
             notify()
 
     def mouseMoveEvent(self, event) -> None:
+        self._mouse_move(event)
+        # An armed tool keeps its cursor over the items too: their hover
+        # cursors (move, resize) belong to Select.
+        if self._pan_last is None and self.composer.tool_mode != "select":
+            self.show_tool_cursor()
+
+    def _mouse_move(self, event) -> None:
         if self._pan_last is not None:
             if not (event.buttons() & (Qt.MiddleButton | Qt.LeftButton)):
                 # The release never came. It does not always: a screenshot,
@@ -4802,12 +4852,24 @@ class ComposerCanvasView(QGraphicsView):
                      "zoom": Qt.SizeVerCursor, "zoom_ventana": Qt.CrossCursor}
 
     def tool_cursor(self):
-        return self._TOOL_CURSORS.get(self.composer.tool_mode, Qt.ArrowCursor)
+        """The armed tool's cursor: its own, a cross for every tool that
+        places or draws something, the arrow for Select."""
+        mode = self.composer.tool_mode
+        if mode == "select":
+            return Qt.ArrowCursor
+        return self._TOOL_CURSORS.get(mode, Qt.CrossCursor)
+
+    def show_tool_cursor(self) -> None:
+        """On the VIEWPORT, not the view (#79, @pacaeiro: «the cursor is
+        always the Select»): once the pointer has crossed an item with a
+        cursor of its own, QGraphicsView hands the viewport an explicit
+        cursor of its own, and from then on the view's never shows."""
+        self.viewport().setCursor(self.tool_cursor())
 
     def _end_pan(self) -> None:
         """Stop panning and give the cursor back to the armed tool."""
         self._pan_last = None
-        self.setCursor(self.tool_cursor())
+        self.show_tool_cursor()
 
     # ---- zoom tools (the model's Zoom and Zoom Window, on the sheet) ------
 
@@ -5208,6 +5270,14 @@ class ComposerWindow(QMainWindow):
         # autoguardado o el icono de guardar en composiciones»).
         QShortcut(QKeySequence.Save, self, activated=self.save_document)
         QShortcut(QKeySequence.SaveAs, self, activated=self.save_document_as)
+        # Ctrl+Tab: back to the model (#91, @pacaeiro); Ctrl+PgUp / PgDn:
+        # the sheet before / after, as Calc walks its sheets.
+        for seq in ("Ctrl+Tab", "Ctrl+Shift+Tab"):
+            QShortcut(QKeySequence(seq), self, activated=self._show_model)
+        QShortcut(QKeySequence("Ctrl+PgUp"), self,
+                  activated=lambda: self.step_sheet(-1))
+        QShortcut(QKeySequence("Ctrl+PgDown"), self,
+                  activated=lambda: self.step_sheet(1))
 
         self._rebuild_canvas()
 
@@ -5350,7 +5420,7 @@ class ComposerWindow(QMainWindow):
             self._view.cancel_placement()
         self.tool_mode = mode
         if hasattr(self, "_view"):
-            self._view.setCursor(self._view.tool_cursor())
+            self._view.show_tool_cursor()
         if mode == "estilo":
             # The format painter starts by taking a style: the first click
             # copies, every later click pastes.
@@ -7317,6 +7387,16 @@ class ComposerWindow(QMainWindow):
         self.activateWindow()
         self._refresh_sheet_tabs()
 
+    def step_sheet(self, step: int) -> None:
+        """The sheet ``step`` places before or after this one — no
+        wrap-around, as in Calc."""
+        comps = self._scene().compositions
+        if self.comp not in comps:
+            return
+        i = comps.index(self.comp) + step
+        if 0 <= i < len(comps):
+            self.show_sheet(i)
+
     def _new_sheet_tab(self) -> None:
         """The «+» tab: a new sheet, shown here."""
         self._on_comp_add()
@@ -7565,10 +7645,22 @@ class ComposerWindow(QMainWindow):
         self.on_selection_changed()
 
     def _selected_item(self) -> Optional[_SheetItem]:
+        """The selected item the panel speaks for: the one it already
+        shows while that one stays selected, else the first. Qt hands
+        ``selectedItems()`` back in no set order — with several cotas
+        selected the panel was filled from one and the edit landed on
+        another, which took ALL the first one's values (its offset, its
+        axis) and jumped (Marco, 24-09: «algunas cotas cambian de
+        ubicación»)."""
+        shown = getattr(self, "_panel_model", None)
+        first = None
         for it in self.canvas.selectedItems():
             if isinstance(it, _SheetItem):
-                return it
-        return None
+                if it.model is shown:
+                    return it
+                if first is None:
+                    first = it
+        return first
 
     def on_selection_changed(self) -> None:
         if self._updating:
@@ -8800,6 +8892,17 @@ class ComposerWindow(QMainWindow):
     def view_edit_item(self):
         return self._view_edit
 
+    def view_is_fixed(self, item) -> bool:
+        """A frame whose orientation its properties name — Top, Front,
+        Back, Left, Right, parallel. Editing it in place pans, zooms and
+        turns it (the turn is a property too), never orbits it off what it
+        says it is (#82, @pacaeiro: «the properties stop corresponding to
+        the reality of the View»)."""
+        frame = getattr(item, "model", None)
+        key = str(getattr(frame, "view_key", "") or "")
+        return (key.startswith("std:") and key != "std:iso"
+                and not getattr(frame, "perspective", False))
+
     def begin_view_edit(self, item) -> None:
         """Double-click on a frame: pan / orbit / zoom its view with the
         mouse until Enter, Esc or a click outside."""
@@ -8811,9 +8914,16 @@ class ComposerWindow(QMainWindow):
         self._view_edit = item
         item.force_select()
         item.update()
-        self.statusBar().showMessage(tr(
-            "Editing the view: drag = pan, Shift+drag = turn, middle button "
-            "or Ctrl+drag = orbit, wheel = zoom, Enter/Esc = done."), 8000)
+        if self.view_is_fixed(item):
+            self.statusBar().showMessage(tr(
+                "Editing the view: drag or middle button = pan, Shift+drag = "
+                "turn, wheel = zoom, Enter/Esc = done. A fixed view does not "
+                "orbit: change it in its properties."), 8000)
+        else:
+            self.statusBar().showMessage(tr(
+                "Editing the view: drag = pan, Shift+drag = turn, middle "
+                "button or Ctrl+drag = orbit, wheel = zoom, Enter/Esc = "
+                "done."), 8000)
 
     def end_view_edit(self) -> None:
         item = self._view_edit
@@ -8889,6 +8999,8 @@ class ComposerWindow(QMainWindow):
 
     def orbit_view(self, item, dyaw: float, dpitch: float) -> None:
         import math
+        if self.view_is_fixed(item):
+            return                  # a Top stays a Top (#82)
         frame = item.model
         _t, _r, _u, yaw, pitch = self._frame_camera_state(item)
         frame.cam_yaw = float(yaw + dyaw)
@@ -9456,13 +9568,24 @@ class ComposerWindow(QMainWindow):
         for f in list(self.comp.frames):
             if f.style == "vectorial":
                 continue
-            if id(f) in self._stale or id(f) not in self.render_cache:
+            if (id(f) in self._stale or id(f) not in self.render_cache
+                    or self._render_outgrown(f)):
                 self.render_frame(f)
                 done = True
         if done:
             self._rebuild_canvas()
         else:
             self.canvas.update()
+
+    def _render_outgrown(self, frame) -> bool:
+        """The frame was resized since its render: the picture no longer
+        has its size (#80, @pacaeiro: «each time I redimension the View I
+        have to Update the View»)."""
+        image = self.render_cache.get(id(frame))
+        if image is None:
+            return False
+        w, h = frame.render_px(RENDER_DPI)
+        return (image.width(), image.height()) != (w, h)
 
     def _on_history_change(self) -> None:
         self._mark_dirty()
@@ -9476,6 +9599,9 @@ class ComposerWindow(QMainWindow):
 
     def _rebuild_after_change(self) -> None:
         self._rebuild_canvas()
+        if self._auto_render and any(self._render_outgrown(f)
+                                     for f in self.comp.frames):
+            self._auto_timer.start()
         if getattr(self, "_pending_sel", None) is not None:
             for it in self.canvas.items():
                 if isinstance(it, _SheetItem) and it.model is self._pending_sel:
@@ -9716,17 +9842,39 @@ class ComposerWindow(QMainWindow):
             item.model,
             {"locked": not getattr(item.model, "locked", False)}))
 
-    def _panel_edit(self, item: "_SheetItem", changes: dict) -> None:
+    def _panel_edit(self, item: "_SheetItem", changes: dict) -> list:
         """A live property edit from the panel: one coalesced undo step,
-        repainting just the touched item (no canvas rebuild mid-typing)."""
+        repainting just the touched items (no canvas rebuild mid-typing).
+        Returns the OTHER selected items the edit also went to."""
         model = item.model
-        if all(getattr(model, k) == v for k, v in changes.items()):
-            return
+        changed = {k: v for k, v in changes.items()
+                   if getattr(model, k) != v}
+        if not changed:
+            return []
+        # The panel shows ONE item, but what the user changed there goes to
+        # every selected item of its kind: several cotas selected, the unit
+        # set to m, all of them in m (Marco, 24-09: «solo una nomas cambia
+        # las demás no»). Only the fields that changed — each keeps its own
+        # text, place and the rest.
+        others = [it for it in self.canvas.selectedItems()
+                  if isinstance(it, _SheetItem) and it is not item
+                  and type(it.model) is type(model)
+                  and all(hasattr(it.model, k) for k in changed)]
         item.prepareGeometryChange()
-        self.history.execute(EditItemCommand(model, changes),
-                             notify=False, coalesce=True)
+        for it in others:
+            it.prepareGeometryChange()
+        if others:
+            cmd = CompoundCommand(
+                [EditItemCommand(model, changes)]
+                + [EditItemCommand(it.model, changed) for it in others])
+        else:
+            cmd = EditItemCommand(model, changes)
+        self.history.execute(cmd, notify=False, coalesce=True)
         self._mark_dirty()
         item.update()
+        for it in others:
+            it.update()
+        return others
 
     def _on_frame_props(self, *_a) -> None:
         item = self._selected_item()
@@ -9769,14 +9917,15 @@ class ComposerWindow(QMainWindow):
                       "km_step_m", "section_marks"}
         paint_only = paint_only | {"grid_m"}
         changed = {k for k, v in changes.items() if getattr(m, k) != v}
-        self._panel_edit(item, changes)
-        if changed - paint_only - annot_only:
-            self._forget_frame(m)
-        elif changed & annot_only:
-            try:
-                self.annot_cache[id(m)] = self.compute_annotations(m)
-            except Exception:  # noqa: BLE001 — a stub viewport in tests
-                self.annot_cache.pop(id(m), None)
+        others = self._panel_edit(item, changes)
+        for fm in [m] + [it.model for it in others]:
+            if changed - paint_only - annot_only:
+                self._forget_frame(fm)
+            elif changed & annot_only:
+                try:
+                    self.annot_cache[id(fm)] = self.compute_annotations(fm)
+                except Exception:  # noqa: BLE001 — a stub viewport in tests
+                    self.annot_cache.pop(id(fm), None)
         self._sync_vector_widgets(m)
         self._sync_title_widgets(m)
         self.refresh_items()                 # bound scale labels re-read {escala}

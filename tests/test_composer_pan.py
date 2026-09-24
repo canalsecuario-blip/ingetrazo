@@ -65,7 +65,7 @@ def test_pan_tool_pans_with_the_left_button_only_in_pan_mode():
         h0 = view.horizontalScrollBar().value()
         _drag(view, Qt.LeftButton, 100, 100, 130, 100)
         assert view.horizontalScrollBar().value() == h0 - 30
-        assert view.cursor().shape() == Qt.OpenHandCursor
+        assert view.viewport().cursor().shape() == Qt.OpenHandCursor
         view.composer.tool_mode = "select"
         h1 = view.horizontalScrollBar().value()
         _drag(view, Qt.LeftButton, 100, 100, 130, 100)    # rubber band, no pan

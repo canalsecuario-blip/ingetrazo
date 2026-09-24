@@ -192,6 +192,7 @@ class MainWindow(QMainWindow):
                 state = factory.read_bytes()
         if state:
             self.restoreState(state)
+        self._show_default_trays(st)
         self._place_new_toolbars(st)
         # Packed on the first show (see showEvent): the toolbars have no
         # geometry to read their order from until the window is laid out.
@@ -965,6 +966,11 @@ class MainWindow(QMainWindow):
         toggle_georef = self.georef_tray.toggleViewAction()
         toggle_georef.setText(tr("Terrain panel"))
         window_menu.addAction(toggle_georef)
+        # Only the menu says a tray is unwanted: that choice is remembered
+        # and every other tray opens at start-up (see _show_default_trays).
+        for dock in self._sidebar_docks():
+            dock.toggleViewAction().triggered.connect(
+                lambda on, d=dock: self._remember_tray_choice(d, on))
 
         toggle_profile = self.profile_dock.toggleViewAction()
         toggle_profile.setText(tr("Terrain profile"))
@@ -1030,6 +1036,35 @@ class MainWindow(QMainWindow):
             lang_menu.addAction(action)
 
     # ---- Sidebar strip (LibreOffice-style) ---------------------------------
+    def _show_default_trays(self, st) -> None:
+        """Properties, BIM and Terrain always open at start-up — a tray
+        stays closed only when it was closed from the Window menu (Marco,
+        24-09: «que siempre se muestren por defecto con opción de ocultarlas
+        desde el menú Ventana»). A saved layout alone (a folded sidebar, a
+        tray lost by the old fold) does not keep one away."""
+        hidden = self._hidden_tray_names(st)
+        docks = self._sidebar_docks()
+        for d in docks:
+            d.setVisible(d.objectName() not in hidden)
+        if not self.tray.isHidden():
+            self.tray.raise_()
+
+    @staticmethod
+    def _hidden_tray_names(st) -> set:
+        raw = st.value("ui/hidden_trays", []) or []
+        if isinstance(raw, str):
+            raw = [raw]
+        return {str(x) for x in raw}
+
+    def _remember_tray_choice(self, dock, shown: bool) -> None:
+        st = QSettings()
+        hidden = self._hidden_tray_names(st)
+        if shown:
+            hidden.discard(dock.objectName())
+        else:
+            hidden.add(dock.objectName())
+        st.setValue("ui/hidden_trays", sorted(hidden))
+
     def _sidebar_docks(self) -> list:
         return [d for d in (getattr(self, "tray", None),
                             getattr(self, "bim_tray", None),
@@ -1452,6 +1487,12 @@ class MainWindow(QMainWindow):
                              on_menu=self._strip_sheet_menu)
         self.setStatusBar(bar)
         self._sheet_tabs = bar.tabs
+        # Ctrl+Tab: to the sheets and back (#91, @pacaeiro) — the last sheet
+        # shown, as the strip's own tab; Ctrl+Shift+Tab too, with only two
+        # places to go. A document without sheets gets its first one.
+        from PySide6.QtGui import QShortcut
+        for seq in ("Ctrl+Tab", "Ctrl+Shift+Tab"):
+            QShortcut(QKeySequence(seq), self, activated=self._to_sheets)
         # ONE hint for the tool and its step (SketchUp's status bar) goes in
         # as the bar's BASE message — SheetStatusBar keeps the Model | Sheet
         # strip glued to the left and restores the base after a timed
@@ -2723,6 +2764,14 @@ class MainWindow(QMainWindow):
         self._strip_sheets = [last]
         tabs.set_show_new(False)
         tabs.refresh([comps[last].name], None)
+
+    def _to_sheets(self) -> None:
+        comps = getattr(self.viewport.scene, "compositions", None) or []
+        if not comps:
+            self._show_new_sheet()
+            return
+        last = min(max(getattr(self, "_last_sheet", 0), 0), len(comps) - 1)
+        self._show_sheet(last)
 
     def _show_strip_sheet(self, k: int) -> None:
         """A sheet tab of THIS strip (it shows only the last sheet)."""

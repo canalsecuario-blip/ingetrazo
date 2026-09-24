@@ -435,13 +435,17 @@ class ProtractorTool(ProtractorBase):
         segments.append((self.start_point, self.hover_point))
         if self.ref_point is not None:
             segments.append((self.start_point, self.ref_point))
-            deg = self._display_deg(self.hover_point)
-            if deg is not None:
-                d = self._direction_at(deg)
-                # Preview of the future guide, long enough to read as a line.
-                segments.append((self.start_point - d * 50.0,
-                                 self.start_point + d * 50.0))
         return segments
+
+    def guide_preview_lines(self):
+        """The angled guide the next click leaves, through the vertex."""
+        if (not self._guides or self.start_point is None
+                or self.ref_point is None or self.hover_point is None):
+            return []
+        deg = self._display_deg(self.hover_point)
+        if deg is None:
+            return []
+        return [Guide(self.start_point, self._direction_at(deg)).segment()]
 
     def value_label(self):
         if self.ref_point is None or self.hover_point is None:

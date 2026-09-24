@@ -109,9 +109,13 @@ def test_zoom_keeps_the_point_under_the_cursor(monkeypatch):
         assert frame.scale_n == pytest.approx(50.0)
         (cx2, cy2), = comp._frame_world_to_page(frame, corner)
         assert (cx2, cy2) == pytest.approx((cx, cy), abs=1e-6)
+        # A Front stays a Front (#82): orbit only turns the free views.
         comp.orbit_view(item, 0.4, 0.2)
-        assert frame.cam_yaw == pytest.approx(math.radians(-90.0) + 0.4)
-        assert frame.cam_pitch == pytest.approx(0.2)
+        assert frame.cam_yaw is None and frame.cam_pitch is None
+        frame.view_key = "std:iso"
+        comp.orbit_view(item, 0.4, 0.2)
+        assert frame.cam_yaw == pytest.approx(math.radians(-45.0) + 0.4)
+        assert frame.cam_pitch == pytest.approx(math.radians(30.0) + 0.2)
     finally:
         comp.close()
         win._saved_version = win.viewport.scene.version
@@ -254,3 +258,21 @@ def test_picking_another_view_source_drops_the_frame_camera_edits(monkeypatch):
     frame.cam_yaw = 0.3
     composer.fw_spin.setValue(frame.w_mm + 10.0)
     assert frame.cam_yaw == 0.3
+
+
+def test_a_fixed_view_pans_where_a_free_one_orbits(monkeypatch):
+    """#82/#83 (@pacaeiro): in a Top or a Front the middle button and
+    Ctrl+drag pan — its properties name the orientation; Isometric, scenes
+    and perspectives still orbit."""
+    win, comp, item = _composer_with_model(monkeypatch)
+    try:
+        assert comp.view_is_fixed(item)                   # std:front
+        item.model.view_key = "std:iso"
+        assert not comp.view_is_fixed(item)
+        item.model.view_key = "std:top"
+        item.model.perspective = True
+        assert not comp.view_is_fixed(item)
+    finally:
+        comp.close()
+        win._saved_version = win.viewport.scene.version
+        win.close()

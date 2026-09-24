@@ -1092,12 +1092,12 @@ class TestLostMouseRelease:
         _mouse(view, QEvent.MouseButtonPress, 300, 300, button=Qt.MiddleButton,
                buttons=Qt.MiddleButton)
         assert view._pan_last is not None
-        assert view.cursor().shape() == Qt.ClosedHandCursor
+        assert view.viewport().cursor().shape() == Qt.ClosedHandCursor
         h0 = view.horizontalScrollBar().value()
         # the release went somewhere else; the next move has no buttons
         _mouse(view, QEvent.MouseMove, 380, 360, buttons=Qt.NoButton)
         assert view._pan_last is None
-        assert view.cursor().shape() == Qt.ArrowCursor
+        assert view.viewport().cursor().shape() == Qt.CrossCursor  # the Cota tool's (#79)
         # …and it did NOT drag the page on the way out
         assert view.horizontalScrollBar().value() == h0
 
@@ -1108,7 +1108,7 @@ class TestLostMouseRelease:
         _mouse(view, QEvent.MouseMove, 340, 330, button=Qt.NoButton,
                buttons=Qt.MiddleButton)
         assert view._pan_last is not None
-        assert view.cursor().shape() == Qt.ClosedHandCursor
+        assert view.viewport().cursor().shape() == Qt.ClosedHandCursor
 
     def test_coming_back_into_the_view_with_nothing_pressed_ends_it(self):
         from PySide6.QtCore import QPointF
@@ -1120,11 +1120,11 @@ class TestLostMouseRelease:
         view.enterEvent(QEnterEvent(QPointF(10, 10), QPointF(10, 10),
                                     QPointF(10, 10)))
         assert view._pan_last is None
-        assert view.cursor().shape() == Qt.ArrowCursor
+        assert view.viewport().cursor().shape() == Qt.CrossCursor  # the Cota tool's (#79)
 
     def test_the_pan_tool_gets_its_open_hand_back(self):
         view, comp = _view("pan")
         _mouse(view, QEvent.MouseButtonPress, 300, 300, button=Qt.MiddleButton,
                buttons=Qt.MiddleButton)
         _mouse(view, QEvent.MouseMove, 380, 360, buttons=Qt.NoButton)
-        assert view.cursor().shape() == Qt.OpenHandCursor
+        assert view.viewport().cursor().shape() == Qt.OpenHandCursor

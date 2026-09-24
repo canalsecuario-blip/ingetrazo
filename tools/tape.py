@@ -263,9 +263,18 @@ class TapeMeasureTool(Tool):
         if self._edge is not None:
             offset = self._guide_offset(self.hover_point)
             if offset is not None:
-                g = Guide(self.start_point + offset, self._edge_dir())
-                return [g.segment(), (self.start_point, self.start_point + offset)]
+                return [(self.start_point, self.start_point + offset)]
         return [(self.start_point, self.hover_point)]
+
+    def guide_preview_lines(self):
+        """The guide line the next click leaves, parallel to its source."""
+        if (self._edge is None or self.start_point is None
+                or self.hover_point is None):
+            return []
+        offset = self._guide_offset(self.hover_point)
+        if offset is None or offset.length() < 1e-9:
+            return []
+        return [Guide(self.start_point + offset, self._edge_dir()).segment()]
 
     def value_label(self):
         if self.start_point is None or self.hover_point is None:

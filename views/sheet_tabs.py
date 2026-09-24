@@ -60,9 +60,13 @@ class SheetTabs(QTabBar):
         # Scroll, never elide: an elided strip squeezes every name to «L…»
         # before the ◀ ▶ buttons ever show.
         self.setElideMode(Qt.ElideNone)
+        # The keys here too, not only on each tab: where Qt cannot tell
+        # which tab is under the pointer (Marco's Wayland screen at 120 %)
+        # this is the tip that shows.
         self.setToolTip(tr(
-            "Switch between the model and each sheet — AutoCAD's "
-            "Model / Layout tabs."))
+            "Model and sheets — Ctrl+Tab switches between them; in the "
+            "sheets, Ctrl+PgUp / Ctrl+PgDown go to the sheet before / "
+            "after."))
         self._on_model = on_model
         self._on_sheet = on_sheet
         self._on_new = on_new
@@ -142,8 +146,19 @@ class SheetTabs(QTabBar):
                     self.removeTab(0)
                 for i, (label, sl) in enumerate(zip(shown, slots)):
                     self.addTab(label)
+                    # The keys that walk the strip, where the hand already
+                    # is (Marco, 24-09: «un mensaje informativo cuando me
+                    # acerque a modelo o lámina»).
                     if sl[0] == "new":
                         self.setTabToolTip(i, tr("New sheet"))
+                    elif sl[0] == "model":
+                        self.setTabToolTip(i, tr(
+                            "Model — Ctrl+Tab goes to the sheet"))
+                    else:
+                        self.setTabToolTip(i, tr(
+                            "Sheet — Ctrl+Tab goes back to the model; "
+                            "Ctrl+PgUp / Ctrl+PgDown, the sheet before / "
+                            "after"))
                 self._shown = shown
             self._slot_list = slots
             want = ("model",) if self._current is None else ("sheet", self._current)

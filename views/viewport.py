@@ -5423,10 +5423,26 @@ class Viewport(QOpenGLWidget):
         pen.setJoinStyle(Qt.RoundJoin)
         painter.setPen(pen)
         for p0, p1 in segments:
-            q0 = self._world_to_pixel(p0)
-            q1 = self._world_to_pixel(p1)
-            if q0 is not None and q1 is not None:
-                painter.drawLine(QPointF(*q0), QPointF(*q1))
+            q = self._segment_to_pixels(p0, p1)
+            if q is not None:
+                painter.drawLine(QPointF(*q[0]), QPointF(*q[1]))
+
+    def _draw_guide_preview(self, painter: QPainter) -> None:
+        """The guide the Tape or the Protractor is about to leave, dashed
+        like the guides themselves, following the cursor (#89, @pacaeiro)."""
+        tool = self.active_tool
+        lines = (tool.guide_preview_lines()
+                 if tool is not None
+                 and hasattr(tool, "guide_preview_lines") else [])
+        if not lines:
+            return
+        pen = QPen(QColor(70, 90, 120), 1.5, Qt.DashLine)
+        pen.setDashPattern([10.0, 7.0])
+        painter.setPen(pen)
+        for p0, p1 in lines:
+            q = self._segment_to_pixels(p0, p1)
+            if q is not None:
+                painter.drawLine(QPointF(*q[0]), QPointF(*q[1]))
 
     # ---- 2D overlay (QPainter on top of OpenGL) -----------------------------
     def _draw_overlay(self) -> None:
@@ -5437,6 +5453,7 @@ class Viewport(QOpenGLWidget):
         # Rubber band for the "always on top" tools (Line/Rectangle/Move),
         # drawn here with a thick, reliable pen.
         self._draw_rubber_band_overlay(painter)
+        self._draw_guide_preview(painter)
 
         # The acquired circle centre (SketchUp's Center inference): a small
         # green dot at the centre of the last circle or arc the cursor
@@ -7013,6 +7030,51 @@ class Viewport(QOpenGLWidget):
         else:
             t = (b * e - d) / denom
         return start + d1 * t
+
+    #: Eye depth (m) a segment is cut at when it runs behind the camera.
+    _CLIP_W = 1e-3
+
+    def _segment_to_pixels(self, p0: QVector3D, p1: QVector3D):
+        """A world segment → its two screen pixels, cut where it passes
+        behind the eye instead of dropped whole. A guide is kilometres
+        long: in perspective one end is nearly always behind the camera,
+        and the preview never showed (#89)."""
+        mvp = self.camera.projection_matrix() * self.camera.view_matrix()
+        c0 = mvp.map(QVector4D(p0.x(), p0.y(), p0.z(), 1.0))
+        c1 = mvp.map(QVector4D(p1.x(), p1.y(), p1.z(), 1.0))
+        w0, w1, eps = c0.w(), c1.w(), self._CLIP_W
+        if w0 < eps and w1 < eps:
+            return None
+        if w0 < eps:
+            c0 = c0 + (c1 - c0) * ((eps - w0) / (w1 - w0))
+        elif w1 < eps:
+            c1 = c1 + (c0 - c1) * ((eps - w1) / (w0 - w1))
+        (x0, y0), (x1, y1) = [
+            ((c.x() / c.w() * 0.5 + 0.5) * self.width(),
+             (1.0 - (c.y() / c.w() * 0.5 + 0.5)) * self.height())
+            for c in (c0, c1)]
+        # Cut to the window (a margin past it): a point a hair in front of
+        # the eye lands millions of pixels out, past what the painter's
+        # fixed-point rasteriser draws right.
+        m = 64.0
+        lo_x, hi_x = -m, self.width() + m
+        lo_y, hi_y = -m, self.height() + m
+        dx, dy = x1 - x0, y1 - y0
+        t0, t1 = 0.0, 1.0
+        for p, q in ((-dx, x0 - lo_x), (dx, hi_x - x0),
+                     (-dy, y0 - lo_y), (dy, hi_y - y0)):
+            if p == 0.0:
+                if q < 0.0:
+                    return None
+                continue
+            r = q / p
+            if p < 0.0:
+                t0 = max(t0, r)
+            else:
+                t1 = min(t1, r)
+        if t0 > t1:
+            return None
+        return [(x0 + dx * t0, y0 + dy * t0), (x0 + dx * t1, y0 + dy * t1)]
 
     def _world_to_pixel(self, world: QVector3D) -> Optional[tuple[float, float]]:
         """World point → screen pixel (or None if behind the camera)."""
