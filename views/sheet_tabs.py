@@ -57,7 +57,9 @@ class SheetTabs(QTabBar):
         self.setExpanding(False)
         self.setDrawBase(False)
         self.setUsesScrollButtons(True)
-        self.setElideMode(Qt.ElideRight)
+        # Scroll, never elide: an elided strip squeezes every name to «L…»
+        # before the ◀ ▶ buttons ever show.
+        self.setElideMode(Qt.ElideNone)
         self.setToolTip(tr(
             "Switch between the model and each sheet — AutoCAD's "
             "Model / Layout tabs."))
@@ -74,31 +76,78 @@ class SheetTabs(QTabBar):
         self.refresh([], None)
 
     # ---- state ----------------------------------------------------------------
+    # The strip has a width budget (a share of the bar): past it, QTabBar's
+    # own ◀ ▶ scroll buttons appear, the way spreadsheet tabs scroll, and the
+    # tabs keep their look. With four sheets the strip had left the hint a
+    # stub, and with ten it would have left nothing (Marco, 23-09; he tried
+    # folding the tabs into a «▾ N more» menu and preferred the arrows).
+    # The LOGICAL layout — «Model», one tab per sheet, «+» — is what
+    # ``names``/``current``/``plus_index``/``click`` speak.
+
     def _wanted(self, names) -> list:
         labels = [tr("Model")] + [str(n) or tr("Sheet") for n in names]
-        if self._on_new is not None:
+        if self._has_new():
             labels.append("+")
         return labels
+
+    def _has_new(self) -> bool:
+        return self._on_new is not None and getattr(self, "_show_new", True)
+
+    def set_show_new(self, show: bool) -> None:
+        """Whether the «+» tab is offered (the model window drops it once
+        the document has sheets: there it only goes model ↔ sheet)."""
+        self._show_new = bool(show)
+
+    def set_budget(self, px) -> None:
+        """The width the strip may take; past it the scroll arrows show."""
+        self.setMaximumWidth(16777215 if px is None else max(int(px), 120))
+
+    def _slots(self) -> list:
+        """What each displayed tab stands for: ``("model",)``,
+        ``("sheet", i)`` or ``("new",)``."""
+        n = len(self._names)
+        return ([("model",)] + [("sheet", i) for i in range(n)]
+                + ([("new",)] if self._has_new() else []))
+
+    def _slot_label(self, slot) -> str:
+        kind = slot[0]
+        if kind == "model":
+            return self._labels[0]
+        if kind == "sheet":
+            return self._labels[1 + slot[1]]
+        return "+"
 
     def refresh(self, names, current) -> None:
         """Rebuild the strip: «Model» then one tab per sheet name (then «+»);
         ``current`` is the sheet index to mark, or ``None`` for the model.
-        The tabs are only torn down when the names changed — a hint or a
-        hand-over must not rebuild the widget under the mouse."""
-        labels = self._wanted(names)
+        The tabs are only torn down when what they show changed — a hint or
+        a hand-over must not rebuild the widget under the mouse."""
+        self._labels = self._wanted(names)
+        self._names = [str(n) for n in names]
+        cur = None if current is None else int(current)
+        if cur is not None and not 0 <= cur < len(self._names):
+            cur = None
+        self._current = cur
+        self._rebuild()
+
+    def _rebuild(self) -> None:
+        if not hasattr(self, "_current"):
+            return
+        slots = self._slots()
+        shown = [self._slot_label(sl) for sl in slots]
         self._updating = True
         try:
-            if labels != self._labels:
+            if shown != getattr(self, "_shown", None):
                 while self.count():
                     self.removeTab(0)
-                for i, label in enumerate(labels):
+                for i, (label, sl) in enumerate(zip(shown, slots)):
                     self.addTab(label)
-                    if self._on_new is not None and i == len(labels) - 1:
+                    if sl[0] == "new":
                         self.setTabToolTip(i, tr("New sheet"))
-                self._labels = labels
-            self._names = [str(n) for n in names]
-            idx = 0 if current is None else int(current) + 1
-            self.setCurrentIndex(max(0, min(idx, len(names))))
+                self._shown = shown
+            self._slot_list = slots
+            want = ("model",) if self._current is None else ("sheet", self._current)
+            self.setCurrentIndex(slots.index(want) if want in slots else 0)
         finally:
             self._updating = False
 
@@ -108,21 +157,34 @@ class SheetTabs(QTabBar):
 
     def current(self):
         """``None`` for the model, else the sheet index."""
-        i = self.currentIndex()
-        return None if i <= 0 or i > len(self._names) else i - 1
+        return self._current
 
     def plus_index(self):
         """The index of the «+» tab, or ``None`` without one."""
-        return len(self._names) + 1 if self._on_new is not None else None
+        return len(self._names) + 1 if self._has_new() else None
 
     # ---- clicks ---------------------------------------------------------------
     def _clicked(self, index: int) -> None:
         if self._updating or index < 0:
             return
+        slots = getattr(self, "_slot_list", [])
+        if index >= len(slots):
+            return
+        slot = slots[index]
         # Let QTabBar finish its press first (see the module docstring).
-        QTimer.singleShot(0, lambda: self._dispatch(index))
+        QTimer.singleShot(0, lambda: self._dispatch_slot(slot))
+
+    def _dispatch_slot(self, slot) -> None:
+        kind = slot[0]
+        if kind == "model":
+            self._on_model()
+        elif kind == "new":
+            self._on_new()
+        elif kind == "sheet":
+            self._on_sheet(slot[1])
 
     def _dispatch(self, index: int) -> None:
+        """A LOGICAL index: 0 the model, 1…n the sheets, then «+»."""
         if index == 0:
             self._on_model()
         elif index == self.plus_index():
@@ -132,13 +194,15 @@ class SheetTabs(QTabBar):
 
     def click(self, index: int) -> None:
         """Programmatic click (tests): the same hand-over as the mouse,
-        run right away."""
+        run right away, on the LOGICAL layout whatever is displayed."""
         self._dispatch(index)
 
     def contextMenuEvent(self, event) -> None:  # noqa: N802
         i = self.tabAt(event.pos())
-        if self._on_menu is not None and 1 <= i <= len(self._names):
-            self._on_menu(i - 1, event.globalPos())
+        slots = getattr(self, "_slot_list", [])
+        if (self._on_menu is not None and 0 <= i < len(slots)
+                and slots[i][0] == "sheet"):
+            self._on_menu(slots[i][1], event.globalPos())
             event.accept()
             return
         super().contextMenuEvent(event)
@@ -171,8 +235,10 @@ class _ElidedLabel(QLabel):
 
     def _relayout(self) -> None:
         fm = QFontMetrics(self.font())
-        super().setText(fm.elidedText(self._full, Qt.ElideRight,
-                                      max(self.width() - 4, 0)))
+        shown = fm.elidedText(self._full, Qt.ElideRight, max(self.width() - 4, 0))
+        super().setText(shown)
+        # Cut short, the whole line is one hover away (Marco, 23-09).
+        self.setToolTip(self._full if shown != self._full else "")
 
 
 class SheetStatusBar(QStatusBar):
@@ -211,9 +277,13 @@ class SheetStatusBar(QStatusBar):
     #: (Marco, 2026-09-15: «que no llegue hasta el otro extremo derecho»).
     MESSAGE_SHARE = 0.5
 
+    #: The sheet strip's share of the bar before its tabs fold.
+    TABS_SHARE = 0.3
+
     def resizeEvent(self, event) -> None:  # noqa: N802
         super().resizeEvent(event)
         self._msg.setMaximumWidth(max(120, int(self.width() * self.MESSAGE_SHARE)))
+        self.tabs.set_budget(max(200, int(self.width() * self.TABS_SHARE)))
 
     # ---- messages, routed to our label ---------------------------------------
     def showMessage(self, text: str, timeout: int = 0) -> None:  # noqa: N802

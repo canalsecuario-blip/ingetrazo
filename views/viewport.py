@@ -6247,11 +6247,17 @@ class Viewport(QOpenGLWidget):
         if world is None:
             return
         east, north, _ = datum.local_to_utm(world)
-        text = (f"E {east:,.2f}  N {north:,.2f}  "
-                f"{datum.zone}{datum.hemisphere}")
         z = self.ground_elevation(world.x(), world.y())
+        # Compact on the bar — a decimetre is the pointer's own precision on
+        # a site plan, and the zone does not change under the mouse — and in
+        # full on hover (Marco, 23-09: the bar had no room for the hint).
+        text = f"E {east:.1f}  N {north:.1f}"
+        full = (f"E {east:,.2f}  N {north:,.2f}  "
+                f"{datum.zone}{datum.hemisphere}")
         if z is not None:
-            text += f"  ·  {z:,.2f} m"
+            text += f"  ·  {z:.1f} m"
+            full += f"  ·  {z:,.2f} m"
+        self._last_coordinate_full = full
         if text != self._last_coordinate:
             self._last_coordinate = text
             self.coordinateChanged.emit(text)

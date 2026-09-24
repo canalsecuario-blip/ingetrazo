@@ -36,6 +36,17 @@ follow [SemVer](https://semver.org).
   en Wayland no se puede mover, así que al llegar al borde se suelta y
   se vuelve a arrastrar.
 
+### Cambiado
+- **La barra de abajo deja sitio a la pista de la herramienta** (Marco): el
+  nombre de la herramienta va delante de la pista en vez de ocupar su propio
+  hueco, las coordenadas UTM salen compactas (completas al pasar el cursor),
+  la pista cortada se lee entera al pasar el cursor, y las pestañas de
+  láminas tienen un ancho máximo con flechas ◀ ▶ si no caben.
+- **En la ventana del modelo, las pestañas son Modelo | última lámina:**
+  la pestaña de lámina lleva a la última que abriste (en la Lámina 2 →
+  Modelo → vuelves a la Lámina 2); todas las láminas se ven como pestañas
+  en el compositor.
+
 ### Corregido
 - **La órbita ya no se queda pegada al ratón** (Andrés Rodríguez, Windows 11).
   Si el aviso de «soltaste el botón» se perdía (algunos ratones y paneles

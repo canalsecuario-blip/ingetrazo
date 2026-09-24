@@ -1445,9 +1445,9 @@ class MainWindow(QMainWindow):
         # tabs): one click from the model to any sheet.
         from views.sheet_tabs import SheetStatusBar
         bar = SheetStatusBar(self, on_model=self._show_model,
-                             on_sheet=self._show_sheet,
+                             on_sheet=self._show_strip_sheet,
                              on_new=self._show_new_sheet,
-                             on_menu=self._sheet_tab_menu)
+                             on_menu=self._strip_sheet_menu)
         self.setStatusBar(bar)
         self._sheet_tabs = bar.tabs
         # ONE hint for the tool and its step (SketchUp's status bar) goes in
@@ -1459,6 +1459,10 @@ class MainWindow(QMainWindow):
         # every shortcut at once.
         self._tool_label = QLabel(tr("Tool: none"))
         bar.addPermanentWidget(self._tool_label)
+        # Not shown any more: the tool's name leads the hint instead, and the
+        # 250 px it held go to the hint (Marco, 23-09 — the icon of the
+        # tool is highlighted anyway). Kept as the record other code reads.
+        self._tool_label.hide()
         self._refresh_sheet_tabs()
 
         # Live UTM readout, the way a CAD shows coordinates. Local scene metres
@@ -1536,9 +1540,20 @@ class MainWindow(QMainWindow):
         from views.status_hints import hint_for
         vp = self.viewport
         tool = vp.active_tool
-        text = hint_for(self._tool_key(tool), tool,
-                        getattr(vp, "nav_mode", None),
+        nav = getattr(vp, "nav_mode", None)
+        text = hint_for(self._tool_key(tool), tool, nav,
                         getattr(vp, "linear_inference_mode", None))
+        # The tool's name leads its hint (it used to sit apart, on the right).
+        if nav is not None:
+            name = tr(nav.replace("_", " ").capitalize())
+        elif tool is not None:
+            name = tr(tool.name)
+        else:
+            name = ""
+        if name and text:
+            text = f"{name} — {text}"
+        elif name:
+            text = name
         if text != getattr(bar, "_base", None):
             if hasattr(bar, "_base"):
                 # Keep a running timed message; only the base changes.
@@ -1559,6 +1574,9 @@ class MainWindow(QMainWindow):
         coord = pending.get("coordinate")
         if coord is not None and coord != self._coord_label.text():
             self._coord_label.setText(coord)
+            # The compact readout above; the full one, zone included, on hover.
+            self._coord_label.setToolTip(
+                getattr(self.viewport, "_last_coordinate_full", "") or "")
         meas = pending.get("measurement")
         if meas is not None and meas != getattr(self, "_vcb_live", None):
             self._on_measurement(meas)
@@ -2646,13 +2664,39 @@ class MainWindow(QMainWindow):
 
     # ---- Model / sheet tabs (the strip at the bottom) -----------------------
     def _refresh_sheet_tabs(self) -> None:
-        """This window shows the model, so its strip always marks «Model»;
-        the sheet names come from the document."""
+        """This window shows the model, so its strip always marks «Model».
+        Beside it, ONE sheet: the last one opened — the model window only
+        goes model ↔ sheet, and all the sheets are tabs in the composer
+        (Marco, 23-09: «en el modelo solo alternar entre el modelo y la
+        lámina… cuando regrese a lámina, que regrese a la lámina 2»). A
+        document without sheets offers «+» instead."""
         tabs = getattr(self, "_sheet_tabs", None)
         if tabs is None:
             return
         comps = getattr(self.viewport.scene, "compositions", None) or []
-        tabs.refresh([c.name for c in comps], None)
+        if not comps:
+            self._strip_sheets = []
+            tabs.set_show_new(True)
+            tabs.refresh([], None)
+            return
+        comp = getattr(getattr(self, "_composer", None), "comp", None)
+        if comp is not None and comp in comps:
+            last = comps.index(comp)
+        else:
+            last = min(max(getattr(self, "_last_sheet", 0), 0), len(comps) - 1)
+        self._last_sheet = last
+        self._strip_sheets = [last]
+        tabs.set_show_new(False)
+        tabs.refresh([comps[last].name], None)
+
+    def _show_strip_sheet(self, k: int) -> None:
+        """A sheet tab of THIS strip (it shows only the last sheet)."""
+        sheets = getattr(self, "_strip_sheets", None) or []
+        self._show_sheet(sheets[k] if 0 <= k < len(sheets) else k)
+
+    def _strip_sheet_menu(self, k: int, pos) -> None:
+        sheets = getattr(self, "_strip_sheets", None) or []
+        self._sheet_tab_menu(sheets[k] if 0 <= k < len(sheets) else k, pos)
 
     def _show_model(self) -> None:
         self.show()
@@ -2663,6 +2707,7 @@ class MainWindow(QMainWindow):
     def _show_sheet(self, index: int) -> None:
         """A sheet tab: the composer opens on that sheet. This window keeps
         showing the model, so its own strip snaps back to «Model»."""
+        self._last_sheet = index
         self._on_open_composer()
         self._composer.show_sheet(index)
         self._refresh_sheet_tabs()

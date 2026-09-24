@@ -42,7 +42,10 @@ def test_the_main_window_strip_lists_model_and_the_document_sheets(monkeypatch):
         win.viewport.scene.compositions.append(Composicion(name="Planta"))
         win.viewport.scene.compositions.append(Composicion(name="Cortes"))
         win._update_title()                              # what open/new call
-        assert tabs.names() == ["Model", "Planta", "Cortes"]
+        # The model window goes model ↔ ONE sheet (the last opened; the
+        # first before any): all the sheets are tabs in the composer.
+        assert tabs.names() == ["Model", "Planta"]
+        assert tabs.plus_index() is None
         assert tabs.current() is None
     finally:
         _close(win)
@@ -55,17 +58,19 @@ def test_a_sheet_tab_opens_the_composer_on_that_sheet(monkeypatch):
         win.viewport.scene.compositions.append(Composicion(name="Planta"))
         win.viewport.scene.compositions.append(Composicion(name="Cortes"))
         win._update_title()
-        win._sheet_tabs.click(2)                         # «Cortes»
+        win._sheet_tabs.click(1)                         # «Planta», the first
         comp = win._composer
         assert comp.isVisible()
-        assert comp.comp is win.viewport.scene.compositions[1]
-        # the composer's strip marks its sheet, the main window's the model
-        assert comp._sheet_tabs.names() == ["Model", "Planta", "Cortes"]
-        assert comp._sheet_tabs.current() == 1
-        assert win._sheet_tabs.current() is None
-        comp._sheet_tabs.click(1)                        # «Planta», from the composer
         assert comp.comp is win.viewport.scene.compositions[0]
+        # the composer's strip lists every sheet and marks its own
+        assert comp._sheet_tabs.names() == ["Model", "Planta", "Cortes"]
         assert comp._sheet_tabs.current() == 0
+        assert win._sheet_tabs.current() is None
+        comp._sheet_tabs.click(2)                        # «Cortes», from the composer
+        assert comp.comp is win.viewport.scene.compositions[1]
+        assert comp._sheet_tabs.current() == 1
+        # …and the model window now offers «Cortes» to go back to.
+        assert win._sheet_tabs.names() == ["Model", "Cortes"]
     finally:
         _close(win)
 
@@ -77,7 +82,8 @@ def test_both_strips_follow_added_renamed_and_deleted_sheets(monkeypatch):
         comp = win._composer
         n0 = len(win.viewport.scene.compositions)
         comp._on_comp_add()
-        assert len(win._sheet_tabs.names()) == n0 + 2    # Model + sheets
+        assert len(comp._sheet_tabs.names()) == n0 + 2   # Model + sheets
+        assert len(win._sheet_tabs.names()) == 2         # Model + the open one
         assert comp._sheet_tabs.current() == n0          # the new one is open
         comp.comp_combo.setEditText("Detalles")
         comp._on_comp_rename()
@@ -86,7 +92,8 @@ def test_both_strips_follow_added_renamed_and_deleted_sheets(monkeypatch):
         monkeypatch.setattr("views.composer.QMessageBox.question",
                             lambda *a, **k: __import__("PySide6.QtWidgets").QtWidgets.QMessageBox.Yes)
         comp._on_comp_del()
-        assert len(win._sheet_tabs.names()) == n0 + 1
+        assert len(comp._sheet_tabs.names()) == n0 + 1
+        assert len(win._sheet_tabs.names()) == 2
         assert comp._sheet_tabs.current() == 0
     finally:
         _close(win)
@@ -143,6 +150,9 @@ def test_the_standing_hint_never_widens_the_window(monkeypatch):
         # The standing hint is one line per tool now; a long one (a wordy
         # translation, a long flash) must still never widen the window.
         long_hint = "Select objects. " * 12
+        # The window's own hint refresh (a timer) would put the real hint
+        # back over this stand-in mid-test — the flake this test had.
+        win._update_status_hint = lambda: None
         bar.showMessage(long_hint)
         assert len(bar.currentMessage()) > 100
         # a plain QLabel with this hint asked for ~2200 px; the app's own
@@ -291,16 +301,17 @@ def test_sheet_tab_menu_renames_duplicates_and_deletes(monkeypatch):
         seen = []
         tabs = win._sheet_tabs
         monkeypatch.setattr(tabs, "_on_menu", lambda i, pos: seen.append(i))
-        rect = tabs.tabRect(2)                            # «Cortes»
+        # (the model window's strip shows one sheet: «Planta», the first)
+        rect = tabs.tabRect(1)
         tabs.contextMenuEvent(QContextMenuEvent(
             QContextMenuEvent.Mouse, rect.center(), tabs.mapToGlobal(rect.center())))
-        assert seen == [1]
+        assert seen == [0]
         # the operations, through the composer (created, never shown)
         comp = win._ensure_composer()
         assert not comp.isVisible()
         comp.rename_sheet(0, "Planta general")
         assert scene.compositions[0].name == "Planta general"
-        assert tabs.names() == ["Model", "Planta general", "Cortes"]
+        assert tabs.names() == ["Model", "Planta general"]
         comp.duplicate_sheet(0)
         assert [c.name for c in scene.compositions] == [
             "Planta general", "Planta general (copy)", "Cortes"]
@@ -313,10 +324,52 @@ def test_sheet_tab_menu_renames_duplicates_and_deletes(monkeypatch):
                             staticmethod(lambda *a, **k: told.append(a[2])))
         assert comp.delete_sheet(1, win)
         assert [c.name for c in scene.compositions] == ["Planta general", "Cortes"]
-        assert tabs.names() == ["Model", "Planta general", "Cortes"]
+        assert tabs.names() == ["Model", "Planta general"]
         # the last sheet stays
         comp.delete_sheet(0, win)
         assert not comp.delete_sheet(0, win)             # refused, told why
         assert len(scene.compositions) == 1 and told
+    finally:
+        _close(win)
+
+
+def test_many_sheets_scroll_within_a_width_budget():
+    """Past its budget the strip keeps every tab and shows QTabBar's ◀ ▶
+    scroll buttons, so the hint keeps its room (Marco, 23-09: he preferred
+    this to folding the tabs into a menu); the logical API — names,
+    current, click — does not change."""
+    from PySide6.QtCore import Qt
+    from views.sheet_tabs import SheetTabs
+    seen = []
+    tabs = SheetTabs(None, lambda: seen.append("model"),
+                     lambda i: seen.append(i), lambda: seen.append("new"))
+    names = [f"Lámina {i}" for i in range(1, 9)]
+    tabs.refresh(names, 2)
+    tabs.set_budget(250)
+    assert tabs.count() == 1 + len(names) + 1          # every tab kept
+    assert tabs.maximumWidth() == 250
+    assert tabs.usesScrollButtons()
+    assert tabs.elideMode() == Qt.ElideNone             # scroll, not squeeze
+    assert tabs.names() == ["Model"] + names
+    assert tabs.current() == 2
+    tabs.click(5)                                       # «Lámina 5»
+    assert seen == [4]
+
+
+def test_the_model_window_returns_to_the_last_sheet(monkeypatch):
+    """Sheet 2 → Model → the sheet tab brings back sheet 2 (Marco, 23-09)."""
+    win = _window(monkeypatch)
+    try:
+        from core.composition import Composicion
+        for name in ("Planta", "Cortes", "Detalles"):
+            win.viewport.scene.compositions.append(Composicion(name=name))
+        win._update_title()
+        win._sheet_tabs.click(1)                         # into the composer
+        comp = win._composer
+        comp._sheet_tabs.click(2)                        # «Cortes»
+        comp._sheet_tabs.click(0)                        # back to the model
+        assert win._sheet_tabs.names() == ["Model", "Cortes"]
+        win._sheet_tabs.click(1)                         # the sheet tab again
+        assert comp.comp is win.viewport.scene.compositions[1]
     finally:
         _close(win)
