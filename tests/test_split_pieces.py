@@ -7,12 +7,14 @@ Home 3D bar stool: 43 groups, five real pieces); connectivity is what finds
 the pieces a person would pick up."""
 from __future__ import annotations
 
+import pytest
+
 from PySide6.QtGui import QMatrix4x4, QVector3D
 
 from core.group import Group, world_mesh
 from core.history import SplitIntoPiecesCommand
 from core.mesh import Mesh
-from core.pieces import connected_parts, split_into_pieces
+from core.pieces import connected_parts, solid_parts, split_into_pieces
 from core.scene import Scene
 
 _QUADS = ((0, 2, 3, 1), (4, 5, 7, 6), (0, 1, 5, 4),
@@ -64,6 +66,25 @@ def test_fragments_across_children_join_into_the_piece_they_are():
     assert len(pieces[0].mesh.faces) == 6
 
 
+def test_a_piece_keeps_the_name_of_the_file_part_it_came_from():
+    """A named file part split in two keeps its name on both halves; a part
+    the importer only numbered does not pass its number on."""
+    named = []
+    for name, starts in (("Carcass", (0, 10)), ("Worktop", (3,)),
+                         ("Part 7", (6,))):
+        m = Mesh()
+        for x0 in starts:
+            _cube(m, x0)
+        g = Group(m, name=name)
+        g.xform = QMatrix4x4()
+        named.append(g)
+    unit = Group()
+    unit.adopt(named)
+    pieces = split_into_pieces(unit)
+    assert sorted(p.name for p in pieces) == [
+        "Carcass", "Carcass 2", "Piece 4", "Worktop"]
+
+
 def test_a_single_piece_has_nothing_to_split():
     mesh = Mesh()
     _cube(mesh, 0)
@@ -81,13 +102,56 @@ def test_splitting_twice_changes_nothing():
     assert split_into_pieces(group) == []
 
 
-def test_touching_solids_that_share_vertices_read_as_one():
-    """The documented limit: welded at a shared face, two cubes are one
-    piece to connectivity, as they are to the eye on a welded mesh."""
+def test_touching_boards_are_separate_pieces():
+    """A cabinet's carcase: closed boards welded where they meet. Plain
+    connectivity reads them as one; the solids pass keeps them apart."""
+    mesh = Mesh()
+    _cube(mesh, 0)
+    _cube(mesh, 0, z0=1)                   # stacked, sharing four corners
+    _cube(mesh, 1)                         # beside, sharing an edge
+    assert len(connected_parts(mesh)) == 1
+    assert [len(f) for f, _e in solid_parts(mesh)] == [6, 6, 6]
+
+
+def test_a_piece_does_not_take_its_neighbours_edges():
+    """Welded boards share corners; a piece copied with every edge that
+    touches one of its corners measured as far as the neighbour's far end
+    (a 1.5 cm side board read as 85 x 60 x 55)."""
+    from core.parts import part_points, part_size
     mesh = Mesh()
     _cube(mesh, 0)
     _cube(mesh, 0, z0=1)
-    assert len(connected_parts(mesh)) == 1
+    pieces = split_into_pieces(Group(mesh))
+    assert [len(p.mesh.edges) for p in pieces] == [12, 12]
+    for p in pieces:
+        assert part_size(part_points(p)) == pytest.approx((1.0, 1.0, 1.0))
+
+
+def test_fragments_join_the_solid_they_lie_on():
+    """A file cut by material: a closed box plus an open patch lying on it
+    (a double-sided decal, a strip) is one piece."""
+    mesh = Mesh()
+    _cube(mesh, 0)
+    a, b = QVector3D(0.2, 0, 0.2), QVector3D(0.8, 0, 0.2)
+    c, d = QVector3D(0.8, 0, 0.8), QVector3D(0.2, 0, 0.8)
+    loose = Mesh()
+    loose.add_face([a, b, c, d])            # a floating sheet: no shared corner
+    for f in loose.faces:
+        mesh.add_face(f.vertices)
+    corner = [QVector3D(0, 0, 0), QVector3D(1, 0, 0), QVector3D(1, 1, 0)]
+    mesh.add_face(corner)                    # a patch on the cube's corners
+    sizes = sorted(len(f) for f, _e in solid_parts(mesh))
+    assert sizes == [1, 7]                   # sheet alone; patch with its box
+
+
+def test_a_zero_thickness_double_sided_sheet_is_not_a_solid():
+    mesh = Mesh()
+    pts = [QVector3D(0, 0, 0), QVector3D(1, 0, 0), QVector3D(1, 1, 0),
+           QVector3D(0, 1, 0)]
+    mesh.add_face(pts)
+    mesh.add_face(list(reversed(pts)))
+    from core.pieces import _is_solid
+    assert not _is_solid(list(mesh.faces))
 
 
 def test_the_split_keeps_the_geometry_where_it_was_and_undoes():

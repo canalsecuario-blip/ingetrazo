@@ -2018,7 +2018,6 @@
  "Nothing to split: it is already in its pieces": "Nada que separar: ya está en sus piezas",
  "Split into {n} pieces — Explode Group sets them free": "Separado en {n} piezas — Deshacer grupo las libera",
  "Parts": "Partes",
- "Click a part to select it inside the component; the check shows or hides it; double-click the name to rename it": "Haz clic en una parte para seleccionarla dentro del componente; la casilla la muestra u oculta; doble clic en el nombre para renombrarla",
  "Regroup the component by the solids that do not touch": "Reagrupa el componente por los sólidos que no se tocan",
  "Copy cut list": "Copiar lista de corte",
  "Copy the parts as a table (quantity, parts, material, length, width, thickness) — pastes into a spreadsheet": "Copia las partes como tabla (cantidad, partes, material, largo, ancho, espesor) — se pega en una hoja de cálculo",
@@ -2029,5 +2028,19 @@
  "<b>{name}</b> — {n} parts": "<b>{name}</b> — {n} partes",
  "Qty": "Cant.",
  "Thickness": "Espesor",
- "Cut list copied: {n} lines, {parts} parts": "Lista de corte copiada: {n} líneas, {parts} partes"
+ "Cut list copied: {n} lines, {parts} parts": "Lista de corte copiada: {n} líneas, {parts} partes",
+ "Exploded view": "Vista explosionada",
+ "Outward": "Hacia fuera",
+ "Along blue (up)": "Según el azul (arriba)",
+ "Along red": "Según el rojo",
+ "Along green": "Según el verde",
+ "Which way the parts move away from the assembly's centre": "Hacia dónde se alejan las partes del centro del conjunto",
+ "Reassemble": "Reensamblar",
+ "Put every part back where it sits assembled (a part you moved by hand keeps that move)": "Devuelve cada parte a su sitio en el conjunto (una parte movida a mano conserva ese movimiento)",
+ "How far apart: 100% puts every part twice as far from the centre as it sits assembled": "Cuánto se separan: 100 % pone cada parte al doble de distancia del centro que en el conjunto",
+ "All parts visible": "Todas las partes visibles",
+ "Rename…": "Renombrar…",
+ "Show": "Mostrar",
+ "Show all parts": "Mostrar todas las partes",
+ "Click a part to select it inside the component; the check shows or hides it. To rename: double-click the name, press F2, or right-click ▸ Rename": "Haz clic en una parte para seleccionarla dentro del componente; la casilla la muestra u oculta. Para renombrar: doble clic en el nombre, F2, o clic derecho ▸ Renombrar"
 }

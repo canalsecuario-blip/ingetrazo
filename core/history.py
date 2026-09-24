@@ -3201,7 +3201,7 @@ class ExplodeGroupCommand(Command):
         self.group = group
         self.snapshot: Optional[dict] = None
         self.index: Optional[int] = None
-        self._lifted: list = []          # (child, xform, mesh, material)
+        self._lifted: list = []   # (child, xform, mesh, material, axes, offset)
         self._selection = None
 
     def do(self, scene) -> None:
@@ -3249,9 +3249,12 @@ class ExplodeGroupCommand(Command):
         # and an unpainted child takes the parent's paint, as its default
         # faces were already drawn with it.
         kids = list(getattr(g, "children", None) or [])
-        self._lifted = [(c, c.xform, c.mesh, c.material, c.axes)
-                        for c in kids]
+        self._lifted = [(c, c.xform, c.mesh, c.material, c.axes,
+                         c.explode_offset) for c in kids]
         for c in kids:
+            # Free of its component, a part keeps where an exploded view put
+            # it; there is no longer anything to reassemble it into.
+            c.explode_offset = None
             if P is not None:
                 if c.xform is not None:
                     c.xform = P * c.xform
@@ -3270,10 +3273,11 @@ class ExplodeGroupCommand(Command):
         scene.version += 1
 
     def undo(self, scene) -> None:
-        for c, xform, mesh, material, axes in self._lifted:
+        for c, xform, mesh, material, axes, offset in self._lifted:
             if c in scene.groups:
                 scene.groups.remove(c)
             c.xform, c.mesh, c.material, c.axes = xform, mesh, material, axes
+            c.explode_offset = offset
         scene.mesh.restore_state(self.snapshot)
         scene.groups.insert(self.index, self.group)
         if self._selection is not None:
@@ -3299,6 +3303,29 @@ class RenameGroupCommand(Command):
         scene.version += 1
 
 
+class ExplodeViewCommand(Command):
+    """Pull a component's parts apart to ``factor`` along ``mode`` — or put
+    them back with ``factor=0`` (see :mod:`core.explode`)."""
+
+    def __init__(self, container: Group, factor: float,
+                 mode: str = "outward") -> None:
+        self.container = container
+        self.factor = factor
+        self.mode = mode
+        self.before = None
+
+    def do(self, scene) -> None:
+        from core import explode
+        self.before = explode.snapshot(self.container)
+        explode.apply_explode(self.container, self.factor, self.mode)
+        scene.version += 1
+
+    def undo(self, scene) -> None:
+        from core import explode
+        explode.restore(self.container, self.before)
+        scene.version += 1
+
+
 class SplitIntoPiecesCommand(Command):
     """Replace what ``group`` holds with ``pieces`` (from
     :func:`core.pieces.split_into_pieces`): the same geometry, now one child
@@ -3314,15 +3341,18 @@ class SplitIntoPiecesCommand(Command):
 
     def do(self, scene) -> None:
         g = self.group
-        self.before = (g.mesh, list(g.children), g.xform)
+        self.before = (g.mesh, list(g.children), g.xform, g.exploded)
         from core.mesh import Mesh
         g.mesh = Mesh()
         g.adopt(self.pieces)
+        # The pieces are cut from the geometry as it stands, so they ARE
+        # assembled in their new arrangement: nothing left to take back.
+        g.exploded = None
         scene.version += 1
 
     def undo(self, scene) -> None:
         g = self.group
-        g.mesh, g.children, g.xform = self.before
+        g.mesh, g.children, g.xform, g.exploded = self.before
         scene.version += 1
 
 

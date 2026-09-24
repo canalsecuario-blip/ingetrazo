@@ -39,6 +39,10 @@ def part_points(part):
     return np.concatenate(chunks)
 
 
+#: How much smaller the part's own box must be to beat the model's axes.
+_OWN_AXES_GAIN = 0.8
+
+
 def part_size(points) -> tuple:
     """``(length, width, thickness)`` in metres, largest first: the extent
     of the tighter of two boxes — along the container's axes, or along the
@@ -58,9 +62,12 @@ def part_size(points) -> tuple:
         centred = points - points.mean(axis=0)
         _w, vecs = np.linalg.eigh(centred.T @ centred)
         own = extent(vecs.T)
-        # Round before comparing: on a square board the two boxes are the
-        # same and float noise must not pick the tilted one.
-        if np.prod(np.round(own, 6)) < np.prod(np.round(best, 6)):
+        # The part's own axes win only when they are MUCH tighter. A splayed
+        # leg or a board lying at an angle is: its own box is a fraction of
+        # the diagonal one. A stepped shape square to the model (a carcass
+        # with a plinth set back) is not — a slightly tilted box happens to
+        # hold it in 7 % less volume, and reads as a depth no one would cut.
+        if np.prod(own) < _OWN_AXES_GAIN * np.prod(best):
             best = own
     dims = sorted((float(d) for d in best), reverse=True)
     return tuple(dims)

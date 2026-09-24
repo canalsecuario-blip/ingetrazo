@@ -44,7 +44,8 @@ def reserve_group_names(names) -> None:
 class Group:
     __slots__ = ("mesh", "name", "layer", "ifc", "billboard", "xform",
                  "children", "owner", "context", "text3d", "hidden", "uid",
-                 "material", "axes", "component")
+                 "material", "axes", "component", "exploded",
+                 "explode_offset")
 
     def __init__(self, mesh: Mesh | None = None, name: str | None = None) -> None:
         self.mesh = mesh if mesh is not None else Mesh()
@@ -76,6 +77,13 @@ class Group:
         #: issue #47, @pacaeiro). Same keys as a face's attrs: ``color`` or
         #: ``texture``, ``opacity``, ``mat``. ``None`` = unpainted.
         self.material: dict | None = None
+        #: Exploded view (core/explode.py). On a container: ``{"factor",
+        #: "mode"}`` while its parts are pulled apart, ``None`` assembled.
+        #: On a part: the ``(x, y, z)`` translation, in the container's
+        #: frame, the explosion added to its matrix — what Reassemble
+        #: takes back off, so a part moved by hand meanwhile keeps that.
+        self.exploded: dict | None = None
+        self.explode_offset: tuple | None = None
         # Component instance (SketchUp): when set, ``mesh`` is a PROTOTYPE in
         # local coordinates SHARED with sibling instances, and ``xform`` maps
         # local -> world. ``None`` = classic group (mesh in world coords).
@@ -583,6 +591,8 @@ def copy_group(group, delta=None):
     g.hidden = group.hidden
     g.material = dict(group.material) if getattr(group, "material", None) else None
     g.component = getattr(group, "component", True)
+    g.exploded = dict(group.exploded) if group.exploded else None
+    g.explode_offset = group.explode_offset
     # Nested placements ride along untranslated: ``delta`` already moved the
     # parent, and a child's transform is relative to it.
     g.children = [copy_group(c) for c in (group.children or ())]

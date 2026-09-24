@@ -67,6 +67,18 @@ def test_a_splayed_leg_measures_along_its_length():
                                                         abs=1e-5)
 
 
+def test_a_stepped_carcass_measures_on_the_models_axes():
+    """A body with a plinth set back: the tilted box that holds it in a
+    little less volume is not a size anyone cuts."""
+    import numpy as np
+    body = [(x, y, z) for x in (0, 0.442) for y in (-0.052, 0.56)
+            for z in (0.085, 0.794)]
+    plinth = [(x, y, z) for x in (0, 0.442) for y in (0.0, 0.56)
+              for z in (0.0, 0.085)]
+    size = part_size(np.array(body + plinth, dtype=float))
+    assert size == pytest.approx((0.794, 0.612, 0.442), abs=1e-6)
+
+
 def test_the_material_is_the_one_covering_most_of_the_part():
     mesh = _box(1.0, 1.0, 0.02, color=(1, 0, 0))
     small = [f for f in mesh.faces if f.area() < 0.1]
@@ -173,4 +185,91 @@ def test_copy_cut_list_fills_the_clipboard():
     lines = QApplication.clipboard().text().splitlines()
     assert len(lines) == 3 and lines[1].startswith("2\t")
     assert len(lines[0].split("\t")) == 6
+    win._saved_version = scene.version
+
+
+def _many_parts(n: int = 20) -> Group:
+    kids = [_part(_box(0.1, 0.1, 0.1, at=(i * 0.2, 0, 0)), f"Piece {i + 1}")
+            for i in range(n)]
+    cab = Group(name="cabinet")
+    cab.adopt(kids)
+    return cab
+
+
+def test_the_list_updates_in_place_and_keeps_its_scroll():
+    """A click on a row below the fourteenth must not throw the list back
+    to its top: the refresh it triggers updates rows, it does not rebuild."""
+    cab = _many_parts()
+    win, scene = _window_with(cab)
+    win.show()
+    panel = win.tray.parts
+    panel.refresh()
+    tree = panel.tree
+    _app.processEvents()
+    tree.scrollToBottom()
+    before = tree.verticalScrollBar().value()
+    assert before > 0
+    row = tree.topLevelItem(17)
+    panel._on_clicked(row, 0)
+    win.tray.on_scene_changed()
+    _app.processEvents()
+    assert tree.topLevelItem(17) is row
+    assert tree.verticalScrollBar().value() == before
+    assert scene.selection == {cab.children[17]}
+    win._saved_version = scene.version
+
+
+def test_a_part_selected_in_the_canvas_scrolls_into_view():
+    cab = _many_parts()
+    win, scene = _window_with(cab)
+    win.show()
+    panel = win.tray.parts
+    panel.refresh()
+    tree = panel.tree
+    _app.processEvents()
+    scene.begin_group_edit(cab)
+    scene.selection.add(cab.children[19])
+    scene.version += 1
+    win.tray.on_scene_changed()
+    _app.processEvents()
+    last = tree.topLevelItem(19)
+    assert last.isSelected()
+    assert tree.viewport().rect().contains(tree.visualItemRect(last).center())
+    scene.end_group_edit()
+    win._saved_version = scene.version
+
+
+def test_all_parts_visible_shows_every_hidden_part():
+    cab = _many_parts(4)
+    win, scene = _window_with(cab)
+    panel = win.tray.parts
+    panel.refresh()
+    panel.tree.topLevelItem(1).setCheckState(0, Qt.Unchecked)
+    panel.tree.topLevelItem(2).setCheckState(0, Qt.Unchecked)
+    assert panel._all_visible.checkState() == Qt.PartiallyChecked
+    panel._all_visible.click()
+    assert not any(k.hidden for k in cab.children)
+    assert panel._all_visible.checkState() == Qt.Checked
+    win.viewport.history.undo()
+    assert sum(k.hidden for k in cab.children) == 2
+    win._saved_version = scene.version
+
+
+def test_a_rename_survives_a_refresh_while_typing():
+    from PySide6.QtTest import QTest
+    cab = _many_parts(3)
+    win, scene = _window_with(cab)
+    win.show()
+    panel = win.tray.parts
+    panel.refresh()
+    item = panel.tree.topLevelItem(2)
+    panel.tree.editItem(item, 0)
+    _app.processEvents()
+    editor = QApplication.focusWidget()
+    win.tray.on_scene_changed()                 # an edit elsewhere lands
+    _app.processEvents()
+    editor.setText("Right side wall")
+    QTest.keyClick(editor, Qt.Key_Return)
+    _app.processEvents()
+    assert cab.children[2].name == "Right side wall"
     win._saved_version = scene.version

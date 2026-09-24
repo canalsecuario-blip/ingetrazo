@@ -502,12 +502,25 @@ def _piece_name(key: tuple, number: int) -> str:
     number reads as nothing in a list of parts, so it becomes «Part 1»."""
     from core.i18n import tr
     obj_name, group_name = key
-    name = (group_name or obj_name).strip()
+    name = _tidy_blender_name((group_name or obj_name).strip())
     if not name:
         return tr("Part {n}", n=number)
     if not any(ch.isalpha() for ch in name):
         return tr("Part {n}", n=name)
     return name
+
+
+def _tidy_blender_name(name: str) -> str:
+    """Blender writes an object as ``<object>_<mesh>`` and numbers copies
+    ``.001``: «Base-unit-Box-Right_Cube.002», «Door.001_Cube.007». The
+    object's own name is the one a person gave; the mesh part (a capitalised
+    word, a default like Cube or Sphere) and the copy numbers are Blender's
+    bookkeeping. «Sphere.021_Sphere.005» keeps «Sphere»: that is all it is."""
+    import re
+    head, sep, tail = name.rpartition("_")
+    if sep and head and re.fullmatch(r"[A-Z][A-Za-z]*(\.\d+)?", tail):
+        name = head
+    return re.sub(r"(\.\d{3})+$", "", name).strip() or name
 
 
 def _pieces_group(stem: str, pieces: dict, face_attrs, tick):

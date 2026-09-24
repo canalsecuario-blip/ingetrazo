@@ -97,3 +97,14 @@ def test_explode_frees_the_parts_where_they_stood(tmp_path):
     assert scene.groups == [stool]
     assert [k.name for k in stool.children] == ["seat", "leg"]
     assert all(k.xform == QMatrix4x4() for k in stool.children)
+
+
+def test_blender_bookkeeping_leaves_the_part_names():
+    from formats.obj import _tidy_blender_name
+    assert _tidy_blender_name("Base-unit-Box-Right_Cube.002") == \
+        "Base-unit-Box-Right"
+    assert _tidy_blender_name("Door-and-Drawers-Right.001_Cube.007") == \
+        "Door-and-Drawers-Right"
+    assert _tidy_blender_name("Sphere.021_Sphere.005") == "Sphere"
+    assert _tidy_blender_name("left_leg") == "left_leg"   # not Blender's
+    assert _tidy_blender_name("seat") == "seat"
