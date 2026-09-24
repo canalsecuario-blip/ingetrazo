@@ -20,6 +20,12 @@ follow [SemVer](https://semver.org).
   - **Vista explosionada:** un deslizador separa las piezas hacia fuera o a
     lo largo de un eje, y Reensamblar las devuelve; se guarda en el `.igz`.
 
+- **Estilos: Color trasero** (PR #99, Gabriel Rodríguez), como en SketchUp:
+  junto al Color frontal, el color de las caras vistas por detrás (el
+  interior de un sólido, una cara invertida). Sin elegir, sigue el de
+  siempre o el que traiga un `.skp`; se guarda en el documento, en las
+  escenas y en la biblioteca de estilos.
+
 ### Corregido
 - **Mac:** el diálogo de cambios sin guardar ya se lee en el tema oscuro, y
   los deslizadores destacan sobre el fondo oscuro (PR #96).

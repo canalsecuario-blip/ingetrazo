@@ -60,6 +60,10 @@ Félix Riestra  (github.com/felixriestra)
     parts, Split into Pieces, the Parts tray with its cut list, and the
     exploded view — furniture and joinery taken to pieces.
 
+Gabriel Rodríguez  (github.com/canalsecuario-blip)
+    The Back color in Styles (pull request #99): SketchUp's Front/Back
+    colour pair, the tint of faces seen from behind.
+
 Sherod Taylor  (github.com/sherodtaylor)
     The First Person tool (pull request #86): walking the model like a
     game with W/A/S/D and mouse look, beside SketchUp's Walk.
