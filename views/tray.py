@@ -1903,27 +1903,34 @@ class StylesPanel(QWidget):
             "front_color")
         grid.addWidget(self._front_c, 4, 1)
 
+        # SketchUp's Back color: the tint of faces seen from behind (the
+        # inside of a solid, or a reversed face).
+        grid.addWidget(QLabel(tr("Back color:")), 5, 0)
+        self._back_c = self._swatch(
+            tr("Back color — paints faces seen from behind"), "back_color")
+        grid.addWidget(self._back_c, 5, 1)
+
         self._sky = QCheckBox(tr("Sky"))
         self._sky.toggled.connect(self._apply_edits)
-        grid.addWidget(self._sky, 5, 0)
+        grid.addWidget(self._sky, 6, 0)
         self._sky_c = self._swatch(tr("Sky color"), "sky_color")
-        grid.addWidget(self._sky_c, 5, 1)
+        grid.addWidget(self._sky_c, 6, 1)
 
-        grid.addWidget(QLabel(tr("Ground:")), 6, 0)
+        grid.addWidget(QLabel(tr("Ground:")), 7, 0)
         self._ground_c = self._swatch(tr("Ground color"), "ground_color")
-        grid.addWidget(self._ground_c, 6, 1)
+        grid.addWidget(self._ground_c, 7, 1)
 
-        grid.addWidget(QLabel(tr("Background:")), 7, 0)
+        grid.addWidget(QLabel(tr("Background:")), 8, 0)
         self._bg_c = self._swatch(
             tr("Background — visible with the sky off"), "background")
-        grid.addWidget(self._bg_c, 7, 1)
+        grid.addWidget(self._bg_c, 8, 1)
 
         self._fill = QCheckBox(tr("Section Fill"))
         self._fill.toggled.connect(self._apply_edits)
-        grid.addWidget(self._fill, 8, 0)
+        grid.addWidget(self._fill, 9, 0)
         self._fill_c = self._swatch(tr("Section fill color"),
                                     "section_fill_color")
-        grid.addWidget(self._fill_c, 8, 1)
+        grid.addWidget(self._fill_c, 9, 1)
 
         row = QHBoxLayout()
         save_btn = QPushButton(tr("Save style…"))
@@ -1932,13 +1939,22 @@ class StylesPanel(QWidget):
         self._del_btn = QPushButton(tr("Delete"))
         self._del_btn.clicked.connect(self._on_delete)
         row.addWidget(self._del_btn)
-        grid.addLayout(row, 9, 0, 1, 2)
+        grid.addLayout(row, 10, 0, 1, 2)
 
         self.refresh()
 
     # ---- Plumbing -----------------------------------------------------------
     def _style(self):
         return getattr(self._window.viewport.scene, "display_style", None)
+
+    def _shown_color(self, attr: str):
+        """The colour a swatch shows for ``attr``. Back color may be unset
+        (automatic): show the tint that actually draws."""
+        style = self._style()
+        if attr == "back_color":
+            from core.style import effective_back_color
+            return effective_back_color(style, self._window.viewport.scene)
+        return getattr(style, attr)
 
     def _swatch(self, title: str, attr: str) -> QPushButton:
         btn = QPushButton()
@@ -1979,6 +1995,8 @@ class StylesPanel(QWidget):
             self._fill.setChecked(style.section_fill)
             self._edge_c.setStyleSheet(self._css(style.edge_color))
             self._front_c.setStyleSheet(self._css(style.front_color))
+            self._back_c.setStyleSheet(
+                self._css(self._shown_color("back_color")))
             self._sky_c.setStyleSheet(self._css(style.sky_color))
             self._ground_c.setStyleSheet(self._css(style.ground_color))
             self._bg_c.setStyleSheet(self._css(style.background))
@@ -2014,7 +2032,7 @@ class StylesPanel(QWidget):
         style = self._style()
         if style is None:
             return
-        c = getattr(style, attr)
+        c = self._shown_color(attr)
         chosen = QColorDialog.getColor(
             QColor.fromRgbF(*(float(v) for v in c[:3])), _dialog_parent(self), title)
         if not chosen.isValid():
@@ -2041,6 +2059,9 @@ class StylesPanel(QWidget):
         if attr == "front_color" and mode not in ("hidden_line", "monochrome"):
             return tr("Front color saved — it paints faces in Hidden line "
                       "and Monochrome modes.")
+        if attr == "back_color" and mode in ("hidden_line", "wireframe"):
+            return tr("Back color saved — it paints back faces in Textures, "
+                      "Shaded, Monochrome and X-ray modes.")
         if attr == "background" and style.sky:
             return tr("Background saved — it shows with the sky off.")
         if attr in ("sky_color", "ground_color") and not style.sky:

@@ -28,6 +28,10 @@ from dataclasses import dataclass, field
 FACE_MODES = ("textures", "shaded", "hidden_line", "monochrome",
               "wireframe", "xray")
 
+#: SketchUp's default back-face blue-grey: a visible back face means "you are
+#: looking at the inside" (or at a genuinely inverted face).
+DEFAULT_BACK_COLOR = (0.62, 0.70, 0.78)
+
 
 @dataclass
 class Style:
@@ -37,6 +41,11 @@ class Style:
     profiles: bool = True                    # silhouette/profile edge pass
     edge_color: tuple = (0.13, 0.17, 0.23)
     front_color: tuple = (1.0, 1.0, 1.0)     # hidden line / monochrome faces
+    # Back-face tint (SketchUp's Back color). ``None`` = automatic: the
+    # document's adopted tint (``scene.back_face_color``, e.g. from an
+    # imported .skp) or ``DEFAULT_BACK_COLOR``. A picked colour wins over
+    # both — see ``effective_back_color``.
+    back_color: tuple | None = None
     background: tuple = (0.90, 0.91, 0.92)
     sky: bool = True
     # The sky/ground backdrop tones (drawn when ``sky`` is on; with it off
@@ -57,6 +66,8 @@ class Style:
             "profiles": self.profiles,
             "edge_color": list(self.edge_color),
             "front_color": list(self.front_color),
+            "back_color": (list(self.back_color)
+                           if self.back_color is not None else None),
             "background": list(self.background),
             "sky": self.sky,
             "sky_color": list(self.sky_color),
@@ -78,6 +89,7 @@ class Style:
             profiles=bool(raw.get("profiles", d.profiles)),
             edge_color=tuple(raw.get("edge_color", d.edge_color)),
             front_color=tuple(raw.get("front_color", d.front_color)),
+            back_color=_opt_rgb(raw.get("back_color")),
             background=tuple(raw.get("background", d.background)),
             sky=bool(raw.get("sky", d.sky)),
             sky_color=tuple(raw.get("sky_color", d.sky_color)),
@@ -89,6 +101,32 @@ class Style:
 
     def copy(self) -> "Style":
         return Style.from_dict(self.to_dict())
+
+
+def _opt_rgb(raw) -> tuple | None:
+    """An optional RGB from a dict: ``None`` (or anything malformed — an
+    old or hand-edited document must never break the style) stays
+    ``None``, i.e. automatic."""
+    if raw is None:
+        return None
+    try:
+        rgb = tuple(float(c) for c in raw)
+    except (TypeError, ValueError):
+        return None
+    return rgb[:3] if len(rgb) >= 3 else None
+
+
+def effective_back_color(style, scene=None) -> tuple:
+    """The back-face tint that actually draws: the style's own
+    ``back_color`` if picked, else the document's adopted tint
+    (``scene.back_face_color``), else SketchUp's default blue-grey."""
+    picked = getattr(style, "back_color", None)
+    if picked is not None:
+        return tuple(picked[:3])
+    adopted = getattr(scene, "back_face_color", None)
+    if adopted is not None:
+        return tuple(adopted[:3])
+    return DEFAULT_BACK_COLOR
 
 
 # The best of SketchUp's collections, adapted: Default (working look),

@@ -225,3 +225,70 @@ def test_panel_combo_lists_saved_styles_and_arms_delete(settings_file):
     panel._on_pick(panel._combo.findData("Default"))
     panel.refresh()
     assert not panel._del_btn.isEnabled()              # a built-in: not
+
+
+# ---- Back color (SketchUp's Front/Back color pair) ----------------------------
+
+def test_back_color_is_style_data_and_round_trips(settings_file):
+    """The back-face tint lives in the Style next to the front colour:
+    serialised, library-saved, copied. Unset (``None``) stays automatic."""
+    from core.style import DEFAULT_BACK_COLOR, effective_back_color
+    assert Style().back_color is None
+    assert effective_back_color(Style()) == DEFAULT_BACK_COLOR
+
+    st = Style(name="Interior", back_color=(0.9, 0.2, 0.1))
+    again = Style.from_dict(st.to_dict())
+    assert again.back_color == (0.9, 0.2, 0.1)
+    assert Style.from_dict(Style().to_dict()).back_color is None
+    save_user_style(st)
+    assert style_by_name("Interior").back_color == (0.9, 0.2, 0.1)
+    # Old documents (no key) and junk values fall back to automatic.
+    assert Style.from_dict({}).back_color is None
+    assert Style.from_dict({"back_color": "rojo"}).back_color is None
+    assert Style.from_dict({"back_color": [1, 2]}).back_color is None
+
+
+def test_back_color_precedence_style_then_document_then_default():
+    """A picked Back color wins over the tint adopted from an imported .skp
+    (``scene.back_face_color``); with none picked the adopted tint still
+    shows, exactly as before this option existed."""
+    from core.style import DEFAULT_BACK_COLOR, effective_back_color
+    scene = Scene()
+    style = scene.display_style
+    assert effective_back_color(style, scene) == DEFAULT_BACK_COLOR
+    scene.back_face_color = (0.5, 0.5, 0.5)
+    assert effective_back_color(style, scene) == (0.5, 0.5, 0.5)
+    style.back_color = (0.1, 0.8, 0.3)
+    assert effective_back_color(style, scene) == (0.1, 0.8, 0.3)
+
+
+def test_panel_back_swatch_shows_the_tint_that_draws(settings_file,
+                                                     monkeypatch):
+    from PySide6.QtGui import QColor
+    from views import tray
+    from views.tray import StylesPanel
+    win = _Win()
+    panel = StylesPanel(win)
+    style = win.viewport.scene.display_style
+    # Automatic: the swatch shows the default blue-grey (158,178,199).
+    assert "rgb(158,178,199)" in panel._back_c.styleSheet()
+
+    monkeypatch.setattr(tray.QColorDialog, "getColor",
+                        staticmethod(lambda *a, **k: QColor(255, 0, 0)))
+    panel._pick_color("Back color", "back_color")
+    assert style.back_color == (1.0, 0.0, 0.0)
+    assert "rgb(255,0,0)" in panel._back_c.styleSheet()
+    assert style.front_color == (1.0, 1.0, 1.0)     # front untouched
+
+
+def test_back_color_hint_only_where_back_faces_cannot_show(settings_file):
+    from views.tray import StylesPanel
+    win = _Win()
+    panel = StylesPanel(win)
+    style = win.viewport.scene.display_style
+    for mode in ("textures", "shaded", "monochrome", "xray"):
+        style.face_mode = mode
+        assert panel._color_hint("back_color") is None, mode
+    for mode in ("hidden_line", "wireframe"):
+        style.face_mode = mode
+        assert panel._color_hint("back_color"), mode
