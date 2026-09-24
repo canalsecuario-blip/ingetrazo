@@ -44,7 +44,7 @@ def reserve_group_names(names) -> None:
 class Group:
     __slots__ = ("mesh", "name", "layer", "ifc", "billboard", "xform",
                  "children", "owner", "context", "text3d", "hidden", "uid",
-                 "material", "axes")
+                 "material", "axes", "component")
 
     def __init__(self, mesh: Mesh | None = None, name: str | None = None) -> None:
         self.mesh = mesh if mesh is not None else Mesh()
@@ -114,6 +114,19 @@ class Group:
         #: the group forgot which way it faced. ``None`` = the world axes.
         #: A component instance does not use it: its ``xform`` IS its axes.
         self.axes = None
+        #: Whether this instance is a COMPONENT — a definition its copies
+        #: share, as Make Component or a SketchUp import makes it — or a
+        #: GROUP that only carries a matrix: a group of groups (``adopt``
+        #: makes every container an instance) or a copied group waiting to
+        #: be edited. Only meaningful with an ``xform``; read it through
+        #: :meth:`is_component` (issue #90, @fafecm: «the parent group
+        #: always becomes a component»).
+        self.component = True
+
+    def is_component(self) -> bool:
+        """A component instance, as the user knows it — not merely a group
+        that carries a matrix."""
+        return self.xform is not None and bool(self.component)
 
     def adopt(self, children) -> None:
         """Take ``children`` as nested placements, guaranteeing the invariant
@@ -162,6 +175,8 @@ class Group:
         from PySide6.QtGui import QMatrix4x4
         self.mesh = transformed_mesh(self.mesh, QMatrix4x4())
         self.children = [_independent_copy(c) for c in self.children]
+        # Nothing shared any more: what is left is a group of groups.
+        self.component = False
 
     def __repr__(self) -> str:  # pragma: no cover - debug aid
         kind = " instance" if self.xform is not None else ""
@@ -567,6 +582,7 @@ def copy_group(group, delta=None):
     g.text3d = dict(group.text3d) if group.text3d else None
     g.hidden = group.hidden
     g.material = dict(group.material) if getattr(group, "material", None) else None
+    g.component = getattr(group, "component", True)
     # Nested placements ride along untranslated: ``delta`` already moved the
     # parent, and a child's transform is relative to it.
     g.children = [copy_group(c) for c in (group.children or ())]

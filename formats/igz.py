@@ -281,6 +281,11 @@ def save_scene(scene, path: Path) -> dict:
                     protos[idx] = _mesh_json(g.mesh)
                 entry = {"proto": idx,
                          "xform": [float(x) for x in xf.data()]}
+                # Group or component (issue #90): a group of groups and a
+                # copied group carry a matrix too. Written for EVERY
+                # instance — a file without the key is an older one, which
+                # the reader tells apart its own way. Older readers ignore it.
+                entry["component"] = bool(getattr(g, "component", True))
             else:
                 entry = _mesh_json(g.mesh)
             # The name — never written until 2026-09-11, so every reopened
@@ -641,6 +646,14 @@ def _load_into_inner(scene, path: Path, progress=None) -> None:
         if depth < 32:              # a corrupt document must not spin
             group.adopt(_group_from(c, depth + 1)
                         for c in raw.get("children", []) or [])
+        if "component" in raw:
+            group.component = bool(raw["component"])
+        elif any(isinstance(c, dict) and "xform" not in c
+                 for c in raw.get("children", []) or []):
+            # Saved before the key existed (issue #90): a container holding
+            # a CLASSIC group can only be Make Group's — a SketchUp import
+            # places every child with a matrix. A group, then.
+            group.component = False
         return group
 
     raw_groups = payload.get("groups", []) or []

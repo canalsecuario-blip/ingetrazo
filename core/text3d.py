@@ -309,6 +309,7 @@ def make_text_group(params: dict):
         return None
     g = Group(name=params["text"].strip()[:24])
     g.adopt(kids)
+    g.component = False           # a 3D text is a group of letters (#90)
     g.text3d = text_state(params, kids)
     return g
 

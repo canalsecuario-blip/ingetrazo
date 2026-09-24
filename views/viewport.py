@@ -9848,6 +9848,9 @@ class Viewport(QOpenGLWidget):
         for src, tpl in zip(groups, group_data):
             if tpl.xform is None:
                 tpl.xform = QMatrix4x4()
+                # Still a GROUP: the matrix is only how the stamps share
+                # until one is edited (issue #90).
+                tpl.component = False
                 if callable(seed):
                     seed(tpl.mesh, src)
         # Reference corner (what the cursor holds the set by): min corner of
@@ -9951,6 +9954,17 @@ class Viewport(QOpenGLWidget):
         component instance opens on a world copy of its definition; the
         session's commands are remembered so leaving can fold them into ONE
         undoable share-back."""
+        if (getattr(group, "xform", None) is not None
+                and not getattr(group, "component", True)
+                and not getattr(group, "children", None)
+                and any(g is not group and g.mesh is group.mesh
+                        for g in self.scene.groups)):
+            # A copied GROUP shares its geometry with the other copies only
+            # until it is edited: opening it makes it its own, one undo
+            # step, instead of editing every copy like a component
+            # (issue #90 — SketchUp's groups behave the same way).
+            from core.history import MakeUniqueCommand
+            self.history.execute(MakeUniqueCommand(group))
         was_instance = (getattr(group, "xform", None) is not None
                         and not getattr(group, "children", None))
         self.scene.begin_group_edit(group)

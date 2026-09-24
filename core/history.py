@@ -2866,12 +2866,14 @@ class MakeUniqueCommand(Command):
         self._xform = None
         self._children = None
         self._axes = None
+        self._component = True
 
     def do(self, scene) -> None:
         self._proto = self.group.mesh
         self._xform = self.group.xform
         self._children = self.group.children
         self._axes = self.group.axes
+        self._component = self.group.component
         self.group.make_unique()
         scene.version += 1
 
@@ -2880,6 +2882,7 @@ class MakeUniqueCommand(Command):
         self.group.xform = self._xform
         self.group.children = self._children or []
         self.group.axes = self._axes
+        self.group.component = self._component
         scene.version += 1
 
 
@@ -2900,13 +2903,20 @@ class GroupToComponentCommand(Command):
     def do(self, scene) -> None:
         from PySide6.QtGui import QMatrix4x4
         self._old_name = self.group.name
-        self.group.xform = QMatrix4x4()
+        self._old_xform = self.group.xform
+        self._old_component = self.group.component
+        if self.group.xform is None:
+            self.group.xform = QMatrix4x4()
+        # A group of groups already carries a matrix: it only changes what
+        # it IS — a component from now on (issue #90).
+        self.group.component = True
         if self._name:
             self.group.name = self._name
         scene.version += 1
 
     def undo(self, scene) -> None:
-        self.group.xform = None
+        self.group.xform = self._old_xform
+        self.group.component = self._old_component
         self.group.name = self._old_name
         scene.version += 1
 
@@ -3036,6 +3046,9 @@ class MakeNestedGroupCommand(Command):
         # In document order, not selection order: a selection is a set, and
         # the children of a group are a list somebody will read.
         self.container.adopt([g for _i, g in self._indices])
+        # A GROUP of groups: ``adopt`` gives it a matrix, which does not
+        # make it a component (issue #90, @fafecm).
+        self.container.component = False
         scene.selection.clear()
         scene.selection.add(self.container)
         scene.version += 1
@@ -3051,6 +3064,28 @@ class MakeNestedGroupCommand(Command):
             scene.groups.remove(self.container)
         scene.selection.clear()
         scene.version += 1
+
+
+class MakeComponentOfCommand(Command):
+    """Make Component over a selection that holds groups (or groups and
+    loose geometry): ONE component containing them, each still a group
+    inside — not one component per group (Marco, 24-09, with issue #90).
+    It is Make Group's container, made a component."""
+
+    def __init__(self, faces, edges, groups, name=None) -> None:
+        self._nest = MakeNestedGroupCommand(faces, edges, groups, name=name)
+
+    @property
+    def container(self):
+        return self._nest.container
+
+    def do(self, scene) -> None:
+        self._nest.do(scene)
+        self._nest.container.component = True
+        scene.version += 1
+
+    def undo(self, scene) -> None:
+        self._nest.undo(scene)
 
 
 class MergeGroupsCommand(Command):

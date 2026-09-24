@@ -1730,46 +1730,54 @@ class MainWindow(QMainWindow):
         sel = self.viewport.scene.selection
         faces = [f for f in sel if isinstance(f, Face)]
         edges = [e for e in sel if isinstance(e, Edge)]
-        classic = [g for g in sel if isinstance(g, Group)
-                   and getattr(g, "xform", None) is None
-                   and not getattr(g, "billboard", False)]
-        if not faces and not edges:
-            if classic:
-                # A selected GROUP converts in place — its mesh becomes the
-                # shared definition, free (no geometry copied). The old
-                # answer was "explode it first", which fed 230k faces
-                # through the loose mesh for minutes (piscina report).
-                from PySide6.QtWidgets import QInputDialog
-                from core.history import GroupToComponentCommand
-                name = None
-                if len(classic) == 1:
-                    name, ok = _prompts.get_text(
-                        self, tr("Make Component"), tr("Component name:"),
-                        text=classic[0].name or tr("Component"))
-                    if not ok:
-                        return
-                    name = name.strip() or None
-                for g in classic:
-                    self.viewport.history.execute(
-                        GroupToComponentCommand(g, name))
-                self.viewport.update()
-                self.statusBar().showMessage(tr(
-                    "Component created — copies will share its definition"),
-                    4000)
+        groups = [g for g in sel if isinstance(g, Group)
+                  and not getattr(g, "billboard", False)]
+        count = sum(1 for g in self.viewport.scene.groups
+                    if g.is_component()) + 1
+        if len(groups) > 1 or (groups and (faces or edges)):
+            # Several groups, or groups and loose geometry: ONE component
+            # holding them, each still a group inside (Marco, 24-09, with
+            # issue #90) — it used to make one component per group, or
+            # refuse outright when loose geometry came along.
+            from core.history import MakeComponentOfCommand
+            name, ok = _prompts.get_text(
+                self, tr("Make Component"), tr("Component name:"),
+                text=tr("Component #{n}", n=count))
+            if not ok:
                 return
+            self.viewport.history.execute(MakeComponentOfCommand(
+                faces, edges, groups,
+                name=name.strip() or tr("Component #{n}", n=count)))
+            self.viewport.update()
+            self.statusBar().showMessage(tr(
+                "Component created — copies will share its definition"), 4000)
+            return
+        if groups:
+            # One group converts in place — its mesh becomes the shared
+            # definition, free (no geometry copied); a group of groups just
+            # becomes what it holds a matrix for. The old answer was
+            # "explode it first", which fed 230k faces through the loose
+            # mesh for minutes (piscina report).
+            g = groups[0]
+            if g.is_component():
+                self.viewport.flash_status(tr("It is a component already"))
+                return
+            from core.history import GroupToComponentCommand
+            name, ok = _prompts.get_text(
+                self, tr("Make Component"), tr("Component name:"),
+                text=g.name or tr("Component"))
+            if not ok:
+                return
+            self.viewport.history.execute(
+                GroupToComponentCommand(g, name.strip() or None))
+            self.viewport.update()
+            self.statusBar().showMessage(tr(
+                "Component created — copies will share its definition"), 4000)
+            return
+        if not faces and not edges:
             self.viewport.flash_status(
                 tr("Select the geometry for the component first"))
             return
-        if [g for g in sel if isinstance(g, Group)]:
-            # Loose geometry AND a group selected: the component would take
-            # the loose part only and quietly leave the group out.
-            self.viewport.flash_status(tr(
-                "Can't put a group inside a component yet — select only the "
-                "loose geometry, or only the group to convert it"), 5000)
-            return
-        from PySide6.QtWidgets import QInputDialog
-        count = sum(1 for g in self.viewport.scene.groups
-                    if getattr(g, "xform", None) is not None) + 1
         name, ok = _prompts.get_text(
             self, tr("Make Component"), tr("Component name:"),
             text=tr("Component #{n}", n=count))
@@ -1785,8 +1793,7 @@ class MainWindow(QMainWindow):
     def _on_make_unique(self) -> None:
         from core.history import MakeUniqueCommand
         for g in [g for g in self.viewport.scene.selection
-                  if isinstance(g, Group)
-                  and getattr(g, "xform", None) is not None]:
+                  if isinstance(g, Group) and g.is_component()]:
             self.viewport.history.execute(MakeUniqueCommand(g))
         self.viewport.update()
 
@@ -2246,8 +2253,9 @@ class MainWindow(QMainWindow):
                     off = menu.addAction(
                         tr("Edit 3D Text… (letters edited by hand)"))
                     off.setEnabled(False)
-            if any(isinstance(e, Group) and getattr(e, "xform", None) is None
-                   and not getattr(e, "billboard", False) for e in sel):
+            if (any(isinstance(e, Group) and not e.is_component()
+                    and not getattr(e, "billboard", False) for e in sel)
+                    or sum(1 for e in sel if isinstance(e, Group)) >= 2):
                 # Convert a classic group into a component IN PLACE (free —
                 # no explode detour): the door the piscina hedge needed.
                 menu.addAction(tr("Make Component…"), self._on_make_component)
@@ -2257,8 +2265,7 @@ class MainWindow(QMainWindow):
                 # one WITHOUT routing their geometry through the loose mesh
                 # (explode + regroup chokes on leafy imports).
                 menu.addAction(tr("Merge Groups"), self._on_merge_groups)
-            if any(isinstance(e, Group)
-                   and getattr(e, "xform", None) is not None for e in sel):
+            if any(isinstance(e, Group) and e.is_component() for e in sel):
                 menu.addAction(tr("Make Unique"), self._on_make_unique)
             if len(groups) == 1 and len(sel) == 1:
                 menu.addAction(tr("Change Axes"),

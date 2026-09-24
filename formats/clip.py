@@ -98,6 +98,7 @@ def decode(data: bytes) -> dict | None:
     for g in scene.groups:
         if getattr(g, "xform", None) is None:
             g.xform = QMatrix4x4()
+            g.component = False       # a group still (issue #90)
     return {"faces": faces, "edges": edges, "groups": list(scene.groups),
             "ref": QVector3D(*head["ref"])}
 

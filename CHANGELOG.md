@@ -30,10 +30,22 @@ follow [SemVer](https://semver.org).
   guía tiene un extremo detrás de la cámara y se descartaba entera.
 
 ### Corregido
-- **Hacer único ya no explota los subgrupos** (#90, @fafecm): un componente
-  con grupos dentro se queda con su propia copia de todo el árbol, con los
-  subgrupos como subgrupos, y deja de compartir con las demás copias. Antes
-  la geometría de los hijos se fundía en una sola malla.
+- **Un grupo de grupos es un grupo, no un componente** (#90, @fafecm). Al
+  hacer Crear grupo con grupos dentro, el resultado se presentaba y se
+  exportaba como componente, y Hacer único fundía sus subgrupos en una sola
+  malla. Ahora:
+  - Info de entidad lo llama **Grupo**, no sale en la lista de componentes
+    y ofrece **Crear componente**, que lo convierte con sus subgrupos.
+  - **Crear componente con varios grupos seleccionados** (o grupos y
+    geometría suelta) hace UN componente que los contiene, cada uno aún
+    grupo dentro. Antes hacía un componente por grupo, o se negaba.
+  - **Hacer único** sobre un componente con subgrupos lo deja como grupo,
+    con su propia copia de todo el árbol y los subgrupos intactos.
+  - Las **copias de un grupo** ya no se editan todas a la vez: al abrir una
+    para editarla se hace única, como en SketchUp.
+  - En **.skp** un grupo de grupos sale como grupo de SketchUp y sus
+    subgrupos como grupos (validado con el SDK de SketchUp). Los `.igz`
+    guardan la diferencia; los archivos anteriores la deducen al abrirse.
 - **La consola de Python sigue el tema** (#92, @xyont): con el tema claro
   tenía el fondo negro. Ahora usa colores claros (los de VS Code Light+), y
   cambia con el tema aunque esté abierta, incluido lo ya escrito.

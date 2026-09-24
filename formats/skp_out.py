@@ -396,7 +396,10 @@ def _split_containers(scene):
         figures = _figures(g)
         if not g.mesh.faces and not kids and not figures:
             continue
-        if getattr(g, "xform", None) is None:
+        if (getattr(g, "xform", None) is None
+                or not getattr(g, "component", True)):
+            # A group of groups carries a matrix but is no component
+            # (issue #90): it goes out as a SketchUp GROUP too.
             classic_groups.append((g, kids, figures))
         else:
             roots.append((_register(g), g))
@@ -1253,13 +1256,23 @@ def _write_skp(scene, path, openskp, SkpWriteError, stage_dir: Path) -> None:
         internal sharing, kept instead of flattened."""
         for ci, c in children:
             translation, matrix3x3 = _placement(defs[ci], c)
-            container.add_instance(
+            # A child that is a GROUP (a classic one, or a group of groups)
+            # is placed as a SketchUp group, not as a component instance
+            # (issue #90); components, figures and shared repeats stay
+            # instances.
+            as_group = (not getattr(c, "billboard", False)
+                        and (getattr(c, "xform", None) is None
+                             or not getattr(c, "component", True)))
+            place = (container.add_group_instance
+                     if as_group and hasattr(container, "add_group_instance")
+                     else container.add_instance)
+            place(
                 handles[ci],
                 name=c.name,
                 translation=translation,
                 matrix3x3=matrix3x3,
                 layer=layer_handles.get(getattr(c, "layer", None)),
-                **_opt_material(container.add_instance, _container_material(c)),
+                **_opt_material(place, _container_material(c)),
             )
 
     # Definitions come first and in registration order — post-order, so a
@@ -1281,7 +1294,12 @@ def _write_skp(scene, path, openskp, SkpWriteError, stage_dir: Path) -> None:
         # SketchUp keeps groups: geometry in its local coordinates, the
         # axes as the placement — so it opens in SketchUp turned the way
         # it is, with its bounding box and axes on it.
-        placed = _local_group(g, faces, kids)
+        if getattr(g, "xform", None) is not None:
+            # A group of groups: its own faces and its children's
+            # placements are in its local frame, its matrix places it.
+            placed = (_instance_placement(g.xform), faces, kids)
+        else:
+            placed = _local_group(g, faces, kids)
         if placed is not None:
             placement, faces, kids = placed
             kw = {"translation": placement[0], "matrix3x3": placement[1]}

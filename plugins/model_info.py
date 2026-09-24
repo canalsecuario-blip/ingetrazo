@@ -66,7 +66,7 @@ def _collect_stats(scene) -> dict:
     loose_faces = len(loose.faces)
 
     group_count = len(groups)
-    instance_count = sum(1 for g in groups if g.is_instance())
+    instance_count = sum(1 for g in groups if g.is_component())
 
     # Instances share their prototype mesh; counting it once per instance is
     # deliberate — these are render/entity counts, the way SketchUp reports

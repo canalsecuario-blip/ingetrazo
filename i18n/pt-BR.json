@@ -1167,6 +1167,7 @@
  "Model — Ctrl+Tab goes to the sheet": "Modelo — Ctrl+Tab vai para a folha",
  "Sheet — Ctrl+Tab goes back to the model; Ctrl+PgUp / Ctrl+PgDown, the sheet before / after": "Folha — Ctrl+Tab volta ao modelo; Ctrl+PgUp / Ctrl+PgDown, a folha anterior / seguinte",
  "Model and sheets — Ctrl+Tab switches between them; in the sheets, Ctrl+PgUp / Ctrl+PgDown go to the sheet before / after.": "Modelo e folhas — Ctrl+Tab alterna entre eles; nas folhas, Ctrl+PgUp / Ctrl+PgDown vão para a folha anterior / seguinte.",
+ "It is a component already": "Já é um componente",
  "BIM panel": "Painel BIM",
  "Terrain panel": "Painel de terreno",
  "Terrain profile": "Perfil do terreno",

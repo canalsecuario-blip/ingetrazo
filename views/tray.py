@@ -1095,7 +1095,7 @@ class ComponentsPanel(QWidget):
         no geometry is walked."""
         by_proto: dict = {}
         for g in self._window.viewport.scene.groups:
-            if not g.is_instance() or getattr(g, "billboard", False):
+            if not g.is_component() or getattr(g, "billboard", False):
                 continue
             by_proto.setdefault(id(g.mesh), []).append(g)
         rows = [(gs[0].name, len(gs[0].mesh.faces), gs)
@@ -2456,7 +2456,7 @@ class EntityInfoPanel(QWidget):
                 vol = self._solid_volume(e)
                 solid = (f"<br>{tr('Volume')}: {vol:.3f} m³"
                          if vol is not None else "")
-                if e.is_instance():
+                if e.is_component():
                     # SketchUp's Entity Info tells a component from a group and
                     # says how many copies share the definition. Without it the
                     # two are indistinguishable here, which also made an import

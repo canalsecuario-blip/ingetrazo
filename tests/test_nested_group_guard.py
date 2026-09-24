@@ -106,15 +106,26 @@ def test_grouping_only_loose_geometry_still_works():
         win.close()
 
 
-def test_component_from_loose_geometry_plus_a_group_refuses():
+def test_component_from_loose_geometry_plus_a_group_holds_both(monkeypatch):
+    """It used to refuse; since issue #90 it makes ONE component holding the
+    loose geometry and the group, still a group inside."""
+    import views.main_window as mw
+    monkeypatch.setattr(mw._prompts, "get_text",
+                        lambda *a, **k: ("Banca", True))
     win, scene = _win_with_a_group_and_loose_geometry()
     try:
+        # the scale figure (a face-me billboard) never goes inside
+        inner = [g for g in scene.groups
+                 if not getattr(g, "billboard", False)]
         before = len(scene.groups)
         scene.selection.clear()
         scene.selection.update(set(scene.mesh.faces) | set(scene.groups))
         win._on_make_component()
-        assert len(scene.groups) == before
-        assert scene.mesh.faces
+        assert len(scene.groups) == before - len(inner) + 1
+        comp = [g for g in scene.groups if g not in inner
+                and not getattr(g, "billboard", False)][0]
+        assert comp.is_component() and comp.name == "Banca"
+        assert comp.children == inner and not scene.mesh.faces
     finally:
         win._saved_version = scene.version
         win.close()
