@@ -5066,13 +5066,19 @@ class MainWindow(QMainWindow):
         """Return True if it's safe to discard the current drawing."""
         if not self._is_dirty():
             return True
-        answer = QMessageBox.question(
-            self,
-            tr("Unsaved changes"),
+        # Built by hand rather than with QMessageBox.question: on macOS
+        # that is a NATIVE alert, which draws «Don't Save» as a red
+        # destructive button — and under the dark scheme main.py forces,
+        # red text on a black button, barely readable. Qt's own dialog
+        # wears the app's palette, like every other window here.
+        box = QMessageBox(
+            QMessageBox.Question, tr("Unsaved changes"),
             tr("{prompt}\n\nUnsaved changes will be lost.", prompt=prompt),
             QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
-            QMessageBox.Save,
-        )
+            self)
+        box.setOption(QMessageBox.Option.DontUseNativeDialog, True)
+        box.setDefaultButton(QMessageBox.Save)
+        answer = box.exec()
         if answer == QMessageBox.Save:
             self._on_save()
             return not self._is_dirty()
