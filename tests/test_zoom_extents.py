@@ -71,3 +71,21 @@ def test_a_point_and_a_huge_model_stay_in_range():
     assert cam.distance > 0 and math.isfinite(cam.distance)
     cam.fit_box(V(0, 0, 0), V(60000, 60000, 10))
     assert cam.distance <= MAX_DISTANCE
+
+
+def test_zoom_extents_frames_the_scale_figure_in_a_new_document():
+    """A new document holds only the scale figure; Zoom Extents used to do
+    nothing there (the figure is left out of the scene bounds), where
+    SketchUp's frames the figure (Marco, 23-09)."""
+    from PySide6.QtWidgets import QApplication
+    QApplication.instance() or QApplication([])
+    from views.main_window import MainWindow
+    win = MainWindow()
+    cam = win.viewport.camera
+    cam.target = V(500, 500, 0)
+    cam.distance = 4000                   # far away from everything
+    win._on_zoom_extents()
+    assert cam.distance < 20              # framed the 1.7 m figure
+    assert abs(cam.target.x() + 0.65) < 1.0 and abs(cam.target.y() + 0.6) < 1.0
+    win._saved_version = win.viewport.scene.version
+    win.close()

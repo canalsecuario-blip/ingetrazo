@@ -53,6 +53,9 @@ follow [SemVer](https://semver.org).
   en el compositor.
 
 ### Corregido
+- **Una cara pegada encima de otra se une con ella** (#73, @pacaeiro):
+  como un rectángulo dibujado ahí, parte el plano en sus regiones en vez
+  de quedar una cara superpuesta a la otra. Pegar al lado no toca nada.
 - **Un grupo girado conserva sus ejes al copiarlo y pegarlo** (#78,
   @pacaeiro): la copia salía con los ejes alineados al mundo.
 - **La órbita ya no se queda pegada al ratón** (Andrés Rodríguez, Windows 11).
@@ -103,6 +106,9 @@ follow [SemVer](https://semver.org).
   diferencia por redondeo numérico, justo lo que el programa tomaba como
   dos puntos distintos. Ahora redondea igual que el cubo recto, en
   cualquier orden de aristas.
+- **Zoom extensión encuadra también las figuras** como el muñeco de escala,
+  igual que «Ver modelo centrado» de SketchUp: en un documento nuevo, donde
+  solo está él, no hacía nada.
 - **Zoom extensión a veces no hacía nada.** Encuadraba la esfera que
   envuelve al modelo, que no depende de hacia dónde miras: tras orbitar o
   pasar a una vista estándar, repetirlo daba la misma cámara y el modelo

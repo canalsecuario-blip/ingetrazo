@@ -59,5 +59,8 @@ def test_picking_a_tool_ends_a_camera_drag():
     vp._last_pos = QPoint(100, 100)
     win._activate_tool("paint")
     assert vp.nav_mode is None and vp._last_pos is None
+    # Leave no closed window holding Paint: until it is collected it sits
+    # in the Alt-tap watcher and can take a later test's tap.
+    win._activate_tool("select")
     win._saved_version = vp.scene.version
     win.close()

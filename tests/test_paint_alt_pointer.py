@@ -23,6 +23,10 @@ from views.viewport import Viewport  # noqa: E402
 
 def _paint_viewport():
     from tools.paint import PaintTool
+    # Windows closed by earlier tests linger in the Alt-tap watcher until
+    # collected, and one still holding Paint could take the tap.
+    import gc
+    gc.collect()
     vp = Viewport(None)
     vp.flash_status = lambda *a, **k: None
     tool = PaintTool()

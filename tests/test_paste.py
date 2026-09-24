@@ -376,3 +376,30 @@ def test_copy_paste_container_whose_own_mesh_is_empty():
     pts = placement_points(pasted)
     assert abs(float(pts[:, 0].min()) - 10.0) < 1e-6
     assert abs(float(pts[:, 1].min()) - 10.0) < 1e-6
+
+
+def test_a_face_pasted_over_another_merges_with_it():
+    """Issue #73 (@pacaeiro): a rectangle copied on top of the previous
+    one lay over it as a second face; like a rectangle drawn there, it now
+    splits the plane into its regions."""
+    from types import SimpleNamespace
+    from PySide6.QtGui import QVector3D as V
+    from core.history import History
+    from core.scene import Scene
+    from tools.paste import PasteTool
+    sc = Scene()
+    hist = History(sc)
+    sc.mesh.add_face([V(0, 0, 0), V(2, 0, 0), V(2, 2, 0), V(0, 2, 0)])
+    sc.version += 1
+    square = [V(0, 0, 0), V(2, 0, 0), V(2, 2, 0), V(0, 2, 0)]
+    tool = PasteTool()
+    tool._clip = {"faces": [(square, [], {})], "edges": [], "groups": [],
+                  "ref": V(0, 0, 0)}
+    tool._offset = V()
+    tool._preview_on = False
+    vp = SimpleNamespace(scene=sc, history=hist, update=lambda: None,
+                         window=None)
+    tool.on_click(SimpleNamespace(world=V(1, 1, 0), viewport=vp))
+    # Overlapping 2×2 squares offset by (1,1): three regions, no stacking.
+    areas = sorted(round(f.area(), 6) for f in sc.mesh.faces)
+    assert areas == [1.0, 3.0, 3.0], areas

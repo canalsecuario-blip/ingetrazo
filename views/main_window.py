@@ -2608,6 +2608,20 @@ class MainWindow(QMainWindow):
     # ---- View navigation ----------------------------------------------------
     def _on_zoom_extents(self) -> None:
         bounds = self.viewport.scene.bounds()
+        # Face-me figures count too, as in SketchUp's Zoom Extents:
+        # ``Scene.bounds()`` leaves them out (they draw per frame), so a new
+        # document — the scale figure alone — framed nothing, and Zoom
+        # Extents did nothing after zooming far away (Marco, 23-09).
+        figs = self._figure_bounds()
+        if figs is not None:
+            lo, hi = figs
+            if bounds[0] is not None:
+                from PySide6.QtGui import QVector3D
+                lo = QVector3D(min(lo.x(), bounds[0].x()), min(lo.y(), bounds[0].y()),
+                               min(lo.z(), bounds[0].z()))
+                hi = QVector3D(max(hi.x(), bounds[1].x()), max(hi.y(), bounds[1].y()),
+                               max(hi.z(), bounds[1].z()))
+            bounds = (lo, hi)
         if bounds[0] is None:
             # ``Scene.bounds()`` covers editable geometry only. A document
             # holding just a survey (the normal state right after importing
@@ -2620,6 +2634,25 @@ class MainWindow(QMainWindow):
                 return
         self.viewport.camera.fit_box(bounds[0], bounds[1])
         self.viewport.update()
+
+    def _figure_bounds(self):
+        """World box of the visible face-me figures, or None."""
+        from PySide6.QtGui import QVector3D
+        from core.group import placement_points
+        scene = self.viewport.scene
+        lo = hi = None
+        for g in scene.groups:
+            if not getattr(g, "billboard", False) or not scene.entity_visible(g):
+                continue
+            pts = placement_points(g)
+            if not len(pts):
+                continue
+            a, b = pts.min(axis=0), pts.max(axis=0)
+            lo = a if lo is None else [min(x, y) for x, y in zip(lo, a)]
+            hi = b if hi is None else [max(x, y) for x, y in zip(hi, b)]
+        if lo is None:
+            return None
+        return QVector3D(*map(float, lo)), QVector3D(*map(float, hi))
 
     def _ensure_composer(self):
         """The composer window, created but not shown — the sheet strip's
