@@ -39,6 +39,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QListWidgetItem,
+    QMenu,
     QMessageBox,
     QPushButton,
     QScrollArea,
@@ -1735,6 +1736,21 @@ class MaterialsPanel(QWidget):
         self._preview.setPixmap(_color_pixmap(PaintTool.current_color))
 
 
+def _dialog_parent(panel) -> QWidget:
+    """Where a dialog opened from a toolbar-dropdown panel must hang: the
+    main window, with the dropdown closed first. Parented to the panel, the
+    modal dialog's transient parent is the menu POPUP — Wayland never maps
+    it, and exec() waits forever for a window no one sees («Añadir
+    localización se queda cargando», Marco on the 0.5.1 Flatpak)."""
+    w = panel.parentWidget()
+    while w is not None:
+        if isinstance(w, QMenu):
+            w.close()
+            break
+        w = w.parentWidget()
+    return panel._window
+
+
 class DimensionStylePanel(QWidget):
     """Live editor for ``scene.dimension_style``."""
 
@@ -1822,7 +1838,7 @@ class DimensionStylePanel(QWidget):
 
     def _pick_color(self) -> None:
         c = self._style().get("color", [45, 55, 75])
-        chosen = QColorDialog.getColor(QColor(c[0], c[1], c[2]), self,
+        chosen = QColorDialog.getColor(QColor(c[0], c[1], c[2]), _dialog_parent(self),
                                        tr("Dimension color"))
         if chosen.isValid():
             self._style()["color"] = [chosen.red(), chosen.green(), chosen.blue()]
@@ -2000,7 +2016,7 @@ class StylesPanel(QWidget):
             return
         c = getattr(style, attr)
         chosen = QColorDialog.getColor(
-            QColor.fromRgbF(*(float(v) for v in c[:3])), self, title)
+            QColor.fromRgbF(*(float(v) for v in c[:3])), _dialog_parent(self), title)
         if not chosen.isValid():
             return
         setattr(style, attr, (chosen.redF(), chosen.greenF(), chosen.blueF()))
@@ -2042,14 +2058,15 @@ class StylesPanel(QWidget):
             return
         from core.style import builtin_names, save_user_style
         suggested = "" if style.name in builtin_names() else style.name
+        parent = _dialog_parent(self)
         name, ok = _prompts.get_text(
-            self, tr("Save style"), tr("Style name:"), text=suggested)
+            parent, tr("Save style"), tr("Style name:"), text=suggested)
         name = name.strip()
         if not ok or not name:
             return
         if name in builtin_names():
             QMessageBox.warning(
-                self, tr("Save style"),
+                parent, tr("Save style"),
                 tr("'{name}' is a built-in style — pick another name.",
                    name=name))
             return
@@ -2065,7 +2082,7 @@ class StylesPanel(QWidget):
         if not name:
             return
         if QMessageBox.question(
-                self, tr("Delete style"),
+                _dialog_parent(self), tr("Delete style"),
                 tr("Delete style '{name}'?", name=name)) != QMessageBox.Yes:
             return
         delete_user_style(name)
@@ -2271,7 +2288,8 @@ class ShadowsPanel(QWidget):
         from core.sun import DEFAULT_LAT, DEFAULT_LON
         lat0 = datum.lat if datum is not None else DEFAULT_LAT
         lon0 = datum.lon if datum is not None else DEFAULT_LON
-        result = pick_location(PRESETS[DEFAULT_SOURCE_ID], lat0, lon0, self)
+        result = pick_location(PRESETS[DEFAULT_SOURCE_ID], lat0, lon0,
+                               _dialog_parent(self))
         if result is None:
             return
         lat, lon, _w, _l = result
@@ -3095,8 +3113,12 @@ class Tray(QDockWidget):
         super().__init__(tr("Properties"), window)
         self.setObjectName("tray_properties")
         self.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
+        # Closable: without it Qt greys out the Window-menu entry, and a
+        # tray the sidebar fold left hidden had no way back (Marco, 0.5.1).
+        # The empty title bar shows no close button either way.
         self.setFeatures(QDockWidget.DockWidgetMovable
-                         | QDockWidget.DockWidgetFloatable)
+                         | QDockWidget.DockWidgetFloatable
+                         | QDockWidget.DockWidgetClosable)
 
         self.entity_info = EntityInfoPanel(window)
         self.materials = MaterialsPanel(window)
@@ -3140,8 +3162,12 @@ class BimTray(QDockWidget):
         super().__init__(tr("BIM"), window)
         self.setObjectName("tray_bim")
         self.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
+        # Closable: without it Qt greys out the Window-menu entry, and a
+        # tray the sidebar fold left hidden had no way back (Marco, 0.5.1).
+        # The empty title bar shows no close button either way.
         self.setFeatures(QDockWidget.DockWidgetMovable
-                         | QDockWidget.DockWidgetFloatable)
+                         | QDockWidget.DockWidgetFloatable
+                         | QDockWidget.DockWidgetClosable)
         self.bim = BimPanel(window)
         self.setWidget(_scrolled([(tr("BIM tagging"), self.bim)]))
 
@@ -3261,8 +3287,12 @@ class GeorefTray(QDockWidget):
         super().__init__(tr("Terrain"), window)
         self.setObjectName("tray_georef")
         self.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
+        # Closable: without it Qt greys out the Window-menu entry, and a
+        # tray the sidebar fold left hidden had no way back (Marco, 0.5.1).
+        # The empty title bar shows no close button either way.
         self.setFeatures(QDockWidget.DockWidgetMovable
-                         | QDockWidget.DockWidgetFloatable)
+                         | QDockWidget.DockWidgetFloatable
+                         | QDockWidget.DockWidgetClosable)
         self.base_map = BaseMapPanel(window)
         self.survey = SurveyPointsPanel(window)
         self.setWidget(_scrolled([(tr("Base map"), self.base_map),

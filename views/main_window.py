@@ -942,6 +942,12 @@ class MainWindow(QMainWindow):
         toggle_tray.setText(tr("Properties panel"))
         window_menu.addAction(toggle_tray)
 
+        # Every tray has its entry: a closed BIM tray had no way back
+        # (Marco, 0.5.1 Flatpak: «no veo las pestañas de terreno y BIM»).
+        toggle_bim = self.bim_tray.toggleViewAction()
+        toggle_bim.setText(tr("BIM panel"))
+        window_menu.addAction(toggle_bim)
+
         toggle_georef = self.georef_tray.toggleViewAction()
         toggle_georef.setText(tr("Terrain panel"))
         window_menu.addAction(toggle_georef)
@@ -1095,7 +1101,10 @@ class MainWindow(QMainWindow):
             if top is not None and top in shown:
                 top.raise_()
         else:
-            self._sidebar_was = [d for d in docks if d.isVisible()]
+            # OPEN, not on screen: a tray tabbed behind another is not
+            # visible, and unfolding left BIM and Terrain closed for good.
+            self._sidebar_was = [d for d in docks
+                                 if d.toggleViewAction().isChecked()]
             self._sidebar_top = next((d for d in docks if d.isVisible()
                                       and not d.visibleRegion().isEmpty()), None)
             for d in docks:

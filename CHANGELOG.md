@@ -4,6 +4,20 @@ All notable changes to IngeTrazo are documented here.
 Format inspired by [Keep a Changelog](https://keepachangelog.com); versions
 follow [SemVer](https://semver.org).
 
+## [Sin publicar]
+
+### Corregido
+- **«Añadir localización» ya abre el mapa** desde el panel de Sombras. En
+  Wayland se quedaba cargando sin mostrar nada: el diálogo colgaba del menú
+  desplegable de la barra. Ahora el menú se cierra y el diálogo sale sobre
+  la ventana principal; lo mismo para los colores y el nombre de los estilos
+  y el color de cota.
+- **Las pestañas BIM y Terreno ya no se pierden.** Al plegar y desplegar la
+  barra lateral solo volvía la pestaña que estaba delante, y el menú
+  Ventana no dejaba recuperar las otras (salían en gris). Ahora vuelven
+  todas las que estaban abiertas, y **Ventana ▸ Panel BIM** se suma a
+  Panel de propiedades y Panel de terreno.
+
 ## [0.5.1] — 2026-09-23
 
 **La revisión 4 de Rafael, las tandas de @pacaeiro y la de los usuarios.**
