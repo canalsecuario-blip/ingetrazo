@@ -390,3 +390,27 @@ def test_a_flattened_skp_group_keeps_its_instance_axes():
     skp_format.apply_payload(scene, payload)
     g = scene.groups[0]
     assert g.axes == turn and g.xform is None
+
+
+def test_a_pasted_rotated_group_keeps_its_axes():
+    """Issue #78 (@pacaeiro): Copy turns a classic group into an instance
+    snapshot and Paste copies that — the instance copy dropped the local
+    axes, so a pasted rotated group came back with the world's axes."""
+    from PySide6.QtGui import QMatrix4x4, QVector3D as V
+    from core.group import Group, copy_group, group_frame
+    from core.history import RotateGroupCommand
+    from core.mesh import Mesh
+    from core.scene import Scene
+    m = Mesh()
+    m.add_face([V(0, 0, 0), V(2, 0, 0), V(2, 1, 0), V(0, 1, 0)])
+    g = Group(m)
+    sc = Scene()
+    sc.groups.append(g)
+    RotateGroupCommand(g, V(0, 0, 0), V(0, 0, 1), 30.0).do(sc)
+    tpl = copy_group(g)                       # what Copy snapshots
+    if tpl.xform is None:
+        tpl.xform = QMatrix4x4()
+    pasted = copy_group(tpl, V(5, 0, 0))      # what Paste stamps
+    red = group_frame(pasted).column(0).toVector3D()
+    assert abs(red.x() - 0.866025) < 1e-4 and abs(red.y() - 0.5) < 1e-4
+    assert group_frame(pasted).column(3).toVector3D() == V(5, 0, 0)

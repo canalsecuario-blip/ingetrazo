@@ -23,6 +23,9 @@ Pedro Caeiro <pacaeiro2@sapo.pt>  (github.com/pacaeiro)
     colliding with Alt+Tab. Much of IngeTrazo's parity with SketchUp's
     everyday gestures comes from him using the program as a draftsman does
     and writing down every one that did not answer the same.
+    He kept going through 0.4 and 0.5 (#27–#79): axis locks and their
+    snaps, local axes in groups and components (#44), the sheet composer,
+    Fillet 3D, Orient Faces, copy/paste between documents, and many more.
 
 Rafael García Rodríguez — "Rafael 3D" (youtube.com/@Rafa3D)
     Draftsman and 3D modelling reviewer.
@@ -48,6 +51,15 @@ dafrobozao <dafrobozao.93@gmail.com>  (github.com/dafrobozao)
     Brazilian Portuguese translation of the interface (pull request #54,
     1 260 strings): IngeTrazo's third language, and the first one
     contributed from outside.
+
+Félix Riestra  (github.com/felixriestra)
+    The macOS package (pull request #64): the IngeTrazo.app bundle and the
+    .dmg built by CI for Apple Silicon, with double-click opening of .igz
+    and .skp files. IngeTrazo's first Mac version.
+
+Sherod Taylor  (github.com/sherodtaylor)
+    The First Person tool (pull request #86): walking the model like a
+    game with W/A/S/D and mouse look, beside SketchUp's Walk.
 
 ---
 

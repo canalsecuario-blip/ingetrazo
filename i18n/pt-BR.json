@@ -1330,5 +1330,12 @@
  "First Person": "Primeira pessoa",
  "Mouse-look sensitivity:": "Sensibilidade ao olhar com o mouse:",
  "How fast a drag turns the head in First Person": "Quão rápido o arrasto gira a cabeça em Primeira pessoa",
- "W/A/S/D = walk, Q/E = down/up, drag = look. Shift = run, Alt = through walls.": "W/A/S/D = andar, Q/E = descer/subir, arrastar = olhar. Shift = correr, Alt = atravessar paredes."
+ "W/A/S/D = walk, Q/E = down/up, drag = look. Shift = run, Alt = through walls.": "W/A/S/D = andar, Q/E = descer/subir, arrastar = olhar. Shift = correr, Alt = atravessar paredes.",
+ "Draftsman. Pull requests and dozens of issue reports from daily drafting work: much of IngeTrazo's SketchUp parity.": "Desenhista. Pull requests e dezenas de relatos do trabalho diário de desenho: boa parte da paridade do IngeTrazo com o SketchUp.",
+ "Draftsman and 3D reviewer. Filmed reviews of the whole program and the drafting standards for dimensions.": "Desenhista e revisor 3D. Revisões em vídeo de todo o programa e as normas de desenho para as cotas.",
+ "Author of OpenSKP, the free SketchUp reader behind the .skp import; his plugin work became the Extensions system.": "Autor do OpenSKP, o leitor livre de SketchUp por trás da importação .skp; seu trabalho em plugins deu origem às Extensões.",
+ "Brazilian Portuguese translation of the interface.": "Tradução da interface para o português do Brasil.",
+ "The macOS package: IngeTrazo for Mac.": "O pacote para macOS: IngeTrazo para Mac.",
+ "The First Person tool: walk the model like a game.": "A ferramenta Primeira pessoa: percorrer o modelo como num videogame.",
+ "And thanks to everyone who tries IngeTrazo and reports what they find.": "E obrigado a todas as pessoas que testam o IngeTrazo e relatam o que encontram."
 }

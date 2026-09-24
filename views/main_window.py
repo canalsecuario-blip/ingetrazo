@@ -1296,33 +1296,11 @@ class MainWindow(QMainWindow):
 
     def _on_about(self) -> None:
         from core.glinfo import describe
+        from views.about_dialog import AboutDialog
         gl_line = describe(getattr(self.viewport, "gl_info", {}))
-        gl_html = f"<p><small>OpenGL: {gl_line}</small></p>" if gl_line else ""
-        QMessageBox.about(
-            self,
-            tr("About IngeTrazo"),
-            "<h3>IngeTrazo</h3>"
-            f"<p>{tr('Version')} {__version__}</p>"
-            f"{gl_html}"
-            f"<p>{tr('Free 3D modeler for architecture, engineering and 3D design.')}</p>"
-            f"<p>{tr('Created by')} <b>Marco Sumari Tellez</b><br>"
-            f"{tr('Civil Engineer — Arequipa, Peru')}</p>"
-            # The people outside the project whose work is IN it. A draftsman
-            # who files what does not answer like SketchUp and a reviewer who
-            # says what the drafting norms require are contributions the code
-            # could not have reached on its own, and they leave no trace
-            # anywhere the user looks. AUTHORS says what each one gave.
-            f"<p>{tr('With contributions from')}<br>"
-            "<b>Pedro Caeiro</b> — "
-            f"{tr('draftsman; pull requests and issue reports')}<br>"
-            "<b>Rafael García Rodríguez</b> — "
-            f"{tr('draftsman; reviews and drafting standards')}<br>"
-            "<b>Ahsan Mehmood</b> — "
-            f"{tr('author of OpenSKP, the SketchUp reader')}</p>"
-            f"<p>{tr('Licensed under GPL-3.0-or-later.')}<br>"
-            "<a href='https://github.com/ingelibre/ingetrazo'>"
-            "github.com/ingelibre/ingetrazo</a></p>",
-        )
+        # The people outside the project whose work is IN it turn in a
+        # carousel there; AUTHORS says what each one gave.
+        AboutDialog(self, __version__, gl_line or "").exec()
 
     def _file_actions(self) -> list[QAction]:
         actions = []

@@ -37,6 +37,11 @@ follow [SemVer](https://semver.org).
   se vuelve a arrastrar.
 
 ### Cambiado
+- **Acerca de IngeTrazo reconoce a todos los que aportan**, en un carrusel
+  que pasa solo de una persona a otra (se detiene al pasar el ratón):
+  Pedro Caeiro, Rafael García, Ahsan Mehmood, dafrobozao (portugués),
+  Félix Riestra (versión para Mac) y Sherod Taylor (Primera persona), y un
+  agradecimiento a todos los que prueban y reportan.
 - **La barra de abajo deja sitio a la pista de la herramienta** (Marco): el
   nombre de la herramienta va delante de la pista en vez de ocupar su propio
   hueco, las coordenadas UTM salen compactas (completas al pasar el cursor),
@@ -48,6 +53,8 @@ follow [SemVer](https://semver.org).
   en el compositor.
 
 ### Corregido
+- **Un grupo girado conserva sus ejes al copiarlo y pegarlo** (#78,
+  @pacaeiro): la copia salía con los ejes alineados al mundo.
 - **La órbita ya no se queda pegada al ratón** (Andrés Rodríguez, Windows 11).
   Si el aviso de «soltaste el botón» se perdía (algunos ratones y paneles
   táctiles en Windows, un clic en otra ventana, cambiar de herramienta con

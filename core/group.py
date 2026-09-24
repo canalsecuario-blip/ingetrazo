@@ -537,6 +537,12 @@ def copy_group(group, delta=None):
     if group.xform is not None:
         g = Group(group.mesh, name=group.name)
         g.xform = t * group.xform
+        # The local axes live in the mesh's space, which the copy shares:
+        # they come along as they are. Dropping them turned a pasted
+        # rotated group's axes back to the world's (issue #78, @pacaeiro:
+        # Copy makes a classic group an instance, and Paste copies that).
+        if getattr(group, "axes", None) is not None:
+            g.axes = QMatrix4x4(group.axes)
     else:
         g = Group(transformed_mesh(group.mesh, t), name=group.name)
         if getattr(group, "axes", None) is not None:

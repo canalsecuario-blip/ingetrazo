@@ -1991,5 +1991,12 @@
  "Rebuilt {n} face(s) on the selected plane.": "{n} cara(s) reconstruida(s) en el plano seleccionado.",
  "Guide point at {d} m, with its segment": "Punto guía a {d} m, con su segmento",
  "This line is on its own — nothing is joined to its ends, so there is no chain to offset. Draw the missing line, or select the edges to offset.": "Esta línea está sola: no hay nada unido a sus extremos, así que no hay cadena que desfasar. Dibuja la línea que falta o selecciona las aristas a desfasar.",
- "Zoom window": "Zoom ventana"
+ "Zoom window": "Zoom ventana",
+ "Draftsman. Pull requests and dozens of issue reports from daily drafting work: much of IngeTrazo's SketchUp parity.": "Delineante. Pull requests y decenas de reportes desde su trabajo diario de dibujo: buena parte de la paridad de IngeTrazo con SketchUp.",
+ "Draftsman and 3D reviewer. Filmed reviews of the whole program and the drafting standards for dimensions.": "Delineante y revisor 3D. Revisiones en vídeo de todo el programa y la normativa de dibujo para las cotas.",
+ "Author of OpenSKP, the free SketchUp reader behind the .skp import; his plugin work became the Extensions system.": "Autor de OpenSKP, el lector libre de SketchUp detrás de la importación .skp; su trabajo en plugins dio origen a las Extensiones.",
+ "Brazilian Portuguese translation of the interface.": "Traducción de la interfaz al portugués de Brasil.",
+ "The macOS package: IngeTrazo for Mac.": "El paquete para macOS: IngeTrazo para Mac.",
+ "The First Person tool: walk the model like a game.": "La herramienta Primera persona: recorrer el modelo como en un videojuego.",
+ "And thanks to everyone who tries IngeTrazo and reports what they find.": "Y gracias a todas las personas que prueban IngeTrazo y reportan lo que encuentran."
 }
