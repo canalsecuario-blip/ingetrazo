@@ -61,6 +61,29 @@ def set_eye_height(value: float) -> None:
         pass
 
 
+#: First Person's mouse-look sensitivity, 1..100 (Preferences ▸ General).
+#: 25 = 0.05° of head turn per pixel of mouse travel.
+DEFAULT_LOOK_SENSITIVITY = 25
+_LOOK_KEY = "walk/look_sensitivity"
+
+
+def look_sensitivity() -> int:
+    """The mouse-look sensitivity, 1..100, remembered across sessions."""
+    try:
+        from PySide6.QtCore import QSettings
+        v = int(float(QSettings().value(_LOOK_KEY, DEFAULT_LOOK_SENSITIVITY)))
+        return v if 1 <= v <= 100 else DEFAULT_LOOK_SENSITIVITY
+    except Exception:  # noqa: BLE001 — no settings store (tests, scripts)
+        return DEFAULT_LOOK_SENSITIVITY
+
+
+def look_deg_per_px(sensitivity: int | None = None) -> float:
+    """Degrees of head turn per pixel for a sensitivity (the stored one
+    when ``None``): 1 → 0.002°, 25 → 0.05°, 100 → 0.2°."""
+    s = look_sensitivity() if sensitivity is None else sensitivity
+    return s / 500.0
+
+
 def _level_heading(camera) -> QVector3D:
     """The camera's heading flattened to the horizon — where a placed eye
     looks first. Straight up or down has no heading: look north."""
@@ -452,7 +475,8 @@ class FirstPersonTool(_EyeTool):
     """Walking as a game plays it — a mode of its own next to Walk, which
     stays SketchUp's. W/A/S/D walk and strafe, Q/E go down and up, Shift
     runs, Alt goes through walls; a drag of either mouse button turns the
-    head at a fixed rate per pixel (the viewport hides the pointer and,
+    head at a fixed rate per pixel, set in Preferences (``look_deg_per_px``;
+    the viewport hides the pointer and,
     where the platform allows, puts it back after each move, so the turn
     never runs out of screen).
 
@@ -465,9 +489,6 @@ class FirstPersonTool(_EyeTool):
     ``_follow_floor``). Q/E fly and leave the floor alone; the next step
     on the ground brings the eye back to its height above it."""
     name = "First Person"
-    #: Head turn per pixel of mouse travel — a game's, not scaled to the
-    #: viewport the way Look Around is.
-    LOOK_DEG_PER_PX = 0.15
     WALK_SPEED = 1.5
     RUN_FACTOR = 3.0
     TICK_MS = 16
@@ -584,9 +605,11 @@ class FirstPersonTool(_EyeTool):
     # ---- Mouse --------------------------------------------------------------
     def on_look(self, viewport, dx: float, dy: float) -> None:
         """Mouse travel of ``(dx, dy)`` pixels while a button is held:
-        right = look right, up = look up (screen y runs down)."""
-        viewport.camera.turn(dx * self.LOOK_DEG_PER_PX,
-                             -dy * self.LOOK_DEG_PER_PX)
+        right = look right, up = look up (screen y runs down). The rate is
+        a game's — per pixel, not scaled to the viewport the way Look
+        Around is — and read each move, so Preferences apply at once."""
+        rate = look_deg_per_px()
+        viewport.camera.turn(dx * rate, -dy * rate)
         viewport.update()
 
     def context_menu(self, viewport, pos) -> bool:

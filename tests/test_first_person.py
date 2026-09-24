@@ -237,25 +237,51 @@ def test_a_drag_turns_the_head_and_keeps_the_eye(win, button):
     eye = vp.camera.eye()
     c = QPoint(600, 400)
     QTest.mousePress(vp, button, Qt.NoModifier, c)
-    QTest.mouseMove(vp, QPoint(700, 400))                # drag right…
+    QTest.mouseMove(vp, QPoint(900, 400))                # drag right…
     f = vp.camera.forward()
     assert f.x() > 0.1                                   # …looks right (east)
-    QTest.mouseMove(vp, QPoint(700, 300))                # drag up…
+    QTest.mouseMove(vp, QPoint(900, 200))                # drag up…
     assert vp.camera.forward().z() > f.z() + 0.1        # …looks up
-    QTest.mouseRelease(vp, button, Qt.NoModifier, QPoint(700, 300))
+    QTest.mouseRelease(vp, button, Qt.NoModifier, QPoint(900, 200))
     assert (vp.camera.eye() - eye).length() < 1e-4
     assert vp._look_drag is None
+
+
+def _turned_deg(vp) -> float:
+    import math
+    f = vp.camera.forward()
+    return math.degrees(math.atan2(f.x(), f.y()))
 
 
 def test_look_is_a_fixed_rate_per_pixel(win):
     vp = win.viewport
     tool = _tool(win)
     tool.on_look(vp, 100, 0)
-    f = vp.camera.forward()
-    import math
-    turned = math.degrees(math.atan2(f.x(), f.y()))
-    assert turned == pytest.approx(100 * FirstPersonTool.LOOK_DEG_PER_PX,
-                                   abs=1e-3)
+    assert _turned_deg(vp) == pytest.approx(100 * wt.look_deg_per_px(),
+                                            abs=1e-3)
+
+
+def test_the_default_sensitivity_is_gentle():
+    """A third of the first cut's 0.15 °/px, which was far too quick:
+    a 1200 px drag across the view turns 60°, not 180°."""
+    assert wt.look_deg_per_px(wt.DEFAULT_LOOK_SENSITIVITY) == pytest.approx(0.05)
+
+
+@pytest.mark.parametrize("sensitivity", [1, 25, 100])
+def test_the_sensitivity_setting_scales_the_turn(win, monkeypatch,
+                                                 sensitivity):
+    monkeypatch.setattr(wt, "look_sensitivity", lambda: sensitivity)
+    vp = win.viewport
+    tool = _tool(win)
+    tool.on_look(vp, 100, 0)
+    assert _turned_deg(vp) == pytest.approx(100 * sensitivity / 500.0,
+                                            abs=1e-3)
+
+
+def test_a_stored_sensitivity_out_of_range_falls_back(monkeypatch):
+    from PySide6.QtCore import QSettings
+    monkeypatch.setattr(QSettings, "value", lambda self, k, d=None: "9999")
+    assert wt.look_sensitivity() == wt.DEFAULT_LOOK_SENSITIVITY
 
 
 def test_right_click_opens_no_menu(win):
