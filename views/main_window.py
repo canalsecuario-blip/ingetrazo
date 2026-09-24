@@ -7,6 +7,8 @@ Save, Save As) onto :mod:`formats.igz`.
 """
 from __future__ import annotations
 
+from views import prompts as _prompts
+
 from pathlib import Path
 from typing import Optional
 
@@ -655,6 +657,28 @@ class MainWindow(QMainWindow):
         )
         self._redo_action.triggered.connect(self._on_redo)
         edit_menu.addAction(self._redo_action)
+        # On the Main toolbar right after the pointer, as SketchUp has them
+        # (Marco, 23-09). The SAME actions as the Edit menu: a second QAction
+        # with Ctrl+Z would make the shortcut ambiguous, and an ambiguous
+        # shortcut fires neither (the F2 lesson on Zoom Extents).
+        main_tb = getattr(self, "toolbars", {}).get("main")
+        if main_tb is not None:
+            from views.icons import tool_icon
+            for act, key, tip in ((self._undo_action, "undo", tr("Undo")),
+                                  (self._redo_action, "redo", tr("Redo"))):
+                act.setIcon(tool_icon(key))
+                act.setToolTip(f"{tip}  ({act.shortcut().toString(QKeySequence.NativeText)})")
+                self._icon_actions.append((act, key))
+            after = self._tool_actions.get("select")
+            acts = main_tb.actions()
+            nxt = (acts[acts.index(after) + 1]
+                   if after in acts and acts.index(after) + 1 < len(acts)
+                   else None)
+            for act in (self._undo_action, self._redo_action):
+                if nxt is None:
+                    main_tb.addAction(act)
+                else:
+                    main_tb.insertAction(nxt, act)
 
         edit_menu.addSeparator()
 
@@ -1654,7 +1678,7 @@ class MainWindow(QMainWindow):
                 from core.history import GroupToComponentCommand
                 name = None
                 if len(classic) == 1:
-                    name, ok = QInputDialog.getText(
+                    name, ok = _prompts.get_text(
                         self, tr("Make Component"), tr("Component name:"),
                         text=classic[0].name or tr("Component"))
                     if not ok:
@@ -1681,7 +1705,7 @@ class MainWindow(QMainWindow):
         from PySide6.QtWidgets import QInputDialog
         count = sum(1 for g in self.viewport.scene.groups
                     if getattr(g, "xform", None) is not None) + 1
-        name, ok = QInputDialog.getText(
+        name, ok = _prompts.get_text(
             self, tr("Make Component"), tr("Component name:"),
             text=tr("Component #{n}", n=count))
         if not ok:
@@ -2322,7 +2346,7 @@ class MainWindow(QMainWindow):
         n = 1
         while scene.layer(f"{base} {n}") is not None:
             n += 1
-        name, ok = QInputDialog.getText(
+        name, ok = _prompts.get_text(
             self, tr("New layer"), tr("Layer name:"), text=f"{base} {n}")
         name = (name or "").strip()
         if ok and name:

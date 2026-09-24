@@ -18,6 +18,8 @@ Behavior:
 """
 from __future__ import annotations
 
+from views import prompts as _prompts
+
 from PySide6.QtCore import Qt
 
 from core.dimension import Dimension
@@ -353,7 +355,7 @@ class SelectTool(Tool):
             measured = (fmt(entity.value(), style) if fmt is not None
                         else entity.label())
             current = entity.text if entity.text else measured
-            text, ok = QInputDialog.getText(
+            text, ok = _prompts.get_text(
                 viewport.window(), tr("Dimension"),
                 tr("Dimension text (<> = measured value):"), text=current)
             if ok:

@@ -1985,5 +1985,6 @@
  "The connected faces already match.": "Las caras conectadas ya están orientadas igual.",
  "The selected faces must lie on one plane.": "Las caras seleccionadas deben estar en un mismo plano.",
  "Rebuilt {n} face(s) on the selected plane.": "{n} cara(s) reconstruida(s) en el plano seleccionado.",
- "Guide point at {d} m, with its segment": "Punto guía a {d} m, con su segmento"
+ "Guide point at {d} m, with its segment": "Punto guía a {d} m, con su segmento",
+ "This line is on its own — nothing is joined to its ends, so there is no chain to offset. Draw the missing line, or select the edges to offset.": "Esta línea está sola: no hay nada unido a sus extremos, así que no hay cadena que desfasar. Dibuja la línea que falta o selecciona las aristas a desfasar."
 }

@@ -11,6 +11,8 @@ the same code the PDF export uses, so screen and paper always agree.
 """
 from __future__ import annotations
 
+from views import prompts as _prompts
+
 import datetime
 import math
 from typing import Optional
@@ -7452,7 +7454,7 @@ class ComposerWindow(QMainWindow):
         new = menu.addAction(tr("New sheet"))
         chosen = menu.exec(global_pos)
         if chosen is rename:
-            name, ok = QInputDialog.getText(parent, tr("Rename sheet…"),
+            name, ok = _prompts.get_text(parent, tr("Rename sheet…"),
                                             tr("Sheet name:"), text=sheet.name)
             if ok:
                 self.rename_sheet(index, name)
@@ -8209,7 +8211,7 @@ class ComposerWindow(QMainWindow):
         if chosen is None:
             return
         if chosen is save:
-            name, ok = QInputDialog.getText(
+            name, ok = _prompts.get_text(
                 self, tr("Save template"), tr("Template name:"),
                 text=self.comp.name)
             if ok and name.strip():
@@ -9152,7 +9154,7 @@ class ComposerWindow(QMainWindow):
             return
         auto = model.auto_label()
         current = model.text if model.text else auto
-        text, ok = QInputDialog.getText(
+        text, ok = _prompts.get_text(
             self, tr("Dimension"),
             tr("Dimension text (<> = measured value):"), text=current)
         if not ok:
@@ -10147,7 +10149,7 @@ class ComposerWindow(QMainWindow):
         if chosen is None:
             return
         if chosen is save:
-            name, ok = QInputDialog.getText(
+            name, ok = _prompts.get_text(
                 self, tr("Save template"), tr("Template name:"),
                 text=tr("My title block"))
             if ok and name.strip():

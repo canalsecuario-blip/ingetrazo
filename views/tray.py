@@ -16,9 +16,11 @@ vertical stack of lightweight collapsibles inside a scroll area.
 """
 from __future__ import annotations
 
+from views import prompts as _prompts
+
 from pathlib import Path
 
-from PySide6.QtCore import QPoint, QRect, QSettings, QSize, Qt
+from PySide6.QtCore import QObject, QPoint, QRect, QSettings, QSize, Qt
 from PySide6.QtGui import QColor, QIcon, QImage, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -564,11 +566,11 @@ class BaseMapPanel(QWidget):
         return True
 
     def _on_add_source(self) -> None:
-        name, ok = QInputDialog.getText(
+        name, ok = _prompts.get_text(
             self, tr("New XYZ source"), tr("Source name:"))
         if not ok or not name.strip():
             return
-        url, ok = QInputDialog.getText(
+        url, ok = _prompts.get_text(
             self, tr("New XYZ source"),
             tr("Tile URL (with {z}/{x}/{y}):"),
             text="https://…/{z}/{x}/{y}.png")
@@ -1438,10 +1440,23 @@ class MaterialsPanel(QWidget):
 
     def refresh_in_model(self) -> None:
         """Rebuild the 'En el modelo' swatches from the materials in use."""
+        # Keep the tray where the user left it. The old swatches only went
+        # away at the next event-loop turn (deleteLater), so for a moment
+        # the grid held both sets, grew, and the scroll area jumped — the
+        # library list slid by itself each time a component was made
+        # (Rafael, revision 4, 02:14 and 06:20).
+        from PySide6.QtWidgets import QScrollArea
+        area = self.parent()
+        while area is not None and not isinstance(area, QScrollArea):
+            area = area.parent()
+        bar = area.verticalScrollBar() if area is not None else None
+        keep = bar.value() if bar is not None else None
         while self._in_model_grid.count():
             item = self._in_model_grid.takeAt(0)
             w = item.widget()
             if w is not None:
+                w.hide()
+                w.setParent(None)
                 w.deleteLater()
         colors: dict = {}
         textures: dict = {}
@@ -1493,6 +1508,11 @@ class MaterialsPanel(QWidget):
                     t["path"], t.get("sw", 1.0), name=n, opacity=o))
             self._in_model_grid.addWidget(b, i // self.COLS, i % self.COLS)
             i += 1
+        if bar is not None and keep is not None:
+            from PySide6.QtCore import QTimer
+            bar.setValue(keep)
+            # …and once more after the layout settles its new height.
+            QTimer.singleShot(0, lambda b=bar, v=keep: b.setValue(v))
 
     # ---- Apply / add --------------------------------------------------------
     def _apply_color(self, rgb, name: str | None = None) -> None:
@@ -1661,7 +1681,7 @@ class MaterialsPanel(QWidget):
         if chosen.isValid():
             # Optional identity: a named colour becomes a registry material
             # (registered on first paint) and shows in per-material takeoffs.
-            name, ok = QInputDialog.getText(
+            name, ok = _prompts.get_text(
                 self, tr("Color"), tr("Material name (optional):"))
             self._apply_color(
                 (chosen.redF(), chosen.greenF(), chosen.blueF()),
@@ -2022,7 +2042,7 @@ class StylesPanel(QWidget):
             return
         from core.style import builtin_names, save_user_style
         suggested = "" if style.name in builtin_names() else style.name
-        name, ok = QInputDialog.getText(
+        name, ok = _prompts.get_text(
             self, tr("Save style"), tr("Style name:"), text=suggested)
         name = name.strip()
         if not ok or not name:
@@ -2325,6 +2345,20 @@ class EntityInfoPanel(QWidget):
         row.addWidget(self._layer_caption)
         row.addWidget(self._layer_box, 1)
         lay.addLayout(row)
+        # A steady height. Selecting something used to resize this panel —
+        # one line for nothing, two for an edge, four and a layer row for a
+        # face — and everything below it (layers, scenes, the materials
+        # library) slid up and down with every click (Marco, 23-09, four
+        # screenshots). The layer row keeps its place when hidden, and the
+        # text keeps room for the four lines a face or a solid shows.
+        for w in (self._layer_caption, self._layer_box):
+            pol = w.sizePolicy()
+            pol.setRetainSizeWhenHidden(True)
+            w.setSizePolicy(pol)
+        from PySide6.QtGui import QFont, QFontMetrics
+        font = QFont(self._label.font())
+        font.setPixelSize(12)
+        self._label.setMinimumHeight(QFontMetrics(font).lineSpacing() * 4 + 4)
         self._layer_caption.hide()
         self._layer_box.hide()
 
@@ -2472,16 +2506,49 @@ class EntityInfoPanel(QWidget):
         return "—"
 
 
+class _ScrollAnchor(QObject):
+    """Keeps what you are looking at still when a section ABOVE it changes
+    height. Entity Info fills up when you select something, and everything
+    below it — the materials library you had scrolled to — slid down by
+    that much (Marco, 23-09: «la lista sigue saltando… cuando selecciono un
+    componente se llena Info de entidad»). Browsers call it scroll
+    anchoring: a section that grows or shrinks above the top of the view
+    moves the scroll bar by the same amount."""
+
+    def __init__(self, scroll: QScrollArea) -> None:
+        super().__init__(scroll)
+        self._scroll = scroll
+
+    def eventFilter(self, obj, event) -> bool:
+        from PySide6.QtCore import QEvent, QTimer
+        if event.type() == QEvent.Resize:
+            delta = event.size().height() - event.oldSize().height()
+            bar = self._scroll.verticalScrollBar()
+            # Only a section wholly ABOVE the view: the one you are looking
+            # at also resizes for a moment as the layout settles, and moving
+            # for it too doubled the correction.
+            if (delta and event.oldSize().height() > 0
+                    and obj.y() + event.oldSize().height() <= bar.value()):
+                target = bar.value() + delta
+                # After the layout has taken the new height, or the bar's
+                # range would clamp the move.
+                QTimer.singleShot(0, lambda b=bar, t=target: b.setValue(t))
+        return False
+
+
 def _scrolled(sections) -> QScrollArea:
     """A scroll area wrapping a vertical stack of collapsible sections."""
     inner = QWidget()
     col = QVBoxLayout(inner)
     col.setContentsMargins(0, 0, 0, 0)
     col.setSpacing(2)
-    for title, widget in sections:
-        col.addWidget(_Section(title, widget))
-    col.addStretch(1)
     scroll = QScrollArea()
+    anchor = _ScrollAnchor(scroll)
+    for title, widget in sections:
+        section = _Section(title, widget)
+        section.installEventFilter(anchor)
+        col.addWidget(section)
+    col.addStretch(1)
     scroll.setWidgetResizable(True)
     scroll.setWidget(inner)
     scroll.setMinimumWidth(240)

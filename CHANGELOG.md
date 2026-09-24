@@ -11,6 +11,9 @@ follow [SemVer](https://semver.org).
   IngeTrazo se pega en otro abierto al lado, con sus materiales, texturas,
   grupos y componentes. **Archivo ▸ Nueva ventana** (Ctrl+Mayús+N) abre un
   segundo IngeTrazo para tener dos diseños lado a lado.
+- **Deshacer y Rehacer en la barra Principal**, justo después del puntero,
+  con iconos propios (flecha curva, contorno en tinta y relleno naranja
+  suave).
 - **Orientar caras** (#77, @pacaeiro), como en SketchUp: clic derecho sobre
   una cara ▸ Orientar caras, y todas las conectadas se voltean para mirar
   hacia el mismo lado que ella. Vale para sólidos y para superficies
@@ -44,6 +47,15 @@ follow [SemVer](https://semver.org).
   (997 920 casos): cambian 1120, ninguno le quita un punto con nombre.
 - **Al cerrar la ventana, lo copiado sigue en el portapapeles** para pegarlo
   en otra ventana; de paso se evita un cierre brusco del proceso.
+- **Los cuadros de «escribe un nombre» ya no salen diminutos** con el
+  título cortado («Crear…»): tienen un ancho mínimo (Rafael, revisión 4).
+- **Desfase sobre una línea suelta lo explica:** si la línea no tiene nada
+  unido a sus extremos, lo dice así y la deja seleccionada para que se vea.
+- **El panel derecho ya no salta al seleccionar:** Info de entidad guarda
+  un alto fijo (antes crecía o encogía con cada selección y arrastraba
+  Capas, Escenas y Materiales), y si has bajado el panel, lo que miras se
+  queda quieto aunque cambie algo de arriba. Tampoco salta la lista de
+  materiales al crear un componente.
 - Faltaba traducir el mensaje de la Cinta «Punto guía a … con su segmento»,
   y el panel «En el modelo» no se refrescaba al salir de un grupo.
 - **«Deshacer grupo» se llama ahora «Explotar»**, como en SketchUp: el

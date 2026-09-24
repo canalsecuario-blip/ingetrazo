@@ -724,6 +724,42 @@ def _geopath(p, ink):
         _dot(p, x, y, 2.8)
 
 
+def _undo(p, ink):
+    # A bold curved arrow turning back to the left (Marco's pick, 23-09):
+    # the head at the upper left, the body sweeping round and down to a
+    # tapered tail. Ink outline and a soft accent fill, like the solid tools;
+    # drawn at 80 % so it keeps the proportion of its neighbours.
+    path = QPainterPath(QPointF(4, 17))          # the tip
+    path.lineTo(QPointF(21, 4))                  # head, upper corner
+    path.lineTo(QPointF(20, 11))                 # where the body leaves the head
+    path.cubicTo(QPointF(37, 10), QPointF(47, 24), QPointF(33, 44))
+    path.cubicTo(QPointF(32, 45.5), QPointF(29.5, 45), QPointF(30, 43))
+    path.cubicTo(QPointF(36, 31), QPointF(31, 23), QPointF(19, 24))
+    path.lineTo(QPointF(18, 31))                 # head, lower corner
+    path.closeSubpath()
+    p.save()
+    p.translate(_PX / 2, _PX / 2)
+    p.scale(0.8, 0.8)
+    p.translate(-_PX / 2 - 1.5, -_PX / 2)
+    pen = QPen(ink, 2.6 / 0.8)
+    pen.setJoinStyle(Qt.RoundJoin)
+    pen.setCapStyle(Qt.RoundCap)
+    p.setPen(pen)
+    acc = _accent()
+    p.setBrush(QColor(acc.red(), acc.green(), acc.blue(), 150))
+    p.drawPath(path)
+    p.restore()
+
+
+def _redo(p, ink):
+    # Undo seen in a mirror.
+    p.save()
+    p.translate(_PX, 0)
+    p.scale(-1, 1)
+    _undo(p, ink)
+    p.restore()
+
+
 def _orbit(p, ink):
     # A sphere with an arrow orbiting around it — Orbit (spin the view around
     # the model). The orbit ring passes behind the sphere at the top and in
@@ -1695,6 +1731,7 @@ _DRAW = {
     "dimension_angular": _dimension_angular,
     "dimension_style": _dimension_style,
     "geopath": _geopath, "orbit": _orbit, "pan": _pan,
+    "undo": _undo, "redo": _redo,
     "text": _text, "text3d": _text3d,
     "eraser": _eraser, "tape": _tape, "protractor": _protractor,
     "section": _section,

@@ -215,6 +215,19 @@ class OffsetTool(Tool):
         points, closed = run
         normal = _newell(points)
         if normal is None:
+            if len(points) == 2 and not closed:
+                # ONE line on its own: say so, and show it. Rafael clicked
+                # his roof line, got the «not in line» message and could not
+                # see why — the line it should have joined had been lost in
+                # an undo, so there was only one (revision 4, 04:42–05:08).
+                viewport.flash_status(tr(
+                    "This line is on its own — nothing is joined to its "
+                    "ends, so there is no chain to offset. Draw the "
+                    "missing line, or select the edges to offset."), 6000)
+                edge = getattr(self, "hovered_edge", None)
+                if edge is not None and hasattr(viewport, "scene"):
+                    viewport.scene.select([edge])
+                return False
             viewport.flash_status(tr(
                 "Offset needs at least two edges that are not in line — a "
                 "straight run has no plane to offset in."), 5000)

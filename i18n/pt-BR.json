@@ -1325,5 +1325,6 @@
  "The selected faces must lie on one plane.": "As faces selecionadas devem estar em um mesmo plano.",
  "Rebuilt {n} face(s) on the selected plane.": "{n} face(s) reconstruída(s) no plano selecionado.",
  "Guide point at {d} m": "Ponto guia a {d} m",
- "Guide point at {d} m, with its segment": "Ponto guia a {d} m, com seu segmento"
+ "Guide point at {d} m, with its segment": "Ponto guia a {d} m, com seu segmento",
+ "This line is on its own — nothing is joined to its ends, so there is no chain to offset. Draw the missing line, or select the edges to offset.": "Esta linha está sozinha: nada está ligado às suas pontas, então não há cadeia para deslocar. Desenhe a linha que falta ou selecione as arestas a deslocar."
 }
