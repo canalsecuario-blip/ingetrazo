@@ -72,7 +72,7 @@ def test_every_registered_tool_has_a_hint():
     win.close()
 
 
-def test_the_message_keeps_to_the_left_half_of_the_bar():
+def test_the_message_keeps_to_its_share_of_the_bar():
     from PySide6.QtWidgets import QApplication
     import pytest
     app = QApplication.instance()
@@ -85,7 +85,7 @@ def test_the_message_keeps_to_the_left_half_of_the_bar():
     bar.show()
     bar.resize(1600, 28)
     app.processEvents()
-    assert bar._msg.maximumWidth() == 800
+    assert bar._msg.maximumWidth() == int(1600 * bar.MESSAGE_SHARE)
     bar.showMessage("Select objects.")
     app.processEvents()
     assert bar._msg.x() < 200                   # glued to the left, after the strip
