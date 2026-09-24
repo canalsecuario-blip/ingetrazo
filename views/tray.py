@@ -1346,7 +1346,8 @@ class PartsPanel(QWidget):
                 self.tree.addTopLevelItem(item)
                 self._items.append(item)
         for item, row in zip(self._items, self._rows):
-            for col, text in enumerate((row["name"], fmt_triple(*row["size"]),
+            for col, text in enumerate((row["name"],
+                                        fmt_triple(*row["size"], fine=True),
                                         row["material"])):
                 if item.text(col) != text:
                     item.setText(col, text)
@@ -1574,10 +1575,10 @@ class PartsPanel(QWidget):
     def _on_copy(self) -> None:
         from PySide6.QtGui import QGuiApplication
         from core.parts import cut_list, cut_list_text
-        from core.units import fmt_len
+        from core.units import fmt_len_fine
         lines = cut_list(self._rows,
                          by_material=self._by_material.isChecked())
-        text = cut_list_text(lines, fmt_len, [
+        text = cut_list_text(lines, fmt_len_fine, [
             tr("Qty"), tr("Parts"), tr("Material"), tr("Length"),
             tr("Width"), tr("Thickness")])
         QGuiApplication.clipboard().setText(text)

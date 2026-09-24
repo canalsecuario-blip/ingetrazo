@@ -273,3 +273,23 @@ def test_a_rename_survives_a_refresh_while_typing():
     _app.processEvents()
     assert cab.children[2].name == "Right side wall"
     win._saved_version = scene.version
+
+
+def test_part_sizes_resolve_the_millimetre_whatever_the_display_precision():
+    """A 4 mm hinge leaf in a document shown to the centimetre read
+    «0.03 × 0.02 × 0.00 m» — a part that looked like it had no thickness."""
+    from core import units
+    from core.scene import Scene
+    scene = Scene()
+    scene.units = {"length": "m", "precision": 2}
+    units.bind_scene(scene)
+    try:
+        assert units.fmt_triple(0.0325, 0.024, 0.0043) == "0.03 × 0.02 × 0.00 m"
+        assert units.fmt_triple(0.0325, 0.024, 0.0043, fine=True) == \
+            "0.033 × 0.024 × 0.004 m"
+        assert units.fmt_len_fine(0.0043) == "0.004 m"
+        scene.units = {"length": "mm", "precision": 0}
+        assert units.fmt_triple(0.0325, 0.024, 0.0043, fine=True) == \
+            "32 × 24 × 4 mm"
+    finally:
+        units.bind_scene(None)
