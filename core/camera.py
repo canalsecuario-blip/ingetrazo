@@ -38,6 +38,10 @@ class OrbitCamera:
         self.znear = 0.1
         self.zfar = 10000.0
         self.perspective = True
+        #: SketchUp's Two-Point Perspective: vertical lines stay vertical
+        #: (José Castro Basso, FADU–UDELAR, for teaching architectural
+        #: drawing). Only in perspective; see ``_level_forward``.
+        self.two_point = False
 
     # ---- Derived state ------------------------------------------------------
     def eye(self) -> QVector3D:
@@ -112,8 +116,32 @@ class OrbitCamera:
         """Walk: eye and target move together, the look stays the same."""
         self.target = self.target + delta
 
+    #: Two-point perspective gives way to the ordinary one past this pitch
+    #: (about 78°): looking nearly straight down, the frustum shift that
+    #: keeps the target centred grows without bound.
+    _TWO_POINT_MIN_COS = 0.2
+
+    def _level_forward(self) -> QVector3D | None:
+        """The level sight line of a two-point perspective — the view
+        direction with its slope taken out — or ``None`` when the view is
+        an ordinary one (the mode off, parallel, or looking too steeply)."""
+        if not (self.two_point and self.perspective):
+            return None
+        f = self.forward()
+        h = QVector3D(f.x(), f.y(), 0.0)
+        if h.length() < self._TWO_POINT_MIN_COS:
+            return None
+        return h / h.length()
+
     def view_matrix(self) -> QMatrix4x4:
         m = QMatrix4x4()
+        level = self._level_forward()
+        if level is not None:
+            # The picture plane stands upright, so verticals stay vertical;
+            # the projection's shift (below) puts the target back on centre.
+            eye = self.eye()
+            m.lookAt(eye, eye + level, QVector3D(0.0, 0.0, 1.0))
+            return m
         m.lookAt(self.eye(), self.target, self.up_vector())
         return m
 
@@ -125,6 +153,19 @@ class OrbitCamera:
             # to something does it step back out of the way — otherwise the
             # near plane itself is what stops you.
             near = min(self.znear, max(self.distance * 0.02, 1e-4))
+            level = self._level_forward()
+            if level is not None:
+                # A view camera's rise: the frustum slides up or down by the
+                # target's height over the level sight line, so what you
+                # orbit around stays in the middle of the screen.
+                half_h = near * math.tan(math.radians(self.fov_deg) / 2.0)
+                half_w = half_h * self.aspect
+                rel = self.target - self.eye()
+                depth = QVector3D.dotProduct(rel, level)
+                shift = rel.z() * near / depth
+                m.frustum(-half_w, half_w, -half_h + shift, half_h + shift,
+                          near, self.zfar)
+                return m
             m.perspective(self.fov_deg, self.aspect, near, self.zfar)
         else:
             # Parallel projection — size derived from camera distance so the
@@ -217,6 +258,14 @@ class OrbitCamera:
 
     def toggle_projection(self) -> None:
         self.perspective = not self.perspective
+        self.two_point = False
+
+    def toggle_two_point(self) -> None:
+        """SketchUp's Camera ▸ Two-Point Perspective; turning it on also
+        turns a parallel view back into a perspective."""
+        self.two_point = not self.two_point
+        if self.two_point:
+            self.perspective = True
 
     # ---- Navigation presets ------------------------------------------------
     def fit_to(self, min_pt: QVector3D, max_pt: QVector3D, margin: float = 1.3) -> None:

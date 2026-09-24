@@ -15,6 +15,7 @@ from typing import Optional
 from PySide6.QtCore import Qt, QSettings, QEvent, QCoreApplication, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QKeySequence, QVector3D
 from PySide6.QtWidgets import (
+    QApplication,
     QFileDialog,
     QLabel,
     QMainWindow,
@@ -805,6 +806,19 @@ class MainWindow(QMainWindow):
         action_proj.triggered.connect(self.viewport.toggle_projection)
         camera_menu.addAction(action_proj)
 
+        # SketchUp's Two-Point Perspective: verticals stay vertical, as an
+        # architectural drawing wants them (José Castro Basso, FADU–UDELAR).
+        self._act_two_point = QAction(tr("Two-Point Perspective"), self)
+        self._act_two_point.setCheckable(True)
+        self._act_two_point.setToolTip(tr(
+            "Perspective with vertical lines kept vertical"))
+        self._act_two_point.triggered.connect(self.viewport.toggle_two_point)
+        camera_menu.addAction(self._act_two_point)
+        camera_menu.aboutToShow.connect(
+            lambda: self._act_two_point.setChecked(
+                self.viewport.camera.two_point
+                and self.viewport.camera.perspective))
+
         # Styles (SketchUp): the model's display look — face mode, edges,
         # background. Scenes remember the style; the composer's live-look
         # frames inherit it.
@@ -1394,6 +1408,7 @@ class MainWindow(QMainWindow):
             (tr("STL (3D printing)…"), self._on_export_stl),
             (tr("Wavefront OBJ (.obj)…"), self._on_export_obj),
             (tr("SketchUp (.skp)…"), self._on_export_skp),
+            (tr("Current view as DXF…"), self._on_export_view_dxf),
             (tr("Image (PNG / JPG)…"), self._on_export_image),
         ):
             act = QAction(label, self)
@@ -2928,7 +2943,8 @@ class MainWindow(QMainWindow):
 
     # ---- File handling ------------------------------------------------------
     # ---- The document's camera (issue #60) ---------------------------------
-    _CAMERA_FIELDS = ("distance", "yaw", "pitch", "fov_deg", "perspective")
+    _CAMERA_FIELDS = ("distance", "yaw", "pitch", "fov_deg", "perspective",
+                      "two_point")
 
     def _camera_dict(self) -> dict:
         """The live camera as the document keeps it (SketchUp saves the
@@ -4837,6 +4853,44 @@ class MainWindow(QMainWindow):
         way into the model lives under File ▸ Import."""
         self.georef_tray.survey._on_import()
         self.georef_tray.raise_()
+
+    def _on_export_view_dxf(self) -> None:
+        """The view on screen as a 2D line drawing for CAD, hidden lines
+        removed (José Castro Basso, FADU–UDELAR). Parallel: true size in
+        metres, edges / profiles / section cut on their own layers, as the
+        composer's «Export view as DXF». Perspective (two-point included):
+        what the window shows, true size at the depth of the orbit
+        target."""
+        path, _ = file_dialogs.getSaveFileName(
+            self, tr("Export current view as DXF"), "vista.dxf",
+            "DXF (*.dxf)")
+        if not path:
+            return
+        from core.hlr import (KIND_CUT, KIND_PROFILE, hlr_drawing,
+                              hlr_perspective)
+        from formats.dxf_out import save_dxf_layers
+        vp = self.viewport
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            geometry = vp.hlr_geometry()
+            if vp.camera.perspective:
+                groups = [("VISTA", hlr_perspective(vp.scene, vp.camera,
+                                                    geometry=geometry))]
+            else:
+                d = hlr_drawing(vp.scene, vp.camera, geometry=geometry)
+                k = d.kinds
+                groups = [("VISTA", d.segs[(k != KIND_CUT)
+                                           & (k != KIND_PROFILE)]),
+                          ("VISTA-PERFIL", d.segs[k == KIND_PROFILE]),
+                          ("VISTA-CORTE", d.segs[k == KIND_CUT])]
+            n = save_dxf_layers(path, groups)
+        except Exception as exc:  # noqa: BLE001
+            QApplication.restoreOverrideCursor()
+            QMessageBox.critical(self, tr("Export DXF failed"), str(exc))
+            return
+        QApplication.restoreOverrideCursor()
+        self.statusBar().showMessage(
+            tr("Exported {n} lines to {name}", n=n, name=path), 5000)
 
     def _on_export_image(self) -> None:
         """Hi-res 2D export of the current view (SketchUp's 'Export 2D

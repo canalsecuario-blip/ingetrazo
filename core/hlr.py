@@ -902,3 +902,159 @@ def hlr_view(scene, camera, return_world: bool = False, geometry=None):
     if not return_world:
         return d.segs
     return d.segs, d.world
+
+
+# ── Perspective ─────────────────────────────────────────────────────────────
+# The hidden-line pass above is parallel. A perspective turns into a parallel
+# view by the projective map (x, y, z) → (x/w, y/w, 1/w): lines stay lines
+# and planes stay planes, and 1/w orders the depth. Clipped to the view
+# pyramid first — a point beside or behind the eye has no picture.
+
+#: The view pyramid in clip space, as rows ``a`` with the kept side a·p ≥ 0:
+#: left, right, bottom, top, near.
+_PYRAMID = np.array([[1, 0, 0, 1], [-1, 0, 0, 1], [0, 1, 0, 1],
+                     [0, -1, 0, 1], [0, 0, 1, 1]], dtype=np.float64)
+
+
+def _clip_polygon(poly):
+    """Sutherland–Hodgman against the view pyramid, in clip space."""
+    for a in _PYRAMID:
+        out = []
+        n = len(poly)
+        for i in range(n):
+            p, q = poly[i], poly[(i + 1) % n]
+            dp, dq = float(a @ p), float(a @ q)
+            if dp >= 0.0:
+                out.append(p)
+            if (dp >= 0.0) != (dq >= 0.0):
+                out.append(p + (q - p) * (dp / (dp - dq)))
+        poly = out
+        if len(poly) < 3:
+            return []
+    return poly
+
+
+def _clip_triangles(C):
+    """(T,3,4) clip-space triangles → the parts inside the pyramid."""
+    if not len(C):
+        return C
+    D = C @ _PYRAMID.T                                  # (T,3,5)
+    inside = (D >= 0.0).all(axis=(1, 2))
+    outside = (D < 0.0).all(axis=1).any(axis=1)
+    parts = [C[inside]]
+    for tri in C[~inside & ~outside]:
+        poly = _clip_polygon(list(tri))
+        for i in range(1, len(poly) - 1):
+            parts.append(np.stack([poly[0], poly[i], poly[i + 1]])[None])
+    return np.concatenate(parts)
+
+
+def _clip_segments(A, B):
+    """Clip-space segments (E,4) → the parts inside the pyramid."""
+    if not len(A):
+        return A, B
+    t0 = np.zeros(len(A))
+    t1 = np.ones(len(A))
+    keep = np.ones(len(A), dtype=bool)
+    for a in _PYRAMID:
+        da, db = A @ a, B @ a
+        keep &= ~((da < 0.0) & (db < 0.0))
+        with np.errstate(divide="ignore", invalid="ignore"):
+            t = da / (da - db)
+        t0 = np.where(da < 0.0, np.maximum(t0, t), t0)
+        t1 = np.where(db < 0.0, np.minimum(t1, t), t1)
+    keep &= t0 < t1
+    A, B, t0, t1 = A[keep], B[keep], t0[keep, None], t1[keep, None]
+    d = B - A
+    return A + d * t0, A + d * t1
+
+
+def hlr_perspective(scene, camera, geometry=None) -> np.ndarray:
+    """Visible edge segments of *scene* in *camera*'s PERSPECTIVE (the
+    two-point one included), (N, 4) as (x0, y0, x1, y1) in metres on the
+    picture plane through the target — what sits at the target's depth
+    comes out true size — with the origin at the centre of the view. Only
+    what the view shows: the drawing is cut at the window's edges.
+
+    ``geometry`` as for :func:`hlr_drawing`. The section in force cuts the
+    model; its poché does not hide what lies behind it here."""
+    from core.camera import OrbitCamera
+
+    soft_n = None
+    if geometry is None:
+        tris, hard, soft = collect_geometry(scene)
+    else:
+        tris, hard, soft, soft_n = geometry
+    sp = (scene.active_section()
+          if getattr(scene, "show_section_cuts", True)
+          and hasattr(scene, "active_section") else None)
+    cut: list = []
+    if sp is not None:
+        if soft_n is not None:
+            tris, hard, soft = _geometry_as_lists(tris, hard, soft, soft_n)
+            soft_n = None
+        tris, hard, soft, cut = clip_to_section(tris, hard, soft, sp,
+                                                split_cuts=True)
+    if soft_n is None:                  # tuple lists → arrays
+        soft_n = np.array([[na, nb if nb is not None else (np.nan,) * 3]
+                           for _p0, _p1, na, nb in soft],
+                          dtype=np.float64).reshape(-1, 2, 3)
+        soft = np.array([[p0, p1] for p0, p1, _na, _nb in soft],
+                        dtype=np.float64).reshape(-1, 2, 3)
+    tris = np.asarray(tris, dtype=np.float64).reshape(-1, 3, 3)
+    soft = np.asarray(soft, dtype=np.float64).reshape(-1, 2, 3)
+    soft_n = np.asarray(soft_n, dtype=np.float64).reshape(-1, 2, 3)
+    lines = [np.asarray(hard, dtype=np.float64).reshape(-1, 2, 3),
+             np.asarray(cut, dtype=np.float64).reshape(-1, 2, 3)]
+    if len(soft):
+        # A soft edge is a profile where its two faces turn opposite ways
+        # to the EYE — in perspective the sight line differs per edge.
+        eye = camera.eye()
+        e = np.array([eye.x(), eye.y(), eye.z()], dtype=np.float64)
+        v = soft.mean(axis=1) - e
+        fa = np.einsum("ij,ij->i", soft_n[:, 0], v)
+        fb = np.einsum("ij,ij->i", soft_n[:, 1], v)
+        lines.append(soft[np.isnan(fb) | ((fa < 0.0) != (fb < 0.0))])
+    E = np.concatenate(lines)
+
+    m = camera.projection_matrix() * camera.view_matrix()
+    M = np.array(m.data(), dtype=np.float64).reshape(4, 4, order="F")
+
+    def to_clip(p):
+        return p @ M[:, :3].T + M[:, 3]
+
+    t = camera.target
+    w_t = float(to_clip(np.array([t.x(), t.y(), t.z()]))[3])
+    if w_t <= 1e-9:
+        return np.empty((0, 4))
+    half_h = w_t * math.tan(math.radians(camera.fov_deg) / 2.0)
+    scale = np.array([half_h * camera.aspect, half_h, w_t])
+
+    def to_parallel(c):
+        # (x/w, y/w) scaled to metres at the target's depth; w_t/w for the
+        # depth, which grows toward the eye.
+        w = c[..., 3:4]
+        return np.concatenate([c[..., :2] / w, 1.0 / w], axis=-1) * scale
+
+    T = _clip_triangles(to_clip(tris.reshape(-1, 3)).reshape(-1, 3, 4))
+    A, B = _clip_segments(to_clip(E[:, 0]), to_clip(E[:, 1]))
+    if not len(A):
+        return np.empty((0, 4))
+    T = to_parallel(T)
+    L = np.stack([to_parallel(A), to_parallel(B)], axis=1)
+    # A parallel camera looking down −Z onto that space: x right, y up, and
+    # the depth growing away from it.
+    top = OrbitCamera()
+    top.perspective = False
+    top.target = type(camera.target)(0.0, 0.0, 0.0)
+    top.yaw, top.pitch = -math.pi / 2.0, math.pi / 2.0
+    top.distance = float(max(T[..., 2].max() if len(T) else 0.0,
+                             L[..., 2].max())) + 1.0
+
+    class _NoSection:
+        pass
+
+    d = hlr_drawing(_NoSection(), top,
+                    geometry=(T, L, np.empty((0, 2, 3)), np.empty((0, 2, 3))),
+                    profiles=False, fills=False, caps=False)
+    return d.segs

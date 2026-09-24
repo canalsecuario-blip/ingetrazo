@@ -6,6 +6,20 @@ follow [SemVer](https://semver.org).
 
 ## [Sin publicar]
 
+### Añadido
+- **Perspectiva de dos puntos** (José Castro Basso, FADU–UDELAR), como la
+  de SketchUp: **Cámara ▸ Perspectiva de dos puntos** mantiene verticales
+  las líneas verticales, como pide un dibujo de arquitectura, con lo que
+  se mira siempre en el centro. Las escenas la recuerdan; mirando casi en
+  vertical hacia abajo vuelve sola a la perspectiva normal.
+- **Archivo ▸ Exportar ▸ Vista actual como DXF** (José Castro Basso): la
+  vista en pantalla como líneas para CAD, sin las ocultas. En paralela, a
+  tamaño real en metros, con aristas, perfiles y corte en capas separadas
+  (como «Exportar vista como DXF» de las láminas). En perspectiva —la de
+  dos puntos incluida— las líneas ocultas se calculan en la propia
+  perspectiva y el dibujo se recorta a lo que muestra la ventana; lo que
+  está a la distancia del punto de mira sale a tamaño real.
+
 ### Corregido
 - **«Añadir localización» ya abre el mapa** desde el panel de Sombras. En
   Wayland se quedaba cargando sin mostrar nada: el diálogo colgaba del menú

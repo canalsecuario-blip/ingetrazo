@@ -11257,6 +11257,10 @@ class Viewport(QOpenGLWidget):
         self.camera.toggle_projection()
         self.update()
 
+    def toggle_two_point(self) -> None:
+        self.camera.toggle_two_point()
+        self.update()
+
     # ---- Helpers ------------------------------------------------------------
     def _build_ctx(self, ev) -> Optional[ToolContext]:
         self._sync_axes()

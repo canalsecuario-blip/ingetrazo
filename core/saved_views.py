@@ -21,7 +21,7 @@ class SavedView:
     def __init__(self, name: str, target=(0.0, 0.0, 0.0), distance: float = 20.0,
                  yaw: float = -0.7853981633974483, pitch: float = 0.5235987755982988,
                  fov_deg: float = 45.0, perspective: bool = True,
-                 hidden_layers=None, style=None, section=None,
+                 two_point: bool = False, hidden_layers=None, style=None, section=None,
                  georef=None, shadows=None, hidden_objects=None,
                  hidden_shown=None) -> None:
         self.name = name
@@ -31,6 +31,8 @@ class SavedView:
         self.pitch = float(pitch)
         self.fov_deg = float(fov_deg)
         self.perspective = bool(perspective)
+        #: Two-point perspective (verticals kept vertical).
+        self.two_point = bool(two_point)
         #: Layer NAMES hidden in this view. Every other layer shows — a layer
         #: created after the view was saved defaults to visible, like SketchUp.
         self.hidden_layers = list(hidden_layers or [])
@@ -82,6 +84,7 @@ class SavedView:
                    distance=camera.distance, yaw=camera.yaw,
                    pitch=camera.pitch, fov_deg=camera.fov_deg,
                    perspective=camera.perspective,
+                   two_point=bool(getattr(camera, "two_point", False)),
                    hidden_layers=[ly.name for ly in scene.layers
                                   if not ly.visible],
                    style=(scene.display_style.to_dict()
@@ -121,6 +124,7 @@ class SavedView:
         camera.pitch = self.pitch
         camera.fov_deg = self.fov_deg
         camera.perspective = self.perspective
+        camera.two_point = self.two_point
         hidden = set(self.hidden_layers)
         for ly in scene.layers:
             ly.visible = ly.name not in hidden
@@ -166,6 +170,8 @@ class SavedView:
             entry["fov"] = self.fov_deg
         if not self.perspective:
             entry["parallel"] = True
+        if self.two_point:
+            entry["two_point"] = True
         if self.hidden_layers:
             entry["hidden_layers"] = list(self.hidden_layers)
         if self.style:
@@ -192,6 +198,7 @@ class SavedView:
                    pitch=raw.get("pitch", 0.5235987755982988),
                    fov_deg=raw.get("fov", 45.0),
                    perspective=not raw.get("parallel", False),
+                   two_point=bool(raw.get("two_point", False)),
                    hidden_layers=raw.get("hidden_layers"),
                    style=raw.get("style"),
                    section=raw.get("section"),
