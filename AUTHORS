@@ -56,6 +56,9 @@ Félix Riestra  (github.com/felixriestra)
     The macOS package (pull request #64): the IngeTrazo.app bundle and the
     .dmg built by CI for Apple Silicon, with double-click opening of .igz
     and .skp files. IngeTrazo's first Mac version.
+    Components that come apart (pull request #96): OBJ files keep their
+    parts, Split into Pieces, the Parts tray with its cut list, and the
+    exploded view — furniture and joinery taken to pieces.
 
 Sherod Taylor  (github.com/sherodtaylor)
     The First Person tool (pull request #86): walking the model like a

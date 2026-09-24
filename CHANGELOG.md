@@ -4,6 +4,26 @@ All notable changes to IngeTrazo are documented here.
 Format inspired by [Keep a Changelog](https://keepachangelog.com); versions
 follow [SemVer](https://semver.org).
 
+## [Sin publicar]
+
+### Añadido
+- **Los componentes se desarman** (PR #96, Félix Riestra):
+  - **Importar OBJ conserva sus piezas:** un archivo con varios grupos
+    (`g`/`o`) llega como UN componente con un grupo por pieza, cada una con
+    su nombre (sin la jerga de Blender). Un OBJ de un solo grupo se importa
+    como antes.
+  - **Dividir en piezas** (Edición, clic derecho y panel Piezas): separa un
+    componente en sus piezas físicas, aunque los tableros se toquen.
+  - **Panel Piezas** con la **lista de corte**: largo × ancho × espesor de
+    cada pieza, material, ocultar, renombrar, y copiar la lista a una hoja
+    de cálculo (piezas iguales en una línea con su cantidad).
+  - **Vista explosionada:** un deslizador separa las piezas hacia fuera o a
+    lo largo de un eje, y Reensamblar las devuelve; se guarda en el `.igz`.
+
+### Corregido
+- **Mac:** el diálogo de cambios sin guardar ya se lee en el tema oscuro, y
+  los deslizadores destacan sobre el fondo oscuro (PR #96).
+
 ## [0.5.2] — 2026-09-24
 
 **Grupos que son grupos, láminas más cómodas y la perspectiva de dos puntos.**
