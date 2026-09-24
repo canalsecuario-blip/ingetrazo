@@ -272,10 +272,12 @@ class SheetStatusBar(QStatusBar):
         self._filler = QWidget(self)
         self.addPermanentWidget(self._filler, 1)
 
-    #: The message never takes more than this share of the bar: the right
-    #: half stays clear before the tool name, the coordinates and the VCB
-    #: (Marco, 2026-09-15: «que no llegue hasta el otro extremo derecho»).
-    MESSAGE_SHARE = 0.5
+    #: The message never takes more than this share of the bar, so the
+    #: right end stays clear for the coordinates and the VCB (Marco,
+    #: 2026-09-15: «que no llegue hasta el otro extremo derecho»). It was
+    #: half; the tool's name moved into the hint (23-09) and freed its own
+    #: label, and the hint, now longer by that name, gets that room.
+    MESSAGE_SHARE = 0.6
 
     #: The sheet strip's share of the bar before its tabs fold.
     TABS_SHARE = 0.3
