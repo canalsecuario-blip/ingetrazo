@@ -9653,8 +9653,11 @@ class Viewport(QOpenGLWidget):
             self.last_snap = None
             self._refresh_snap()
             return
-        # Picking a drawing tool always leaves camera-navigation mode.
+        # Picking a drawing tool always leaves camera-navigation mode — and
+        # any camera drag it was in the middle of.
         self.nav_mode = None
+        self._last_pos = None
+        self._pan_mode = False
         self.unsetCursor()
         if self.active_tool is not None:
             self.active_tool.on_deactivate(self)
@@ -10014,6 +10017,15 @@ class Viewport(QOpenGLWidget):
             return False          # the container and what lives inside it
         return self._owner_of(group) is not ctx
 
+    def _end_camera_drag(self) -> None:
+        """Forget a camera drag in progress (orbit, pan or zoom by drag)."""
+        self._last_pos = None
+        self._pan_mode = False
+        if self.nav_mode is not None:
+            self._apply_nav_cursor()
+        else:
+            self._apply_tool_cursor()
+
     def set_nav_mode(self, mode: Optional[str]) -> None:
         """Enter a SketchUp-style camera navigation mode ("orbit" / "pan").
 
@@ -10028,6 +10040,8 @@ class Viewport(QOpenGLWidget):
         self._hover_entity = None
         self.last_snap = None
         self.nav_mode = mode
+        self._last_pos = None             # a drag in progress ends here
+        self._pan_mode = False
         if mode is not None:
             self._apply_nav_cursor()      # orbit / pan / magnifier icons
         else:
@@ -10222,6 +10236,14 @@ class Viewport(QOpenGLWidget):
         alt = bool(ev.modifiers() & Qt.AltModifier)
         if alt != self._alt_down:
             self._apply_alt_cursor(alt)
+        if self._last_pos is not None and ev.buttons() == Qt.NoButton:
+            # A camera drag with no button held: its release never reached
+            # us (a Windows mouse or touchpad driver, a click on another
+            # window, a tool switched by keyboard mid-drag). Left alone,
+            # EVERY mouse move orbited the view whatever tool was picked —
+            # «el orbital se mantiene activo… no se desactiva con nada»
+            # (Andrés Rodríguez, Windows 11 + NVIDIA, 0.5.0).
+            self._end_camera_drag()
         if self._last_pos is not None:
             p = ev.position().toPoint()
             dx = p.x() - self._last_pos.x()

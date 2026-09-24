@@ -24,6 +24,12 @@ follow [SemVer](https://semver.org).
   dibujo, si es plano).
 
 ### Corregido
+- **La órbita ya no se queda pegada al ratón** (Andrés Rodríguez, Windows 11).
+  Si el aviso de «soltaste el botón» se perdía (algunos ratones y paneles
+  táctiles en Windows, un clic en otra ventana, cambiar de herramienta con
+  el teclado a media órbita), cada movimiento del ratón giraba la vista,
+  con cualquier herramienta. Ahora un movimiento sin botón pulsado, o
+  elegir otra herramienta, termina la órbita.
 - **Lo que dibujas dentro de un grupo o componente se ve al momento**
   (Rafael, revisión 4). Las líneas nuevas no aparecían hasta salir del
   grupo: la parte del dibujo que guarda las aristas de los grupos no se
