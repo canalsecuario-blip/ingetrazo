@@ -1326,5 +1326,9 @@
  "Rebuilt {n} face(s) on the selected plane.": "{n} face(s) reconstruída(s) no plano selecionado.",
  "Guide point at {d} m": "Ponto guia a {d} m",
  "Guide point at {d} m, with its segment": "Ponto guia a {d} m, com seu segmento",
- "This line is on its own — nothing is joined to its ends, so there is no chain to offset. Draw the missing line, or select the edges to offset.": "Esta linha está sozinha: nada está ligado às suas pontas, então não há cadeia para deslocar. Desenhe a linha que falta ou selecione as arestas a deslocar."
+ "This line is on its own — nothing is joined to its ends, so there is no chain to offset. Draw the missing line, or select the edges to offset.": "Esta linha está sozinha: nada está ligado às suas pontas, então não há cadeia para deslocar. Desenhe a linha que falta ou selecione as arestas a deslocar.",
+ "First Person": "Primeira pessoa",
+ "Mouse-look sensitivity:": "Sensibilidade ao olhar com o mouse:",
+ "How fast a drag turns the head in First Person": "Quão rápido o arrasto gira a cabeça em Primeira pessoa",
+ "W/A/S/D = walk, Q/E = down/up, drag = look. Shift = run, Alt = through walls.": "W/A/S/D = andar, Q/E = descer/subir, arrastar = olhar. Shift = correr, Alt = atravessar paredes."
 }

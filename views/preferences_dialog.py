@@ -139,6 +139,14 @@ class PreferencesDialog(QDialog):
                                       != "0")
         form.addRow("", self._invert_orbit)
 
+        from tools.walkthrough import look_sensitivity
+        self._look_sens = QSpinBox()
+        self._look_sens.setRange(1, 100)
+        self._look_sens.setValue(look_sensitivity())
+        self._look_sens.setToolTip(tr(
+            "How fast a drag turns the head in First Person"))
+        form.addRow(tr("Mouse-look sensitivity:"), self._look_sens)
+
         self._msaa = QComboBox()
         for n in (0, 2, 4, 8):
             self._msaa.addItem(tr("Off") if n == 0 else f"{n}x", n)
@@ -342,6 +350,9 @@ class PreferencesDialog(QDialog):
         st.setValue("nav/invert_orbit_y",
                     "1" if self._invert_orbit.isChecked() else "0")
         self._window.viewport._invert_orbit_y = self._invert_orbit.isChecked()
+
+        # First Person reads it on every look move: nothing to push.
+        st.setValue("walk/look_sensitivity", int(self._look_sens.value()))
 
         msaa = self._msaa.currentData()
         st.setValue("display/msaa", msaa)

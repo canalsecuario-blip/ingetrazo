@@ -61,6 +61,29 @@ def set_eye_height(value: float) -> None:
         pass
 
 
+#: First Person's mouse-look sensitivity, 1..100 (Preferences ▸ General).
+#: 25 = 0.05° of head turn per pixel of mouse travel.
+DEFAULT_LOOK_SENSITIVITY = 25
+_LOOK_KEY = "walk/look_sensitivity"
+
+
+def look_sensitivity() -> int:
+    """The mouse-look sensitivity, 1..100, remembered across sessions."""
+    try:
+        from PySide6.QtCore import QSettings
+        v = int(float(QSettings().value(_LOOK_KEY, DEFAULT_LOOK_SENSITIVITY)))
+        return v if 1 <= v <= 100 else DEFAULT_LOOK_SENSITIVITY
+    except Exception:  # noqa: BLE001 — no settings store (tests, scripts)
+        return DEFAULT_LOOK_SENSITIVITY
+
+
+def look_deg_per_px(sensitivity: int | None = None) -> float:
+    """Degrees of head turn per pixel for a sensitivity (the stored one
+    when ``None``): 1 → 0.002°, 25 → 0.05°, 100 → 0.2°."""
+    s = look_sensitivity() if sensitivity is None else sensitivity
+    return s / 500.0
+
+
 def _level_heading(camera) -> QVector3D:
     """The camera's heading flattened to the horizon — where a placed eye
     looks first. Straight up or down has no heading: look north."""
@@ -78,6 +101,44 @@ def _floor_below(viewport, x: float, y: float, z_from: float):
         return None
     t = dist(QVector3D(x, y, z_from), QVector3D(0.0, 0.0, -1.0))
     return None if t is None else z_from - t
+
+
+def _blocked(viewport, eye: QVector3D, delta: QVector3D, h: float,
+             clearance: float, knee: float) -> bool:
+    """Would this step run into a wall? Two feelers along the step, at
+    eye height and at knee height, must both be clear for the step
+    plus the clearance."""
+    dist = getattr(viewport, "ray_distance", None)
+    if dist is None:
+        return False
+    d = QVector3D(delta)
+    length = d.length()
+    if length < 1e-12:
+        return False
+    d = d / length
+    reach = length + clearance
+    for origin in (eye, eye - _UP * max(h - knee, 0.0)):
+        t = dist(origin, d)
+        if t is not None and t < reach:
+            return True
+    return False
+
+
+def _follow_floor(viewport, h: float, step_up: float) -> None:
+    """Keep the eye ``h`` above whatever is underfoot: a stair riser
+    no taller than ``step_up`` is climbed, a drop is fallen, and with
+    nothing below the ground plane (z = 0) is the floor."""
+    cam = viewport.camera
+    eye = cam.eye()
+    # Look down from just above the tallest step the feet can take, so a
+    # riser ahead is seen as the new floor rather than as a wall.
+    z_from = eye.z() - h + step_up
+    floor = _floor_below(viewport, eye.x(), eye.y(), z_from)
+    if floor is None:
+        floor = min(0.0, eye.z() - h)
+    target_z = floor + h
+    if abs(target_z - eye.z()) > 1e-6:
+        cam.move_eye(_UP * (target_z - eye.z()))
 
 
 def _handoff(viewport, key: str) -> None:
@@ -391,39 +452,10 @@ class WalkTool(_EyeTool):
 
     def _blocked(self, viewport, eye: QVector3D, delta: QVector3D,
                  h: float) -> bool:
-        """Would this step run into a wall? Two feelers along the step, at
-        eye height and at knee height, must both be clear for the step
-        plus the clearance."""
-        dist = getattr(viewport, "ray_distance", None)
-        if dist is None:
-            return False
-        d = QVector3D(delta)
-        length = d.length()
-        if length < 1e-12:
-            return False
-        d = d / length
-        reach = length + self.CLEARANCE
-        for origin in (eye, eye - _UP * max(h - self.KNEE, 0.0)):
-            t = dist(origin, d)
-            if t is not None and t < reach:
-                return True
-        return False
+        return _blocked(viewport, eye, delta, h, self.CLEARANCE, self.KNEE)
 
     def _follow_floor(self, viewport, h: float) -> None:
-        """Keep the eye ``h`` above whatever is underfoot: a stair riser
-        no taller than STEP_UP is climbed, a drop is fallen, and with
-        nothing below the ground plane (z = 0) is the floor."""
-        cam = viewport.camera
-        eye = cam.eye()
-        # Look down from just above the tallest step the feet can take, so a
-        # riser ahead is seen as the new floor rather than as a wall.
-        z_from = eye.z() - h + self.STEP_UP
-        floor = _floor_below(viewport, eye.x(), eye.y(), z_from)
-        if floor is None:
-            floor = min(0.0, eye.z() - h)
-        target_z = floor + h
-        if abs(target_z - eye.z()) > 1e-6:
-            cam.move_eye(_UP * (target_z - eye.z()))
+        _follow_floor(viewport, h, self.STEP_UP)
 
     # ---- Overlay ----------------------------------------------------------------
     def draw_overlay(self, viewport, painter) -> None:
@@ -437,3 +469,149 @@ class WalkTool(_EyeTool):
         painter.drawLine(QPointF(x, y - 10), QPointF(x, y + 10))
         painter.setPen(QPen(QColor(255, 255, 255, 200), 1.0))
         painter.drawEllipse(QPointF(x, y), 4.0, 4.0)
+
+
+class FirstPersonTool(_EyeTool):
+    """Walking as a game plays it — a mode of its own next to Walk, which
+    stays SketchUp's. W/A/S/D walk and strafe, Q/E go down and up, Shift
+    runs, Alt goes through walls; a drag of either mouse button turns the
+    head at a fixed rate per pixel, set in Preferences (``look_deg_per_px``;
+    the viewport hides the pointer and,
+    where the platform allows, puts it back after each move, so the turn
+    never runs out of screen).
+
+    While the tool is active the six letters are its own: the viewport
+    asks ``claims_key`` before the window's tool shortcuts get them. With
+    Ctrl held they are not claimed — Ctrl+S still saves, Ctrl+Q still
+    quits — which is why running is Shift here and not Walk's Ctrl.
+
+    Walls, stairs and the eye height are Walk's (``_blocked`` and
+    ``_follow_floor``). Q/E fly and leave the floor alone; the next step
+    on the ground brings the eye back to its height above it."""
+    name = "First Person"
+    WALK_SPEED = 1.5
+    RUN_FACTOR = 3.0
+    TICK_MS = 16
+    CLEARANCE = WalkTool.CLEARANCE
+    STEP_UP = WalkTool.STEP_UP
+    KNEE = WalkTool.KNEE
+
+    #: key → (forward, right, up)
+    _MOVES = {
+        Qt.Key_W: (1, 0, 0), Qt.Key_S: (-1, 0, 0),
+        Qt.Key_D: (0, 1, 0), Qt.Key_A: (0, -1, 0),
+        Qt.Key_E: (0, 0, 1), Qt.Key_Q: (0, 0, -1),
+    }
+
+    def __init__(self) -> None:
+        self._viewport = None
+        self.held: set[int] = set()
+        self._timer = None
+
+    def on_activate(self, viewport) -> None:
+        super().on_activate(viewport)
+        self.held.clear()
+
+    def on_deactivate(self, viewport) -> None:
+        self._release_all()
+        super().on_deactivate(viewport)
+
+    @property
+    def moving(self) -> bool:
+        return bool(self.held)
+
+    # ---- Keys ---------------------------------------------------------------
+    def claims_key(self, key: int, modifiers) -> bool:
+        return key in self._MOVES and not modifiers & Qt.ControlModifier
+
+    def on_key(self, viewport, key: int, modifiers) -> bool:
+        if not self.claims_key(key, modifiers):
+            return False
+        self.held.add(key)
+        self._start(viewport)
+        return True
+
+    def on_key_release(self, viewport, key: int) -> bool:
+        if key not in self._MOVES:
+            return False
+        self.held.discard(key)
+        if not self.held:
+            self._stop()
+        return True
+
+    def on_focus_out(self, viewport) -> None:
+        """The key releases go to whatever took the focus: forget them all,
+        or the walk would carry on by itself."""
+        self._release_all()
+
+    def on_cancel(self, viewport) -> None:
+        self._release_all()
+
+    def _release_all(self) -> None:
+        self.held.clear()
+        self._stop()
+
+    def _start(self, viewport) -> None:
+        if self._timer is None:
+            from PySide6.QtCore import QTimer
+            self._timer = QTimer(viewport)
+            self._timer.setInterval(self.TICK_MS)
+            self._timer.timeout.connect(self._tick)
+        if not self._timer.isActive():
+            self._timer.start()
+
+    def _stop(self) -> None:
+        if self._timer is not None:
+            self._timer.stop()
+
+    def _tick(self) -> None:
+        vp = self._viewport
+        if vp is None or not self.held:
+            return
+        from PySide6.QtWidgets import QApplication
+        self.step(vp, set(self.held), self.TICK_MS / 1000.0,
+                  QApplication.keyboardModifiers())
+        emit = getattr(vp, "measurementChanged", None)
+        if emit is not None and hasattr(vp, "_measurement_text"):
+            emit.emit(vp._measurement_text())
+        vp.update()
+
+    def step(self, viewport, keys, dt: float, modifiers=Qt.NoModifier) -> None:
+        """One step with ``keys`` held, ``dt`` seconds long. Pure of the
+        timer, so a test can walk deterministically."""
+        fwd = right = up = 0
+        for key in keys:
+            f, r, u = self._MOVES.get(key, (0, 0, 0))
+            fwd, right, up = fwd + f, right + r, up + u
+        if not (fwd or right or up):
+            return
+        cam = viewport.camera
+        h = eye_height()
+        speed = self.WALK_SPEED * (self.RUN_FACTOR
+                                   if modifiers & Qt.ShiftModifier else 1.0)
+        forward = _level_heading(cam)
+        side = QVector3D.crossProduct(forward, _UP).normalized()
+        direction = forward * fwd + side * right + _UP * up
+        # Diagonals at the same speed as straight lines.
+        delta = direction.normalized() * (speed * dt)
+        through_walls = bool(modifiers & Qt.AltModifier)
+        if not through_walls and _blocked(viewport, cam.eye(), delta, h,
+                                          self.CLEARANCE, self.KNEE):
+            return
+        cam.move_eye(delta)
+        if not through_walls and not up:
+            _follow_floor(viewport, h, self.STEP_UP)
+
+    # ---- Mouse --------------------------------------------------------------
+    def on_look(self, viewport, dx: float, dy: float) -> None:
+        """Mouse travel of ``(dx, dy)`` pixels while a button is held:
+        right = look right, up = look up (screen y runs down). The rate is
+        a game's — per pixel, not scaled to the viewport the way Look
+        Around is — and read each move, so Preferences apply at once."""
+        rate = look_deg_per_px()
+        viewport.camera.turn(dx * rate, -dy * rate)
+        viewport.update()
+
+    def context_menu(self, viewport, pos) -> bool:
+        """The right button looks around here; no menu."""
+        return True

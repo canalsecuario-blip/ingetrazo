@@ -64,7 +64,8 @@ from tools.followme import FollowMeTool
 from tools.rotated_rectangle import RotatedRectangleTool
 from tools.offset import OffsetTool
 from tools.texture_position import TexturePositionTool
-from tools.walkthrough import LookAroundTool, PositionCameraTool, WalkTool
+from tools.walkthrough import (FirstPersonTool, LookAroundTool,
+                               PositionCameraTool, WalkTool)
 from tools.paint import PaintTool
 from tools.paste import PasteTool
 from tools.arc import PieTool
@@ -127,6 +128,9 @@ class MainWindow(QMainWindow):
             "position_camera": PositionCameraTool(),
             "walk": WalkTool(),
             "look_around": LookAroundTool(),
+            # Walking as a game plays it (W/A/S/D + mouse look), beside
+            # SketchUp's Walk rather than instead of it.
+            "first_person": FirstPersonTool(),
         }
         # SketchUp's Solid Tools (tools/solid_tools.py, core/solids.py).
         from tools.solid_tools import SOLID_TOOLS
@@ -480,7 +484,7 @@ class MainWindow(QMainWindow):
               "solid_intersect", "solid_split"]),
             # SketchUp's Walkthrough toolbar, in its order.
             ("walkthrough", tr("Walkthrough"),
-             ["position_camera", "walk", "look_around"]),
+             ["position_camera", "walk", "look_around", "first_person"]),
         ]
         for oname, title, keys in layout:
             tb = self._new_toolbar(title, oname)
@@ -881,7 +885,7 @@ class MainWindow(QMainWindow):
             camera_menu.addAction(action)
         # SketchUp's Camera ▸ Position Camera / Walk / Look Around.
         camera_menu.addSeparator()
-        for key in ("position_camera", "walk", "look_around"):
+        for key in ("position_camera", "walk", "look_around", "first_person"):
             camera_menu.addAction(self._tool_actions[key])
 
         # Draw menu (SketchUp: the drawing tools, grouped by family)
