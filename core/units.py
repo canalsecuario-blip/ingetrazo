@@ -155,6 +155,38 @@ def fmt_pair(a: float, b: float) -> str:
     return f"{fmt_len(a)} × {fmt_len(b)}"
 
 
+#: The fewest decimals that still resolve a millimetre (or 1/16") in each
+#: unit — what a parts list needs whatever the document's display
+#: precision is: a 4 mm hinge leaf in a document shown to the centimetre
+#: read «0.00 m» and looked like a sheet with no thickness at all.
+_FINE_DECIMALS = {"m": 3, "cm": 1, "mm": 0, "in": 2, "ft": 3,
+                  "ft-in": 2, "in-frac": 2, "ft-in-frac": 2}
+
+
+def fine_precision() -> int:
+    """The document's precision, raised to millimetre resolution."""
+    return max(model_precision(), _FINE_DECIMALS.get(model_unit(), 3))
+
+
+def fmt_len_fine(metres: float) -> str:
+    """:func:`fmt_len` at least to the millimetre — for part sizes and cut
+    lists, where a thickness is the number that matters."""
+    return format_length(float(metres), model_unit(), fine_precision())
+
+
+def fmt_triple(a: float, b: float, c: float, fine: bool = False) -> str:
+    """``0.58 × 0.45 × 0.04 m`` — a part's length × width × thickness, in
+    the same idiom as :func:`fmt_pair`. ``fine`` resolves the millimetre
+    (:func:`fmt_len_fine`)."""
+    u = model_unit()
+    n = fine_precision() if fine else model_precision()
+    if u in ("m", "cm", "mm"):
+        factor = {"m": 1.0, "cm": 100.0, "mm": 1000.0}[u]
+        a_, b_ = (f"{float(v) * factor:.{n}f}" for v in (a, b))
+        return f"{a_} × {b_} × {format_length(float(c), u, n)}"
+    return " × ".join(format_length(float(v), u, n) for v in (a, b, c))
+
+
 def fmt_area(square_metres: float) -> str:
     """An area in the model's units squared."""
     u = model_unit()

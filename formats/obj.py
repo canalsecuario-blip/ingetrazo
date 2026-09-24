@@ -322,7 +322,13 @@ def _load_obj_inner(scene, path, progress=None, scale: float = 1.0,
     materials: dict = {}
     current_mat = None
     current_smooth = 0
-    pending: list[tuple[list[QVector3D], object, object]] = []
+    # Which piece of the model each face belongs to: the file's own ``o``
+    # (object) and ``g`` (group) statements. A furniture OBJ is written as
+    # its parts — a stool's seat, its legs, its footrest — and those names
+    # are the only record of which facet belongs to which part.
+    current_o = ""
+    current_g = ""
+    pending: list[tuple[list[QVector3D], object, object, int, tuple]] = []
 
     for line in path.read_text().splitlines():
         parts = line.split()
@@ -349,6 +355,11 @@ def _load_obj_inner(scene, path, progress=None, scale: float = 1.0,
             materials = _parse_mtl(path.with_name(parts[1]))
         elif tag == "usemtl":
             current_mat = materials.get(parts[1])
+        elif tag == "o":
+            current_o = " ".join(parts[1:])
+            current_g = ""
+        elif tag == "g":
+            current_g = " ".join(parts[1:])
         elif tag == "s":
             # "s 1", "s off": which faces the file means as one surface.
             v = parts[1].lower() if len(parts) > 1 else "off"
@@ -373,7 +384,8 @@ def _load_obj_inner(scene, path, progress=None, scale: float = 1.0,
                 loop_uv = ([uvs[t] for t in tidxs]
                            if all(0 <= t < len(uvs) for t in tidxs) else None)
                 pending.append(([verts[i] for i in idxs], current_mat,
-                                loop_uv, current_smooth))
+                                loop_uv, current_smooth,
+                                (current_o, current_g)))
 
     def _face_attrs(mat, loop=None, loop_uv=None, smooth=0):
         """The attrs of one imported polygon.
@@ -419,13 +431,28 @@ def _load_obj_inner(scene, path, progress=None, scale: float = 1.0,
     from formats.dae import _MAX_FUSE_LOOPS, _add_fused
     from formats.fuse import (SMOOTH_KEY, drop_smoothing_groups,
                               soften_by_smoothing_group)
+    pieces: dict = {}
+    for item in pending:
+        pieces.setdefault(item[4], []).append(item)
+    if len(pieces) > 1:
+        # A model the file describes as parts arrives as parts: one
+        # container (the object you place, move and copy) whose children
+        # are the file's pieces, each named as the file names it. Fusing
+        # piece by piece also keeps two parts that merely touch — a seat
+        # resting on its legs — from being welded into one.
+        scene.groups.append(_pieces_group(
+            path.stem, pieces, _face_attrs, tick))
+        scene.version += 1
+        tick(1.0, "Done")
+        return
+
     if len(pending) > _MAX_FUSE_LOOPS:
         from core.group import Group
         from core.mesh import Mesh
         from formats.fuse import fuse_coplanar_loops, soften_smooth_edges
         target = Mesh()
         raw = [(loop, _face_attrs(mat, loop, loop_uv, sm))
-               for loop, mat, loop_uv, sm in pending]
+               for loop, mat, loop_uv, sm, _piece in pending]
         tick(0.5, "Merging coplanar faces…")
         fused = fuse_coplanar_loops(raw)
         n = max(len(fused), 1)
@@ -445,7 +472,7 @@ def _load_obj_inner(scene, path, progress=None, scale: float = 1.0,
     target = scene.mesh
     seed: set = set()
     new_faces = set()
-    for loop, mat, loop_uv, sm in pending:
+    for loop, mat, loop_uv, sm, _piece in pending:
         try:
             face = target.add_face(loop)
         except Exception:  # noqa: BLE001 — skip a degenerate polygon
@@ -467,3 +494,65 @@ def _load_obj_inner(scene, path, progress=None, scale: float = 1.0,
     soften_by_smoothing_group(scene.mesh)
     drop_smoothing_groups(scene.mesh)
     scene.version += 1
+
+
+def _piece_name(key: tuple, number: int) -> str:
+    """What a piece is called: the file's group name, else its object name.
+    Exporters often number their groups (``g 1``, ``g 2``…), and a bare
+    number reads as nothing in a list of parts, so it becomes «Part 1»."""
+    from core.i18n import tr
+    obj_name, group_name = key
+    name = _tidy_blender_name((group_name or obj_name).strip())
+    if not name:
+        return tr("Part {n}", n=number)
+    if not any(ch.isalpha() for ch in name):
+        return tr("Part {n}", n=name)
+    return name
+
+
+def _tidy_blender_name(name: str) -> str:
+    """Blender writes an object as ``<object>_<mesh>`` and numbers copies
+    ``.001``: «Base-unit-Box-Right_Cube.002», «Door.001_Cube.007». The
+    object's own name is the one a person gave; the mesh part (a capitalised
+    word, a default like Cube or Sphere) and the copy numbers are Blender's
+    bookkeeping. «Sphere.021_Sphere.005» keeps «Sphere»: that is all it is."""
+    import re
+    head, sep, tail = name.rpartition("_")
+    if sep and head and re.fullmatch(r"[A-Z][A-Za-z]*(\.\d+)?", tail):
+        name = head
+    return re.sub(r"(\.\d{3})+$", "", name).strip() or name
+
+
+def _pieces_group(stem: str, pieces: dict, face_attrs, tick):
+    """The container an OBJ made of parts imports as: an instance at
+    identity with an empty mesh of its own (the same shape 3D text takes,
+    see :func:`core.text3d.make_text_group`), one child per piece."""
+    from PySide6.QtGui import QMatrix4x4
+    from core.group import Group
+    from core.mesh import Mesh
+    from formats.dae import _add_fused
+    from formats.fuse import (drop_smoothing_groups, fuse_coplanar_loops,
+                              soften_by_smoothing_group, soften_smooth_edges)
+
+    kids = []
+    n = max(len(pieces), 1)
+    for k, (key, items) in enumerate(pieces.items(), start=1):
+        tick(0.5 + 0.45 * k / n, "Building the model…")
+        mesh = Mesh()
+        raw = [(loop, face_attrs(mat, loop, loop_uv, sm))
+               for loop, mat, loop_uv, sm, _piece in items]
+        _add_fused(mesh, fuse_coplanar_loops(raw))
+        if not mesh.faces:
+            continue
+        soften_by_smoothing_group(mesh)
+        soften_smooth_edges(mesh)
+        drop_smoothing_groups(mesh)
+        kid = Group(mesh, name=_piece_name(key, k))
+        kid.xform = QMatrix4x4()
+        # A part is its own geometry, shared with nothing: a group inside
+        # the component, not a component of its own (issue #90).
+        kid.component = False
+        kids.append(kid)
+    container = Group(name=stem)
+    container.adopt(kids)
+    return container

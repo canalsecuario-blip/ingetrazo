@@ -319,6 +319,14 @@ def save_scene(scene, path: Path) -> dict:
                 entry["uid"] = g.uid
             if getattr(g, "hidden", False):
                 entry["hidden"] = True
+            if getattr(g, "exploded", None):
+                # An exploded view and each part's share of it, so the
+                # document reopens able to reassemble (core/explode.py).
+                # Older readers ignore both and see the parts where they
+                # stand.
+                entry["exploded"] = dict(g.exploded)
+            if getattr(g, "explode_offset", None):
+                entry["explode_offset"] = list(g.explode_offset)
             kids = getattr(g, "children", None)
             if kids:
                 entry["children"] = [_entry(c) for c in kids]
@@ -643,6 +651,11 @@ def _load_into_inner(scene, path: Path, progress=None) -> None:
             group.hidden = True
         if isinstance(raw.get("material"), dict):
             group.material = dict(raw["material"])
+        if isinstance(raw.get("exploded"), dict):
+            group.exploded = dict(raw["exploded"])
+        off = raw.get("explode_offset")
+        if isinstance(off, list) and len(off) == 3:
+            group.explode_offset = tuple(float(v) for v in off)
         if depth < 32:              # a corrupt document must not spin
             group.adopt(_group_from(c, depth + 1)
                         for c in raw.get("children", []) or [])

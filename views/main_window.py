@@ -84,6 +84,19 @@ from views.viewport import Viewport
 IGZ_FILE_FILTER = "IngeTrazo document (*.igz);;All files (*)"
 
 
+
+def _obj_parts(temp):
+    """The container a multi-part OBJ imported as, its pieces' facet seams
+    softened like any library model's, or ``None`` for a single-piece file
+    (which the callers keep handling as one mesh)."""
+    if not temp.groups or not temp.groups[0].children:
+        return None
+    from formats.fuse import soften_smooth_edges
+    group = temp.groups[0]
+    for kid in group.children:
+        soften_smooth_edges(kid.mesh, cos_threshold=0.55)
+    return group
+
 class MainWindow(QMainWindow):
     """Top-level IngeTrazo window."""
 
@@ -731,6 +744,10 @@ class MainWindow(QMainWindow):
         self._intersect_menu = QMenu(tr("Intersect Faces"), edit_menu)
         self._fill_intersect_menu(self._intersect_menu)
         edit_menu.addMenu(self._intersect_menu)
+
+        split_action = QAction(tr("Split into Pieces"), self)
+        split_action.triggered.connect(self._on_split_into_pieces)
+        edit_menu.addAction(split_action)
 
         convert_path_action = QAction(tr("Convert Path to Geometry"), self)
         convert_path_action.triggered.connect(self._on_convert_geopath)
@@ -1842,6 +1859,39 @@ class MainWindow(QMainWindow):
             build_add_edges(scene, segs, detect_faces=True))
         self.viewport.flash_status(
             tr("{n} intersection edges added", n=len(segs)), 3000)
+
+    def _on_split_into_pieces(self) -> None:
+        """Regroup the selected group's contents by physical piece — the
+        solids that do not touch (see :mod:`core.pieces`). The group stays
+        one object; Explode afterwards gives each piece on its own."""
+        from PySide6.QtWidgets import QApplication
+        from core.history import SplitIntoPiecesCommand
+        from core.pieces import split_into_pieces
+        scene = self.viewport.scene
+        if scene.edit_group is not None:
+            self.viewport.flash_status(tr(
+                "Leave the group first (Esc) to split it into pieces"))
+            return
+        groups = [g for g in scene.selection if isinstance(g, Group)
+                  and not getattr(g, "billboard", False)]
+        if len(groups) != 1:
+            self.viewport.flash_status(tr(
+                "Select one group or component to split into pieces"))
+            return
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            pieces = split_into_pieces(groups[0])
+        finally:
+            QApplication.restoreOverrideCursor()
+        if not pieces:
+            self.viewport.flash_status(tr(
+                "Nothing to split: it is already in its pieces"))
+            return
+        self.viewport.history.execute(
+            SplitIntoPiecesCommand(groups[0], pieces))
+        self.viewport.flash_status(tr(
+            "Split into {n} pieces — Explode Group sets them free",
+            n=len(pieces)), 5000)
         self.viewport.update()
 
     def _on_explode_group(self) -> None:
@@ -2260,6 +2310,10 @@ class MainWindow(QMainWindow):
                 # no explode detour): the door the piscina hedge needed.
                 menu.addAction(tr("Make Component…"), self._on_make_component)
             menu.addAction(tr("Explode Group"), self._on_explode_group)
+            if sum(1 for e in sel if isinstance(e, Group)
+                   and not getattr(e, "billboard", False)) == 1:
+                menu.addAction(tr("Split into Pieces"),
+                               self._on_split_into_pieces)
             if sum(1 for e in sel if isinstance(e, Group)) >= 2:
                 # The fix-my-grouping path: fuse the selected groups into
                 # one WITHOUT routing their geometry through the loose mesh
@@ -3466,6 +3520,11 @@ class MainWindow(QMainWindow):
         elif obj_path.exists():
             from formats import obj as _obj
             _obj.load_obj(temp, obj_path)
+            parts = _obj_parts(temp)
+            if parts is not None:
+                parts.name = name or tr(key.capitalize())
+                self._start_place(parts)
+                return
             mesh = temp.mesh
             if not mesh.faces and temp.groups:
                 # Big OBJs land as a reference group (formats/obj.py), not
@@ -3514,6 +3573,13 @@ class MainWindow(QMainWindow):
                            matrix=library.model_matrix(entry, obj))
         except Exception as exc:  # noqa: BLE001
             QMessageBox.critical(self, tr("Component library"), str(exc))
+            return
+        parts = _obj_parts(temp)
+        if parts is not None:
+            # A model written as parts keeps them: one component to place,
+            # its pieces inside (see formats.obj._pieces_group).
+            parts.name = entry.get("nombre", "") or parts.name
+            self._start_place(parts)
             return
         mesh = temp.mesh
         if not mesh.faces and temp.groups:
@@ -5000,13 +5066,19 @@ class MainWindow(QMainWindow):
         """Return True if it's safe to discard the current drawing."""
         if not self._is_dirty():
             return True
-        answer = QMessageBox.question(
-            self,
-            tr("Unsaved changes"),
+        # Built by hand rather than with QMessageBox.question: on macOS
+        # that is a NATIVE alert, which draws «Don't Save» as a red
+        # destructive button — and under the dark scheme main.py forces,
+        # red text on a black button, barely readable. Qt's own dialog
+        # wears the app's palette, like every other window here.
+        box = QMessageBox(
+            QMessageBox.Question, tr("Unsaved changes"),
             tr("{prompt}\n\nUnsaved changes will be lost.", prompt=prompt),
             QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
-            QMessageBox.Save,
-        )
+            self)
+        box.setOption(QMessageBox.Option.DontUseNativeDialog, True)
+        box.setDefaultButton(QMessageBox.Save)
+        answer = box.exec()
         if answer == QMessageBox.Save:
             self._on_save()
             return not self._is_dirty()
