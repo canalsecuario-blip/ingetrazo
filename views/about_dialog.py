@@ -92,7 +92,7 @@ class _Credits(QWidget):
     Two copies of the list sit one above the other; when the first has
     rolled out of view the roll starts over, seamlessly."""
 
-    LINES = 5
+    LINES = 11
 
     def __init__(self, people, parent=None) -> None:
         super().__init__(parent)
@@ -163,7 +163,7 @@ class AboutDialog(QDialog):
             pic.setAlignment(Qt.AlignTop)
             outer.addWidget(pic, 0, Qt.AlignTop)
         col = QVBoxLayout()
-        col.setSpacing(8)
+        col.setSpacing(4)
         outer.addLayout(col, 1)
 
         def para(html: str) -> QLabel:
@@ -174,20 +174,22 @@ class AboutDialog(QDialog):
             col.addWidget(lab)
             return lab
 
-        para("<h3 style='margin:0'>IngeTrazo</h3>"
-             f"{tr('Version')} {version}")
-        if gl_line:
-            para(f"<small>OpenGL: {gl_line}</small>")
-        para(tr("Free 3D modeler for architecture, engineering and 3D design."))
-        para(f"{tr('Created by')} <b>Marco Sumari Tellez</b><br>"
+        # The top is one compact block, so the credits below get the room
+        # (Marco, 23-09).
+        gl = f"<br><small>OpenGL: {gl_line}</small>" if gl_line else ""
+        para("<b style='font-size:15px'>IngeTrazo</b> "
+             f"{tr('Version')} {version}{gl}<br>"
+             f"{tr('Free 3D modeler for architecture, engineering and 3D design.')}<br>"
+             f"{tr('Created by')} <b>Marco Sumari Tellez</b> — "
              f"{tr('Civil Engineer — Arequipa, Peru')}")
-        para(f"<b>{tr('With contributions from')}</b>")
+        head = para(f"<b>{tr('With contributions from')}</b>")
+        head.setContentsMargins(0, 8, 0, 0)
         self.credits = _Credits(CONTRIBUTORS, self)
         col.addWidget(self.credits)
         para(f"<small>{tr('And thanks to everyone who tries IngeTrazo and reports what they find.')}</small>")
-        para(f"{tr('Licensed under GPL-3.0-or-later.')}<br>"
+        para(f"<small>{tr('Licensed under GPL-3.0-or-later.')} · "
              "<a href='https://github.com/ingelibre/ingetrazo'>"
-             "github.com/ingelibre/ingetrazo</a>")
+             "github.com/ingelibre/ingetrazo</a></small>")
         buttons = QDialogButtonBox(QDialogButtonBox.Ok, self)
         buttons.accepted.connect(self.accept)
         col.addWidget(buttons)

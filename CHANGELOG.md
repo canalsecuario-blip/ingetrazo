@@ -4,7 +4,14 @@ All notable changes to IngeTrazo are documented here.
 Format inspired by [Keep a Changelog](https://keepachangelog.com); versions
 follow [SemVer](https://semver.org).
 
-## [Sin publicar]
+## [0.5.1] — 2026-09-23
+
+**La revisión 4 de Rafael, las tandas de @pacaeiro y la de los usuarios.**
+Lo que dibujas dentro de un grupo se ve al momento; una puerta que arranca
+del suelo atraviesa el muro; copiar y pegar entre ventanas; Orientar caras;
+Zoom extensión que encuadra de verdad; la órbita que ya no se queda pegada
+en Windows; Primera persona, de @sherodtaylor; y una barra de estado con
+sitio para leer la pista de cada herramienta.
 
 ### Añadido
 - **Copiar y pegar entre ventanas** (#76, @pacaeiro): lo copiado en un
@@ -37,8 +44,8 @@ follow [SemVer](https://semver.org).
   se vuelve a arrastrar.
 
 ### Cambiado
-- **Acerca de IngeTrazo reconoce a todos los que aportan**, en un carrusel
-  que pasa solo de una persona a otra (se detiene al pasar el ratón):
+- **Acerca de IngeTrazo reconoce a todos los que aportan**, en unos
+  créditos que suben despacio y sin parar, como al final de una película:
   Pedro Caeiro, Rafael García, Ahsan Mehmood, dafrobozao (portugués),
   Félix Riestra (versión para Mac) y Sherod Taylor (Primera persona), y un
   agradecimiento a todos los que prueban y reportan.

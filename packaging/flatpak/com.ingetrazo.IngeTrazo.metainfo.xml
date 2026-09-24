@@ -77,6 +77,16 @@
   <url type="vcs-browser">https://github.com/ingelibre/ingetrazo</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.5.1" date="2026-09-23">
+      <description>
+        <p>What you draw inside a group shows at once; a door drawn from
+        the floor goes through the wall; copy and paste between windows;
+        Orient Faces; Zoom Extents that frames the model as you look at
+        it; the orbit no longer sticks to the mouse on Windows; a First
+        Person walk; and a status bar with room to read each tool's
+        hint.</p>
+      </description>
+    </release>
     <release version="0.5.0" date="2026-09-23">
       <description>
         <p>Solids, local axes and Mac. SketchUp's Solid Tools (Outer
