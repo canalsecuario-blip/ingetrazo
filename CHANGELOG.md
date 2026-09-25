@@ -26,6 +26,11 @@ follow [SemVer](https://semver.org).
   siempre o el que traiga un `.skp`; se guarda en el documento, en las
   escenas y en la biblioteca de estilos.
 
+### Cambiado
+- **Icono de Zoom a extensión** (#112): ahora es la lupa con tres flechas
+  hacia las esquinas, como en SketchUp, para que quien viene de allí lo
+  reconozca; antes eran cuatro esquinas que pocos identificaban.
+
 ### Corregido
 - **Mac:** el diálogo de cambios sin guardar ya se lee en el tema oscuro, y
   los deslizadores destacan sobre el fondo oscuro (PR #96).

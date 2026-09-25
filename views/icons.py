@@ -911,11 +911,34 @@ def _zoom_window(p, ink):
 
 
 def _zoom_extents(p, ink):
-    # Corner brackets framing the extent (fit-to-view).
-    for (cx, cy, sx, sy) in ((13, 13, 1, 1), (35, 13, -1, 1),
-                             (35, 35, -1, -1), (13, 35, 1, -1)):
-        p.drawLine(QPointF(cx, cy), QPointF(cx + 7 * sx, cy))
-        p.drawLine(QPointF(cx, cy), QPointF(cx, cy + 7 * sy))
+    # SketchUp's Zoom Extents, so its users find it (#112): a magnifier with
+    # the handle to the lower-left and three fat accent arrows pushing out to
+    # the free corners. Sized a notch under the plain Zoom lens so it keeps
+    # proportion beside it in the Camera toolbar (Marco chose "A2", 25-09).
+    cx = cy = 24.0
+    r = 8.5
+    d = r / math.sqrt(2)
+    p.setBrush(Qt.NoBrush)
+    p.drawEllipse(QPointF(cx, cy), r, r)
+    p.save()
+    p.setPen(_rpen(ink, 4.0))
+    p.drawLine(QPointF(cx - d, cy + d), QPointF(cx - d - 7.5, cy + d + 7.5))
+    p.setBrush(_accent())
+    head, half = 7.5, 7.5 * 0.62
+    for sx, sy in ((-1, -1), (1, -1), (1, 1)):
+        tip = QPointF(cx + sx * 18, cy + sy * 18)
+        # Unit vector along the diagonal and its normal, for the arrowhead.
+        ux, uy = sx / math.sqrt(2), sy / math.sqrt(2)
+        base = QPointF(tip.x() - ux * head, tip.y() - uy * head)
+        p.setPen(_rpen(_accent(), 4.2))
+        p.drawLine(QPointF(cx + sx * 10.5, cy + sy * 10.5), base)
+        p.setPen(Qt.NoPen)
+        p.drawPolygon(QPolygonF([
+            tip,
+            QPointF(base.x() - uy * half, base.y() + ux * half),
+            QPointF(base.x() + uy * half, base.y() - ux * half),
+        ]))
+    p.restore()
 
 
 # ---- Standard-view icons: a little house drawn from each viewpoint ----------
