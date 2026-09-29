@@ -9808,6 +9808,12 @@ class Viewport(QOpenGLWidget):
         X-ray and wireframe show everything, so nothing hides a snap there
         (SketchUp: switch to X-ray to dimension the floor of a pool through
         its water). Hidden-line and shaded keep the visible-only rule.
+
+        What a transform tool is dragging hides nothing either: the live
+        preview moves it in the scene, so a rectangle slid across a wall
+        covered the wall's own corners and edges, and their snaps showed only
+        in X-ray (Marco, 2026-09-29). SketchUp infers THROUGH the entities in
+        motion, as it leaves them out of the candidates (issue #19).
         """
         if self._effective_style().face_mode in ("xray", "wireframe"):
             return False
@@ -9820,15 +9826,16 @@ class Viewport(QOpenGLWidget):
         if dist < 1e-9:
             return False
         d = delta / dist
+        mask = self._occluder_mask(idx)
         sp = _active_cut(self.scene)
         if sp is None:
             # Nothing to sort out per face: the single nearest hit decides,
             # and asking for it skips allocating a per-face array on every
             # query (this fires dozens of times a frame).
-            nearest = self._ray_hits(idx, origin, d, idx.ent_vis,
+            nearest = self._ray_hits(idx, origin, d, mask,
                                      reduce_global=True)
             return nearest is not None and nearest < dist - 1e-3
-        face_t = self._ray_hits(idx, origin, d, idx.ent_vis)
+        face_t = self._ray_hits(idx, origin, d, mask)
         if face_t is None:
             return False
         import numpy as np
@@ -9844,6 +9851,49 @@ class Viewport(QOpenGLWidget):
         c = float(n @ [sp.point.x(), sp.point.y(), sp.point.z()])
         pts = eye + dv * face_t[hit][:, None]
         return bool(((pts @ n - c) <= 1e-6).any())
+
+    def _occluder_mask(self, idx):
+        """``idx.ent_vis`` without the faces the active tool has in motion
+        (its ``snap_excluded``): a loose face every edge of whose outer loop
+        moves, and every face of a group being dragged. A face only
+        stretched — one corner still — stays an occluder. Memoised per index
+        and exclusion, since ``_is_occluded`` runs dozens of times a frame
+        and a Move drag rebuilds the index on every mouse move anyway."""
+        tool = getattr(self, "active_tool", None)          # stub VPs in tests
+        excl = getattr(tool, "snap_excluded", None)
+        excl = excl() if callable(excl) else None
+        if excl is None:
+            return idx.ent_vis
+        edges, groups = excl
+        key = (frozenset(edges), frozenset(groups))
+        memo = getattr(self, "_occluder_memo", None)
+        if memo is not None and memo[0] is idx and memo[1] == key:
+            return memo[2]
+        mask = idx.ent_vis.copy()
+        placements = idx.ent_placements
+        for i, (face, owner) in enumerate(idx.entities):
+            if not mask[i]:
+                continue
+            pi = int(idx.ent_place_idx[i])
+            if pi >= 0:
+                if groups and (id(owner) in groups
+                               or id(placements[pi]) in groups):
+                    mask[i] = False
+                continue
+            loop = getattr(face, "loop", None)
+            if not edges or not loop:
+                continue
+            moving = True
+            for j, v in enumerate(loop):
+                w = loop[(j + 1) % len(loop)]
+                if not any(id(e) in edges and (e.v0 is w or e.v1 is w)
+                           for e in v.edges):
+                    moving = False
+                    break
+            if moving:
+                mask[i] = False
+        self._occluder_memo = (idx, key, mask)
+        return mask
 
     def pick_face(self, screen_x: float, screen_y: float):
         """Return the face the cursor ray hits, or ``None``.
