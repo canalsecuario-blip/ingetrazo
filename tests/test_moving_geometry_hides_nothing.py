@@ -70,6 +70,31 @@ def test_the_rectangle_being_moved_does_not_hide_the_wall(vp):
     assert vp._is_occluded(on_wall)                      # dropped back, it hides
 
 
+def test_a_group_being_moved_does_not_hide_the_wall(vp):
+    # A group drags through the viewport's preview, not the scene: its faces
+    # stay in the pick index where they were, and hid the wall from there.
+    from core.history import History, MakeGroupCommand
+    rect = _scene(vp)
+    History(vp.scene).execute(MakeGroupCommand([rect], []))
+    vp.scene.version += 1
+    group = vp.scene.groups[0]
+    # The preview itself only paints (GL); without it the index is what the
+    # app has during the drag.
+    vp.begin_groups_preview = lambda groups=(), external=False: None
+    vp.set_groups_preview_offset = lambda delta: None
+    vp.end_groups_preview = lambda: None
+    on_wall = V(0, 0, 1)
+    assert vp._is_occluded(on_wall)
+    vp.scene.selection.clear()
+    vp.scene.selection.add(group)
+    tool = MoveTool()
+    vp.set_active_tool(tool)
+    _grab(vp, tool, V(-1, -0.3, 0.5))
+    assert not vp._is_occluded(on_wall)
+    tool.on_cancel(vp)
+    assert vp._is_occluded(on_wall)
+
+
 def test_what_stays_put_still_hides(vp):
     rect = _scene(vp)
     # A second face in front, not selected: it keeps hiding the wall while
