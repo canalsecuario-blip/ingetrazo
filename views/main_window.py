@@ -1111,6 +1111,16 @@ class MainWindow(QMainWindow):
                 lambda _c=False, p=preset: self._apply_display_style(p))
             style_menu.addAction(act)
             self._style_actions[preset.name] = act
+        # X-ray on and off with one key: a glance at what hides behind a
+        # face, then back to the style you were in.
+        self._style_before_xray = (None, None)
+        self._act_xray_toggle = QAction(tr("Toggle X-ray"), self)
+        self._act_xray_toggle.setShortcut(QKeySequence("Alt+X"))
+        self._act_xray_toggle.setStatusTip(tr(
+            "Switch to X-ray, or back to the style you were in."))
+        self._act_xray_toggle.triggered.connect(self._toggle_xray)
+        style_menu.addSeparator()
+        style_menu.addAction(self._act_xray_toggle)
         style_menu.addSeparator()
         self._act_style_edges = QAction(tr("Edges"), self)
         self._act_style_edges.setStatusTip(tr("Draw the edges of the model."))
@@ -2792,6 +2802,24 @@ class MainWindow(QMainWindow):
         self.viewport.update()
         self.statusBar().showMessage(
             tr("Style: {name}", name=tr(preset.name)), 2000)
+
+    def _toggle_xray(self) -> None:
+        """Alt+X: into X-ray, remembering the style you leave; out of it,
+        back to that style — or to Default when there is none to go back to
+        (X-ray picked from the menu, or another document since)."""
+        from core.style import style_by_name
+        scene = self.viewport.scene
+        style = getattr(scene, "display_style", None)
+        if style is not None and style.face_mode == "xray":
+            prev_scene, prev = self._style_before_xray
+            self._style_before_xray = (None, None)
+            if prev_scene is not scene or prev is None:
+                prev = style_by_name("Default")
+            self._apply_display_style(prev)
+        else:
+            self._style_before_xray = (
+                scene, style.copy() if style is not None else None)
+            self._apply_display_style(style_by_name("X-ray"))
 
     def _set_style_field(self, name: str, value: bool) -> None:
         style = getattr(self.viewport.scene, "display_style", None)

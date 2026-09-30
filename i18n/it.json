@@ -2454,5 +2454,7 @@
  "{n} damaged pieces (a coordinate that is not a number) were left out so the rest of “{name}” could open. Save it to keep the repaired document.": "{n} elementi danneggiati (una coordinata che non è un numero) sono stati esclusi perché il resto di «{name}» potesse aprirsi. Salvalo per conservare il documento riparato.",
  "Put the scale figure in new documents": "Inserisci la figura di scala nei nuovi documenti",
  "Architect. The Windowizer example extension: parametric windows from faces, and the extension API's menus and group data.": "Architetto. L'estensione di esempio Windowizer: finestre parametriche a partire da facce, e i menu e i dati per gruppo dell'API delle estensioni.",
- "Active colour changed — click faces to paint it": "Colore attivo cambiato: fai clic sulle facce per dipingerlo"
+ "Active colour changed — click faces to paint it": "Colore attivo cambiato: fai clic sulle facce per dipingerlo",
+ "Toggle X-ray": "Attiva/disattiva raggi X",
+ "Switch to X-ray, or back to the style you were in.": "Passa ai raggi X, o torna allo stile in cui eri."
 }

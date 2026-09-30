@@ -2250,5 +2250,7 @@
  "{n} damaged pieces (a coordinate that is not a number) were left out so the rest of “{name}” could open. Save it to keep the repaired document.": "{n} bagian rusak (koordinat yang bukan angka) dilewati agar sisa «{name}» bisa dibuka. Simpan untuk mempertahankan dokumen yang diperbaiki.",
  "Put the scale figure in new documents": "Tempatkan figur skala di dokumen baru",
  "Architect. The Windowizer example extension: parametric windows from faces, and the extension API's menus and group data.": "Arsitek. Ekstensi contoh Windowizer: jendela parametrik dari muka, serta menu dan data per grup pada API ekstensi.",
- "Active colour changed — click faces to paint it": "Warna aktif diubah: klik muka untuk mewarnainya"
+ "Active colour changed — click faces to paint it": "Warna aktif diubah: klik muka untuk mewarnainya",
+ "Toggle X-ray": "Alihkan Sinar-X",
+ "Switch to X-ray, or back to the style you were in.": "Beralih ke Sinar-X, atau kembali ke gaya sebelumnya."
 }

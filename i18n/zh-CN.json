@@ -2453,5 +2453,7 @@
  "{n} damaged pieces (a coordinate that is not a number) were left out so the rest of “{name}” could open. Save it to keep the repaired document.": "为打开“{name}”的其余部分，已略过 {n} 个损坏的元素（坐标不是数字）。请保存以保留修复后的文档。",
  "Put the scale figure in new documents": "在新文档中放置比例人物",
  "Architect. The Windowizer example extension: parametric windows from faces, and the extension API's menus and group data.": "建筑师。示例扩展 Windowizer：由面生成参数化窗户，以及扩展 API 的菜单和按组数据。",
- "Active colour changed — click faces to paint it": "已更改当前颜色：点击面进行涂色"
+ "Active colour changed — click faces to paint it": "已更改当前颜色：点击面进行涂色",
+ "Toggle X-ray": "切换X光",
+ "Switch to X-ray, or back to the style you were in.": "切换到X光，或回到之前的样式。"
 }
