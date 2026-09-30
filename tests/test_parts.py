@@ -265,7 +265,12 @@ def test_a_rename_survives_a_refresh_while_typing():
     item = panel.tree.topLevelItem(2)
     panel.tree.editItem(item, 0)
     _app.processEvents()
-    editor = QApplication.focusWidget()
+    # The tree's own line editor, not whatever holds the focus: in a full
+    # offscreen run another test's window can stay active and keep it
+    # («'Viewport' object has no attribute 'setText'» on CI).
+    from PySide6.QtWidgets import QLineEdit
+    editor = panel.tree.viewport().findChild(QLineEdit)
+    assert editor is not None
     win.tray.on_scene_changed()                 # an edit elsewhere lands
     _app.processEvents()
     editor.setText("Right side wall")
