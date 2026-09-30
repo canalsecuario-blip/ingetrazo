@@ -1,5 +1,5 @@
 """Orient Faces (issue #77): the faces connected to the chosen one wind
-like it, as SketchUp's Orient Faces does."""
+like it, as the classic Orient Faces does."""
 from __future__ import annotations
 
 from PySide6.QtGui import QVector3D as V

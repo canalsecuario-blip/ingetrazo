@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""Saved views — SketchUp's "Scenes": a named snapshot of the camera and of
+"""Saved views — "Scenes": a named snapshot of the camera and of
 the layer-visibility state, re-applied with one click.
 
 A saved view never owns geometry; it is pure presentation state. Together
@@ -34,22 +34,22 @@ class SavedView:
         #: Two-point perspective (verticals kept vertical).
         self.two_point = bool(two_point)
         #: Layer NAMES hidden in this view. Every other layer shows — a layer
-        #: created after the view was saved defaults to visible, like SketchUp.
+        #: created after the view was saved defaults to visible.
         self.hidden_layers = list(hidden_layers or [])
         #: Display-style snapshot (core.style.Style.to_dict()) or ``None`` —
-        #: SketchUp scenes remember the style they were saved with.
+        #: a scene remembers the style it was saved with.
         self.style = dict(style) if style else None
-        #: Section state (SketchUp scenes remember it): the ACTIVE plane's
+        #: Section state (scenes remember it): the ACTIVE plane's
         #: uid (or None = no cut) + the two visibility toggles. ``None``
         #: entirely = a view loaded from a document older than sections,
         #: which is left alone on recall. A view captured with NO planes in
-        #: the model still records {"active": None}: SketchUp's "Active
-        #: Section Planes" is saved per scene by default, so a plan or
+        #: the model still records {"active": None}: "Active Section
+        #: Planes" is saved per scene by default, so a plan or
         #: elevation scene made BEFORE any cut switches the cut OFF when
         #: recalled — every scene stands on its own (Marco, 2026-09-02).
         self.section = dict(section) if section else None
         #: Geographic reference layers shown in this view: the flat base
-        #: map, the 3D terrain and the photogrammetric survey. In SketchUp
+        #: map, the 3D terrain and the photogrammetric survey. In a .skp
         #: those are groups on their own layers, so a scene hides or shows
         #: them like anything else; here they hang off the scene as display
         #: objects, so the view records their visibility explicitly — a
@@ -59,19 +59,19 @@ class SavedView:
         #: this field, left alone on recall.
         self.georef = dict(georef) if georef else None
         #: Shadow settings snapshot (core.sun.ShadowSettings.to_dict()):
-        #: on/off, date, time, darkness. SketchUp scenes save "Shadow
-        #: Settings" too — a 3D captured with shadows renders its sheet
+        #: on/off, date, time, darkness. Scenes save "Shadow Settings"
+        #: too — a 3D captured with shadows renders its sheet
         #: frame with shadows, one captured without renders without (Marco,
         #: 2026-09-14). ``None`` = a view from before this field, hands-off.
         self.shadows = dict(shadows) if shadows else None
         #: The objects (group uids) hidden when the scene was saved —
-        #: SketchUp scenes remember "Hidden Objects" (Rafael, 2026-09-16:
+        #: scenes remember "Hidden Objects" (Rafael, 2026-09-16:
         #: «una escena en donde esto esté oculto»). ``None`` = a view from
         #: before this field, hands-off; a list, even empty, is applied.
         self.hidden_objects = (list(hidden_objects)
                                if hidden_objects is not None else None)
         #: View ▸ Hidden Objects / Hidden Geometry as the scene was saved
-        #: (``{"objects": bool, "geometry": bool}``); SketchUp scenes keep
+        #: (``{"objects": bool, "geometry": bool}``); scenes keep
         #: both. ``None`` = hands-off.
         self.hidden_shown = dict(hidden_shown) if hidden_shown else None
 

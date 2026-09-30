@@ -3,9 +3,10 @@
 """DWG → DXF bridge through the LibreDWG satellite (D3).
 
 DWG is never parsed inside the app: the LibreDWG ``dwg2dxf`` command-line
-tool runs as an external converter — the same satellite pattern skp2dae
-uses, and a straight port of IngeCAD's ``formats/dwg_bridge.py``, scars
-included. The user double-clicks a ``.dwg`` and never sees the DXF.
+tool runs as an external converter — the same satellite pattern the
+former external converter used, and a straight port of IngeCAD's
+``formats/dwg_bridge.py``, scars included. The user double-clicks a
+``.dwg`` and never sees the DXF.
 
 Search order for the tool: the bundle shipped with IngeTrazo
 (``vendor/libredwg/bin``), the system PATH, and — a development-machine
@@ -200,8 +201,9 @@ def dwg_to_dxf(dwg_path: Path) -> Path:
     """Convert a DWG to a temporary DXF; returns the DXF path.
 
     The temp file lands in a fresh ASCII-only directory: satellite argv
-    encoding is a known gotcha family (skp2dae), so the *output* side stays
-    plain even when the drawing's name carries accents."""
+    encoding is a known gotcha family (the former external
+    converter), so the *output* side stays plain even when the drawing's
+    name carries accents."""
     tool = find_dwg2dxf()
     if tool is None:
         raise DwgBridgeError("LibreDWG (dwg2dxf) is not available")

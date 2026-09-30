@@ -3,7 +3,7 @@
 """Box selection on the sheet (Marco, 2026-09-07: «falta seleccionar varios
 objetos con el mouse haciendo un cuadro»): a drag from the empty page
 selects what the box encloses (left→right, window) or touches
-(right→left, crossing) — SketchUp's rule — with the model Select tool's
+(right→left, crossing) — the usual rule — with the model Select tool's
 modifiers; locked items stay out; a click on the page still clears."""
 from __future__ import annotations
 

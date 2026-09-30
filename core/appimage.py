@@ -71,8 +71,8 @@ def _desktop_entry(appimage: Path) -> str:
         "Name=IngeTrazo\n"
         "GenericName=3D Modeler\n"
         "GenericName[es]=Modelador 3D\n"
-        "Comment=Free SketchUp-style 3D modeler for civil engineering and architecture\n"
-        "Comment[es]=Modelador 3D libre estilo SketchUp para ingeniería civil y arquitectura\n"
+        "Comment=Free 3D modeler for civil engineering and architecture\n"
+        "Comment[es]=Modelador 3D libre para ingeniería civil y arquitectura\n"
         f'Exec="{exe}" %f\n'
         f'TryExec={exe}\n'
         "Icon=ingetrazo\n"

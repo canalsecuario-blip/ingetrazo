@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """Issue #44 (@pacaeiro), phase 2: inside a group you draw on ITS axes.
 
-SketchUp: «when you open a group for editing you see its axes, not the
+The usual convention: «when you open a group for editing you see its axes, not the
 model axes» — the red/green/blue inferences, the arrow-key locks, the
 rectangle and the ground follow them, level by level. ``core.axes`` holds
 the one table every tool reads; the viewport syncs it to the open

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """A group or component instance takes a material of its own (issue #47,
-@pacaeiro), by SketchUp's rules as he spelled them out:
+@pacaeiro), by the usual rules as he spelled them out:
 
   a. a face carries its own material (front, and a back of its own);
   b. the container's material dresses every face inside that wears the

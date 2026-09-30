@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""SketchUp's Intersect Faces (Edit ▸ Intersect Faces ▸ With Model / With
+"""Intersect Faces (Edit ▸ Intersect Faces ▸ With Model / With
 Selection / With Context): new edges wherever faces cross.
 
-Nothing has to be a solid — this is SketchUp's classic way to cut shapes
+Nothing has to be a solid — this is the classic way to cut shapes
 out of one another: intersect, then erase what is not wanted. The edges
 land in the context being edited (outside the groups when the model is
 the context, which is what makes them easy to separate), and they split
@@ -12,7 +12,7 @@ the faces of that context they run across.
 The geometry: two planar faces cross along the line common to their two
 planes; that line is clipped by each polygon (outer ring and holes, the
 even-odd rule) and what both keep is the new edge. Coplanar faces do not
-cross — SketchUp draws nothing for them either.
+cross — nothing is drawn for them.
 """
 from __future__ import annotations
 

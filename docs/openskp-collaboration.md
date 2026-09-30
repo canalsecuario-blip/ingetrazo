@@ -1,24 +1,23 @@
 # OpenSKP collaboration
 
-> **2026-09-28 — Trimble's copyright notice.** IngeTrazo no longer runs,
-> downloads or links to anything of Trimble's: the skp2dae converter (which
-> loaded Trimble's `SketchUpAPI.dll` under Wine) and its automatic download
-> are gone, the SDK-based validation tests are gone, and the `.skp` export is
-> off because OpenSKP's writer builds on a blank document written by
-> Trimble's SDK, which IngeTrazo no longer distributes. `.skp` files are read
-> with OpenSKP only. The sections below that mention skp2dae or the SDK
-> oracle are the record of how the reader was validated at the time.
+> **2026-09-28.** IngeTrazo no longer runs, downloads or links to any
+> proprietary .skp tooling: the former external converter and its automatic
+> download are gone, the validation tests built on it are gone, and the `.skp`
+> export is off because OpenSKP's writer builds on a blank template document
+> that IngeTrazo no longer distributes. `.skp` files are read with OpenSKP
+> only. Where the sections below say "the oracle", they mean the reference
+> output the reader was validated against at the time.
 
 **Status:** introduction issue **posted** upstream
 ([iamahsanmehmood/openskp#2](https://github.com/iamahsanmehmood/openskp/issues/2),
 2026-07-21). This doc keeps the rationale for how IngeTrazo supports
 [OpenSKP](https://github.com/iamahsanmehmood/openskp) without becoming dependent
-on it, plus the issue text for reference.
+on it, plus a pointer to the introduction issue.
 
 ## Strategy: upstream-first, not upstream-dependent
 
 We want to help OpenSKP become a pure-Python parser that opens **any** `.skp`
-(old → recent), and use it in IngeTrazo to replace the Wine + Trimble-DLL path.
+(old → recent), and use it in IngeTrazo as its only `.skp` reader.
 
 Because OpenSKP is **MIT**, our ability to ship it never depends on upstream
 merging our work:
@@ -39,16 +38,16 @@ GPL while the parser files keep their MIT header + attribution.
 
 ## Clean-room boundary
 
-Our differential validation uses the Trimble SDK (via skp2dae) strictly as a
-**black-box oracle**: feed a `.skp` in, compare the output against OpenSKP's
-parse. This is legitimate output comparison — **never** DLL decompilation or
-copying SDK headers/internals into the parser. It matches the "observed `.skp`
-files + their COLLADA exports" methodology the reverse-engineering already uses.
+Differential validation is strictly **black-box output comparison**: a
+reference COLLADA export of the same model is compared against OpenSKP's
+parse — never decompilation or copying proprietary internals into the parser.
+It matches the "observed `.skp` files + their COLLADA exports" methodology the
+reverse-engineering already uses.
 
 ## Findings — OpenSKP 0.2.0 wired into IngeTrazo (2026-07-21)
 
 OpenSKP is **wired and working** (`formats/skp_openskp.py`). Measured against
-the skp2dae/Trimble oracle on real files (`demuna.skp`, SketchUp 2022):
+the reference oracle on real files (`demuna.skp`, a .skp of the 2022 version):
 
 - ✅ **Bounding box exact** — units (inches→m), Z-up and instance transforms all
   correct.
@@ -60,7 +59,7 @@ Contribution targets, most valuable first:
 1. ✅ **Expose `Material.id`** — **PR submitted**
    ([openskp#3](https://github.com/iamahsanmehmood/openskp/pull/3), 2026-07-21):
    `Material.id` + `SkpModel.materials_by_id`, surfacing the join the internal
-   exporter already had. Validated 19/19 face material_ids on a real SU2022
+   exporter already had. Validated 19/19 face material_ids on a real 2022-version
    file. Layer B insurance: branch `expose-material-id` on
    `tuxiasumari/openskp`; IngeTrazo's adapter uses the join when present
    (guarded, so PyPI 0.2.0 still imports, just uncoloured).
@@ -68,10 +67,10 @@ Contribution targets, most valuable first:
    ([openskp#4](https://github.com/iamahsanmehmood/openskp/pull/4), 2026-07-21):
    `Material.texture` (`Texture` dataclass — filename, tile size in inches, raw
    image bytes, `save()`), read from the material's ZIP folder with a sibling
-   fallback for name mismatches. Validated 2/2 textures on a real SU2022 file.
+   fallback for name mismatches. Validated 2/2 textures on a real 2022-version file.
    Integration branch `ingetrazo` on `tuxiasumari/openskp` merges #3 + #4 for
    IngeTrazo's venv until they ship on PyPI. Measured after both: **18/18
-   materials, 2/2 textures — exact parity with the skp2dae oracle.**
+   materials, 2/2 textures — exact parity with the oracle.**
 3. ✅ **"~5–9% skipped faces" — resolved 2026-07-21: measurement artefact, not
    parser loss.** Raw DAE = 4516 tris = OpenSKP's parse exactly; surface area
    matches to 0.00% (327.268 vs 327.269 m²). The deltas came from comparing a
@@ -80,13 +79,13 @@ Contribution targets, most valuable first:
    fusion pipeline as its DAE import. **No upstream work needed.**
 4. ✅ **Instance-level materials — PR submitted**
    ([openskp#5](https://github.com/iamahsanmehmood/openskp/pull/5), 2026-07-21):
-   `Instance.material_id` (the `D007`/`D107` under the `6419` node — SketchUp's
+   `Instance.material_id` (the `D007`/`D107` under the `6419` node —
    "paint the component"). Found on the plaza: 24/274 instances carry a
    material (granite pergolas, wood floors). IngeTrazo's adapter now resolves
    the inheritance (face material `None` → nearest painted ancestor;
    prototypes split per inherited material so a red and a green copy don't
    wrongly share). Also fixed on our side: texture filenames that are full
-   Windows paths (`C:\Users\...\toro.png`, `P:/SketchUp projects/...png`)
+   Windows paths (`C:\Users\...\toro.png`, `P:/Projects/...png`)
    are reduced to a safe basename before writing.
 5. ✅ **"Image entities" — solved (2026-07-21): it was an ENCODING bug, not a
    missing entity class.** The tree foliage IS ordinary faces with the
@@ -99,8 +98,8 @@ Contribution targets, most valuable first:
    ([openskp#7](https://github.com/iamahsanmehmood/openskp/pull/7)): all six
    decode sites switch to UTF-8. Measured after: Celtis foliage **445 m² vs
    the oracle's 444**, total painted **2274 m² vs the oracle's 2205** — the
-   pure path now paints *more* than the Trimble DLL (instance-material
-   inheritance the SDK's DAE export drops). Lesson: a "missing feature" can
+   pure path now paints *more* than the reference DAE (instance-material
+   inheritance that export drops). Lesson: a "missing feature" can
    be a one-word bug — measure per-material before reverse-engineering.
 6. ✅ **Per-face texture mapping — DECODED and shipped** (2026-07-21). The
    user authored the controlled experiment (`textura.skp`: untouched /
@@ -109,7 +108,7 @@ Contribution targets, most valuable first:
    ``uvq = [p·xr, p·yr, 1] @ inv(M)``, ``u = uvq[0]/uvq[2]/tile_w`` (plane
    basis ``xr = normalize(Z×n)``, ``yr = n×xr``, inches; projective for
    4-pin distortion). Validated to rms < 1e-5 on 150 photo-fitted flag
-   triangles vs SDK ground truth. **PR submitted**
+   triangles vs reference ground truth. **PR submitted**
    ([openskp#6](https://github.com/iamahsanmehmood/openskp/pull/6)):
    `Face.uv_transform` / `uv_transform_back` with the recipe documented.
    IngeTrazo's adapter bakes the exact per-vertex UVs into the per-face
@@ -124,13 +123,13 @@ Contribution targets, most valuable first:
    `D007 → DC05 → DD05 → B136 → B236 → 1027 → 1127 (front) / 1227 (back)
    → 1327 → { 1427: flag(=1), 1527: 9×f64 3×3 matrix, 1627: 3×f64 }` —
    and the 9-double matrix is per-face and projective-looking (its [8]
-   element varies ≈0.98–1.06, the signature of SketchUp's 4-pin distorted
+   element varies ≈0.98–1.06, the signature of a 4-pin distorted
    mapping). What's missing is the exact convention: tested affine and
-   homography readings (row/col-major, inverse, SketchUp-style plane axes)
+   homography readings (row/col-major, inverse, conventional plane axes)
    against ground-truth UVs recovered from the DAE oracle (200 matched
    triangles) — none closes (best rms ≈0.30 in wrapped UV). The 2D basis
-   SketchUp uses is not the naive normal-derived axes. Next step: a
-   CONTROLLED experiment — a minimal .skp authored in SketchUp with a
+   the format uses is not the naive normal-derived axes. Next step: a
+   CONTROLLED experiment — a minimal .skp authored by hand with a
    known positioned texture (unrotated square / 90°-rotated / distorted)
    to calibrate the basis cleanly, instead of a photo-fitted waving mesh.
    Related finds while digging: `D207` under the face's `D007` = the BACK
@@ -138,7 +137,7 @@ Contribution targets, most valuable first:
    both worth exposing upstream too (back-painted faces currently import
    colourless).
 6. **Instance-tree misplacement (upstream, latent)** — found while digging
-   into #3: in a real SU2022 file, an instance is attached to the wrong parent
+   into #3: in a real 2022-version file, an instance is attached to the wrong parent
    definition (Rodeo#2 under Derrick instead of the root) and a pure-wireframe
    component (`CASCO.dwg`, 137 verts / 156 edges, 0 faces) is never instanced.
    Positions happen to come out right; the hierarchy is wrong. Candidate for
@@ -160,53 +159,12 @@ Contribution targets, most valuable first:
 8. **Legacy MFC (v8–v20)** version coverage, if not already handled.
 
 The differential harness lives at **`scripts/skp_diff.py`**:
-`python scripts/skp_diff.py model.skp` converts with skp2dae (oracle) and diffs a
-structural fingerprint against the pure backend's parse (unavailable until a
-backend is wired, in which case the run still validates the skp2dae output).
+`python scripts/skp_diff.py model.skp [--dae model.dae]` loads a reference
+COLLADA export of the same model and diffs a structural fingerprint against
+the pure backend's parse.
 
-## Introduction issue (post upstream)
+## Introduction issue
 
-**Title:** IngeTrazo (free SketchUp-alternative modeler) would like to
-contribute — roadmap, legacy formats & governance?
-
----
-
-Hi! First, thank you for OpenSKP — a clean-room, MIT, cross-platform `.skp`
-parser is exactly the missing piece for the free/libre 3D ecosystem.
-
-I maintain [IngeTrazo](https://github.com/tuxiasumari/ingetrazo), a GPL-3.0,
-Linux-first 3D modeler (a free SketchUp alternative aimed at civil engineering /
-architecture in Latin America, with a BIM→IFC bridge). Today we open `.skp`
-files by shelling out to Trimble's proprietary `SketchUpAPI.dll` through Wine —
-it works, but it's a proprietary, Windows-only, offline-hostile dependency we'd
-love to **replace with a pure-Python parser like OpenSKP**. I've already built a
-pluggable import seam so OpenSKP can drop in as the preferred backend, with the
-DLL path kept only as a fallback.
-
-I want to **contribute substantially and long-term**, not just file wishlist
-issues. Before I dive in, three questions to align:
-
-1. **Legacy formats.** Our users bring models from *any* SketchUp version.
-   OpenSKP currently targets the VFF container (2021+). Is decoding the older
-   **MFC binary format (v8–v20)** on the roadmap, or out of scope? That range
-   matters a lot for real-world adoption.
-2. **Fidelity gaps.** Where do you feel the parser is weakest today (textured
-   materials, per-corner UVs, component/group hierarchy + instance transforms,
-   layers/scenes)? I'd like to pick a slice to own — I have deep experience with
-   texture UV mapping and component instancing from IngeTrazo's DAE importer.
-3. **License & governance.** Confirming MIT stays MIT, and how you like
-   contributions to flow (PR conventions, direction, any CLA).
-
-**What I can bring that's uncommon:** a **differential validation harness +
-real-world `.skp` corpus across versions**. Because we already run the Trimble
-SDK (as a black box), I can generate ground-truth output for a given `.skp` and
-**diff it against OpenSKP's parse** (geometry, materials, hierarchy) to pinpoint
-discrepancies — a fast feedback loop toward "as faithful as the Blender
-importer." This is strictly **black-box output comparison** (feed file in,
-compare results), never DLL decompilation, keeping the clean-room lineage
-intact — the same "observed `.skp` files + their COLLADA exports" methodology
-the format work already relies on.
-
-Happy to start with whatever's most useful to you: the diff harness, sample
-files (with permission), or a specific fidelity fix. Thanks again for building
-this!
+Posted upstream as
+[openskp#2](https://github.com/iamahsanmehmood/openskp/issues/2); the text
+lives there.

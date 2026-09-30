@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """Editing INTO a component instance edits its shared definition: the
 session works on a world copy, and leaving shares it back so every copy
-shows the edit — one undo step for the whole session (SketchUp)."""
+shows the edit — one undo step for the whole session."""
 from __future__ import annotations
 
 from PySide6.QtGui import QMatrix4x4, QVector3D

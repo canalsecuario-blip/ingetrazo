@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""Freehand tool — SketchUp's Freehand (the Line tool's flyout).
+"""Freehand tool — Freehand (the Line tool's flyout).
 
 Press and DRAG to sketch: the stroke samples the cursor, gets simplified
-(Ramer–Douglas–Peucker in screen space, so zoom level = detail level, like
-SketchUp), and lands as ONE curve entity — a polyline sharing a curve id,
-so it selects as a whole contour exactly like circles and arcs. A stroke
+(Ramer–Douglas–Peucker in screen space, so zoom level = detail level), and
+lands as ONE curve entity — a polyline sharing a curve id, so it selects
+as a whole contour exactly like circles and arcs. A stroke
 that ends back at its start closes, and a closed flat stroke becomes a
 face through the shared curve pipeline.
 """
@@ -45,6 +45,9 @@ def _rdp(idx0: int, idx1: int, spts, keep) -> None:
 
 class FreehandTool(Tool):
     name = "Freehand"
+    description = (
+        "Drag to sketch a curve; a stroke that ends where it began "
+        "closes into a face.")
     uses_snap = False        # the stroke follows the hand, not the magnets
 
     def __init__(self) -> None:
@@ -87,7 +90,7 @@ class FreehandTool(Tool):
         if len(world) < 3:
             viewport.update()
             return
-        # Close the loop when the hand came back to the start (SketchUp).
+        # Close the loop when the hand came back to the start.
         sx, sy = screen[0]
         ex, ey = screen[-1]
         closed = ((ex - sx) ** 2 + (ey - sy) ** 2) <= _CLOSE_PX ** 2

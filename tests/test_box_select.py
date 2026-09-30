@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""Rubber-band box selection — window vs crossing (SketchUp-style).
+"""Rubber-band box selection — window vs crossing (the usual convention).
 
 - Left-to-right drag (``crossing=False``, "window"): selects only entities whose
   screen projection is *entirely* inside the box.
@@ -155,7 +155,7 @@ def test_box_select_maps_instances_to_world():
 
 def test_crossing_box_selects_guides_window_does_not():
     # An infinite guide line can never be fully enclosed → only a crossing box
-    # takes it (SketchUp). Guide points behave like any point.
+    # takes it. Guide points behave like any point.
     from core.guide import Guide
     scene = Scene()
     vp = _StubViewport(scene)

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""Project locator (Track G) — the SketchUp-style "Add Location" flow.
+"""Project locator (Track G) — the classic "Add Location" flow.
 
 Start near you (IP), search a place to get close, then pan/zoom the map under a
 fixed centre pin to nail the exact spot — even an unnamed rural site — and

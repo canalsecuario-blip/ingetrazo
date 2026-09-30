@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """Extension inference — snap to the collinear continuation of a nearby edge.
 
-SketchUp's dashed-extension guide: when the cursor lines up with the prolongation
+The classic dashed-extension guide: when the cursor lines up with the prolongation
 of an existing edge (beyond its endpoints), the point snaps onto that line so you
 can draw in line with it.
 """

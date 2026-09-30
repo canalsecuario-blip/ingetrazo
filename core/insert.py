@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """Insert another IngeTrazo document into the open one, as ONE component.
 
-SketchUp's File ▸ Import of a .skp: the whole file arrives as a single
+Like importing a .skp file: the whole file arrives as a single
 component you place with a click — a pergola, an arch, a lamp post drawn
 in their own files, brought into the plaza («quiero agregar mobiliario
 que ya había trabajado como pérgolas, arco, luminaria… son archivos .igz»,

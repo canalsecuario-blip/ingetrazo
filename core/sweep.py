@@ -116,7 +116,7 @@ def _revolution_rings(face, path):
     """Rings for a profile turned about an AXIS (#125/#128), or ``None``.
 
     A closed, planar, circular path whose axis lies in the profile's plane
-    is a lathe: SketchUp's sphere is a circle swept along a circle that
+    is a lathe: the classic sphere is a circle swept along a circle that
     shares its centre. The mitre construction only reproduces that when the
     profile stands exactly on a path vertex — anywhere else it SLIDES the
     profile onto the first joint plane and squashes it (a «sphere» with
@@ -305,7 +305,7 @@ def sweep_preview_faces(face, path, closed):
     return out
 
 
-# ---- Manual (dragged) paths — SketchUp's "click and drag along the path" --
+# ---- Manual (dragged) paths — "click and drag along the path" -----------
 
 def manual_path_start(face, edge, toward=None):
     """The first station(s) of a path dragged from the profile ``face`` over

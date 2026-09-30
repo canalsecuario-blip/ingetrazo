@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""DXF import — SketchUp's CAD import behaviour (official doc: "Importing
-and Exporting CAD Files"), on our machinery. D1 + D2:
+"""DXF import — the classic CAD import behaviour of push/pull modellers, on
+our machinery. D1 + D2:
 
 - LINE / LWPOLYLINE / POLYLINE / ARC / CIRCLE / ELLIPSE / SPLINE come in as
   edges; curved entities are flattened and share ONE curve id each, so a
@@ -9,16 +9,16 @@ and Exporting CAD Files"), on our machinery. D1 + D2:
 - **Blocks become components** (D2): each used block definition builds ONE
   prototype mesh in local metres, and every INSERT is an O(1) placement
   (``Group.xform``) — 500 trees are one proto and 500 matrices, the sharing
-  SketchUp gives nested blocks (piscina's hedge lesson). INSERTs *inside* a
+  nested blocks deserve (piscina's hedge lesson). INSERTs *inside* a
   block explode into its prototype for now (nested sharing deferred);
   MINSERT arrays explode in place.
 - **3DFACE / SOLID / TRACE become faces** (D2), then each mesh that gained
   faces runs the stitch + coplanar merge every importer here uses — a
-  triangulated CAD terrain comes back as clean polygons, SketchUp's "Merge
+  triangulated CAD terrain comes back as clean polygons, as with a "merge
   coplanar faces" option always on.
-- Text, dimensions, hatches and points are skipped, as SketchUp skips them.
-- CAD layers become groups-with-tags — SketchUp's documented "Import Layers
-  as Groups" behaviour, the shape that works with our layer system. Block
+- Text, dimensions, hatches and points are skipped, the usual convention.
+- CAD layers become groups-with-tags — the classic "import layers as
+  groups" behaviour, the shape that works with our layer system. Block
   instances carry their INSERT's layer the same way.
 - Units: the header's ``$INSUNITS`` is only a *claim* — offices copy
   templates and never look ("Detalles Plaza Yanque" declares millimetres
@@ -193,7 +193,7 @@ def _entity_segments(e, sagitta: float):
         curved = kind in _CURVED
         if not curved:
             # A polyline with arc bulges is a curve for selection purposes;
-            # an all-straight one stays plain edges (SketchUp's feel).
+            # an all-straight one stays plain edges (the classic feel).
             curved = bool(getattr(e, "has_arc", False))
             if kind == "POLYLINE":
                 try:

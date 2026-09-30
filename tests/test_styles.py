@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""Display styles (SketchUp Styles): presets, persistence, scene binding."""
+"""Display styles: presets, persistence, scene binding."""
 from __future__ import annotations
 
 import sys
@@ -25,7 +25,7 @@ def test_style_roundtrip_and_defaults():
     assert s.edges is True                     # copies never alias
 
 
-def test_builtin_presets_cover_the_sketchup_classics():
+def test_builtin_presets_cover_the_classics():
     names = {p.name for p in BUILTIN_STYLES}
     assert {"Default", "Architectural", "Shaded", "Hidden line",
             "Monochrome", "Wireframe", "X-ray"} <= names

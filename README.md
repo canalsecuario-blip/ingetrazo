@@ -25,7 +25,7 @@ with its sister project [IngePresupuestos](https://ingepresupuestos.com).
 ## Status
 
 **Usable — real work gets done in it today.** Draw, extrude, edit, paint,
-dimension and annotate; open any SketchUp file from 2013 to 2026; tag BIM classes and export IFC quantities; georeference and
+dimension and annotate; open `.skp` files from 2013 to 2026; tag BIM classes and export IFC quantities; georeference and
 import survey data. IngeTrazo is developed by dogfooding on real engineering
 projects, backed by ~2,000 automated tests, and its geometry engine refuses
 to commit a broken solid (the hermeticity guard) — your quantities stay
@@ -127,15 +127,13 @@ welcome arch with all its rebar (also attached to every release as
 - **Side tray** — Entity info, Layers, Scenes, Materials (213 RAL colours and
   a textured library at real size), **Components** (scale figures, furniture,
   trees, vehicles, your own face-me PNGs), Dimension style.
-- **SketchUp import** — open `.skp` files natively (double-click too), every
+- **`.skp` import** — open `.skp` files natively (double-click too), every
   era from classic 2013–2020 to current 2021+, with materials, textures,
   per-side face materials, translucency, layers, scenes, dimensions and
-  leader texts. Pure Python, offline, nothing of Trimble's — powered by
+  leader texts. Pure Python and offline — powered by
   [OpenSKP](https://github.com/iamahsanmehmood/openskp) (see
-  [Acknowledgements](#acknowledgements)). There is no `.skp` export: the
-  writer builds on a blank document made with Trimble's SDK, which
-  IngeTrazo stopped distributing after Trimble's copyright notice
-  (2026-09-28). To take a model to SketchUp, export COLLADA `.dae`.
+  [Acknowledgements](#acknowledgements)). There is no `.skp` export: to take
+  a model to another program, export COLLADA `.dae`, OBJ or glTF.
 - **Files** — native `.igz` save/open (self-contained: textures travel inside
 the document), **import STL (with principal-plane or advanced all-surface
   coplanar merging), OBJ
@@ -182,9 +180,9 @@ IFC import · extension manager UI · Flathub packaging.
 
 ## Why IngeTrazo
 
-There is no good native 3D CAD for the Linux-using civil engineer — SketchUp
-has no Linux build and FreeCAD's UX is painful. IngeTrazo is that missing tool:
-Linux-first, in Spanish, free software, and designed around the real workflow
+There was no good native 3D modeller for the civil engineer who works on
+Linux: the usual tools have no Linux build, or are hard to learn. IngeTrazo is
+that missing tool: Linux-first, in Spanish, free software, and designed around the real workflow
 of *tracing over a georeferenced site and tagging what you draw for takeoff*.
 
 ## Stack
@@ -228,9 +226,9 @@ each under `i18n/`).
 - **[Pedro Caeiro](https://github.com/pacaeiro)** — architectural and
   mechanical draftsman, and IngeTrazo's most persistent outside contributor:
   five merged pull requests and fifteen issues filed from real drafting work.
-  He uses IngeTrazo as if it were the tool he already knows and writes down
-  every gesture that does not answer the same way, which is how most of our
-  parity with SketchUp's everyday behaviour got found. See [AUTHORS](AUTHORS).
+  He draws with IngeTrazo every day and writes down every gesture that does
+  not answer the way a draftsman expects, which is how much of its everyday
+  behaviour got polished. See [AUTHORS](AUTHORS).
 - **Rafael García Rodríguez** — [Rafael 3D](https://www.youtube.com/@Rafa3D),
   draftsman and reviewer.
   His filmed reviews put the program through a professional's hands and
@@ -240,8 +238,8 @@ each under `i18n/`).
   drafting norms is not a technical tool, and that is knowledge we did not
   have.
 - **[OpenSKP](https://github.com/iamahsanmehmood/openskp)** (MIT) by Ahsan
-  Mehmood — the clean-room, pure-Python SketchUp `.skp` reader that powers
-  IngeTrazo's native import. It replaced our Wine/DLL converter path entirely.
+  Mehmood — the clean-room, pure-Python `.skp` reader that powers
+  IngeTrazo's native import.
   IngeTrazo contributes back upstream: material and texture fidelity, per-face
   UV mapping, image entities, style colors, back-side materials, edge display
   flags, and a full reader for the classic pre-2021 MFC container format. If
@@ -279,14 +277,16 @@ loop **modelar → taggear → metrar → presupuestar** junto a
 **Ya funciona de punta a punta:** dibujás (línea, rectángulo, círculo, arco,
 polígono), extruís con push/pull hermético grado-BIM, hacés muros con espesor
 (offset), movés, agrupás, pintás con colores y texturas, acotás, y exportás a
-STL/OBJ. **Abre archivos `.skp` de SketchUp de forma nativa** (con doble clic),
+STL/OBJ. **Abre archivos `.skp` de forma nativa** (con doble clic),
 de cualquier época (clásico 2013–2020 y actual 2021+), gracias a
-[OpenSKP](https://github.com/iamahsanmehmood/openskp) — sin Wine ni DLLs. En
+[OpenSKP](https://github.com/iamahsanmehmood/openskp). En
 desarrollo temprano, respaldado por ~870 tests. Software libre GPL-3.0, hecho
 en Perú. Más en [docs/](docs/).
 
 ---
 
-*SketchUp is a trademark of Trimble Inc. IngeTrazo is an independent project,
-not affiliated with or endorsed by Trimble. SketchUp es una marca registrada de
-Trimble Inc.; IngeTrazo es un proyecto independiente, sin relación con Trimble.*
+*IngeTrazo is an independent project, written from scratch and not affiliated
+with any other software vendor; the file formats it reads belong to their
+respective owners. IngeTrazo es un proyecto independiente, escrito desde cero y
+sin relación con otros fabricantes de software; los formatos de archivo que lee
+pertenecen a sus respectivos dueños.*

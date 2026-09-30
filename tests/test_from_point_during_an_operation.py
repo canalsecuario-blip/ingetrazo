@@ -17,8 +17,8 @@ Measured with the corner acquired and the same cursor:
     rectangle under way        none         x = 6.370
 
 The machinery was built and working. It was locked away behind
-``start_point is None`` at exactly the moment he needed it, and SketchUp
-offers it mid-operation too.
+``start_point is None`` at exactly the moment he needed it, and the classic
+inference offers it mid-operation too.
 
 WHERE it was opened is the whole safety argument. Rule 5d sits ABOVE the
 named points, so unlocking it in place would have let an alignment line

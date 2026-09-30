@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""Layer / tag system: visibility and locking (SketchUp tags).
+"""Layer / tag system: visibility and locking (tags).
 
 A layer never *owns* geometry — it is a label an entity carries (faces via
 ``attrs["layer"]``, edges via their ``layer`` slot, groups via ``.layer``).

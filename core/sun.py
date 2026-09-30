@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""The real sun — position from geography and clock, SketchUp's Shadows.
+"""The real sun — position from geography and clock, for Shadows.
 
 The model already carries a geographic datum (lat/lon, the georef anchor),
 so shadows here are not a mood light: elevation and azimuth come from the
@@ -135,7 +135,7 @@ def daylight_minutes(lat: float, lon: float, month: int, day: int,
     """First and last minute of the LOCAL clock day with the sun above the
     horizon, or ``None`` when it never rises (polar night). The clock is
     whatever ``utc_offset`` says — a deliberately wrong zone shifts daylight
-    to odd hours, which is exactly what it means (SketchUp's time slider
+    to odd hours, which is exactly what it means (the usual time slider
     behaves the same way). Sampled every ``step`` minutes: ±5 min is well
     under what a shadow can show."""
     off = utc_offset if utc_offset is not None else default_utc_offset(lon)

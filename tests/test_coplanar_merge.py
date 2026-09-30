@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """Coplanar-merge — dissolve the seam a flush push/pull leaves behind.
 
-SketchUp's model: an edge bordering exactly two faces in the same plane carries
+The classic model: an edge bordering exactly two faces in the same plane carries
 no silhouette, so it is dissolved and the two faces merge into one (the "L").
 This is the fix for the phantom line left when a stacked block's wall is pushed
 flush with the wall it sits against — easy on the shared-vertex engine because
@@ -304,7 +304,7 @@ def test_push_wall_whose_base_edge_spans_a_t_junction():
     assert not partition, "internal partition survived the T-junction overhang push"
 
 
-# ---- erase a coplanar divider edge → faces merge (SketchUp) ------------------
+# ---- erase a coplanar divider edge → faces merge ----------------------------
 
 def test_erase_coplanar_divider_merges_faces():
     from core.history import EraseSelectionCommand

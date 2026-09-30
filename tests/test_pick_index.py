@@ -185,7 +185,7 @@ def test_instance_groups_pick_through_transformed_chunks():
 
 
 def test_selected_group_offers_its_box_corners_to_the_snap_engine():
-    """SketchUp makes a selected group's bounding-box corners grabbable — they
+    """A selected group's bounding-box corners are grabbable — they
     are what you take hold of to move it somewhere exact. The box is already
     the selection cue here; this puts its corners in reach of the snap."""
     from core.camera import OrbitCamera

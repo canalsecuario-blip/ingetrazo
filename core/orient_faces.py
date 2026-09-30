@@ -1,19 +1,19 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""SketchUp's Orient Faces: make every face connected to a chosen face wind
+"""Orient Faces: make every face connected to a chosen face wind
 the same way it does (issue #77, @pacaeiro).
 
 Two faces sharing an edge agree when they walk that edge in OPPOSITE
 directions — that is what makes their fronts face the same side of the
 surface. So the chosen face is the reference and the agreement spreads edge
-by edge through the connected faces, the way SketchUp's does. Unlike
+by edge through the connected faces. Unlike
 :func:`core.orient.orient_outward`, it does not ask which side is outside:
 the user says so by choosing the face, which also works on open surfaces
 (a terrain, a roof sheet) where "outside" has no meaning.
 
 It crosses only edges shared by exactly TWO faces. Where three or more meet
 (a wall between two rooms) there is no single neighbour to agree with, and
-SketchUp stops there too.
+the walk stops there.
 """
 from __future__ import annotations
 

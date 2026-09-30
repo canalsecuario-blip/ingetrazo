@@ -192,7 +192,7 @@ def _big_obj(tmp_path, n):
 
 
 def test_big_import_lands_as_reference_group(tmp_path):
-    # Library-scale meshes (3D Warehouse buildings) are reference geometry:
+    # Library-scale meshes (downloaded library buildings) are reference geometry:
     # they skip the O(F²) fusion/orientation passes (minutes-to-hours at 17k
     # triangles — the app read as hung) AND land in their own Group, so the
     # drawing tools' loose-mesh scans (snap, edge splitting, auto-face) never

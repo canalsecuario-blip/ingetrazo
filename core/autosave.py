@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""Auto-save recovery slots — SketchUp's General ▸ Auto-save, our way.
+"""Auto-save recovery slots — the usual General ▸ Auto-save, our way.
 
 One ``.igz`` slot per document in the user data dir (NOT beside the
 document: the project folder may live in a syncing drive — pCloud has

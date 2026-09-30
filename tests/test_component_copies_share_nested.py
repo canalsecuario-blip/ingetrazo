@@ -3,7 +3,7 @@
 """Copies of a component share the groups inside it (issue #97).
 
 Make two groups → Make Component → copy it. Editing a group inside one copy
-must change every copy, as in SketchUp: the nested groups are part of the
+must change every copy, the usual convention: the nested groups are part of the
 definition. Copies of a plain GROUP stay independent, and what leaves a
 component (Make Unique, Explode) stops sharing on the way out."""
 from __future__ import annotations

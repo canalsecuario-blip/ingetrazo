@@ -1,8 +1,8 @@
 # Compositor de láminas — plan C1→C4
 
 > Imprimir el modelo 3D como plano, a escala exacta. El referente de UX es el
-> **compositor de impresión de QGIS** (elección de Marco), no SketchUp LayOut:
-> LayOut es una app aparte con formato propio (la trampa de scope); QGIS es una
+> **compositor de impresión de QGIS** (elección de Marco), no un programa de láminas
+> aparte con formato propio (la trampa de scope); QGIS es una
 > ventana del mismo programa cuyo lienzo es un `QGraphicsScene` — exactamente
 > el framework que ya tenemos debajo. Definido el 2026-08-08.
 

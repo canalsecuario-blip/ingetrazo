@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""Push/Pull UX parity with SketchUp: Ctrl = push/pull a copy (keep the base
+"""Push/Pull UX, the classic conventions: Ctrl = push/pull a copy (keep the base
 face as a slab division), double-click = repeat the last distance, VCB accepts
 negatives (reverse) and unit suffixes.
 
@@ -99,7 +99,7 @@ def test_ctrl_push_keeps_base_as_slab_division():
     assert top in scene.faces                  # the start face stays
     assert _top(scene, 5.0) is not None        # new cap above it
     # 6 cube faces + 4 stacked strips + the new cap = 11; the walls are NOT
-    # merged into tall faces (the belt at z=3 divides them, SketchUp-style).
+    # merged into tall faces (the belt at z=3 divides them, the classic way).
     assert len(scene.faces) == 11
     belt = [e for e in scene.mesh.edges
             if abs(e.a.z() - 3) < 1e-9 and abs(e.b.z() - 3) < 1e-9]
@@ -230,7 +230,7 @@ def test_parse_value_buffer_units_and_sign():
     assert parse("1;2;50cm") == (1.0, 2.0, 0.5)
     assert parse("-30cm") == -0.3
     assert parse("abc") is None
-    assert parse("2x") == ("array", 2, "x")   # SketchUp array (Move-copy)
+    assert parse("2x") == ("array", 2, "x")   # array (Move-copy)
     assert parse("2xy") is None
 
 
@@ -269,8 +269,8 @@ def test_shrink_beyond_height_clamps():
 
 
 def test_shrink_to_exact_limit_collapses_to_single_face():
-    # Pushing the top all the way down flattens the box to one face — how
-    # SketchUp deletes a volume with Push/Pull.
+    # Pushing the top all the way down flattens the box to one face — the
+    # classic way to delete a volume with Push/Pull.
     scene = Scene()
     hist = History(scene)
     _cube(scene, hist, height=3.0)
@@ -685,7 +685,7 @@ def test_two_room_plan_raises_cleanly():
     """The casita core loop: a plan with two rooms sharing a wall, both raised
     to the same height. The second push must not crash on the already-built
     shared wall (it deduplicates), the roofs stay two faces split by a ridge
-    over the divider (SketchUp's crease rule — no slab floating over the
+    over the divider (the classic crease rule — no slab floating over the
     wall), and nothing is left orphaned."""
     scene = Scene()
     hist = History(scene)
@@ -797,7 +797,7 @@ def _painted_rect(scene, hist, size=4.0, attrs=None):
 
 
 def test_push_carries_the_colour_onto_the_new_sides():
-    # SketchUp extrudes the material with the shape: a painted rectangle pulled
+    # Push/Pull extrudes the material with the shape: a painted rectangle pulled
     # up is a painted box, not a box with one painted face (Marco, 2026-08-27).
     scene = Scene()
     hist = History(scene)
@@ -1161,7 +1161,7 @@ class _EdgeInferViewport(_StubViewport):
 
 
 def test_hovering_an_edge_infers_distance_and_says_on_edge():
-    """SketchUp's "On edge" while pushing (Marco's capture, 2026-09-14):
+    """The usual "On edge" while pushing (Marco's capture, 2026-09-14):
     the cursor on another block's top edge — away from its corners — sets
     the push level with that edge, red marker and «On edge» label."""
     from PySide6.QtCore import QPointF

@@ -114,7 +114,7 @@ def test_skp_export_with_color(tmp_path):
 
 
 def test_skp_export_includes_groups(tmp_path):
-    """A classic group exports as a SketchUp GROUP: its face lives in a
+    """A classic group exports as a .skp GROUP: its face lives in a
     definition placed by one instance, not flattened into root geometry."""
     scene = Scene()
     hist = History(scene)
@@ -162,7 +162,7 @@ def test_skp_export_roundtrip_instances(tmp_path):
     """Export → re-import through IngeTrazo's OWN .skp importer: the three
     instances come back as groups at their original world positions —
     the strongest check that the placement matrix convention matches
-    ``skp_openskp._matrix`` (and therefore real SketchUp)."""
+    ``skp_openskp._matrix`` (and therefore real .skp files)."""
     from PySide6.QtGui import QMatrix4x4
     from core.group import world_mesh
     from core.mesh import Mesh
@@ -206,7 +206,7 @@ def test_skp_export_face_hole_survives(tmp_path):
 
 
 def test_skp_export_unpainted_face_has_no_material(tmp_path):
-    """A face that was never painted must export with SketchUp's default
+    """A face that was never painted must export with the .skp default
     material (i.e. no material record at all), not an explicit cream paint —
     otherwise a round-trip stamps attrs["color"] on faces the model left
     unspecified and pollutes the per-material takeoff."""
@@ -221,7 +221,7 @@ def test_skp_export_unpainted_face_has_no_material(tmp_path):
 
 def test_skp_export_mixed_painted_and_unpainted(tmp_path):
     """Only the painted face creates a material; the unpainted one keeps
-    SketchUp's default."""
+    the .skp default."""
     scene = Scene()
     hist = History(scene)
     F._draw_rect(scene, hist, [V(0, 0), V(4, 0), V(4, 4), V(0, 4)], [])
@@ -269,7 +269,7 @@ def test_skp_export_same_color_different_names_stay_separate(tmp_path):
 
 
 def test_skp_export_with_texture(tmp_path):
-    """A face with an image texture exports as a textured SketchUp
+    """A face with an image texture exports as a textured .skp
     material (add_texture_material), not just a solid fallback colour."""
     png = _make_png(tmp_path / "brick.png")
     scene = Scene()
@@ -286,7 +286,7 @@ def test_skp_export_with_texture(tmp_path):
 
 
 def test_skp_export_with_layer(tmp_path):
-    """A face assigned to a custom layer exports as a SketchUp layer/tag
+    """A face assigned to a custom layer exports as a .skp layer/tag
     of that name, alongside the default layer."""
     scene = Scene()
     hist = History(scene)
@@ -435,7 +435,7 @@ def test_a_texture_at_a_very_long_path_exports_a_file_that_still_opens(tmp_path)
     """0.3.10's Flatpak: a texture cached under a stacked-hash name spilled
     into the temp fallback, the path passed openskp's 255-character string
     limit AFTER the image was in the buffer, the colour fallback landed on
-    top, and SketchUp (and openskp itself) refused the file."""
+    top, and the original program (and openskp itself) refused the file."""
     deep = tmp_path / ("x" * 120)
     deep.mkdir()
     png = _make_png(deep / ("b307e18de460e81b-" * 12 + "water_calm.png"))
@@ -476,7 +476,7 @@ def test_a_texture_that_cannot_be_embedded_becomes_a_colour_before_the_writer_ru
 
 
 def test_a_bmp_texture_from_an_imported_model_is_re_encoded_not_dropped(tmp_path):
-    """openskp embeds PNG and JPEG only; a bridge imported from SketchUp
+    """openskp embeds PNG and JPEG only; a bridge imported from a .skp
     carries its logos as BMP. They must reach the .skp as textures."""
     bmp = tmp_path / "coca-cola_logo5.bmp"
     img = QImage(6, 6, QImage.Format_RGB32)
@@ -495,7 +495,7 @@ def test_a_bmp_texture_from_an_imported_model_is_re_encoded_not_dropped(tmp_path
     assert "coca-cola_logo5.png".encode("utf-16-le") in path.read_bytes()
 
 
-# ---- Texture placement: what SketchUp reads back is what the viewport drew --
+# ---- Texture placement: what a .skp reader sees is what the viewport drew ---
 
 _TILE_M = 0.254            # a 10-inch tile: a scale slip shows up as ×10
 
@@ -509,10 +509,10 @@ def _calibration_faces(scene, png, planar: bool, sdk_extras: bool = False):
 
     ``sdk_extras`` adds the cases openskp's reader gets wrong today, so
     only the SDK oracle asks for them: a square tilted by 1e-4 (inside
-    SketchUp's 1e-3 vertical tolerance, outside the reader's 1e-9), one
+    the format's 1e-3 vertical tolerance, outside the reader's 1e-9), one
     far from the origin (float32 vertex noise once turned its normal and
     its texture with it), and three floors looking DOWN, whose basis
-    SketchUp turns 180° rather than mirroring."""
+    the format turns 180° rather than mirroring."""
     import math
     c30, s30 = math.cos(math.radians(30)), math.sin(math.radians(30))
     c45 = math.sqrt(0.5)
@@ -552,7 +552,7 @@ def _calibration_faces(scene, png, planar: bool, sdk_extras: bool = False):
 
 def _reader_uvs(model, defn):
     """Every ``(point_metres, (u, v))`` of the textured faces in ``defn`` as
-    openskp's parser — calibrated against real SketchUp files — reads them:
+    openskp's parser — calibrated against real .skp files — reads them:
     through the per-face matrix when there is one, the default projection
     otherwise, both divided by the material's applied size."""
     from openskp._face_groups import (compute_face_uv, face_uv_basis,
@@ -608,7 +608,7 @@ def test_textures_read_back_where_the_viewport_drew_them(tmp_path, planar):
     face turned by its first edge's angle — a palm trunk shattered), the
     writer did not scale pins by the applied size (a 2 m water tile 78×
     too big: a flat blue slab), and the renderer's planar projection used a
-    basis 180° off SketchUp's on walls facing +Y and −X. The first two are
+    basis 180° off the format's on walls facing +Y and −X. The first two are
     compensated per ``_writer_uv_quirks``; the third is one shared recipe
     now (``core.texture.projection_basis``)."""
     png = _make_png(tmp_path / "tile.png")
@@ -648,9 +648,9 @@ def _face_min_x_m(model, face) -> float:
                for vid in reconstruct_loop_vertices(face.loops[0], edges))
 
 
-def test_a_face_painted_on_the_front_stays_front_only_in_sketchup(tmp_path):
+def test_a_face_painted_on_the_front_stays_front_only_in_the_skp(tmp_path):
     """Faces have sides (2026-09-11): a paint on the front is the front's,
-    and the back is SketchUp's default — the same thing IngeTrazo now
+    and the back is the .skp default — the same thing IngeTrazo now
     shows. A TWO-SIDED face (``back = True``) and a translucent front, which
     reads from both sides here, get the same material and pins on both."""
     png = _make_png(tmp_path / "tile.png")
@@ -683,7 +683,7 @@ def test_a_face_painted_on_the_front_stays_front_only_in_sketchup(tmp_path):
 
 
 def test_a_two_sided_face_keeps_its_own_back_paint(tmp_path):
-    """``attrs["back"]`` — a face SketchUp painted differently on each side
+    """``attrs["back"]`` — a face painted differently on each side in a .skp
     — comes back as its own back material, not the front's."""
     scene = Scene()
     f = scene.mesh.add_face([V(0, 0), V(1, 0), V(1, 1), V(0, 1)])
@@ -703,10 +703,10 @@ def test_a_two_sided_face_keeps_its_own_back_paint(tmp_path):
 
 def test_face_me_figures_become_face_me_components(tmp_path):
     """A textured cut-out (Sumari) and a vector figure (a 2D person) leave
-    as component definitions in SketchUp's face-me convention — feet at the
-    local origin, front along −Y, the axis SketchUp turns toward the camera
+    as component definitions in the .skp face-me convention — feet at the
+    local origin, front along −Y, the axis the format turns toward the camera
     — placed at their anchors. They used to be skipped altogether: every
-    person on the pool deck vanished in SketchUp."""
+    person on the pool deck vanished from the .skp."""
     from core.group import Group, make_billboard_group
     from core.mesh import Mesh
     png = _make_png(tmp_path / "figure.png")
@@ -781,7 +781,7 @@ def test_translated_copies_inside_one_mesh_share_a_definition(tmp_path):
     three times (at each copy's corner) and the odd strip stays as faces.
     An older IngeTrazo saved models with their components exploded — the
     pool's 24 hedges became one 230 400-face group — and the file was 70 MB
-    for what SketchUp keeps in a fraction."""
+    for what the .skp format keeps in a fraction."""
     from core.group import Group
     from core.mesh import Mesh
     m = Mesh()
@@ -881,14 +881,15 @@ def test_a_copy_turned_about_the_vertical_shares_too(tmp_path):
 
 
 
-# ---- The file SketchUp can save --------------------------------------------------
+# ---- A .skp the original program can save -------------------------------------
 
 def test_the_pid_counter_covers_every_entity_written(tmp_path):
-    """SketchUp could open our files but not SAVE them: the pinned writer
-    numbers every section's persistent IDs from 1 and grows the header's
-    counter by materials and layers only, so SketchUp renumbers duplicates
-    on load and then fails to serialize (Marco's pool in SketchUp Web,
-    2026-09-04: "Guardado fallido"). Whatever writer is installed, the
+    """The original program could open our files but not SAVE them: the
+    pinned writer numbers every section's persistent IDs from 1 and grows
+    the header's counter by materials and layers only, so the original
+    program renumbers duplicates on load and then fails to serialize
+    (Marco's pool in its web version, 2026-09-04: "Guardado fallido").
+    Whatever writer is installed, the
     u32 counter at the writer's own offset must cover every record."""
     import struct
     from openskp.create import _PID_COUNTER_POS
@@ -924,8 +925,8 @@ def _quad_mesh():
 
 
 def test_only_layers_in_use_are_written(tmp_path):
-    """SketchUp's Purge on the pool threw away 8 of our 10 layers — all
-    empty — and IngeTrazo's default "Layer 0" is SketchUp's own "Layer0":
+    """A Purge on the pool threw away 8 of our 10 layers — all
+    empty — and IngeTrazo's default "Layer 0" is the .skp format's own "Layer0":
     an exported file carries the layers something sits on, nothing else."""
     scene = Scene()
     hist = History(scene)

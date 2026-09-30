@@ -84,7 +84,7 @@ def test_dimension_labels_can_read_in_inches_and_feet():
     assert fmt(1.5, {"units": "m", "decimals": 2}) == "1.50 m"
 
 
-def test_mixed_numbers_the_way_sketchup_writes_them():
+def test_mixed_numbers_the_usual_way():
     parse = Viewport._parse_value_buffer
     assert abs(parse('1 1/2"') - 1.5 * IN) < 1e-9          # space form
     assert abs(parse('1-1/2"') - 1.5 * IN) < 1e-9          # hyphen form

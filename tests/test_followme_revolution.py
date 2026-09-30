@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """Follow Me around a circle that shares the profile's axis is a lathe
-(#125, #128): the classic SketchUp sphere — a circle swept along a circle
+(#125, #128): the classic sphere — a circle swept along a circle
 with the same centre — must come out as a closed sphere of the profile's
 radius, whatever angle the profile stands at around the path."""
 from __future__ import annotations

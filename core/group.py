@@ -12,6 +12,7 @@ Selected as a unit and moved/exploded via the commands in :mod:`core.history`.
 """
 from __future__ import annotations
 
+import copy
 import itertools
 
 from core.mesh import Mesh
@@ -45,7 +46,7 @@ class Group:
     __slots__ = ("mesh", "name", "layer", "ifc", "billboard", "xform",
                  "children", "owner", "context", "text3d", "hidden", "uid",
                  "material", "axes", "component", "exploded",
-                 "explode_offset")
+                 "explode_offset", "ext")
 
     def __init__(self, mesh: Mesh | None = None, name: str | None = None) -> None:
         self.mesh = mesh if mesh is not None else Mesh()
@@ -54,14 +55,19 @@ class Group:
         self.layer = None
         # BIM tag ({"class": "IfcWall", "name": ...}) or None — see core/bim.py.
         self.ifc = None
-        # Face-me billboard (SketchUp): the group's textured quad rotates
+        # Face-me billboard: the group's textured quad rotates
         # around its vertical anchor axis to face the camera every frame.
         self.billboard = False
         # 3D text (core/text3d.py): the parameters this container was
         # generated from — text, font, height… — so it can be re-edited and
         # laid out again in place. ``None`` on every other group.
         self.text3d = None
-        # SketchUp's Hide: the object stays in the document but draws,
+        # Extensions' own parameters for this container, by extension key
+        # ({"windowizer": {...}}): kept with copies and saved in the .igz,
+        # and apart from ``ifc``, which the BIM panel replaces when it
+        # retags. ``None`` when no extension wrote here.
+        self.ext = None
+        # Hide: the object stays in the document but draws,
         # picks, snaps and exports as if it were not there — until Unhide,
         # or the scene that remembers it visible (Rafael, 2026-09-16: «una
         # escena en donde esto esté oculto»). A hidden TAG hides by layer;
@@ -71,7 +77,7 @@ class Group:
         # it remembers which objects it hides. Fresh per object; a copy gets
         # its own (see ``copy_group``).
         self.uid = new_uid()
-        #: The container's own paint (SketchUp: a group or component
+        #: The container's own paint (the usual convention: a group or component
         #: instance takes a material, and every face inside that wears the
         #: default material shows it; a face painted itself keeps its own —
         #: issue #47, @pacaeiro). Same keys as a face's attrs: ``color`` or
@@ -84,25 +90,25 @@ class Group:
         #: takes back off, so a part moved by hand meanwhile keeps that.
         self.exploded: dict | None = None
         self.explode_offset: tuple | None = None
-        # Component instance (SketchUp): when set, ``mesh`` is a PROTOTYPE in
+        # Component instance: when set, ``mesh`` is a PROTOTYPE in
         # local coordinates SHARED with sibling instances, and ``xform`` maps
         # local -> world. ``None`` = classic group (mesh in world coords).
         # Instances render/pick through transformed chunk arrays; transform
         # tools compose into ``xform`` (O(1)); geometry edits first
-        # ``materialize`` the instance (SketchUp's "make unique").
+        # ``materialize`` the instance ("make unique").
         self.xform = None
         # Nested placements the group OWNS: each a Group with an ``xform``
         # over a SHARED prototype mesh, in this group's coordinates. They
         # render, pick and export as part of their parent — one object to
         # the user, however deep the tree — which is what lets an imported
-        # component keep the sharing SketchUp gave it.
+        # component keep the sharing its .skp file gave it.
         #
         # Without them a component's internal repetition was flattened on
         # import: the hedge in piscina.igz is 4480 + 5120 faces placed 48
         # times, and it arrived as 230400 real ones. Twenty-four times the
         # geometry, for the element that is 89% of that model — which is
         # why the .skp we wrote was 80 MB against the original's 14, and
-        # why SketchUp Web laboured over our copy of a model it draws
+        # why a web .skp viewer laboured over our copy of a model it draws
         # fluently itself.
         self.children: list = []
         # Set only on the throwaway placement proxies the viewport builds for
@@ -123,7 +129,7 @@ class Group:
         #: A component instance does not use it: its ``xform`` IS its axes.
         self.axes = None
         #: Whether this instance is a COMPONENT — a definition its copies
-        #: share, as Make Component or a SketchUp import makes it — or a
+        #: share, as Make Component or a .skp import makes it — or a
         #: GROUP that only carries a matrix: a group of groups (``adopt``
         #: makes every container an instance) or a copied group waiting to
         #: be edited. Only meaningful with an ``xform``; read it through
@@ -154,7 +160,7 @@ class Group:
         return self.xform is not None
 
     def materialize(self) -> None:
-        """Bake this instance into its OWN world-space mesh (SketchUp 'make
+        """Bake this instance into its OWN world-space mesh ('make
         unique'): sibling instances keep the shared prototype untouched.
         Editing into an instance no longer does this — the session edits a
         world copy and shares it back on leaving (Scene.begin_group_edit).
@@ -171,7 +177,7 @@ class Group:
         self.children = []
 
     def make_unique(self) -> None:
-        """SketchUp's Make Unique: this instance stops sharing with its
+        """Make Unique: this instance stops sharing with its
         siblings. Without nested placements it bakes into a classic group
         (``materialize``); WITH them it keeps its placement and its tree —
         a private copy of its own mesh and of every subgroup below it — so
@@ -565,7 +571,7 @@ def copy_group(group, delta=None, _in_definition=False):
     """A pastable duplicate of ``group``, optionally translated by ``delta``.
 
     A component instance stays an instance: the duplicate SHARES the prototype
-    mesh and only gets its own transform (SketchUp: copying an instance adds a
+    mesh and only gets its own transform (copying an instance adds a
     sibling, O(1)). A classic group gets a deep mesh copy.
 
     Everything inside a COMPONENT belongs to its definition, so the groups
@@ -602,6 +608,7 @@ def copy_group(group, delta=None, _in_definition=False):
     g.ifc = dict(group.ifc) if group.ifc else None
     g.billboard = group.billboard
     g.text3d = dict(group.text3d) if group.text3d else None
+    g.ext = copy.deepcopy(group.ext) if getattr(group, "ext", None) else None
     g.hidden = group.hidden
     g.material = dict(group.material) if getattr(group, "material", None) else None
     g.component = getattr(group, "component", True)
@@ -703,8 +710,8 @@ def frame_from_points(positions) -> tuple:
     """An orthonormal frame for a group, derived from its vertices: the yaw
     about Z whose footprint is tightest, with Z kept upright.
 
-    SketchUp gives every group its own axes and draws the selection box in
-    them, so the box hugs the object. Nothing stores those axes here yet (an
+    The usual convention gives every group its own axes and draws the
+    selection box in them, so the box hugs the object. Nothing stores those axes here yet (an
     imported group is baked to world coordinates, a classic group never had
     a frame), so they are derived — and derived *exactly*: the minimum-area
     rectangle around a point set always has a side flush with an edge of its

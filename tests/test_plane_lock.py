@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Arrow keys before the first click lock a planar tool's drawing plane
-(SketchUp; Marco, 2026-09-08: «quiero dibujar un círculo en el plano ZX…
+(Marco, 2026-09-08: «quiero dibujar un círculo en el plano ZX…
 me restringe a qué plano quiero dibujar apretando las teclas de
 desplazamiento»)."""
 from PySide6.QtCore import QPointF, Qt
@@ -88,7 +88,7 @@ def test_rectangle_and_centre_arc_lock_too():
     assert arc.work_plane == (V(5, 5, 5), V(0, 1, 0))
 
 
-# ---- Down arrow: SketchUp's magenta reference lock (issue #10) -------------
+# ---- Down arrow: the magenta reference lock (issue #10) --------------------
 
 class _Edge:
     def __init__(self, a, b):

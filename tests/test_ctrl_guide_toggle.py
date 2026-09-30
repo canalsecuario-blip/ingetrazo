@@ -10,7 +10,7 @@ Guideline, if necessary. It would be handy to have that!»
 Both tools left a guide behind whether you wanted one or not, so measuring
 meant cleaning up afterwards. Ctrl is a MODE, not a per-click modifier; it
 survives between operations and resets when the tool is picked up, the way
-SketchUp's does.
+the classic tool does.
 
 On the TAPE it cycles three ways, not two — its status bar spells them out
 (Marco's screenshot, 2026-09-17): «Ctrl = Líneas guía del ciclo / Puntos
@@ -103,7 +103,7 @@ def _tap(tool, vp):
     return release(vp, Qt.Key_Control)
 
 
-def test_ctrl_cycles_the_tape_through_the_three_sketchup_modes():
+def test_ctrl_cycles_the_tape_through_the_three_classic_modes():
     scene = Scene()
     vp = _Vp(scene, _edge(V(0, 0), V(4, 0)))
     tool = TapeMeasureTool()
@@ -152,7 +152,7 @@ def test_ctrl_turns_the_tape_into_a_plain_ruler():
 
 
 def test_picking_the_tool_up_starts_in_guide_mode():
-    """SketchUp's rule: the + «appears or disappears depending on whether
+    """The usual rule: the + «appears or disappears depending on whether
     you tapped Ctrl SINCE YOU PICKED UP THE TOOL». Ours stayed off for
     good, so after one measure-only reading the guides looked broken —
     Marco hit it straight away: «solo funciona con ctrl»."""
@@ -167,7 +167,7 @@ def test_picking_the_tool_up_starts_in_guide_mode():
 
 def test_the_cursor_says_which_mode_it_is_in():
     """The + beside the cursor is the ENTIRE interface of this toggle in
-    SketchUp; without it the mode is invisible until after the click."""
+    the classic tool; without it the mode is invisible until after the click."""
     scene = Scene()
     vp = _Vp(scene)
     for tool in (TapeMeasureTool(), ProtractorTool()):
@@ -224,7 +224,7 @@ def test_ctrl_turns_the_protractor_into_a_plain_protractor():
 
 
 def test_the_status_bar_keeps_the_ctrl_clause_up():
-    """SketchUp keeps its modifiers on screen the whole time the tool is
+    """The usual status bar keeps the modifiers on screen the whole time the tool is
     active — «Ctrl = Líneas guía del ciclo/Puntos guía/Medida» — instead of
     flashing them once. A flash says what just happened; this says what you
     can do and which way it is set (Marco, 2026-09-17)."""
@@ -252,7 +252,7 @@ def test_the_status_bar_keeps_the_ctrl_clause_up():
         assert seen[0].index("[") < seen[1].index("[") < seen[2].index("[")
 
         # ONE modifier at a time, each in the phase where it does
-        # something: SketchUp's line carries Ctrl before the first click
+        # something: the usual line carries Ctrl before the first click
         # and Alt once the measurement is under way, never both. Stacked,
         # the bar ran out of room and elided.
         from PySide6.QtGui import QVector3D

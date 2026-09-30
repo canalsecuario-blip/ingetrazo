@@ -73,7 +73,7 @@ def test_grouping_a_group_with_loose_geometry_NESTS_it(cancels):
     """Esto se negaba, y con razón mientras entrar a un contenedor lo
     horneaba. Con la pila de contextos (2026-09-11) ya no: agrupar una cara
     suelta junto a un grupo mete la cara en la malla del contenedor nuevo y
-    el grupo pasa a ser su hijo — lo que hace SketchUp."""
+    el grupo pasa a ser su hijo — lo habitual."""
     win, scene = _win_with_a_group_and_loose_geometry()
     try:
         antes = list(scene.groups)

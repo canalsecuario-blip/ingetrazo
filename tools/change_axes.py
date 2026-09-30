@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """Change Axes (issue #44, @pacaeiro): give a group or component new local
-axes, SketchUp's way — right-click ▸ Change Axes, then three clicks:
+axes, the usual way — right-click ▸ Change Axes, then three clicks:
 
 1. the new ORIGIN,
 2. a point along the new RED axis,

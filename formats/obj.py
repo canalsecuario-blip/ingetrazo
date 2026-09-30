@@ -45,7 +45,7 @@ def save_obj(scene, path) -> None:
     become ``Kd`` materials; textured faces become ``map_Kd`` materials with the
     image copied next to the .obj and per-vertex ``vt`` from the same planar
     projection the viewport uses — so the model opens with matching textures in
-    SketchUp/Blender."""
+    other modellers (Blender, ...)."""
     import shutil
     from core.texture import planar_uv
 
@@ -296,8 +296,8 @@ def load_obj(scene, path, progress=None, scale: float = 1.0,
 def _load_obj_inner(scene, path, progress=None, scale: float = 1.0,
                     matrix=None) -> None:
     """Add the faces of a Wavefront OBJ at ``path`` to ``scene``'s mesh, then
-    weld + merge coplanar so a triangulated file (e.g. our own export, or a
-    SketchUp OBJ) comes back as clean editable polygons. Material ``Kd`` colours
+    weld + merge coplanar so a triangulated file (e.g. our own export, or another
+    modeller's OBJ) comes back as clean editable polygons. Material ``Kd`` colours
     become per-face ``attrs["color"]`` (skipped when they match the default
     cream, so plain faces stay unpainted). Adds to the current scene; the caller
     wraps it for undo.
@@ -426,7 +426,7 @@ def _load_obj_inner(scene, path, progress=None, scale: float = 1.0,
 
     # Library-scale meshes are *reference* geometry: they land in their own
     # Group (isolated mesh, coplanar triangles fast-fused into clean facade
-    # polygons + smooth edges softened — the SketchUp import look) so drawing
+    # polygons + smooth edges softened — the classic import look) so drawing
     # beside them never scans their triangles — see formats/dae.py.
     from formats.dae import _MAX_FUSE_LOOPS, _add_fused
     from formats.fuse import (SMOOTH_KEY, drop_smoothing_groups,

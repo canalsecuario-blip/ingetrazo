@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""North angle (SketchUp's): the map turns under the model, never the model
+"""North angle: the map turns under the model, never the model
 under the map — and StraightenModelCommand, which converts a model that was
 turned+dragged onto its site into exactly that.
 

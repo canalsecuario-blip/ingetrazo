@@ -1,4 +1,4 @@
-"""Two-point perspective (SketchUp's Camera ▸ Two-Point Perspective): the
+"""Two-point perspective (Camera ▸ Two-Point Perspective): the
 verticals of the model stay vertical on screen, and the target stays in the
 middle of it, like an architectural perspective (José Castro Basso,
 FADU–UDELAR)."""

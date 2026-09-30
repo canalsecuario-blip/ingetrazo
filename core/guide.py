@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""Construction guides (Tape Measure) — SketchUp guide lines and points.
+"""Construction guides (Tape Measure) — guide lines and points.
 
 A guide is scaffolding, not geometry: an infinite dashed construction line (or a
 lone point) used to align real drawing. It never enters the topology mesh; it
@@ -21,7 +21,7 @@ class Guide:
     when ``direction`` is None, a guide point.
 
     A guide point pulled from a vertex keeps ``origin``, the vertex it was
-    measured from: SketchUp draws the dashed *guide segment* from there to
+    measured from: a dashed *guide segment* is drawn from there to
     the point (Rafael, Revisión 3: «un segmento guía que termina en un
     puntito»), which is how the eye reads what the point is 1,5 m from.
     The segment is a drawing, not a snap target — the point is."""

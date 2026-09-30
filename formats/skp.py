@@ -6,9 +6,9 @@ IngeTrazo aims to open **any** ``.skp`` (old → recent). This module is the
 single seam between IngeTrazo and *how* an ``.skp`` is read, so the parser can
 evolve independently of the app. The backend is **OpenSKP**
 (https://github.com/iamahsanmehmood/openskp, MIT) or a maintained fork: pure
-Python, offline, no Wine, nothing of Trimble's. (Until 2026-09-28 a second
-path ran Trimble's SketchUpAPI.dll through an external converter for files
-the reader could not open; it was removed after Trimble's copyright notice.)
+Python, offline, no Wine, no proprietary code. (Until 2026-09-28 a second
+path ran a proprietary SDK through the former external converter for files
+the reader could not open; it has been removed.)
 
 **Parse then apply.** A backend *parses* a file into a plain **payload** (world-
 space face loops, no ``Scene`` touched). The heavy parse runs outside the undo
@@ -40,12 +40,12 @@ def detect_format(path) -> str:
     """Best-effort container detection from the file's first bytes, no parser
     involved:
 
-    * ``"skp"``     — a SketchUp document (UTF-16 ``SketchUp Model`` marker, or
+    * ``"skp"``     — a ``.skp`` document (UTF-16 ``Sketch…`` model marker, or
       a ``PK`` ZIP-wrapped container). Covers legacy MFC and 2021+ files alike —
       both begin with the same marker, so the *era* is not observable from the
       magic bytes (OpenSKP handles the range, so we don't need to tell them
       apart here).
-    * ``"unknown"`` — not recognisably a SketchUp file / unreadable.
+    * ``"unknown"`` — not recognisably a ``.skp`` file / unreadable.
     """
     try:
         head = Path(path).read_bytes()[:64]
@@ -61,7 +61,7 @@ def detect_format(path) -> str:
 class _OpenSkpBackend:
     """Pure-Python OpenSKP backend. Parses via :mod:`formats.skp_openskp`, which
     imports ``openskp`` lazily. ``available()`` is True only when the package is
-    importable; ``supports`` covers any recognised SketchUp file (OpenSKP reads
+    importable; ``supports`` covers any recognised ``.skp`` file (OpenSKP reads
     a broad version range). A parse that yields no geometry returns ``None`` from
     :meth:`parse`, so the seam falls back to the converter."""
 
@@ -134,7 +134,7 @@ def apply_payload(scene, payload) -> str:
     """Add a parsed payload's geometry to ``scene`` as reference groups (an
     isolated ``Mesh`` per group, like the big-DAE import). Runs the same
     clean-up the DAE reference import does — coplanar fusion (merges the raw
-    SketchUp polygons and drops double-sided duplicates) and smooth-edge
+    ``.skp`` polygons and drops double-sided duplicates) and smooth-edge
     softening — so a ``.skp`` opened through the pure backend looks identical
     to one that came through the converter. Cheap relative to the parse; the
     caller wraps it in a command for undo. Returns the backend name."""
@@ -174,11 +174,11 @@ def _apply_payload_inner(scene, payload) -> str:
     def _build_mesh(faces, soft_edges=None):
         mesh = Mesh()
         if soft_edges is not None:
-            # The backend carried SketchUp's ORIGINAL polygons plus the
+            # The backend carried the file's ORIGINAL polygons plus the
             # file's own per-edge display flags — add everything as-is and
-            # soften exactly the flagged edges. No coplanar fusion: SketchUp
-            # keeps coplanar same-material faces separate with their edges
-            # visible (glass mullions, beam/column lines), so fusing them
+            # soften exactly the flagged edges. No coplanar fusion: the .skp
+            # format keeps coplanar same-material faces separate with their
+            # edges visible (glass mullions, beam/column lines), so fusing them
             # dissolved real user lines. Built in one vectorized bulk pass —
             # the per-face add_face welding dominated big imports.
             import numpy as np
@@ -293,7 +293,7 @@ def _apply_payload_inner(scene, payload) -> str:
                         if attrs.get("mat") in remap:
                             attrs["mat"] = remap[attrs["mat"]]
 
-    # The file's layers (SketchUp tags) join the scene's layer list, keeping
+    # The file's layers (.skp tags) join the scene's layer list, keeping
     # their visibility — layers already present are left untouched (a re-import
     # must not flip what the user toggled).
     if payload.get("layers"):
@@ -322,9 +322,9 @@ def _apply_payload_inner(scene, payload) -> str:
                 hidden_layers=raw.get("hidden_layers")))
             existing.add(raw["name"])
 
-    # Linear dimensions (SketchUp's Dimension tool): world endpoints + an
+    # Linear dimensions (.skp dimension entities): world endpoints + an
     # offset distance. IngeTrazo's Dimension carries the offset as a VECTOR
-    # from the a–b segment to the dimension line, so turn the SketchUp scalar
+    # from the a–b segment to the dimension line, so turn the .skp scalar
     # into the in-plane perpendicular direction × distance.
     if payload.get("dimensions"):
         from PySide6.QtGui import QVector3D
@@ -346,7 +346,7 @@ def _apply_payload_inner(scene, payload) -> str:
             scene.dimensions.append(
                 Dimension(a, b, perp * float(raw.get("offset", 0.0))))
 
-    # Leader texts (SketchUp's Text tool): the anchor is the pointed-at
+    # Leader texts (.skp text entities): the anchor is the pointed-at
     # spot and the label floats at its world "label" position (leader line
     # joins them) — screen texts carry no label position and float at the
     # anchor itself.
@@ -369,7 +369,7 @@ def _apply_payload_inner(scene, payload) -> str:
                 g.layer = gp["layer"]
             axes = gp.get("axes")
             if isinstance(axes, list) and len(axes) == 16:
-                # The SketchUp instance's transformation, kept as the
+                # The .skp instance's transformation, kept as the
                 # group's own axes (issue #44) — its mesh stays in world
                 # coordinates. Column-major, as QMatrix4x4.data() wrote it.
                 from PySide6.QtGui import QMatrix4x4

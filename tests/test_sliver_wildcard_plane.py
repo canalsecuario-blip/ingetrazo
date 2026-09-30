@@ -6,7 +6,7 @@ Plaza Yanque, 2026-09-10: inside a group, Marco drew one line at a corner
 and all 447 faces of that group vanished — edges left, no error logged, the
 command "succeeded". The mesh really had lost them.
 
-The culprit was a 3 mm² sliver imported from SketchUp whose Newell normal
+The culprit was a 3 mm² sliver imported from a .skp file whose Newell normal
 measured 5.9e-6. Face.normal() guarded degeneracy at 1e-9 and then handed
 the vector to QVector3D.normalized(), which returns a NULL vector for
 anything shorter than 1e-5 — four orders of magnitude above the guard. A

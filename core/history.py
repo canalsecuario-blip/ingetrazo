@@ -319,7 +319,7 @@ class AddEdgeCommand(Command):
 
 class DeleteEdgesCommand(Command):
     """Erase edges (resolved by endpoint position). A face can't outlive a
-    bounding edge — SketchUp erases an edge and its faces go with it — so every
+    bounding edge — erasing an edge takes its faces with it — so every
     face that used a deleted edge on its *outer* boundary is removed too (its
     other edges stay, now free). Hole edges are left alone."""
 
@@ -364,7 +364,7 @@ class DeleteEdgesCommand(Command):
 
 
 class EraseSelectionCommand(Command):
-    """Erase selected edges and faces, SketchUp-style.
+    """Erase selected edges and faces, the usual way.
 
     An edge that divides two *coplanar* faces is dissolved and the faces merge
     back into one (rubbing out a face's split line reunites it). Any other erased
@@ -463,7 +463,7 @@ class EraseSelectionCommand(Command):
         # Deleting a curved surface takes its hidden seams with it: a soft edge
         # left bordering no face is a dangling curve segment (a cylinder side's
         # vertical seam) — prune it so no stray vertical lines remain. Hard
-        # orphan edges stay (an erased flat face keeps its outline, SketchUp).
+        # orphan edges stay (an erased flat face keeps its outline).
         for e in list(m.edges):
             if e.soft and not e.faces:
                 m.remove_edge(e)
@@ -507,7 +507,7 @@ def _inherit_paint(face, mother) -> None:
     it does not already carry itself.
 
     A face drawn on a painted one is part of that surface: a door outlined on
-    a textured wall comes out textured in SketchUp, and lines up with the wall
+    a textured wall comes out textured, and lines up with the wall
     because both keep the same world→UV map. Only the remainder of a carved
     mother inherited here, so the cut-out itself came back bare (Marco,
     2026-08-27). Verbatim, map included — the two are coplanar, so the image
@@ -686,7 +686,7 @@ def _dirty_group_chunks(scene) -> None:
 
 
 class FlipFacesCommand(Command):
-    """Reverse the winding of a set of faces — SketchUp's "Reverse Faces".
+    """Reverse the winding of a set of faces — "Reverse Faces".
 
     Reversing the loops flips the geometric normal while keeping the *same*
     ``Face`` objects and their shared edges/incidence (identity preserved, so
@@ -713,7 +713,7 @@ class FlipFacesCommand(Command):
 
 
 class AssignLayerCommand(Command):
-    """Move entities onto a layer — SketchUp's Tag field in Entity Info.
+    """Move entities onto a layer — the Tag field in Entity Info.
 
     Faces, edges, groups and annotations alike (``core.layers.assign_layer``
     knows where each one keeps its label). Previous labels are captured at
@@ -770,7 +770,7 @@ def _set_hidden(entity, hidden: bool) -> None:
 
 
 class HideCommand(Command):
-    """Hide (or unhide) objects, faces and edges — SketchUp's Edit ▸ Hide
+    """Hide (or unhide) objects, faces and edges — Edit ▸ Hide
     and Edit ▸ Unhide.
 
     An OBJECT (group or component, ``Group.hidden``) and a FACE
@@ -966,14 +966,18 @@ class RestampMaterialCommand(Command):
     every group whose ``attrs["mat"]`` carries that name receives the new
     recipe — colour/texture/opacity — in one undoable step. Keys absent
     from the new recipe are removed (a material edited from textured to
-    plain colour drops its texture). Undo restores the registry entry and
-    each face's previous values exactly."""
+    plain colour drops its texture). Groups and components painted WHOLE
+    wear it too, on the container (issue #155, @fafecm: the loose face
+    changed colour, the painted box beside it stayed the old one). Undo
+    restores the registry entry, each face's previous values and each
+    container's previous paint exactly."""
 
     def __init__(self, name, new_material) -> None:
         self._name = name
         self._new = new_material
         self._old_material = None
         self._old_faces: Optional[list] = None   # (face, {key: old value})
+        self._old_groups: Optional[list] = None  # (container, old material)
 
     _KEYS = ("color", "texture", "opacity")
 
@@ -998,6 +1002,20 @@ class RestampMaterialCommand(Command):
                 if f.attrs.get("mat") == self._name:
                     yield f
 
+    def _painted_groups(self, scene):
+        """Every placement painted as a whole with this material, nested
+        ones included. Each placement carries its own paint, so no dedupe
+        by prototype here."""
+        from core.group import iter_placements
+        seen: set = set()
+        for g in scene.groups:
+            for pg, _m in iter_placements(g):
+                paint = getattr(pg, "material", None)
+                if (id(pg) not in seen and isinstance(paint, dict)
+                        and paint.get("mat") == self._name):
+                    seen.add(id(pg))
+                    yield pg
+
     def do(self, scene) -> None:
         stamp = self._new.face_attrs()
         if self._old_faces is None:
@@ -1005,6 +1023,8 @@ class RestampMaterialCommand(Command):
             self._old_faces = [
                 (f, {k: f.attrs.get(k) for k in self._KEYS})
                 for f in self._targets(scene)]
+            self._old_groups = [(g, g.material)
+                                for g in self._painted_groups(scene)]
         scene.materials[self._name] = self._new
         for f, _old in self._old_faces:
             for k in self._KEYS:
@@ -1012,6 +1032,8 @@ class RestampMaterialCommand(Command):
                     f.attrs[k] = stamp[k]
                 else:
                     f.attrs.pop(k, None)
+        for g, _old in self._old_groups or []:
+            g.material = dict(stamp)
         _dirty_group_chunks(scene)
         scene.version += 1
 
@@ -1026,12 +1048,14 @@ class RestampMaterialCommand(Command):
                     f.attrs.pop(k, None)
                 else:
                     f.attrs[k] = old[k]
+        for g, old in self._old_groups or []:
+            g.material = old
         _dirty_group_chunks(scene)
         scene.version += 1
 
 
 class PurgeUnusedCommand(Command):
-    """SketchUp's "Purge Unused", for layers and/or materials.
+    """"Purge Unused", for layers and/or materials.
 
     Layers are labels, not owners (core.layers), so emptying one cannot
     delete it — an explicit sweep is the only honest way to clear what an
@@ -1147,7 +1171,7 @@ class AddTextLabelCommand(Command):
 
 class MoveTextLabelsCommand(Command):
     """Translate the floating label of leader texts: the label end moves,
-    the anchor stays pinned and the leader stretches (SketchUp's Move-on-
+    the anchor stays pinned and the leader stretches (the classic Move-on-
     text behaviour)."""
 
     def __init__(self, labels, delta) -> None:
@@ -1170,7 +1194,7 @@ class MoveDimensionsCommand(Command):
     ends slides its LINE by the delta (minus any component along the
     measured segment, so the line stays parallel and the extension lines
     stay square) while the endpoints keep holding their vertices —
-    SketchUp's Move-on-dimension, «mover la cota conservando la línea guía»
+    the classic Move-on-dimension, «mover la cota conservando la línea guía»
     (Marco, 2026-09-20). A dimension with a free endpoint moves that
     endpoint rigidly instead. ``modes`` maps each dimension to ``"line"``
     or ``"rigid"``, decided by the tool at grab time."""
@@ -1225,7 +1249,7 @@ class EditTextLabelCommand(Command):
 
 class EditDimensionTextCommand(Command):
     """Change a dimension's custom text (``None`` = back to the measured
-    value) — SketchUp's double-click on the dimension text."""
+    value) — a double-click on the dimension text."""
 
     def __init__(self, dim, text) -> None:
         self.dim = dim
@@ -1280,7 +1304,7 @@ class AddGuideCommand(Command):
 
 
 class PlaceSectionPlaneCommand(Command):
-    """Place a section plane. SketchUp: the new plane immediately becomes
+    """Place a section plane. The new plane immediately becomes
     the ACTIVE cut of the context; undo restores the previous one."""
 
     def __init__(self, plane) -> None:
@@ -1329,7 +1353,7 @@ class DeleteSectionPlanesCommand(Command):
 
 
 class ReverseSectionPlaneCommand(Command):
-    """SketchUp's Reverse: flip which side the plane hides."""
+    """Reverse: flip which side the plane hides."""
 
     def __init__(self, plane) -> None:
         self.plane = plane
@@ -1344,7 +1368,7 @@ class ReverseSectionPlaneCommand(Command):
 
 
 class SetActiveSectionCommand(Command):
-    """Make ``plane`` the active cut (or ``None`` to deactivate) — SketchUp's
+    """Make ``plane`` the active cut (or ``None`` to deactivate) — the
     Active Cut toggle / double-click."""
 
     def __init__(self, plane) -> None:
@@ -1926,7 +1950,7 @@ def translate_points(scene, keys: set, delta: QVector3D) -> None:
 class MoveVerticesCommand(Command):
     """Translate every shared vertex at a set of positions by ``delta``, then
     **autofold**: any face the move warped out of its plane is split into
-    planar pieces along fold edges (SketchUp behaviour — a quad with a lifted
+    planar pieces along fold edges (the classic behaviour — a quad with a lifted
     corner becomes two triangles, not a fake bent "face").
 
     Undo/redo restore identity-preserving snapshots. The old "cheap" inverse
@@ -1980,7 +2004,7 @@ def rotate_points(scene, keys: set, matrix) -> None:
 
 def mirror_matrix(centre: QVector3D, axis: QVector3D):
     """Reflection about the plane through ``centre`` with normal ``axis``
-    (Householder), as a QMatrix4x4 — SketchUp's Flip."""
+    (Householder), as a QMatrix4x4 — the Flip tool."""
     from PySide6.QtGui import QMatrix4x4
     n = QVector3D(axis).normalized()
     r = QMatrix4x4(
@@ -1996,7 +2020,7 @@ def mirror_matrix(centre: QVector3D, axis: QVector3D):
 
 
 class FlipGroupsCommand(Command):
-    """Flip whole groups about an axis plane (SketchUp's Flip). Instances
+    """Flip whole groups about an axis plane (the Flip tool). Instances
     compose the reflection into their transform (O(1)); classic groups map
     their vertices and re-reverse every face loop so the mirrored solid
     keeps its faces pointing OUT. A reflection is an involution: undo flips
@@ -2151,8 +2175,8 @@ class RotateGroupCommand(Command):
 
 def scale_matrix(center: QVector3D, factor, axes=None):
     """Scale about ``center``: a float scales uniformly, a 3-tuple scales each
-    axis by its own factor (SketchUp's edge/face grips). A negative factor
-    mirrors through the centre along that axis (SketchUp allows it — dragging
+    axis by its own factor (the edge/face grips). A negative factor
+    mirrors through the centre along that axis (allowed — dragging
     a grip past its anchor, or typing -1).
 
     ``axes`` = ``(red, green, blue)`` unit vectors: the three factors act
@@ -2300,7 +2324,7 @@ class PruneOrphanEdgesCommand(Command):
 
 
 class CoplanarMergeCommand(Command):
-    """Dissolve coplanar seams left by push/pull, SketchUp-style.
+    """Dissolve coplanar seams left by push/pull.
 
     After a wall is pushed flush against an adjacent one, the shared edge borders
     two faces in the same plane and carries no silhouette — a phantom line. This
@@ -2352,7 +2376,7 @@ class CoplanarMergeCommand(Command):
 
 
 class StitchSolidCommand(Command):
-    """Make a solid watertight again after push/pull, SketchUp-style.
+    """Make a solid watertight again after push/pull.
 
     Repeated pushes leave three kinds of connectivity debris: edges that run past
     a vertex belonging to a neighbour (a *T-junction* — the two sides share a
@@ -2493,7 +2517,7 @@ def _coplanar_component(mesh, f0, seedkeys: set,
     An edge that also carries a *non-coplanar* face is a **crease** — a wall
     standing under the seam — and the component never crosses it: two roof
     slabs over a dividing wall stay two faces with a visible ridge,
-    SketchUp-style, instead of fusing into one slab floating over the wall.
+    as expected, instead of fusing into one slab floating over the wall.
 
     ``ncache``/``scache`` memoise per-face normalized normals and seed tests
     within one (mutation-free) scan — Newell normals recomputed per comparison
@@ -2738,7 +2762,7 @@ class SnapshotCompound(Command):
             for f in heal_overlapping_faces(scene.mesh, footprint=footprint):
                 scene.selection.discard(f)
             # A draw that split a curve leaves it in separate contours — break
-            # the curve ids there (SketchUp), before the snapshot so redo keeps it.
+            # the curve ids there, before the snapshot so redo keeps it.
             scene.mesh.resplit_curves()
             self.after = scene.mesh.capture_state()
         else:
@@ -2793,7 +2817,7 @@ class MakeGroupCommand(Command):
                  component: bool = False, name: str | None = None) -> None:
         # ``component=True`` builds the fresh mesh in LOCAL coordinates
         # (origin at the selection's min corner) and hands back an INSTANCE
-        # (Group with an xform) — SketchUp's Make Component: copies of it
+        # (Group with an xform) — Make Component: copies of it
         # share the definition through the existing prototype machinery.
         self._component = component
         self._name = name
@@ -2840,7 +2864,7 @@ class MakeGroupCommand(Command):
         # COMPONENT shifts them into local coordinates around the origin.
         origin = QVector3D(0.0, 0.0, 0.0)
         # Made inside a turned group, the new one lines up with THAT
-        # context's axes (SketchUp; issue #44): its origin is the lowest
+        # context's axes (issue #44): its origin is the lowest
         # corner measured along them, not along the world's.
         frame = getattr(scene, "drawing_frame", None)
         pts = [p for loop, holes, _a in self._face_loops
@@ -2934,7 +2958,7 @@ class MakeGroupCommand(Command):
 
 class ReshareInstanceCommand(Command):
     """Leaving a component instance edited in place: the session's edits go
-    into the shared definition, so every copy shows them (SketchUp).
+    into the shared definition, so every copy shows them.
 
     The commands run inside the session are absorbed into this one — the
     whole edit undoes as one step, back to the definition as it was, with
@@ -2962,7 +2986,7 @@ class ReshareInstanceCommand(Command):
 
 
 class MakeUniqueCommand(Command):
-    """SketchUp's Make Unique: bake a component instance into its OWN mesh
+    """Make Unique: bake a component instance into its OWN mesh
     so edits stop touching the siblings' shared definition."""
 
     def __init__(self, group) -> None:
@@ -3031,7 +3055,7 @@ class InsertGroupCommand(Command):
     collection item) into the scene, selected so the user can Move it into
     place.
 
-    INSIDE an open container it goes into the container — SketchUp's rule
+    INSIDE an open container it goes into the container — the usual rule
     that whatever you create while editing a group belongs to it. A roof
     pasted while editing the pergola used to land at the top level, beside
     the plaza («se supone que todo lo que edite debería estar dentro del
@@ -3108,7 +3132,7 @@ class EditText3DCommand(Command):
 
 
 class MakeNestedGroupCommand(Command):
-    """SketchUp's Make Group when the selection already holds groups.
+    """Make Group when the selection already holds groups.
 
     Until 2026-09-11 this was refused: a container baked its children the
     moment you opened it, so nesting would have dissolved the bench and the
@@ -3116,7 +3140,7 @@ class MakeNestedGroupCommand(Command):
     gone, and grouping groups is what it says.
 
     The loose part of the selection, if any, becomes the container's OWN
-    mesh — the same thing SketchUp does: inside the new group you find the
+    mesh — the classic behaviour: inside the new group you find the
     loose faces AND the groups, each still a group. Reusing
     :class:`MakeGroupCommand` for that half keeps one code path for taking
     geometry off the loose mesh.
@@ -3298,7 +3322,7 @@ class ExplodeGroupCommand(Command):
     """Dissolve ONE level of a group: its own geometry merges back into the
     loose mesh (welding to whatever it touches) and the groups and
     components nested in it come out whole, as top-level objects in its
-    place — SketchUp's Explode (@pacaeiro, issue #72: «the inside groups
+    place — Explode (@pacaeiro, issue #72: «the inside groups
     explode as well»). Snapshot undo restores the loose mesh, the group and
     each lifted child's placement."""
 
@@ -3328,7 +3352,7 @@ class ExplodeGroupCommand(Command):
                             [[W(v) for v in h] for h in f.holes] or None)
             # What the face showed inside is what it keeps outside: its own
             # paint, or — a default face — the group's on BOTH sides
-            # (SketchUp; issue #47: the back used to fall back to default).
+            # (issue #47: the back used to fall back to default).
             drawn = effective_attrs(dict(f.attrs or {}), paint)
             for key, val in drawn.items():
                 nf.attrs[key] = dict(val) if isinstance(val, dict) else val
@@ -3374,7 +3398,7 @@ class ExplodeGroupCommand(Command):
         scene.groups[self.index:self.index] = kids
         scene.selection.discard(g)
         if kids:
-            scene.selection = set(kids)   # SketchUp selects what came out
+            scene.selection = set(kids)   # select what came out
         scene.version += 1
 
     def undo(self, scene) -> None:
@@ -3525,7 +3549,7 @@ def placement_rotation_deg(xform) -> float:
 
 class StraightenModelCommand(Command):
     """Put a model that was turned and dragged onto its site back on its
-    own axes, and turn the MAP under it instead (SketchUp's north angle).
+    own axes, and turn the MAP under it instead (a north angle).
 
     ``group`` is the placed model: a top-level instance whose ``xform`` is a
     turn about Z plus a translation. The command applies the inverse of that
@@ -3943,7 +3967,7 @@ class CompoundCommand(Command):
 
 
 class ChangeAxesCommand(Command):
-    """SketchUp's Change Axes (issue #44): give ``group`` a new frame —
+    """Change Axes (issue #44): give ``group`` a new frame —
     origin, red, green, blue as the world matrix ``frame`` — while nothing
     moves in the world.
 
@@ -3952,7 +3976,7 @@ class ChangeAxesCommand(Command):
     definition in the new axes: the definition takes ``D = frame⁻¹ · xform``,
     this instance's placement becomes ``frame``, and every other instance of
     the definition takes ``D⁻¹`` on the right — so all of them now carry the
-    new axes and none of them moves (SketchUp: «changing one updates the
+    new axes and none of them moves («changing one updates the
     others»). Undo runs the inverse."""
 
     def __init__(self, group, frame) -> None:

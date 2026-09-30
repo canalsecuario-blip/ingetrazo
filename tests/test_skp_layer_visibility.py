@@ -9,8 +9,8 @@ and EVERY imported layer landed visible, whatever the author had turned
 off.
 
 Found on 2026-09-17 with Rafael's ``edificio.skp``: the file hides
-``Camera_FOV_Lines`` and ``Camera_FOV_Volume``, so SketchUp shows a small
-camera glyph and nothing else. IngeTrazo drew the whole camera frustum
+``Camera_FOV_Lines`` and ``Camera_FOV_Volume``, so the original program shows a
+small camera glyph and nothing else. IngeTrazo drew the whole camera frustum
 across the model — Marco spotted it comparing screenshots side by side.
 
 Not a regression from the openskp 1.3.0 repin: the old pinned version

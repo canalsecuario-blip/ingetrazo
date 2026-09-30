@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""Purge unused — SketchUp's "Purgar sin usar", for layers and materials.
+"""Purge unused — "Purgar sin usar", for layers and materials.
 
 A layer is a LABEL an entity carries, never its owner (see core.layers), so
 deleting the geometry cannot delete the tag: the layer you empty on purpose
@@ -84,7 +84,7 @@ def layers_held_by_scenes(scene) -> set[str]:
     """Layer names a saved view switches off.
 
     An empty layer a scene deliberately hides is not litter — it is part of
-    that scene's meaning, and SketchUp users build plan/elevation scenes
+    that scene's meaning, and modellers build plan/elevation scenes
     around tags they are about to fill. The sweep leaves them alone and says
     so, rather than quietly breaking a view.
     """

@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""Nothing of Trimble's (their copyright notice, 2026-09-28): a .skp the
+"""No third-party vendor files (copyright notice, 2026-09-28): a .skp the
 built-in reader cannot open is reported -- no converter runs, nothing is
-downloaded -- there is no SketchUp export, and no bundle carries openskp's
+downloaded -- there is no .skp export, and no bundle carries openskp's
 SDK-written blank template."""
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ def test_an_unreadable_skp_is_reported_and_nothing_else_runs(monkeypatch, tmp_pa
     win = MainWindow()
     try:
         bad = tmp_path / "roto.skp"
-        bad.write_bytes(b"not a sketchup file at all")
+        bad.write_bytes(b"not a .skp file at all")
         assert win.import_skp_path(bad) is False
         assert said and "COLLADA" in said[-1]
     finally:
@@ -42,7 +42,7 @@ def test_an_unreadable_skp_is_reported_and_nothing_else_runs(monkeypatch, tmp_pa
         win.close()
 
 
-def test_no_sketchup_export_in_the_menu():
+def test_no_skp_export_in_the_menu():
     from views.main_window import MainWindow
 
     win = MainWindow()

@@ -1,16 +1,15 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""Rotate tool (Q): turn geometry with SketchUp's protractor.
+"""Rotate tool (Q): turn geometry with the classic protractor.
 
 The instrument is the shared :class:`~tools.protractor.ProtractorBase` —
-Rotate shows the same protractor as the Protractor tool (SketchUp,
-help.sketchup.com "Flipping, Mirroring, Rotating and Arrays"):
+Rotate shows the same protractor as the Protractor tool:
 
 - Before the centre click the disc follows the cursor, aligned to the face
   underneath and coloured by the rotation axis (red/green/blue on axis
   planes); arrow keys lock the plane, Shift freezes it.
 - CLICK-DRAG from the centre sets a custom rotation axis along the drag
-  (SketchUp's fold-along-a-line gesture); a plain click keeps the inferred
+  (the classic fold-along-a-line gesture); a plain click keeps the inferred
   plane.
 - Second click sets the reference arm; the geometry swings live with the
   cursor, snapping to the 15° ticks near the disc and free at 0.1° farther
@@ -54,6 +53,9 @@ from tools.protractor import ProtractorBase
 class RotateTool(ProtractorBase):
     name = "Rotate"
     shortcut = "Q"
+    description = (
+        "Turn the selection around a centre with the protractor; Ctrl "
+        "leaves a copy behind.")
     vcb_label = "Angle"
     accepts_angle_ratio = True  # VCB "3:12" (rise:run) arrives as degrees
     accepts_array = True  # VCB "3x" / "/3" after a copy: a POLAR array
@@ -90,7 +92,7 @@ class RotateTool(ProtractorBase):
 
     # ---- Keyboard -----------------------------------------------------------
     def on_key(self, viewport, key: int, modifiers) -> bool:
-        # Ctrl toggles copy mode (SketchUp: rotate a copy, original stays).
+        # Ctrl toggles copy mode (rotate a copy, original stays).
         if key == Qt.Key_Control:
             self._copy = not self._copy
             if self._copy:
@@ -112,7 +114,7 @@ class RotateTool(ProtractorBase):
             splanes = [p for p in viewport.scene.selection
                        if isinstance(p, SectionPlane)]
             if not splanes and not viewport.scene.selection:
-                # SketchUp: Rotate grabs a section plane directly by its
+                # Rotate grabs a section plane directly by its
                 # frame, no pre-selection needed.
                 pick = getattr(viewport, "pick_section_plane", None)
                 sp = (pick(ctx.screen.x(), ctx.screen.y())
@@ -170,7 +172,7 @@ class RotateTool(ProtractorBase):
 
     def on_release(self, viewport) -> None:
         """A real DRAG from the centre fixes the rotation axis along it
-        (SketchUp's fold gesture); a plain click keeps the inferred plane.
+        (the classic fold gesture); a plain click keeps the inferred plane.
         The gesture lives in :class:`ProtractorBase`, shared with the
         Protractor tool."""
         if self._release_axis_drag(viewport):
@@ -188,7 +190,7 @@ class RotateTool(ProtractorBase):
             self._commit(viewport, sign * abs(value))
             return True
         if self._last is not None:
-            # Hot retype (SketchUp): redo the rotation just made at the new
+            # Hot retype: redo the rotation just made at the new
             # angle. A typed negative flips the side.
             last = self._last
             stack = getattr(viewport.history, "undo_stack", None)
@@ -210,7 +212,7 @@ class RotateTool(ProtractorBase):
         return False
 
     def on_array_value(self, viewport, count: int, mode: str) -> bool:
-        """SketchUp's polar array, typed right after a rotate-COPY: ``3x``
+        """The classic polar array, typed right after a rotate-COPY: ``3x``
         lays three copies at multiples of the angle (30° → 30/60/90) and
         ``/3`` three copies dividing it (90° → 30/60/90). Retyping re-lays
         the fan; the window closes at the next click or tool change.
@@ -252,7 +254,7 @@ class RotateTool(ProtractorBase):
     # ---- Snap exclusion -----------------------------------------------------
     def snap_excluded(self):
         """The geometry swinging live, left out of the snap candidates so
-        the tool never infers against itself (SketchUp; issue #19). Mirrors
+        the tool never infers against itself (issue #19). Mirrors
         MoveTool.snap_excluded; in copy mode the original stays put."""
         if self.ref_point is None or self._copy:
             return None
@@ -506,7 +508,7 @@ class RotateTool(ProtractorBase):
             cmd = build([deg])
             if cmd is not None:
                 viewport.history.execute(cmd)
-                # SketchUp: the angle stays hot — typing a value + Enter
+                # The angle stays hot — typing a value + Enter
                 # redoes this rotation until the next click or tool change,
                 # and after a COPY «3x» / «/3» fan it into a polar array.
                 self._last = {"cmd": cmd, "build": build, "deg": float(deg),

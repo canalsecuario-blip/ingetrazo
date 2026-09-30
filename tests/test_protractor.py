@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""Protractor tool (H): angled guide lines, SketchUp semantics — reset after
+"""Protractor tool (H): angled guide lines, classic semantics — reset after
 each guide with a hot retype window, 15° tick snapping near the disc,
 rise:run slope input, plane lock by arrow keys."""
 from __future__ import annotations
@@ -64,7 +64,7 @@ def test_click_angle_creates_guide_and_resets():
     assert (g.point - QVector3D(2, 1, 0)).length() < 1e-9
     assert abs(abs(g.direction.y()) - 1.0) < 1e-9  # vertical in plan
 
-    # SketchUp: after the guide the tool RESETS for the next measurement.
+    # After the guide the tool RESETS for the next measurement.
     assert t.start_point is None and t.ref_point is None
     _click(vp, t, 10, 0)
     _click(vp, t, 11, 0)
@@ -93,7 +93,7 @@ def test_typed_angle_via_vcb_and_undo():
 
 
 def test_hot_retype_reaims_last_guide():
-    # SketchUp: after the guide is created the Measurements box stays hot —
+    # After the guide is created the Measurements box stays hot —
     # typing a new angle re-aims THAT guide instead of adding another.
     scene = Scene()
     vp = _Vp(scene)
@@ -123,7 +123,7 @@ def test_hot_retype_reaims_last_guide():
 
 
 def test_tick_snapping_near_disc_free_far():
-    # SketchUp: near the protractor the cursor snaps to the 15° ticks; farther
+    # Near the protractor the cursor snaps to the 15° ticks; farther
     # from the centre it measures free (0.1° precision).
     scene = Scene()
     vp = _VpScreen(scene)

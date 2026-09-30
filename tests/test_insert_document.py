@@ -4,7 +4,7 @@
 
 «Quiero agregar mobiliario que ya había trabajado como pérgolas, arco,
 luminaria y demás… son archivos .igz, ¿cómo haría?» (Marco, 2026-09-11).
-Como el Import de un .skp en SketchUp: el archivo entero llega como un
+Como el Import de un .skp: el archivo entero llega como un
 componente que se coloca con un clic, con sus grupos, materiales y capas.
 """
 from __future__ import annotations
@@ -219,7 +219,7 @@ def test_el_igz_conserva_los_nombres_de_los_grupos(tmp_path):
 
 def test_un_documento_importado_se_sostiene_por_su_origen():
     """El arco tiene zapatas bajo z=0: colgado de su base se saldría del
-    suelo; colgado de su ORIGEN (los ejes del componente en SketchUp) las
+    suelo; colgado de su ORIGEN (los ejes del componente en un .skp) las
     zapatas quedan enterradas como las dibujó Marco."""
     from tools.base import ToolContext
     from tools.place_group import PlaceGroupTool

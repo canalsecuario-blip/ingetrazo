@@ -145,7 +145,7 @@ def test_tool_flow_path_then_profile():
     assert len(m.faces) == 1                        # back to the lone profile
 
 
-# ---- Manual drag (SketchUp: click the profile, drag along the path) --------
+# ---- Manual drag (click the profile, drag along the path) ------------------
 
 class _Vp2(_Vp):
     def __init__(self, scene):

@@ -55,10 +55,10 @@ def test_the_lock_goes_the_moment_the_SEGMENT_exists():
     active».
 
     This test used to assert the opposite — that the lock survives the
-    second click — and that was my reading, not SketchUp's. The first fix
+    second click — and that was my reading, not the real behaviour. The first fix
     released the lock when the OPERATION ended, and for the Line tool the
     operation is the whole polyline, because it chains. He means the
-    moment the line EXISTS. He draws in SketchUp every day; the test was
+    moment the line EXISTS. He draws this way every day; the test was
     encoding my guess over his measurement.
 
     The signal is «did this click make something», not «is the tool idle».
@@ -123,7 +123,7 @@ def test_switching_tool_drops_it_too():
 
 
 def test_a_typed_length_ends_the_operation_too():
-    """SketchUp releases however the line ends, and typing a distance and
+    """The lock is released however the line ends, and typing a distance and
     pressing Enter is the other way to end one."""
     win, vp = _viewport()
     try:

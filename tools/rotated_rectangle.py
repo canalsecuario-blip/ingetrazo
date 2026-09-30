@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """Rotated Rectangle tool: a rectangle at any angle IN ANY PLANE.
 
-Three clicks, SketchUp-style:
+Three clicks, the classic way:
 1. first corner — which also captures the plane,
 2. second corner — sets the base edge's **direction and length** (the
    rotation), with a protractor drawn at the first corner: near its rim the
@@ -14,7 +14,7 @@ Three clicks, SketchUp-style:
    holds the angle); the VCB takes ``width`` or ``width;angle``.
 
 The two protractors are @pacaeiro's issue #70 — «a "Protractor" inside it,
-to help drawing the rectangle» — which is SketchUp's own tool: IngeTrazo
+to help drawing the rectangle» — which is the classic tool: IngeTrazo
 had the geometry of step 3 but drew neither instrument.
 
 The plane is the whole point of the tool and it used to be missing:
@@ -44,7 +44,12 @@ class RotatedRectangleTool(AxisMagnet, PlaneLock, Tool):
     _MIN_WIDTH = 1e-6
 
     name = "Rotated Rect"
-    shortcut = "K"
+    # K belongs to Back Edges, as in the other modeller (issue #234);
+    # there the rotated rectangle has no default key either.
+    shortcut = None
+    description = (
+        "Draw a rectangle at any angle and in any plane: a base edge, "
+        "then the width.")
 
     @property
     def vcb_label(self) -> str:  # type: ignore[override]
@@ -62,7 +67,7 @@ class RotatedRectangleTool(AxisMagnet, PlaneLock, Tool):
         self.work_plane: tuple[QVector3D, QVector3D] | None = None
         #: Giro del ANCHO alrededor de la arista base, en grados. 0 = en el
         #: plano de trabajo (el rectángulo tumbado), 90 = perpendicular a él
-        #: (de pie). Es el tercer paso de SketchUp: su transportador gira
+        #: (de pie). Es el tercer paso clásico: su transportador gira
         #: sobre la arista base y el cuadro pide «Anchura, Ángulo».
         self.angle: float = 0.0
         #: Dirección impuesta por el bloqueo de eje, cacheada en el hover.
@@ -188,7 +193,7 @@ class RotatedRectangleTool(AxisMagnet, PlaneLock, Tool):
 
     def on_value(self, viewport, value) -> bool:
         """``3`` = 3 m wide keeping the current angle; ``3;90`` = 3 m wide
-        standing perpendicular to the base plane — SketchUp's «Anchura,
+        standing perpendicular to the base plane — the classic «Anchura,
         Ángulo», which is the only way to raise a rectangle whose base edge
         lies flat."""
         if self.start_point is None:
@@ -268,7 +273,7 @@ class RotatedRectangleTool(AxisMagnet, PlaneLock, Tool):
         """``(point, normal)`` the rectangle will live in, or ``None`` to keep
         the legacy ground plane. An arrow-key lock is an explicit request and
         wins; otherwise the face under the click decides, which is what
-        SketchUp does without being asked."""
+        users expect without being asked."""
         locked = self.locked_work_plane(ctx.world)
         if locked is not None:
             return locked
@@ -303,7 +308,7 @@ class RotatedRectangleTool(AxisMagnet, PlaneLock, Tool):
         Both ``_perp`` and the plane normal are perpendicular to the edge, so
         spinning between them sweeps every direction the width can take — and
         90° lands on the normal, which is the perpendicular rectangle
-        SketchUp draws with its protractor.
+        the classic tool draws with its protractor.
         """
         import math
         perp = self._perp()
@@ -410,8 +415,8 @@ class RotatedRectangleTool(AxisMagnet, PlaneLock, Tool):
 
     def _width_cursor(self, ctx: ToolContext) -> QVector3D:
         """Where the cursor is for the width: on the second protractor's
-        plane (square to the base edge, through its end), as SketchUp reads
-        it. The snap engine answers on the drawing plane, so the width
+        plane (square to the base edge, through its end), the usual reading
+        of it. The snap engine answers on the drawing plane, so the width
         could only lie in it — 0° or 180° — unless the view happened to
         look along the edge (Marco, 2026-09-23: «me fuerza a 180° a no ser
         que cambie un poco la vista»)."""

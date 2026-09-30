@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """Auto-merge of coincident edges — Phase 1, sub-step 1.
 
-Covers the SketchUp-style weld: drawing an edge that already exists (in
+Covers the classic weld: drawing an edge that already exists (in
 either orientation, within the position tolerance) reuses it instead of
 stacking a duplicate. Exercised at two levels:
 

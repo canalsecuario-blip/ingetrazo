@@ -54,7 +54,7 @@ def test_alt_taps_on_the_menu_bar_still_reach_the_viewport():
 
 
 def test_a_tap_toggles_the_eyedropper_and_it_stays():
-    """SketchUp since 2021.1 (Marco: «se alterna con Alt, no es que se
+    """The current convention (Marco: «se alterna con Alt, no es que se
     mantenga presionado»): tap = eyedropper on, it stays after the release;
     tap again = off."""
     from tools.paint import PaintTool

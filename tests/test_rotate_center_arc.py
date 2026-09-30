@@ -181,7 +181,7 @@ def test_center_arc_typed_angle_and_circle_weld():
 
 
 def test_scale_selection_doubles_about_anchor():
-    # Grip-box flow (SketchUp): the far corner grip doubles the selection
+    # Grip-box flow: the far corner grip doubles the selection
     # about the OPPOSITE corner, which stays put.
     from tools.scale import ScaleTool
 
@@ -363,7 +363,7 @@ def test_triple_click_selects_whole_connected_solid():
     assert far not in sel                        # disconnected slab untouched
 
 
-# ---- SketchUp protractor parity on Rotate -----------------------------------
+# ---- Classic protractor behaviour on Rotate ---------------------------------
 
 def test_ctrl_copy_rotates_a_group_copy():
     # Ctrl = copy mode: the original group stays put, a rotated copy appears,

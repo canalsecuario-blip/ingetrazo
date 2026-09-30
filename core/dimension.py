@@ -5,8 +5,8 @@
 A ``Dimension`` records two endpoints ``a``/``b`` and an ``offset`` vector
 giving where the dimension line sits relative to the measured segment.
 
-An endpoint placed ON a vertex is **anchored** to it (SketchUp attaches a
-dimension to the geometry it measures): the endpoint reads the vertex's
+An endpoint placed ON a vertex is **anchored** to it (a dimension belongs to
+the geometry it measures): the endpoint reads the vertex's
 position live, so scaling, moving or stretching the drawing takes the
 dimension along and re-measures it — the first thing a user of DriveMeca's
 video missed (2026-09-20, Marco: «dibujamos algo, lo acotamos, después lo
@@ -21,7 +21,7 @@ It is an annotation, not geometry: it lives in ``Scene.dimensions`` and is
 drawn as a screen-space overlay (extension lines + dimension line + value
 label), not in the mesh.
 
-Two kinds, as in SketchUp: **aligned** (``axis`` is None) — the dimension
+Two kinds, the usual convention: **aligned** (``axis`` is None) — the dimension
 line parallel to a–b, measuring its length — and **linear** (``axis`` is
 ``"x"``/``"y"``/``"z"``) — the dimension line parallel to that axis,
 measuring the segment's extent along it, the extension lines square to the
@@ -201,11 +201,11 @@ class Dimension:
         #: ``None`` = aligned; ``"x"``/``"y"``/``"z"`` = linear along that
         #: world axis (see the module docstring).
         self.axis = axis if axis in _AXIS_VECTORS else None
-        #: Layer (SketchUp tag) the annotation lives on; ``None`` = default
+        #: Layer (tag) the annotation lives on; ``None`` = default
         #: layer. Scenes hide layers, so a plan scene can show a clean model
         #: and an "Anotaciones" layer can carry the cotas and leader texts.
         self.layer = layer
-        #: Custom text (SketchUp: double-click the value to edit it);
+        #: Custom text (double-click the value to edit it);
         #: ``None`` shows the measured value, and ``<>`` inside the text
         #: stands for it.
         self.text = text
@@ -364,7 +364,7 @@ class Dimension:
     def placement_for_cursor(a: QVector3D, b: QVector3D,
                              cursor: QVector3D) -> tuple[QVector3D, str | None]:
         """``(offset, axis)`` for the cursor's position — which dimension
-        the drafter is asking for, and where its line goes. SketchUp's
+        the drafter is asking for, and where its line goes. The usual
         reading: the cursor pulled PAST both endpoints along an axis's
         extension direction asks for the linear dimension along that axis
         (to the side of a slanted line → its vertical extent; above it →

@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """Eraser tool (E): erase by clicking or by dragging over geometry.
 
-SketchUp behaviour: press marks the edge under the cursor, dragging keeps
+The classic behaviour: press marks the edge under the cursor, dragging keeps
 marking everything the cursor sweeps over (shown highlighted red), and release
 erases the whole stroke as ONE undo step. Erasing an edge takes its faces with
 it (and rubbing out a divider between coplanar faces merges them back — the
@@ -11,12 +11,12 @@ erases its whole contour, curves being single entities. Guides, dimensions,
 leader texts and georef paths are erased too (texts: @pacaeiro, issue #66).
 Esc cancels the in-progress stroke.
 
-Shift held at press starts a HIDE stroke instead (SketchUp's Shift+eraser):
+Shift held at press starts a HIDE stroke instead (the classic Shift+eraser):
 the swept edges are hidden, not erased — still one undo step. Only edges and
 objects can hide, so a hide stroke ignores guides/dimensions/paths rather
 than deleting what the gesture promised to keep.
 
-A group or component under the cursor is erased WHOLE, as SketchUp does
+A group or component under the cursor is erased WHOLE, as users expect
 (@pacaeiro, issue #46: «ERASE tool cannot erase Groups nor Components,
 only raw edges and faces»); its box marks the stroke, and Shift hides it.
 """
@@ -47,6 +47,9 @@ from tools.base import Tool, ToolContext
 class EraserTool(Tool):
     name = "Eraser"
     shortcut = "E"
+    description = (
+        "Click or drag over edges to erase them, together with the "
+        "faces they bound.")
     uses_snap = False
     wireframe_color = (0.90, 0.20, 0.15, 1.0)   # stroke marks show red
 

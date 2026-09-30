@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""Alt cycles the linear inferences DURING an operation, as SketchUp does.
+"""Alt cycles the linear inferences DURING an operation, the classic way.
 
 @pacaeiro, on 0.4.2 (issue #26): «I finally discovered that ALT key switch
 off some inferences (witch is very good), but the problem is the ALT key
@@ -8,9 +8,9 @@ itself. In my daily job I use a lot the shortcuts ALT and ALT+TAB to switch
 between programs, and every time I do that with ingeTrazo I lost the
 inferences.»
 
-The key is right — Marco's own SketchUp screenshot reads «Alt =
+The key is right — Marco's reference screenshot reads «Alt =
 Activar/desactivar "Inferencias lineales" (Ninguno activo)», the same three
-states we cycle. What was wrong is WHEN: SketchUp offers it only after the
+states we cycle. What was wrong is WHEN: the convention offers it only after the
 first click of a line, and we had it global, at any idle moment. So an
 Alt+Tab with nothing in progress moved a mode he was not even using.
 
@@ -143,7 +143,7 @@ def test_losing_focus_drops_the_claim_on_the_release():
 
 
 def test_the_toggle_lasts_one_operation_and_no_longer():
-    """SketchUp's rule, checked by Marco against the real thing: «desactivo
+    """The usual rule, checked by Marco against the real thing: «desactivo
     con alt, termino de dibujar la línea, aprieto la flechita y aprieto otra
     vez la línea y está activo la inferencia». Ours was sticky — off stayed
     off for the session, which is a trap, and it is what made an accidental
@@ -212,12 +212,12 @@ def test_escape_gives_the_inferences_back():
 
 
 def test_the_status_bar_offers_alt_and_names_the_state():
-    """SketchUp puts the offer AND the current state on the same line while
-    drawing: «Alt = Activar/desactivar "Inferencias lineales" (Ninguno
-    activo)»."""
+    """The usual status bar puts the offer AND the current state on one line
+    while drawing: «Alt = Activar/desactivar "Inferencias lineales"
+    (Ninguno activo)»."""
     from views.status_hints import alt_inference_hint, hint_for
 
-    # Shorter than SketchUp's own wording on purpose: it has the whole bar
+    # Shorter than the usual wording on purpose: it has the whole bar
     # for this line and we have half of it, so the full name «linear
     # inferences (none active)» spent 52 of a ~110-character budget and got
     # the end of the hint elided on a 1366 screen. The long name still runs

@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """Tape Measure pulls a guide from a GUIDE, not only from an edge.
 
-Issue #22 (@pacaeiro): in SketchUp you click a guide line's body with the
+Issue #22 (@pacaeiro): the usual way, you click a guide line's body with the
 Tape and drag (or type) to lay a second guide parallel to it — that is how a
 grid of guides is built. Ours only accepted mesh edges as the source, because
 the tool picked with the mesh edge picker, which never sees guides.

@@ -1,24 +1,24 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""SKP export — native SketchUp file via OpenSKP's pure-Python writer.
+"""SKP export — native .skp file via OpenSKP's pure-Python writer.
 
-Writes the scene as a legacy-format (v17) ``.skp`` file that opens directly in
-SketchUp 2017 or later — no COLLADA round-trip, no Trimble SDK, no Wine.
-Per-face paint (``Face.attrs["color"]``) becomes a SketchUp material, textured
-faces (``attrs["texture"]``) become image-mapped materials with their original
-textures embedded in the ``.skp``, layers become SketchUp tags, and face holes
-survive as inner loops.
+Writes the scene as a legacy-format (v17) ``.skp`` file, readable wherever
+.skp files of the 2017 version or later open — no COLLADA round-trip, no
+external SDK, no Wine. Per-face paint (``Face.attrs["color"]``) becomes a
+.skp material, textured faces (``attrs["texture"]``) become image-mapped
+materials with their original textures embedded in the ``.skp``, layers
+become .skp tags, and face holes survive as inner loops.
 
 Structure survives too: a classic group (mesh in world coordinates, no
-``xform``) becomes a SketchUp group via ``add_group``, and component instances
+``xform``) becomes a .skp group via ``add_group``, and component instances
 — sibling groups sharing one prototype mesh — become ONE component definition
 placed by N instances (``add_component_definition`` + ``add_instance``), so
 the shared geometry is stored once and stays editable as a component on the
-SketchUp side. Loose mesh faces stay root-level. Hidden entities are not
+reading side. Loose mesh faces stay root-level. Hidden entities are not
 exported (mirroring ``meshexport.world_faces``); face-me figures become
-components in SketchUp's own face-me convention (``_billboard_definition``).
+components in the .skp format's face-me convention (``_billboard_definition``).
 
-Coordinates are in **inches** (SketchUp's native unit); the model's metre-based
+Coordinates are in **inches** (the .skp native unit); the model's metre-based
 geometry is scaled by ``_M_TO_IN``, and instance placements carry their
 rotation/scale 3×3 unchanged with the translation converted the same way.
 The file produced is the same legacy MFC format that ``openskp.create``
@@ -34,11 +34,11 @@ from PySide6.QtGui import QVector3D
 from core.materials import back_is_default
 from core.texture import face_uv_axes, projection_basis, uv_reference_points
 
-# SketchUp's face-me convention: a component that "always faces the camera"
+# The .skp face-me convention: a component that "always faces the camera"
 # turns about its own Z so that its LOCAL −Y axis points at the eye.
 _FACEME_FRONT = (0.0, -1.0)
 
-# IngeTrazo stores geometry in metres; SketchUp works in inches.
+# IngeTrazo stores geometry in metres; the .skp format works in inches.
 _M_TO_IN = 39.37007874
 
 
@@ -56,7 +56,7 @@ def _pts_inches(points):
 
 def _is_soft_face(face):
     """True when ANY of the face's bounding edges is soft — mirrors how the
-    import flags soft edges from SketchUp's smoothed curved surfaces."""
+    import flags soft edges from the smoothed curved surfaces of .skp files."""
     for v in face.loop:
         for e in v.edges:
             if getattr(e, "soft", False):
@@ -80,7 +80,7 @@ def _is_hidden_face(face):
     ``hidden_edges`` applies to all the edges a face creates, so only a
     face whose outline is fully invisible in IngeTrazo asks for it — a
     figure's cut-out quad, a leaf card whose outline is its texture mask.
-    Without it SketchUp drew a black rectangle around Sumari."""
+    Without it the .skp reader drew a black rectangle around Sumari."""
     edges = _boundary_edges(face)
     return bool(edges) and all(e is not None and getattr(e, "hidden", False)
                                for e in edges)
@@ -116,7 +116,7 @@ def _stage_texture(src: Path, stage_dir: Path | None, taken: set) -> Path | None
     string writer refuses 255+ characters — AFTER the image bytes and the
     applied size are already in its buffer. So a long path never "fell
     back to a colour": the material was left half-written, the colour
-    record landed on top, and SketchUp refused the whole file (0.3.10's
+    record landed on top, and the reader refused the whole file (0.3.10's
     Flatpak: a texture cached under a stacked-hash name of 250 characters
     spilled into the temp fallback and the path passed 255). Staging into
     ``stage_dir`` under the image's plain name keeps the stored string short
@@ -134,7 +134,7 @@ def _stage_texture(src: Path, stage_dir: Path | None, taken: set) -> Path | None
     from core.texture import texture_file_name
     base = texture_file_name(src.name)
     if not (data.startswith(b"\x89PNG\r\n\x1a\n") or data[:3] == b"\xff\xd8\xff"):
-        # BMP / TIFF / GIF — what imported SketchUp models often carry (a
+        # BMP / TIFF / GIF — what imported .skp models often carry (a
         # bridge's soda logos, a slaughterhouse's bronze). openskp embeds
         # only PNG and JPEG, so re-encode through Qt instead of dropping
         # the image; what Qt cannot read either becomes a colour.
@@ -167,7 +167,7 @@ def _collect_materials(faces_by_key, builder, stage_dir: Path | None = None,
 
     Returns ``mat_handles``: ``key → material_slot``. Unpainted faces never
     reach here — their ``None`` key stays out of ``faces_by_key``, so they
-    export with no material at all (SketchUp's default material).
+    export with no material at all (the .skp default material).
 
     ``applied``, when given, is filled with ``key → (width, height)``: the
     applied size in inches the TEXTURED materials were actually written with
@@ -197,7 +197,7 @@ def _collect_materials(faces_by_key, builder, stage_dir: Path | None = None,
                 continue
             # The applied size, in inches: how much model space one tile
             # covers. For a texture applied without positioning this IS
-            # the mapping — SketchUp writes no per-face record for those
+            # the mapping — .skp files carry no per-face record for those
             # — so leaving it out made every texture claim to span one
             # inch however large it was. Marco's lawn (3.26 x 8.82 m)
             # repeated 128 times and lost its aspect; only the surfaces
@@ -228,9 +228,9 @@ def _collect_materials(faces_by_key, builder, stage_dir: Path | None = None,
 def _collect_layers(scene, builder, used=None):
     """Register the scene's layers on the builder AFTER materials — only
     the ones something exported sits on, when ``used`` (a set of names)
-    is given: SketchUp's own Purge on Marco's pool threw away 8 of our 10
+    is given: a purge of unused items on Marco's pool threw away 8 of our 10
     layers, every one of them empty, and IngeTrazo's default "Layer 0" is
-    SketchUp's "Layer0" already (a face on it carries no layer).
+    the .skp "Layer0" already (a face on it carries no layer).
 
     Returns ``layer_handles``: ``layer_name → layer_slot``."""
     from core.layers import DEFAULT_LAYER
@@ -247,7 +247,7 @@ def _collect_layers(scene, builder, used=None):
 
 def _opacity_key(attrs) -> tuple:
     """Translucency is part of a material's identity: the same image painted
-    at two opacities is two SketchUp materials, and merging them would make
+    at two opacities is two .skp materials, and merging them would make
     one of them wrong."""
     op = attrs.get("opacity")
     return () if op is None or float(op) >= 0.999 else (round(float(op), 3),)
@@ -256,7 +256,7 @@ def _opacity_key(attrs) -> tuple:
 def _material_key_attrs(attrs):
     """Compute the material-grouping key for a face — same logic as
     ``formats.meshexport.collect_geometry`` and ``formats.obj``, except an
-    unpainted face keys to ``None``: SketchUp has a first-class default
+    unpainted face keys to ``None``: the .skp format has a first-class default
     material (OBJ/glTF don't, which is why meshexport bakes cream there),
     so "never painted" round-trips as "no material" instead of coming back
     as an explicit cream paint that pollutes the per-material takeoff.
@@ -300,7 +300,7 @@ def _material_info_attrs(attrs):
         info = {"color": tuple(attrs["color"]), "map": None}
     op = attrs.get("opacity")
     if op is not None and float(op) < 0.999:
-        # Translucency lives on the MATERIAL in SketchUp, so it has to reach
+        # Translucency lives on the MATERIAL in a .skp, so it has to reach
         # the material record: a pool's water (0.6) exported as an opaque
         # slab without it.
         info["opacity"] = float(op)
@@ -329,7 +329,7 @@ def _split_containers(scene):
     Definitions are keyed by prototype mesh AND nested structure, so the
     hedge's 9600 faces are written ONCE and placed 48 times instead of
     landing in the file 48 times over — which is the difference between the
-    14 MB SketchUp writes for that model and the 80 MB we used to.
+    14 MB the reference .skp takes for that model and the 80 MB we used to.
 
     Mirrors ``meshexport.world_faces``'s rules: hidden entities are skipped
     (face-me figures become definitions of their own, see
@@ -399,13 +399,13 @@ def _split_containers(scene):
         if (getattr(g, "xform", None) is None
                 or not getattr(g, "component", True)):
             # A group of groups carries a matrix but is no component
-            # (issue #90): it goes out as a SketchUp GROUP too.
+            # (issue #90): it goes out as a .skp GROUP too.
             classic_groups.append((g, kids, figures))
         else:
             roots.append((_register(g), g))
     # Figures go in LAST: a 1-face definition written first, ahead of the
     # big ones, was the file the pinned OpenSKP produced with duplicate
-    # persistent IDs that SketchUp could load but not save (see
+    # persistent IDs that the reader could load but not save (see
     # _fix_pid_counter); with the figure anywhere else the same model saved.
     for g in figures_at_root:
         roots.append((_register_figure(g), g))
@@ -434,18 +434,18 @@ def _split_containers(scene):
 
 
 def _billboard_definition(g) -> dict:
-    """A face-me group as a SketchUp component definition: its geometry in
+    """A face-me group as a .skp component definition: its geometry in
     the component's LOCAL frame, feet at the origin, front along −Y — the
-    axis SketchUp turns toward the camera when the definition carries the
+    axis a .skp reader turns toward the camera when the definition carries the
     always-faces-camera behaviour (the same turn the viewport does around
     the figure's anchor). The anchor becomes the instance's placement.
 
     Figures were simply left out of the file before, so every 2D person
-    and cut-out tree vanished in SketchUp (Marco's pool: the man on the
+    and cut-out tree vanished on reading (Marco's pool: the man on the
     deck, the swimmers). Two kinds, mirroring the viewport's two passes:
     a textured quad (``billboard is True``: a PNG cut-out) is rebuilt as
     the canonical upright quad the viewport draws, whatever yaw its stored
-    quad has; a vector figure (``"mesh"``: SketchUp's 2D people, real
+    quad has; a vector figure (``"mesh"``: the classic 2D people, real
     outlines) keeps its faces, turned so the largest one's normal points
     along −Y. A writer without the behaviour flag still gets the figure —
     standing still, facing −Y — instead of nothing."""
@@ -513,7 +513,7 @@ def _billboard_definition(g) -> dict:
 
 def _placement(entry, group):
     """OpenSKP's ``(translation, matrix3x3)`` for placing ``group``: a
-    figure sits at its anchor with no turn (SketchUp turns it), anything
+    figure sits at its anchor with no turn (the reader turns it), anything
     else by its own transform."""
     if entry.get("billboard"):
         a = entry["anchor"]
@@ -538,7 +538,7 @@ def _loose_edge_runs(mesh, xf=None) -> list:
         if xf is not None:
             p = xf.map(p)
         return (float(p.x()) * _M_TO_IN, float(p.y()) * _M_TO_IN,
-                float(p.z()) * _M_TO_IN)          # SketchUp speaks inches
+                float(p.z()) * _M_TO_IN)          # the .skp speaks inches
 
     by_curve: dict = {}
     singles = []
@@ -841,7 +841,7 @@ def _share_repeats(sources):
 
     A model saved by an older IngeTrazo has its components exploded: Marco's
     pool carries 24 hedges — 7200 leaves — fused into ONE group of 230 400
-    faces, three identical benches as three groups. SketchUp keeps such
+    faces, three identical benches as three groups. The .skp format keeps such
     things as one definition placed N times, and so does this writer for
     groups that share a mesh object — but not for geometry that merely
     LOOKS the same. Now it does: the connected pieces of every mesh get a
@@ -928,19 +928,19 @@ def _writer_uv_quirks(openskp, stage_dir: Path) -> frozenset:
     the fork: see the ``_supported`` docstring for how that bit before).
 
     * ``"first-edge basis"`` — ``add_face(front_uv=)`` solves its 3×3 in the
-      basis (first edge, n × first edge) while SketchUp reads it in
+      basis (first edge, n × first edge) while the reader reads it in
       (Z × n, n × Z × n): every pinned face came out turned by the angle of
       its first edge. A palm trunk of thousands of quads, each with its own
-      first edge, arrived in SketchUp shattered.
-    * ``"unscaled pins"`` — SketchUp keeps that matrix in INCHES of texture
-      space and divides by the material's applied size when it reads; the
+      first edge, arrived shattered.
+    * ``"unscaled pins"`` — a .skp keeps that matrix in INCHES of texture
+      space, divided by the material's applied size on reading; the
       writer stores the pins' tile-unit UVs as given. Marco's pool water
       (2 m tile = 78.7 in) came out 78.7× too big: one flat blue slab.
       openskp's own ``edit`` module dodges this by writing applied size 1.0
       — not an option here, where ``planar`` faces of the same material
       rely on the real size.
 
-    Both measured through the SDK's own converter (skp2dae, 2026-09-04,
+    Both measured through the former external converter (2026-09-04,
     identity on 11 orientations once compensated). The probe writes one
     horizontal square whose first edge runs along +Y, material applied size
     10 in, pinned to ``u = x/10, v = y/10``, and reads the stored matrix
@@ -992,21 +992,21 @@ def _writer_uv_quirks(openskp, stage_dir: Path) -> frozenset:
 def _compensate_pins(pairs, pts_in, normal, quirks, applied):
     """Undo in advance what the installed writer will do wrong with the
     pins (:func:`_writer_uv_quirks`), so the matrix that lands in the file
-    is the one SketchUp reads back correctly.
+    is the one a .skp reader reads back correctly.
 
     Scale: the UVs handed over in inches of texture space (× applied size),
-    which is what SketchUp divides by the applied size on read. Basis: in
+    which is what the reader divides by the applied size on read. Basis: in
     place of the real point, one whose projection on the WRITER's basis
     (U = first edge of the very point list it receives — the face, or the
     triangle of the fallback — W = n × U) equals the real point's
-    projection on SketchUp's (Z × n, n × Z × n). The writer only ever dots
+    projection on the reader's (Z × n, n × Z × n). The writer only ever dots
     a pin's point with its two axes, never asks it to lie on the face, so
     the fit it solves is exactly the one it should have solved."""
     aw, ah = applied
     if "unscaled pins" in quirks:
         pairs = [(pt, (u * aw, v * ah)) for pt, (u, v) in pairs]
     if "first-edge basis" in quirks and len(pts_in) >= 2:
-        # The normal SketchUp will read is the plane the WRITER computes
+        # The normal the reader will read is the plane the WRITER computes
         # from these very points, in float64 — not IngeTrazo's float32
         # one. A horizontal face is exactly vertical there while the
         # float32 normal carried (2.9e-6, 0, 1): the Z × n basis snaps to
@@ -1046,7 +1046,7 @@ def _tuple3(v) -> tuple:
 def _writer_normal(pts_in) -> tuple | None:
     """The unit plane normal the OpenSKP writer stores for ``pts_in`` —
     its own Newell sum in float64 — so the pins are expressed against the
-    plane SketchUp will actually read. Falls back to the same sum done
+    plane the reader will actually read. Falls back to the same sum done
     here when the writer does not expose it."""
     try:
         from openskp.create import _plane_from_polygon
@@ -1069,10 +1069,10 @@ def _face_uv_pairs(face, points=None, quirks=frozenset(), applied=(1.0, 1.0),
                    tex=None):
     """Where the face's texture sits, as the three ``(point, (u, v))`` pairs
     OpenSKP fits its UV matrix through — or ``None`` for an untextured or
-    degenerate face, which then takes SketchUp's default projection.
+    degenerate face, which then takes the .skp default projection.
 
     Without this the exporter wrote textured faces with no mapping at all,
-    and a model saved from IngeTrazo opened in SketchUp Web with every
+    and a model saved from IngeTrazo opened in a web .skp viewer with every
     texture gone, each surface flat in its average colour (Marco's pool: the
     water lavender, the deck terracotta, the palm a black silhouette). The
     recipe is shared with the renderer through ``core.texture.face_uv_axes``,
@@ -1092,7 +1092,7 @@ def _face_uv_pairs(face, points=None, quirks=frozenset(), applied=(1.0, 1.0),
     if not tex or not tex.get("path"):
         return None
     if tex.get("planar"):
-        # SketchUp's default projection: the material's applied size is the
+        # The .skp default projection: the material's applied size is the
         # whole mapping and the file carries no per-face record — its own
         # files do exactly this for a texture applied without positioning
         # (all three faces of the calibration model, and two thirds of the
@@ -1143,15 +1143,15 @@ def _emit_face(sink, face, mat_handles, layer_handles, SkpWriteError,
     position, and the fallback triangles get their own pins, fitted on the
     triangle the writer sees.
 
-    Each side gets what it wears here, and SketchUp shows the same:
+    Each side gets what it wears here, and the .skp shows the same:
     ``attrs["back"]`` as a dict is the back's own material and pins,
     ``True`` a two-sided face (the front's material and pins again), and an
-    absent back is SketchUp's default back — unless the front is
+    absent back is the .skp default back — unless the front is
     translucent, which reads on both sides here and so is painted on both
     there (``core.materials.back_is_default``, the renderer's rule). Until
     2026-09-11 every paint was drawn on both sides, and the writer had to
-    paint both to match (the lavender backs of Marco's pool in SketchUp
-    Web, 2026-09-04); now the two agree face by face."""
+    paint both to match (the lavender backs of Marco's pool in a web
+    .skp viewer, 2026-09-04); now the two agree face by face."""
     key = _material_key(face)
     material = mat_handles.get(key)
     face_layer = face.attrs.get("layer")
@@ -1243,7 +1243,7 @@ def _instance_placement(xform):
     ``None`` is the IDENTITY, not an error: a CLASSIC group owns its
     geometry in the coordinates its parent expects and has no matrix at all
     — that is the whole difference from an instance. Reading rows off the
-    None killed Export ▸ SketchUp on any container holding such a child
+    None killed the .skp export on any container holding such a child
     (found on Plaza Yanque, 2026-09-17: «Group 8»)."""
     if xform is None:
         return _IDENTITY_PLACEMENT
@@ -1256,7 +1256,7 @@ def _instance_placement(xform):
 
 
 def save_skp(scene, path) -> None:
-    """Write the scene as a SketchUp ``.skp`` to ``path``."""
+    """Write the scene as a ``.skp`` to ``path``."""
     try:
         import openskp
         from openskp import SkpWriteError
@@ -1279,7 +1279,7 @@ def _write_skp(scene, path, openskp, SkpWriteError, stage_dir: Path) -> None:
             if not isinstance(attrs, dict):
                 continue
             key = _material_key_attrs(attrs)
-            if key is None:  # unpainted — SketchUp's default material
+            if key is None:  # unpainted — the .skp default material
                 continue
             if key not in materials_info:
                 materials_info[key] = _material_info_attrs(attrs)
@@ -1287,8 +1287,8 @@ def _write_skp(scene, path, openskp, SkpWriteError, stage_dir: Path) -> None:
                 materials_info[key]["mat"] = attrs["mat"]
 
     # Register materials (must be before layers and geometry).
-    # A container's own paint (issue #47) is a material too: SketchUp
-    # keeps it on the group / instance and its default faces show it.
+    # A container's own paint (issue #47) is a material too: the .skp
+    # format keeps it on the group / instance and its default faces show it.
     def _containers():
         for g, kids, _faces in classic:
             yield g
@@ -1345,7 +1345,7 @@ def _write_skp(scene, path, openskp, SkpWriteError, stage_dir: Path) -> None:
         for ci, c in children:
             translation, matrix3x3 = _placement(defs[ci], c)
             # A child that is a GROUP (a classic one, or a group of groups)
-            # is placed as a SketchUp group, not as a component instance
+            # is placed as a .skp group, not as a component instance
             # (issue #90); components, figures and shared repeats stay
             # instances.
             as_group = (not getattr(c, "billboard", False)
@@ -1381,8 +1381,8 @@ def _write_skp(scene, path, openskp, SkpWriteError, stage_dir: Path) -> None:
 
     for g, kids, faces in classic:
         # A group that knows its own axes (issue #44) goes out the way
-        # SketchUp keeps groups: geometry in its local coordinates, the
-        # axes as the placement — so it opens in SketchUp turned the way
+        # the .skp format keeps groups: geometry in its local coordinates,
+        # the axes as the placement — so it opens in a reader turned the way
         # it is, with its bounding box and axes on it.
         if getattr(g, "xform", None) is not None:
             # A group of groups: its own faces and its children's
@@ -1439,14 +1439,14 @@ def _fix_pid_counter(path: Path, builder) -> None:
     cover every pid the writer handed out.
 
     That writer numbers each section's pids from 1 again and grows the
-    header's counter by materials and layers only, so SketchUp — which
+    header's counter by materials and layers only, so the reader — which
     renumbers the duplicates it finds on load — could open our files but
-    not SAVE them (``SUModelSaveToFile`` → serialization error; "Guardado
-    fallido" in SketchUp Web, Marco 2026-09-04). A counter that covers the
+    not SAVE them (a serialization error on save; "Guardado
+    fallido" in a web .skp viewer, Marco 2026-09-04). A counter that covers the
     biggest section rescues most models; the fork's writer runs one pid
     sequence across sections (``_pid_start`` on the builder) and needs
     nothing here. The field is a u32 at ``_PID_COUNTER_POS`` — measured:
-    2 000 000 round-trips through the SDK. Best effort: any surprise in
+    2 000 000 round-trips through the former external converter. Best effort: any surprise in
     the writer's internals leaves the file as written."""
     if hasattr(builder, "_pid_start"):
         return                                   # a writer that numbers pids right
@@ -1473,7 +1473,7 @@ def _emit_annotations(scene, builder) -> None:
     (add_dimension/add_text — our annotations branch; harmless no-op before
     it lands upstream).
 
-    The .skp free dimension stores a SCALAR offset; SketchUp derives the
+    The .skp free dimension stores a SCALAR offset; the reader derives the
     plane itself, so the scalar is our offset vector projected on the same
     in-plane perpendicular the importer uses (cross(Z, segment) with the
     import's fallbacks) — export∘import is the identity on our own files.

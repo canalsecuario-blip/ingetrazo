@@ -100,9 +100,9 @@ def test_edge_layer_survives_split_and_snapshot():
     assert all(layer_of(k) == "Instalaciones" for k in scene.mesh.edges)
 
 
-# ---- Annotations on layers (SketchUp tags) ----------------------------------
+# ---- Annotations on layers (tags) -------------------------------------------
 
-def test_annotations_take_layers_like_sketchup(tmp_path):
+def test_annotations_take_layers_like_any_entity(tmp_path):
     """Cotas and leader texts are tagged like any entity: default layer when
     born, reassignable, hidden with their layer (so a scene that hides an
     "Anotaciones" layer shows a clean model — no need to duplicate the

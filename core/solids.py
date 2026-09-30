@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""Solid booleans on groups and components — SketchUp's Solid Tools.
+"""Solid booleans on groups and components — the classic Solid Tools.
 
-Outer Shell, Union, Subtract, Trim, Intersect and Split, with SketchUp's
-rules (help.sketchup.com, «Modeling Complex 3D Shapes with Solid Tools»):
+Outer Shell, Union, Subtract, Trim, Intersect and Split, with the
+classic rules:
 
 * A **solid** is a group or component instance with a closed volume: every
   edge borders exactly two faces, no stray edges, no groups nested inside.
@@ -17,8 +17,8 @@ rules (help.sketchup.com, «Modeling Complex 3D Shapes with Solid Tools»):
   the union without anything inside (inner voids go too); Union keeps them.
 
 Deviation, on purpose: the result goes on the layer of the solid that
-receives the operation, not on the current layer (a SketchUp habit its own
-users complain about).
+receives the operation, not on the current layer (a habit of the classic
+tool that its users complain about).
 
 The arithmetic is manifold3d (Apache-2.0, the kernel of OpenSCAD and
 Blender's booleans): robust on the coincident faces and shared edges real
@@ -35,12 +35,12 @@ from PySide6.QtGui import QVector3D
 from core.group import Group, world_mesh
 from core.mesh import Mesh
 
-#: Operations, in SketchUp's help order.
+#: Operations, in the classic order.
 OUTER_SHELL, UNION, SUBTRACT, TRIM, INTERSECT, SPLIT = (
     "outer_shell", "union", "subtract", "trim", "intersect", "split")
 OPS = (OUTER_SHELL, UNION, SUBTRACT, TRIM, INTERSECT, SPLIT)
 
-#: The group names SketchUp gives its results (translated where shown).
+#: The group names given to the results (translated where shown).
 RESULT_NAMES = {OUTER_SHELL: "Outer shell", UNION: "Union",
                 SUBTRACT: "Difference", TRIM: "Trimmed",
                 INTERSECT: "Intersection", SPLIT: "Split"}
@@ -74,8 +74,8 @@ def is_solid(group) -> bool:
 
 
 def solid_volume(group) -> float | None:
-    """The group's volume when it is a solid (SketchUp's «Solid Group»),
-    else ``None``. Nested groups disqualify it, as in SketchUp."""
+    """The group's volume when it is a solid (a «Solid Group»),
+    else ``None``. Nested groups disqualify it."""
     if not isinstance(group, Group) or getattr(group, "children", None):
         return None
     ok, vol = solid_report(world_mesh(group))
@@ -243,7 +243,7 @@ def _group_from_loops(loops, sources: _Sources, name: str, layer):
 
 def _drop_collinear(polys, tol: float = 1e-9) -> None:
     """A corner every ring passes straight through is not a corner: the
-    triangulation left them along edges, and SketchUp's result has none."""
+    triangulation left them along edges, and the classic result has none."""
     def key(p):
         return (round(p.x(), 7), round(p.y(), 7), round(p.z(), 7))
 

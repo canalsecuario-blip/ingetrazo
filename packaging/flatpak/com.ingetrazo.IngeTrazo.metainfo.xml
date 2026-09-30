@@ -23,14 +23,14 @@
       a escala (PDF/DXF).
     </p>
     <p>
-      Opens SketchUp .skp files natively (2013–2026, through the
+      Opens .skp files natively (2013–2026, through the
       pure-Python OpenSKP library), imports and exports COLLADA and OBJ,
       exports STL, glTF/GLB and IFC4 for BIM quantity take-off, and brings
       real terrain in: base-map tiles, 3D elevation, photogrammetry meshes
       and survey points.
     </p>
     <p xml:lang="es">
-      Abre archivos .skp de SketchUp de forma nativa (2013–2026, vía la
+      Abre archivos .skp de forma nativa (2013–2026, vía la
       librería puro-Python OpenSKP), importa y exporta
       COLLADA y OBJ, exporta STL, glTF/GLB e IFC4 para metrados BIM, y trae
       el terreno real: mapas base, elevación 3D, mallas de fotogrametría y
@@ -55,9 +55,9 @@
       <caption xml:lang="es">Terreno real: mapa base, elevación 3D y levantamientos bajo el modelo</caption>
     </screenshot>
     <screenshot>
-      <image>https://ingetrazo.com/images/screenshots/import-sketchup.jpeg</image>
-      <caption>SketchUp .skp files open natively, textures and all</caption>
-      <caption xml:lang="es">Los archivos .skp de SketchUp abren de forma nativa, con sus texturas</caption>
+      <image>https://ingetrazo.com/images/screenshots/importar.jpeg</image>
+      <caption>A plaza modelled in IngeTrazo on its satellite terrain, with its layers and scenes</caption>
+      <caption xml:lang="es">Una plaza modelada en IngeTrazo sobre su terreno satelital, con sus capas y escenas</caption>
     </screenshot>
     <screenshot>
       <image>https://ingetrazo.com/images/screenshots/componentes.jpeg</image>
@@ -75,6 +75,36 @@
   <url type="vcs-browser">https://github.com/ingelibre/ingetrazo</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.5.7" date="2026-09-30">
+      <description>
+        <p>Parametric windows with the Windowizer example extension, the
+        selection marked with dots, back edges drawn dashed (K), an X-ray
+        mode that dims the edges behind faces (Alt+X), Scale grips that snap
+        to other objects, a short description for every command, an instant
+        command search (F3), Indonesian, big models with thousands of
+        mirrored components that open and close quickly, and Render with
+        Blender working in the Flatpak.</p>
+        <p xml:lang="es">Ventanas paramétricas con la extensión de ejemplo
+        Windowizer, la selección marcada con puntos, aristas traseras en
+        discontinua (K), un modo Rayos X que atenúa las aristas detrás de
+        las caras (Alt+X), pinzas de Escalar que enganchan otros objetos,
+        una descripción breve para cada comando, el buscador de comandos
+        (F3) al instante, indonesio, modelos grandes con miles de
+        componentes espejados que abren y cierran rápido, y Renderizar con
+        Blender funcionando en el Flatpak.</p>
+      </description>
+    </release>
+    <release version="0.5.6.1" date="2026-09-29">
+      <description>
+        <p>The AI assistant, the MCP bridge and Render with Blender load again
+        in the Windows, macOS, AppImage and tar packages; IngeTrazo describes
+        itself on its own terms across the interface and its listings.</p>
+        <p xml:lang="es">El Asistente IA, el puente MCP y Renderizar con
+        Blender vuelven a cargar en los paquetes de Windows, macOS, AppImage
+        y tar; IngeTrazo se describe por sí mismo en la interfaz y sus
+        fichas.</p>
+      </description>
+    </release>
     <release version="0.5.6" date="2026-09-29">
       <description>
         <p>Render with Blender: photorealistic images of the view with the
@@ -97,18 +127,19 @@
     </release>
     <release version="0.5.5" date="2026-09-28">
       <description>
-        <p>Nothing of Trimble's: the skp2dae converter and the .skp export
-        are gone, and .skp files keep opening with the free built-in
-        reader. IngeTrazo's own icons replace those that imitated
-        SketchUp's. Orbit turns about what you are looking at, Push/Pull
+        <p>IngeTrazo keeps only free pieces: the link to an external .skp
+        converter and the .skp export are retired, and .skp files keep
+        opening with the free built-in reader. The icons are updated to
+        stay consistent across the interface. Orbit turns about what you are looking at, Push/Pull
         stops at the Tape's guides, rotating lands exactly on the snapped
         point, saving no longer leaves a phantom "unsaved changes", lengths
         show in the document's units, and Shift+R repeats the last
         command.</p>
-        <p xml:lang="es">Nada de Trimble: el conversor skp2dae y la
-        exportación a .skp se van, y los .skp se siguen abriendo con el
-        lector libre integrado. Íconos propios de IngeTrazo en lugar de los
-        que imitaban a SketchUp. La órbita gira alrededor de lo que miras,
+        <p xml:lang="es">IngeTrazo se queda solo con piezas libres: el
+        enlace a un conversor externo de .skp y la exportación a .skp se
+        retiran, y los .skp se siguen abriendo con el lector libre
+        integrado. Los íconos se actualizan para mantenerlos coherentes en
+        toda la interfaz. La órbita gira alrededor de lo que miras,
         Empujar/Tirar se detiene en las guías de la Cinta, rotar cae exacto
         en el punto enganchado, guardar ya no deja «cambios sin guardar»
         fantasma, las medidas salen en las unidades del documento, y
@@ -117,7 +148,7 @@
     </release>
     <release version="0.5.3" date="2026-09-25">
       <description>
-        <p>Rotation grips on Move and a Select submenu, as in SketchUp;
+        <p>Rotation grips on Move and a Select submenu;
         count and spacing in one entry (5x10m); 3D mouse navigation; Edit ▸
         Invert Selection; an empty .skp opens empty. Fixes from users'
         videos: Scale no longer tears loose geometry, a group turned about
@@ -149,7 +180,7 @@
     </release>
     <release version="0.5.0" date="2026-09-23">
       <description>
-        <p>Solids, local axes and Mac. SketchUp's Solid Tools (Outer
+        <p>Solids, local axes and Mac. The Solid Tools (Outer
         Shell, Union, Subtract, Trim, Intersect, Split) and Intersect
         Faces; local axes for groups and components, with Change Axes and
         .skp files that keep them; the Rotated Rectangle's protractors;
@@ -165,7 +196,7 @@
         batch of 20–21 September: Divide, the camera saved in the
         document, a progress bar on open, section planes that finish and
         take their axis colour, the undo cap, scrolling lists, Paint with
-        SketchUp's rule (face over group), hidden things you can click, the
+        the usual rule (face over group), hidden things you can click, the
         linear dimension, the axis magnet in every drawing tool. From
         Rafael's third review: the Tape pulls guides off the axes and
         leaves guide points with their segment, and the AI Assistant says
@@ -178,7 +209,7 @@
         Dividir, la cámara guardada en el documento, la barra de progreso
         al abrir, los planos de sección que terminan y se colorean por
         eje, los pasos de deshacer, el scroll de las listas, Pintar con la
-        regla de SketchUp (cara sobre grupo), lo oculto que se puede
+        regla de siempre (cara sobre grupo), lo oculto que se puede
         clicar, la cota lineal, el imán de ejes en todas las herramientas
         de dibujo. De la tercera revisión de Rafael: la cinta saca guías
         desde los ejes y deja puntos guía con su segmento, y el Asistente
@@ -257,10 +288,9 @@
         video on 0.4.x was split in two releases: this is the MODEL one —
         the three bugs and the five requests — and the next will be the
         sheets. The big pieces: a walkthrough camera (Position Camera, Look
-        Around and Walk, as SketchUp does them) to see interiors; hiding
+        Around and Walk) to see interiors; hiding
         objects, and layers you can actually use; 3D text that stays
-        editable, one group per letter; and an inference SketchUp does not
-        have — a window on the next wall level with the first one, the
+        editable, one group per letter; and a new inference — a window on the next wall level with the first one, the
         horizontal plane through the corner cut by the wall the cursor is
         on. Also @pacaeiro's issue #34 on snapping under a lock: references
         are fetched on both sides of the start, level ones too, Shift over
@@ -270,10 +300,10 @@
         entero. Su vídeo de una hora sobre la 0.4.x se repartió en dos
         releases: esta es la del MODELO —los tres bugs y los cinco pedidos—
         y la siguiente será la de las láminas. Lo grande: la cámara de
-        paseo (Situar cámara, Mirar alrededor y Caminar, como en SketchUp)
+        paseo (Situar cámara, Mirar alrededor y Caminar)
         para mirar los interiores; ocultar objetos y capas que se usan de
         verdad; texto 3D que sigue siendo editable, con un grupo por letra;
-        y una inferencia que SketchUp no tiene: la ventana de la pared de al
+        y una inferencia nueva: la ventana de la pared de al
         lado a la altura de la primera, el plano horizontal por la esquina
         cortado con la pared a la que apuntas. Y la issue #34 de @pacaeiro
         sobre los snaps bajo bloqueo: las referencias se pescan a los dos
@@ -351,12 +381,12 @@
     </release>
     <release version="0.4.3" date="2026-09-17">
       <description>
-        <p>SketchUp files that used to be refused now open: the reader moves
+        <p>.skp files that used to be refused now open: the reader moves
         to the upstream openskp 1.3.0, checked against 214 real drawings
         before the change. Exporting every sheet to PDF no longer drops one
         silently. A sheet can now hold a PERSPECTIVE view, with its own sun
         and shadows, for an isometric that looks like the site rather than a
-        drawing. More SketchUp parity from a draughtsman's testing: Rotate +
+        drawing. More from a draughtsman's testing: Rotate +
         Ctrl lays a polar array with "3x" or "/3"; Ctrl on the Tape Measure
         cycles guide lines, guide points and plain measuring, and on the
         Protractor turns the guide on and off, with a + beside the cursor
@@ -366,13 +396,13 @@
         inferences away when you switch windows with Alt+Tab. The people
         outside the project whose work is in it are now credited in Help
         &gt; About.</p>
-        <p xml:lang="es">Archivos de SketchUp que antes no abrían ahora
+        <p xml:lang="es">Archivos .skp que antes no abrían ahora
         abren: el lector pasa a la versión oficial de openskp 1.3.0,
         comprobada contra 214 dibujos reales antes del cambio. Exportar
         todas las láminas a PDF ya no se deja una fuera en silencio. Una
         lámina puede llevar ahora una vista en PERSPECTIVA, con su propio
         sol y sus sombras, para que una isométrica se vea como en campo y no
-        como un dibujo. Más paridad con SketchUp salida de las pruebas de un
+        como un dibujo. Más cosas salidas de las pruebas de un
         delineante: Girar + Ctrl reparte copias en círculo con «3x» o «/3»;
         Ctrl en la cinta métrica recorre líneas guía, puntos guía y medida
         sola, y en el transportador pone y quita la guía, con un + junto al
@@ -386,26 +416,26 @@
     </release>
     <release version="0.4.2" date="2026-09-16">
       <description>
-        <p>Export to SketchUp works again in the Windows installer, the
+        <p>The .skp export works again in the Windows installer, the
         AppImage, the tarball and the snap (the packaging shipped openskp's
-        modules but not its data). SketchUp parity requested by a
+        modules but not its data). Requests from a
         draughtsman: Move + Ctrl copies and "3x" / "/3" lay an array; the
         Tape Measure pulls a guide from another guide; the Protractor
         tilts with click-and-drag; the Down arrow locks the Circle,
         Polygon, Rectangle and arcs perpendicular to the hovered edge
-        (SketchUp's magenta reference), the way to start a pipe on an
+        (the magenta reference), the way to start a pipe on an
         inclined axis; Move and Rotate no longer infer against the
         geometry being moved; two crossing guides give their intersection
         again.</p>
-        <p xml:lang="es">Exportar a SketchUp vuelve a funcionar en el
+        <p xml:lang="es">La exportación a .skp vuelve a funcionar en el
         instalador de Windows, el AppImage, el tar y el snap (el paquete
-        llevaba los módulos de openskp pero no sus datos). Paridad con
-        SketchUp pedida por un delineante: Mover + Ctrl copia y «3x» /
+        llevaba los módulos de openskp pero no sus datos). Pedidos de
+        un delineante: Mover + Ctrl copia y «3x» /
         «/3» hacen una matriz; la cinta métrica saca una guía de otra guía;
         el transportador se inclina con clic y arrastre; la flecha abajo
         fija el círculo, el polígono, el rectángulo y los arcos
-        perpendiculares a la arista bajo el cursor (la referencia magenta
-        de SketchUp), la manera de empezar un tubo sobre un eje inclinado;
+        perpendiculares a la arista bajo el cursor (la referencia
+        magenta), la manera de empezar un tubo sobre un eje inclinado;
         Mover y Rotar ya no infieren contra lo que se mueve; dos guías que
         se cruzan vuelven a dar su intersección.</p>
       </description>
@@ -426,15 +456,15 @@
     </release>
     <release version="0.4.0" date="2026-09-15">
       <description>
-        <p>Inference the SketchUp way, three tools that were missing, and
+        <p>Inference reworked, three tools that were missing, and
         the Linux packages fixed for NVIDIA. Rectangle, circle and arcs draw
         on the plane facing the view and show it on the cursor; From Point
         before the first click, two points at once, tangent at vertex, arc
         midpoints, component origins — all reaching into nested groups. The
-        Arc rounds a corner like SketchUp's: tangent preview, magenta at the
+        Arc rounds a corner: tangent preview, magenta at the
         same distance on the next edge, a double-click trims the corner. New
         tools: Fillet rounds the edges of a solid (chains, box corners,
-        concave edges), Position Texture puts SketchUp's pins on a face
+        concave edges), Position Texture puts pins on a face
         (move, scale, rotate, shear; back side too) and a sampled position
         travels to other faces; painting a curved surface wraps the image
         around it. A rim piece pushed flush onto the far face is cut through.
@@ -444,17 +474,17 @@
         screenshots; the MCP bridge names every client that can use it. The
         tarball and AppImage leave the C++ runtime and GLib to the host, which
         is what aborted GLX on NVIDIA.</p>
-        <p xml:lang="es">Inferencia a la SketchUp, tres herramientas que
+        <p xml:lang="es">Inferencia renovada, tres herramientas que
         faltaban y los paquetes Linux arreglados para NVIDIA. Rectángulo,
         círculo y arcos dibujan en el plano que mira a la vista y lo enseñan
         en el cursor; «Desde el punto» antes del primer clic, dos puntos a
         la vez, tangente en el vértice, puntos medios de arco, orígenes de
-        componente — todo alcanza grupos anidados. El Arco redondea esquinas
-        como SketchUp: vista previa tangente, magenta a la misma distancia en
+        componente — todo alcanza grupos anidados. El Arco redondea esquinas:
+        vista previa tangente, magenta a la misma distancia en
         la arista contigua, doble clic recorta la esquina. Herramientas
         nuevas: Redondear redondea las aristas de un sólido (cadenas,
-        esquinas de caja, cóncavas), Posicionar textura pone los pines de
-        SketchUp sobre una cara (mover, escalar, rotar, cizallar; también el
+        esquinas de caja, cóncavas), Posicionar textura pone pines
+        sobre una cara (mover, escalar, rotar, cizallar; también el
         reverso) y la muestra viaja a otras caras; pintar una superficie
         curva envuelve la imagen. Una pieza del borde empujada a ras de la
         cara opuesta se corta de lado a lado. La barra de estado da una sola
@@ -503,7 +533,7 @@
       <description>
         <p>The project north. A model drawn square to the axes no longer has
         to be turned to fit its site: the Terrain panel gets a North angle
-        (degrees clockwise from the green axis, as in SketchUp) that turns the
+        (degrees clockwise from the green axis) that turns the
         base map, the 3D terrain, imported paths and points and the sun under
         the model, while the model — and its front/right/top views and axis
         locks — stays put. "Straighten model on the map" converts a model
@@ -514,7 +544,7 @@
         <p xml:lang="es">El norte del proyecto. Un modelo dibujado a escuadra
         con los ejes ya no tiene que girarse para encajar en su sitio: el
         panel Terreno tiene un ángulo del Norte (grados en sentido horario
-        desde el eje verde, como en SketchUp) que gira el mapa base, el
+        desde el eje verde) que gira el mapa base, el
         terreno 3D, las rutas y puntos importados y el sol bajo el modelo,
         mientras el modelo —y sus vistas frontal/derecha/planta y bloqueos de
         eje— se queda quieto. «Enderezar modelo sobre el mapa» convierte un
@@ -526,7 +556,7 @@
     </release>
     <release version="0.3.18" date="2026-09-12">
       <description>
-        <p>Nested groups, the way SketchUp does them: a group can hold groups,
+        <p>Nested groups: a group can hold groups,
         you step into them level by level, and inside one the rest of the
         model stays a reference — its corners and edges still snap, and the
         centre of any circle or arc lights up as a green point. Faces have
@@ -536,7 +566,7 @@
         click; the .igz keeps your group names. Plus the fixes a day of real
         work turned up: deleting and box-selecting inside a component, a
         mirrored component losing its paint, a ghost of a moved arch.</p>
-        <p xml:lang="es">Grupos anidados como los hace SketchUp: un grupo
+        <p xml:lang="es">Grupos anidados: un grupo
         puede contener grupos, se entra a ellos por niveles, y dentro de uno
         el resto del modelo sigue siendo referencia — sus esquinas y aristas
         snapean, y el centro de cualquier círculo o arco se enciende como un
@@ -553,20 +583,20 @@
       <description>
         <p>A whole day modelling a real job, and everything it turned up.
         The rotated rectangle draws in a plane at last — including standing
-        square to it, by typing width and angle like SketchUp's protractor —
+        square to it, by typing width and angle as with the protractor —
         offset finally works inwards on concave shapes, unused tags and
         materials can be purged in one click, a textured material can be
         tinted a colour, and Reverse Faces is where you look for it: the
-        right-click menu. Keyboard: P is Push/Pull as in SketchUp, and three
+        right-click menu. Keyboard: P is Push/Pull, and three
         keys that quietly did nothing — H, O and F2 — work again.</p>
         <p xml:lang="es">Un día entero modelando una obra de verdad, y todo
         lo que salió de ahí. El rectángulo rotado por fin dibuja en un plano
-        —incluso de pie, escribiendo anchura y ángulo como el transportador
-        de SketchUp—, la equidistancia ya funciona hacia adentro en formas
+        —incluso de pie, escribiendo anchura y ángulo como con el
+        transportador—, la equidistancia ya funciona hacia adentro en formas
         cóncavas, las capas y los materiales sin usar se purgan de un clic,
         un material texturizado se puede teñir de un color, e Invertir caras
         está donde se busca: en el menú del botón derecho. Teclado: P es
-        Empujar/Tirar como en SketchUp, y tres teclas que no hacían nada sin
+        Empujar/Tirar, y tres teclas que no hacían nada sin
         decirlo —H, O y F2— vuelven a funcionar.</p>
       </description>
     </release>
@@ -627,12 +657,12 @@
     <release version="0.3.4" date="2026-08-25">
       <description>
         <p>Copy/paste for groups and components with a solid, textured
-        preview; the Protractor and Rotate rebuilt to SketchUp parity
+        preview; the Protractor and Rotate rebuilt
         (angle snapping, rise:run slopes, rotate-a-copy); tool cursors;
         display styles with per-frame styles in the sheet composer; and a
         real modelling session's worth of selection and guide fixes.</p>
         <p xml:lang="es">Copiar/pegar grupos y componentes con vista previa
-        sólida y texturada; transportador y Rotar en paridad SketchUp
+        sólida y texturada; transportador y Rotar rehechos
         (imanes de ángulo, pendientes subida:avance, rotar copia); cursores
         de herramienta; estilos de visualización con estilo por marco en el
         compositor; y una sesión real de fixes de selección y guías.</p>
@@ -640,10 +670,10 @@
     </release>
     <release version="0.3.3" date="2026-08-21">
       <description>
-        <p>The complete SketchUp round trip: native .skp export, the full
+        <p>The complete .skp round trip: native .skp export, the full
         2013–2026 corpus opens natively, and dimensions and leader texts
         travel both ways. Named materials with per-material quantities.</p>
-        <p xml:lang="es">El viaje redondo SketchUp completo: export .skp
+        <p xml:lang="es">El viaje redondo .skp completo: export .skp
         nativo, todo el corpus 2013–2026 abre nativo, y cotas y textos guía
         viajan en ambas direcciones. Materiales con nombre y metrados por
         material.</p>

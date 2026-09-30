@@ -15,7 +15,7 @@ was painted with a material carries ``attrs["mat"] = name`` alongside the
 baked values. That one extra key — surviving face churn for free, like
 every attr — is what enables:
 
-- the .skp import to keep SketchUp's material NAMES ("Wood_Floor", not
+- the .skp import to keep the .skp file's material NAMES ("Wood_Floor", not
   an anonymous colour),
 - per-material quantities ("how many m² of *Tarrajeo*?"),
 - editing a material once and restamping every face that wears it,
@@ -104,9 +104,9 @@ def is_translucent(attrs) -> bool:
 def back_is_default(attrs) -> bool:
     """Whether the BACK of a face shows the style's default back colour.
 
-    SketchUp paints exactly the side you click: the front of a wall takes
+    Painting covers exactly the side you click: the front of a wall takes
     the brick, its back keeps the blue-grey default — unless the material
-    is translucent, when SketchUp paints both sides so glass, water and a
+    is translucent, when paint goes on both sides so glass, water and a
     mesh read the same from either side («solo en el caso de una malla o
     cristal o agua», Marco, 2026-09-11). ``attrs["back"]`` says when the
     back has something of its own: ``True`` mirrors the front (a two-sided
@@ -151,7 +151,7 @@ def effective_attrs(attrs, material):
     """The attrs a face is DRAWN with inside a container that carries
     ``material`` (a group's or component instance's paint, issue #47).
 
-    SketchUp's rule, as @pacaeiro spelled it out: the face's own material
+    The classic rule, as @pacaeiro spelled it out: the face's own material
     always wins; only the faces wearing the default material take the
     container's, front and back alike. ``material`` is a dict with the same
     keys a face uses (``color`` / ``texture``, ``opacity``, ``mat``)."""

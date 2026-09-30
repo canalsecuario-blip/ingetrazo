@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""Editing a frame's view in place (LayOut: double-click the viewport, then
-pan / orbit / zoom; Zoom Extents recentres the model)."""
+"""Editing a frame's view in place (the usual convention for sheets:
+double-click the viewport, then pan / orbit / zoom; Zoom Extents recentres the model)."""
 from __future__ import annotations
 
 import math

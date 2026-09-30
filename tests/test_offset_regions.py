@@ -5,8 +5,8 @@
 `core.topology.offset_loop` slides each edge and re-intersects its
 neighbours: exact while every corner survives, and it gives up the moment
 one disappears. Marco's paved slab carries the segmented bite the round
-plaza takes out of it, and refused any inward offset past 2.65 cm; SketchUp
-does it, because it removes what closes.
+plaza takes out of it, and refused any inward offset past 2.65 cm; the classic
+Offset does it, because it removes what closes.
 
 `core.offset` slides, mitres, hands the segments to the planar arrangement —
 which already computes every crossing for RebuildPlaneFacesCommand — and

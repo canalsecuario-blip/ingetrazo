@@ -357,7 +357,7 @@ class PhotoMeshSampler:
 # ---------------------------------------------------------------------------
 # Document storage
 # ---------------------------------------------------------------------------
-# A survey belongs *in* the document. The Agisoft→SketchUp habit it replaces
+# A survey belongs *in* the document. The Agisoft→.skp habit it replaces
 # ended with the model saved inside the .skp; a reference mesh that has to be
 # re-imported every time you open the file is not the same tool. Geometry goes
 # in as one compressed NumPy archive (8.4 MB → 4.9 MB on the real survey) and

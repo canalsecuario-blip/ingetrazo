@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""Move + Ctrl copies, and "3x" / "/3" lay an array (SketchUp; issue #20).
+"""Move + Ctrl copies, and "3x" / "/3" lay an array (issue #20).
 
 Tapping Ctrl during a Move leaves the original where it is and stamps a
 translated copy on the second click; right afterwards, typing ``3x`` makes

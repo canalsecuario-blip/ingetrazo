@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """Offset (F) must not strip the face's paint.
 
-Both halves keep the material, the layer and the BIM tag — SketchUp's Offset
+Both halves keep the material, the layer and the BIM tag — the classic Offset
 does. Losing them turned a textured flagstone slab into two blank faces,
 which on a finished drawing reads as "it created a face on top" (Marco,
 2026-09-10). Make Group learned this same lesson earlier; the tool didn't.

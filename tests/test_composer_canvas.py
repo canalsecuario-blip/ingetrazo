@@ -3,8 +3,8 @@
 """Two-point placement on the composer canvas: the sheet tools accept BOTH a
 drag and click-move-click (the model's dimension-tool habit), snapping every
 point. The dimension tool adds a THIRD click that pulls the dimension line
-away from the measured points (LayOut-style ``sep_mm``). A bare click with a
-two-point tool must NOT place a zero-size item — that was 'the second point
+away from the measured points (``sep_mm``, as sheets usually do). A bare
+click with a two-point tool must NOT place a zero-size item — that was 'the second point
 never snaps': the first release placed a zero cota and silently disarmed the
 tool."""
 from __future__ import annotations

@@ -7,7 +7,7 @@ Group or Component.»
 
 The tool asked ``pick_edge``, which only ever sees the loose mesh, so a
 click on a component's edge found nothing and fell through to plain
-measuring. SketchUp reads a group's edges from the outside without opening
+measuring. The classic Tape reads a group's edges from the outside without opening
 it, and so does the rest of IngeTrazo: ``pick_edge_any`` — built for the
 Down-arrow reference lock (issue #10) — returns a group's edge as a world
 pseudo-edge. The Tape now asks that one.

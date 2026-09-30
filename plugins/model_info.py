@@ -69,8 +69,8 @@ def _collect_stats(scene) -> dict:
     instance_count = sum(1 for g in groups if g.is_component())
 
     # Instances share their prototype mesh; counting it once per instance is
-    # deliberate — these are render/entity counts, the way SketchUp reports
-    # them, not a dedup of prototypes.
+    # deliberate — these are render/entity counts, the way modellers usually
+    # report them, not a dedup of prototypes.
     from core.group import iter_placements
     placed = [(pg, m) for g in groups for pg, m in iter_placements(g)]
 
@@ -436,6 +436,9 @@ class ModelInfoTool(Tool):
     """Extensions-menu tool that opens the Model Info dialog."""
     name = "Model Info"
     shortcut = None          # menu entry only; no key to fight over
+    description = (
+        "Show the model's statistics: faces, edges, groups, materials "
+        "and more.")
     uses_snap = False
 
     def on_activate(self, viewport) -> None:

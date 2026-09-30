@@ -1,7 +1,7 @@
-# Performance plan — SketchUp-parity fluidity
+# Performance plan — native-modeller fluidity
 
 *Written 2026-08-25, after the piscina.igz marathon. Owner benchmark
-(Marco): "SketchUp feels ~2× smoother overall" on the same laptop
+(Marco): "the reference native modeller feels ~2× smoother overall" on the same laptop
 (Radeon 780M, Wayland). Goal: close that gap on real project scenes
 (200–400k faces) — not on synthetic million-face torture tests.*
 
@@ -20,10 +20,10 @@
 `INGETRAZO_PERF=1` is the measuring stick; every phase lands with its
 numbers in the commit message, like the marathon did.
 
-## Why SketchUp feels 2× (honest diagnosis)
+## Why the native modeller feels 2× (honest diagnosis)
 
 1. **Input→photon latency, not raw fps.** Our paints already hit 60 fps
-   on clean scenes. What SketchUp does better is the path from gesture
+   on clean scenes. What a native modeller does better is the path from gesture
    to frame: their event handling, picking and snapping are native; ours
    cross Python on every mouse move (25–40 ms of hover work before the
    paint even starts). Latency, not throughput, is most of the "2×".
@@ -33,7 +33,7 @@ numbers in the commit message, like the marathon did.
    depth bug) plus the QPainter overlay pass cost a few ms that native
    apps don't pay.
 4. **Instance geometry is world-baked**: 5 instances of a 230k-face
-   hedge = 5× vertex data uploaded and drawn. SketchUp draws one
+   hedge = 5× vertex data uploaded and drawn. A native modeller draws one
    definition N times.
 
 ## Principles
@@ -111,11 +111,11 @@ cores once PySide6 supports it cleanly), Qt RHI.
 - **No renderer/library swap** (VTK, Qt Quick 3D, ModernGL, wgpu,
   game engines): our draw-call count is already low — the overhead they
   would remove is not where the time goes, and each drags its own
-  interaction model that fights the SketchUp feel.
+  interaction model that fights the push/pull feel.
 - **No LOD/impostor system yet**: culling + instancing must land first;
   billboard impostors for distant vegetation are a later, separate
-  conversation (SketchUp doesn't have them either — it would be a
-  leapfrog, not parity).
+  conversation (the usual push/pull modellers don't have them either — it
+  would be a leapfrog, not parity).
 
 ## First P0 findings (2026-08-25, live piscina session)
 

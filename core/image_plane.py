@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""Imported reference images (SketchUp's ``File ▸ Import ▸ image``).
+"""Imported reference images (``File ▸ Import ▸ image``).
 
 An image plane is a textured rectangle you trace over: a scanned floor plan, a
 survey sketch, a facade photo. It is **reference, never geometry** — invariant

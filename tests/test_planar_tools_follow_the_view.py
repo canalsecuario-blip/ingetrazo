@@ -6,7 +6,7 @@ of 2026-09-10, B1/B2).
 At eye level, with the horizon mid-screen, his rectangle read «5.74 × 0.00 m»:
 the viewport handed the second corner on the camera-facing VERTICAL plane
 through the first (the near-horizon plane) while the tool measured the sides
-along world X/Y — one side was always zero, at any cursor height. SketchUp's
+along world X/Y — one side was always zero, at any cursor height. The classic
 rectangle, circle and arcs lay themselves out on the plane most perpendicular
 to the view when nothing else decides; orbiting re-decides. Now the shape is
 laid out on the plane of the last hit (``PlaneLock.hover_plane``), and the
@@ -142,8 +142,8 @@ def test_a_captured_slab_keeps_a_planar_tool_flat_at_the_horizon(viewport):
 
 
 # ---------------------------------------------------------------------------
-# SketchUp shows the plane on the cursor BEFORE the first click: a ring (circle,
-# polygon) or a little square (rectangle) lying on the plane the shape would
+# The classic tools show the plane on the cursor BEFORE the first click: a
+# ring (circle, polygon) or a little square (rectangle) lying on the plane the shape would
 # take, drawn in the axis colour while an arrow key locks it. Without it our
 # lock was invisible — Rafael: «sí que me cambia de plano, pero no se ve».
 
@@ -205,7 +205,7 @@ def test_rectangle_shows_a_square_on_the_cursor_and_keeps_the_colour_while_drawi
 def test_a_zero_sided_rectangle_is_refused_instead_of_raising(viewport):
     """Marco's log (2026-09-14): «degenerate edge: endpoints weld to one
     vertex» from the history — the second corner sat on the first's row.
-    SketchUp draws nothing; we say why."""
+    The classic tool draws nothing; we say why."""
     from tools.rectangle import RectangleTool
     viewport.camera.set_view("iso")
     said = []

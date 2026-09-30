@@ -127,7 +127,7 @@ def test_label_edit_command_undo_redo():
 
 def test_select_double_click_edits_label(monkeypatch):
     """Double-clicking a leader text with Select opens the edit dialog
-    (SketchUp-style) and commits the new text as one undoable command."""
+    (the usual convention) and commits the new text as one undoable command."""
     from types import SimpleNamespace
     from PySide6.QtWidgets import QInputDialog
     from tools.select import SelectTool
@@ -246,7 +246,7 @@ def test_label_igz_round_trip(tmp_path):
 
 
 def test_text_block_sits_away_from_the_anchor():
-    """SketchUp: the leader ends at the NEAR edge of the text block, so the
+    """The leader ends at the NEAR edge of the text block, so the
     block goes right when the anchor is on the left and LEFT when the
     leader arrives from the right — never under the words."""
     from views.viewport import Viewport

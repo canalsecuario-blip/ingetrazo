@@ -3,7 +3,7 @@
 """The run-time fix for legacy dimensions anchored inside groups
 (formats/openskp_compat.py; upstream iamahsanmehmood/openskp#384).
 
-A user's SketchUp 2018 house opened with 2 of its 72 root entities: a
+A user's .skp house (2018 version) opened with 2 of its 72 root entities: a
 dimension anchored to a vertex inside nested groups was read with a fixed
 length, and the root reader stopped at the next item. Synthetic bytes —
 the user's files are not in the repository."""

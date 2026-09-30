@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """Push/Pull stops level with a Tape Measure guide (issue #165).
 
-In SketchUp you mark a height with the Tape -- a guide point above a corner,
+The usual way: you mark a height with the Tape -- a guide point above a corner,
 or a guide line -- and push the face until it engages the guide. Ours never
 engaged: the push's distance inference scanned mesh vertices, edges and faces,
 and guides live in ``Scene.guides``, outside the mesh.
