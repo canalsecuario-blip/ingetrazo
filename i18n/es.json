@@ -2280,5 +2280,8 @@
  "Radius dimension": "Cota de radio",
  "Shift = add/remove, Ctrl = add. Double-click a group to edit it. F3 = search commands.": "Mayús = añadir/quitar, Ctrl = añadir. Doble clic en un grupo para editarlo. F3 = buscar comandos.",
  "The macOS package: IngeTrazo for Mac. Components that come apart (parts, cut list, exploded view) and the Extension API 2.": "El paquete para macOS: IngeTrazo para Mac. Componentes que se desarman (piezas, lista de corte, vista explosionada) y la API de extensiones 2.",
- "STL import and Simplify Mesh.": "Importación de STL y Simplificar malla."
+ "STL import and Simplify Mesh.": "Importación de STL y Simplificar malla.",
+ "Click the start point — on an edge, a tangent arc. Type the segments first.": "Clic en el punto inicial; sobre una arista, arco tangente. Antes puedes teclear los segmentos.",
+ "Click the start point. Type the segments first.": "Clic en el punto inicial. Antes puedes teclear los segmentos.",
+ "Click the centre. Type the segments first.": "Clic en el centro. Antes puedes teclear los segmentos."
 }
