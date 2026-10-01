@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""Position Texture — SketchUp's fixed pins (Rafael's review of 2026-09-10,
+"""Position Texture — the classic fixed pins (Rafael's review of 2026-09-10,
 C1: «no encontré manera de cambiar la escala a la textura»).
 
 The pins sit on the corners of the tile under the click; red drags the
@@ -250,7 +250,7 @@ def test_the_back_side_texture_is_positioned_and_stored_on_the_back(viewport):
     assert "uvw" not in face.attrs["back"]["texture"]
 
 
-# ---- SketchUp's protractor on the green pin (Rafael, 2026-09-16, 04:30) -------
+# ---- The protractor on the green pin (Rafael, 2026-09-16, 04:30) -------------
 
 def _px_per_metre(vp, at=(0.5, 0.0, 0.0)):
     a = vp._world_to_pixel(QVector3D(*at))
@@ -274,10 +274,10 @@ def _tile_angle(tool):
 
 
 def test_the_sweep_snaps_to_15_degree_steps_wherever_the_cursor_is(viewport):
-    """«En SketchUp te bloquea a los 0, a los 45 y a los 90» (Rafael) — the
+    """«Te bloquea a los 0, a los 45 y a los 90» (Rafael) — the
     protractor's 15° steps, which include them; and not only near the
     disc: Marco's recording shows the steps with the cursor three radii
-    out, and SketchUp's own «Ctrl = Sin ajuste» says the snap is the
+    out, and the original «Ctrl = Sin ajuste» says the snap is the
     default everywhere."""
     face = _textured_square(viewport)
     tool = _begin(viewport, face)

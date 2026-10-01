@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""SketchUp-parity batch: Pie, arc radius suffix, Make Component,
+"""Classic-tools batch: Pie, arc radius suffix, Make Component,
 Make Unique, Flip and Freehand."""
 from __future__ import annotations
 
@@ -121,7 +121,7 @@ def test_make_component_shares_definition_with_copies():
     # …and the transform puts it back exactly where it was drawn.
     w = inst.xform.map(V(0, 0, 0))
     assert abs(w.x() - 2.0) < 1e-9 and abs(w.y() - 3.0) < 1e-9
-    # A copy SHARES the definition (SketchUp components).
+    # A copy SHARES the definition (components).
     twin = copy_group(inst)
     assert twin.mesh is inst.mesh
     assert hist.undo()

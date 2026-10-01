@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """DXF import (D1): CAD linework arrives as tagged layer groups, curves as
-single contours, units honoured, survey coordinates recentred — SketchUp's
-documented 2D import behaviour, on our machinery."""
+single contours, units honoured, survey coordinates recentred — the usual
+2D import behaviour, on our machinery."""
 from __future__ import annotations
 
 import pytest
@@ -270,7 +270,7 @@ def test_solid_corners_unswap_their_z_order(tmp_path):
 
 
 def test_a_triangulated_plane_merges_back_to_one_face(tmp_path):
-    """SketchUp's "Merge coplanar faces" option, always on: a CAD export
+    """The usual "Merge coplanar faces" option, always on: a CAD export
     that triangulated a slab comes back as the slab."""
     doc = _doc()
     msp = doc.modelspace()

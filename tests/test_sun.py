@@ -63,7 +63,7 @@ def test_daylight_window_follows_site_and_zone():
     """The time slider's bounds: daylight for the LOCAL clock. In Arequipa
     at the equinox with the natural zone (UTC−5) the sun runs roughly
     06:00→18:00; forcing UTC−10 shifts the same daylight five clock hours
-    earlier — odd-looking and correct, which is exactly what SketchUp's
+    earlier — odd-looking and correct, which is exactly what the classic
     slider shows for a mismatched zone."""
     from core.sun import daylight_minutes
     rng = daylight_minutes(DEFAULT_LAT, DEFAULT_LON, 3, 21)

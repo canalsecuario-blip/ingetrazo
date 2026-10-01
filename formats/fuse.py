@@ -2,9 +2,9 @@
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """Fast coplanar fusion for imported triangle soups.
 
-A 3D-Warehouse building arrives as ~17k triangles; SketchUp's importer merges
-the coplanar ones back into clean facade-sized faces (and that is why the
-same model is fluid there). The engine's generic coplanar merge is O(F²) and
+A downloaded library building arrives as ~17k triangles; a good importer
+merges the coplanar ones back into clean facade-sized faces (and that is what
+keeps the same model fluid). The engine's generic coplanar merge is O(F²) and
 melts at that scale, so imports get this dedicated O(F) pass instead:
 
 - bucket loops by (plane, material) with rounded keys,
@@ -73,7 +73,7 @@ def _attrs_sig(attrs):
 
 
 def _sig_rank(sig) -> int:
-    """Preference between coincident duplicate copies (SketchUp's two-sided
+    """Preference between coincident duplicate copies (a two-sided
     export): a textured copy beats a colour-only copy beats a bare one."""
     if sig is None:
         return 0
@@ -120,7 +120,7 @@ def fuse_coplanar_loops(loops, cos_tol: float = 0.99999,
     faceted curve (real dihedral steps) never chain-merges into a non-planar
     blob."""
     faces: list = []
-    # Coincident duplicates (SketchUp's two-sided export writes every
+    # Coincident duplicates (a two-sided export writes every
     # triangle twice, front + reversed back): keep ONE copy — they z-fight
     # in the render (the mottled front/back patchwork) and their 4-faces
     # edges block every merge. The copy carrying a material wins.
@@ -407,7 +407,7 @@ def drop_smoothing_groups(mesh) -> None:
 
 def soften_smooth_edges(mesh, cos_threshold: float = 0.85) -> None:
     """Mark edges between two same-material faces meeting at a shallow
-    dihedral as soft (hidden in the render) — SketchUp's import smoothing.
+    dihedral as soft (hidden in the render) — the classic import smoothing.
     Curved facades read smooth, plane-bucket seams disappear, while real
     corners (90° walls) and material boundaries stay visible."""
     normals = {}

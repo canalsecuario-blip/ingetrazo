@@ -1,20 +1,20 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""COLLADA (.dae) import + export — the bridge to SketchUp, which reads and
-writes COLLADA natively.
+"""COLLADA (.dae) import + export — the bridge to other modellers, most of
+which read and write COLLADA natively.
 
-Import opens the models SketchUp exports; :func:`save_dae` writes ours back out
+Import opens the models other programs export; :func:`save_dae` writes ours back out
 (Z-up, metres, per-face colour/texture, and — when georeferenced — the standard
 ``<geographic_location>`` so a sun/shadow study keeps the site).
 
 COLLADA is Khronos' open XML interchange format; parsing with the stdlib
 ``xml.etree`` keeps the project dependency-free. Scope (matching what
-SketchUp emits): ``library_geometries`` meshes (``triangles`` / ``polylist``
+common exporters emit): ``library_geometries`` meshes (``triangles`` / ``polylist``
 / ``polygons``), the ``visual_scene`` node tree with baked transforms
 (``matrix`` / ``translate`` / ``rotate`` / ``scale``), component instancing
 via ``library_nodes`` / ``instance_node``, lambert/phong diffuse colours,
-``up_axis`` (Y_UP → Z-up conversion) and the ``unit`` metre scale (SketchUp
-exports inches). Textures are skipped (colour only).
+``up_axis`` (Y_UP → Z-up conversion) and the ``unit`` metre scale (some
+exporters write inches). Textures are skipped (colour only).
 
 Like the OBJ importer, triangles are fused back into clean editable polygons
 (coplanar merge) and closed results get a consistent outward orientation.
@@ -48,7 +48,7 @@ def _add_fused(mesh, fused) -> None:
 
 # Imports up to this many polygons get the full editable-import pipeline
 # (coplanar fusion + outward orientation). Bigger models come from asset
-# libraries (3D Warehouse buildings, furniture) and import as-is: the fusion
+# libraries (downloaded buildings, furniture) and import as-is: the fusion
 # pass is O(F²)-ish and measured minutes-to-hours at that scale (a 17k-tri
 # building froze the app), while the result is reference geometry anyway.
 # Mirrored in formats/obj.py — keep the two in sync.
@@ -78,8 +78,8 @@ def save_dae(scene, path, project_name: str = "IngeTrazo model") -> None:
     """Write the scene as a COLLADA (``.dae``) file at ``path``, with a sibling
     folder of texture images copied next to it.
 
-    COLLADA is what SketchUp imports natively, so this is the "open it back in
-    SketchUp" bridge. Written Z-up (``<up_axis>Z_UP</up_axis>``) in metres.
+    COLLADA is imported natively by most modellers, so this is the "open it
+    back elsewhere" bridge. Written Z-up (``<up_axis>Z_UP</up_axis>``) in metres.
     Solid ``Face.attrs["color"]`` become lambert diffuse colours; textured faces
     become ``<texture>`` effects with the image copied beside the ``.dae`` (same
     as the OBJ exporter — send the file *and* the folder together, or use GLB to
@@ -290,7 +290,7 @@ class _Dae:
         self._img_alpha: dict = {}
         self._polys_cache: dict = {}
         # How many times each library node is instanced — reused targets are
-        # SketchUp components and import as shared-prototype instances.
+        # components and import as shared-prototype instances.
         from collections import Counter
         self.inst_counts = Counter(
             (el.get("url") or "") for el in root.iter(f"{_NS}instance_node"))
@@ -441,9 +441,9 @@ def _prim_loops(prim_el, positions, uv_count: int = 0) -> list:
 
 def _image_color(dae: _Dae, image_el):
     """Representative RGB of a texture image: the average colour when the
-    file exists next to the ``.dae`` (SketchUp exports a ``<name>/`` folder),
-    else a stable light tint derived from the path — either way, distinct
-    materials get distinct colours, so the fusion pass keeps their
+    file exists next to the ``.dae`` (exporters often write a ``<name>/``
+    folder), else a stable light tint derived from the path — either way,
+    distinct materials get distinct colours, so the fusion pass keeps their
     boundaries (a plaza's curb lines must not melt into the paving)."""
     init = image_el.find(f"{_NS}init_from")
     ref = (init.text or "").strip() if init is not None else ""
@@ -493,7 +493,7 @@ def _effect_diffuse(dae: _Dae, material_el):
                     return vals[:3], None
             tex = diffuse.find(f"{_NS}texture")
             if tex is not None:
-                # Chase sampler → surface → image (SketchUp sometimes puts
+                # Chase sampler → surface → image (some exporters put
                 # the image id directly in texture/@texture).
                 sid = tex.get("texture") or ""
                 target = dae.by_id.get(sid)
@@ -521,7 +521,7 @@ def _effect_diffuse(dae: _Dae, material_el):
 
 def _image_file(dae: _Dae, image_el):
     """Absolute path of a texture image when it exists next to the ``.dae``
-    (SketchUp exports a ``<name>/`` folder), else ``None``."""
+    (exporters often write a ``<name>/`` folder), else ``None``."""
     init = image_el.find(f"{_NS}init_from")
     ref = (init.text or "").strip() if init is not None else ""
     if not ref or dae.base_dir is None:
@@ -677,11 +677,11 @@ def _image_has_cutout(dae: _Dae, path: str) -> bool:
 
 
 def _looks_faceme(dae: _Dae, loops) -> bool:
-    """Whether a component subtree reads as a SketchUp face-me sprite: every
+    """Whether a component subtree reads as a face-me sprite: every
     polygon textured with the SAME image, all coplanar on ONE near-vertical
     plane (in final Z-up coordinates), and either a cut silhouette (more
     than 4 distinct corners) or a rectangle whose image has REAL
-    transparency (SketchUp people/animals/trees are alpha-cutout PNGs on a
+    transparency (2D people/animals/trees are alpha-cutout PNGs on a
     rectangle; an opaque photo panel — a sign, a mural — stays static).
     COLLADA drops the 'always face camera' flag, so these are the only
     signals left to keep sprites turning toward the camera."""
@@ -721,7 +721,7 @@ def _collect(dae: _Dae, node_el, xform: QMatrix4x4, out: list,
              depth: int = 0, faceme: list | None = None,
              instances: list | None = None) -> None:
     """Walk a node tree, baking transforms; instances recurse into
-    ``library_nodes`` (SketchUp components). With ``faceme`` given, a child
+    ``library_nodes`` (components). With ``faceme`` given, a child
     component whose geometry is a face-me silhouette is pulled out into it
     as ``(name, loops)`` instead of flattening into the parent. With
     ``instances`` given, a reused component worth sharing is pulled out as
@@ -813,7 +813,7 @@ _INST_MIN_SAVED = 400
 _INST_MIN_POLYS = 60
 
 
-# Reference imports mirror SketchUp's group structure: every DAE assembly
+# Reference imports mirror the source's group structure: every DAE assembly
 # (group / component instance) can become its own Group, so the user selects,
 # moves and edits a farola or a pérgola as a unit instead of one monolithic
 # 160k-face blob (exploding THAT into the loose mesh melts the editing
@@ -831,7 +831,7 @@ def _node_label(node_el) -> str:
 def _bucketize(dae: _Dae, top_nodes, faceme: list | None = None,
                instances: list | None = None) -> list:
     """Split the visual scene into ``(name, loops)`` buckets along the DAE
-    node hierarchy (SketchUp groups/components). Returns at most
+    node hierarchy (groups/components). Returns at most
     ``_MAX_GROUPS`` buckets, largest assemblies split first. Face-me
     silhouettes found anywhere in the tree land in ``faceme`` instead."""
     import heapq
@@ -841,7 +841,7 @@ def _bucketize(dae: _Dae, top_nodes, faceme: list | None = None,
     # kind "subtree": xform is the PRE-entry matrix (node's own applies at
     # collect). kind "direct": xform is the composed matrix, no recursion.
     # via_inst marks entries that came through an instance_node — a target
-    # reached that way ≥2 times is a SketchUp component: its geometry is
+    # reached that way ≥2 times is a component: its geometry is
     # built ONCE and every copy becomes a shared-prototype instance.
     heap = []
     for nd in top_nodes:
@@ -952,7 +952,7 @@ def _load_dae_inner(scene, path, progress=None) -> None:
     Small models (≤ ``_MAX_FUSE_LOOPS`` polygons) go into the loose mesh and
     get the full editable pipeline — triangle fusion + outward orientation.
     Bigger models are *reference* geometry: they land in their own
-    :class:`~core.group.Group` (isolated mesh, SketchUp-style), so the
+    :class:`~core.group.Group` (isolated mesh), so the
     editing engine — snap, edge splitting, auto-face, heals — never scans
     their thousands of triangles while the user draws beside them. The
     caller wraps this for undo (``SnapshotImport`` handles the group).
@@ -977,7 +977,7 @@ def _load_dae_inner(scene, path, progress=None) -> None:
     total_polys = sum(_subtree_count(dae, nd) for nd in top_nodes)
 
     if total_polys > _MAX_FUSE_LOOPS:
-        # Reference import, SketchUp-structured: one Group per DAE assembly
+        # Reference import, structured: one Group per DAE assembly
         # (group / component instance) via the greedy splitter, so elements
         # stay individually selectable/movable/editable and the loose-mesh
         # engine never has to swallow the whole model.
@@ -1015,7 +1015,7 @@ def _load_dae_inner(scene, path, progress=None) -> None:
             if target.faces:
                 scene.groups.append(Group(target, name=name))
             done += len(loops)
-        # SketchUp components (a reused library node, found at any depth):
+        # Components (a reused library node, found at any depth):
         # ONE prototype mesh in Z-up LOCAL coordinates, shared by every copy;
         # each copy is a Group with only a local->world matrix. A component
         # carrying a face-me sprite inside falls back to per-copy geometry

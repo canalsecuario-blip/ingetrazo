@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """Generate the bundled texture library (procedural, tileable, ours).
 
-SketchUp ships a categorised material library; its images are copyrighted, so
+Commercial modellers ship material libraries whose images are copyrighted, so
 IngeTrazo's are generated here with QPainter — deterministic (fixed seed),
 seamlessly tileable (every speckle/line is drawn with toroidal wrap), and
 licence-clean. Re-run to regenerate:

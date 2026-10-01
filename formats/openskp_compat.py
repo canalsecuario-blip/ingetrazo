@@ -10,9 +10,9 @@ pinned reader skips a FIXED 42/82 bytes there, right only while the lists
 are empty (a dimension on loose geometry). Anchored to a vertex inside
 nested groups, the read slides off the record and the root entity reader,
 which stops at the first unreadable item, drops everything after it:
-Juan José Noriega's SketchUp 2018 house opened with 2 of its 72 root
-entities — walls and lawn, no upper floor, roofs, openings or trees
-(12 placements instead of 2384).
+Juan José Noriega's house (a .skp of the 2018 version) opened with 2 of
+its 72 root entities — walls and lawn, no upper floor, roofs, openings or
+trees (12 placements instead of 2384).
 
 The patch is detected by BEHAVIOUR, not by version: once the upstream
 reader carries ``_connection_paths`` it is left alone.

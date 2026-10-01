@@ -53,7 +53,7 @@ def test_a_bare_number_is_typed_in_the_models_unit(bound):
     assert abs(_parse_length_field("2m") - 2.0) < 1e-9          # an explicit unit still wins
     assert abs(_parse_length_field("-30") + 0.030) < 1e-12
     bound.units = {"length": "ft-in", "precision": 0}
-    assert abs(_parse_length_field("6") - 6 * 0.0254) < 1e-9     # inches, as SketchUp
+    assert abs(_parse_length_field("6") - 6 * 0.0254) < 1e-9     # inches, as in .skp
 
 
 def test_units_travel_in_the_igz_and_default_to_metres(tmp_path):

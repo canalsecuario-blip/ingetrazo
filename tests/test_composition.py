@@ -491,7 +491,7 @@ class TestC5Items:
     def test_anchored_cota_measures_the_projected_distance(self):
         # Elevation at 1:40: the fountain's top (on the axis) and the slab's
         # front edge (3 m closer to the viewer) are 60 paper mm apart
-        # vertically. LayOut reads the height, 2.40 m — not the 3.87 m
+        # vertically. A sheet reads the height, 2.40 m — not the 3.87 m
         # diagonal through the depth the drawing cannot show.
         ct = CotaItem(dx_mm=-0.6, dy_mm=60.0, scale_n=40.0,
                       anchor_uid="f1", a_world=[0.02, 0.03, 2.4],

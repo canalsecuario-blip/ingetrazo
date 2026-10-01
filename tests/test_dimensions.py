@@ -215,7 +215,7 @@ def test_is_occluded_matches_geometry():
 
 
 def test_xray_and_wireframe_let_snaps_through_faces():
-    # SketchUp: in X-ray (or wireframe) nothing hides geometry, so the snap
+    # In X-ray (or wireframe) nothing hides geometry, so the snap
     # engine must not reject a point behind a face — that is how you
     # dimension the floor of a pool through its water (Marco, 2026-09-02).
     # Shaded/hidden-line styles keep the visible-only rule.
@@ -367,7 +367,7 @@ def test_world_under_cursor_uses_cached_pick():
     assert abs(ground.z()) < 1e-6             # falls back to the ground plane
 
 
-# ---- Custom dimension text (SketchUp: double-click the value) ---------------
+# ---- Custom dimension text (double-click the value) -------------------------
 
 def test_dimension_custom_text_and_placeholder():
     from PySide6.QtGui import QVector3D
@@ -400,7 +400,7 @@ def test_edit_dimension_text_command_undo_redo():
 
 
 def test_select_double_click_edits_dimension_text(monkeypatch, tmp_path):
-    """Double-clicking a cota with Select opens the text dialog (SketchUp),
+    """Double-clicking a cota with Select opens the text dialog,
     commits the new text as one undoable command, and a bare "<>" or the
     measured value itself returns the cota to its automatic label. The text
     survives the .igz round trip."""

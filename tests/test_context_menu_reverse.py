@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """«Ahora debería haber una opción de invertir cara» (Marco, 2026-09-10).
 
-La había — en el menú Edición — y no la encontró, porque SketchUp la pone en
+La había — en el menú Edición — y no la encontró, porque lo habitual es ponerla en
 el menú del BOTÓN DERECHO sobre la cara, que es donde uno la busca. Aquí el
 menú contextual ofrecía agrupar, ocultar aristas, cortar, copiar y borrar,
 pero no invertir.

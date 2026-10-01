@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """Arc tool: two endpoints (the chord), then a bulge.
 
-SketchUp's 2-point arc:
+The classic 2-point arc:
 1. click the start point,
 2. click the end point — the chord,
 3. move to bulge the arc out from the chord, click to commit.
@@ -10,7 +10,7 @@ SketchUp's 2-point arc:
 The arc is committed as a polyline of short edges (it auto-faces if it closes a
 region with existing geometry). The bulge can be typed in the VCB.
 
-Rounding a corner (SketchUp 2015+, Rafael's review of 2026-09-10, C2): a
+Rounding a corner (Rafael's review of 2026-09-10, C2): a
 start point ON an edge makes the preview an arc **tangent to that edge**
 (cyan, «Tangent to edge»); on the adjacent edge, at the same distance from
 the shared corner, the arc turns **magenta** — tangent to both edges, the
@@ -38,9 +38,9 @@ from core.units import fmt_len
 
 _SEGMENTS = 16  # polyline segments approximating the arc
 
-#: Magenta of the arc that is tangent to BOTH edges of a corner (SketchUp
-#: turns its turquoise tangent inference magenta «at the point where it
-#: fillets a corner»).
+#: Magenta of the arc that is tangent to BOTH edges of a corner (the classic
+#: convention turns the turquoise tangent inference magenta «at the
+#: point where it fillets a corner»).
 COLOR_FILLET = (0.85, 0.30, 0.80)
 
 _Seg = namedtuple("_Seg", "a b")
@@ -120,10 +120,10 @@ def commit_arc(viewport, pts: list[QVector3D], close_to=None, trim=None):
     arrangement on flat drawings, scoped per-plane arrangement when the
     drawing plane already carries content in a 3D scene, naive otherwise.
     Used by every arc variant. With ``close_to`` (a centre point) the two
-    radius edges close the wedge — SketchUp's Pie. ``trim`` is a list of
+    radius edges close the wedge — the classic Pie. ``trim`` is a list of
     ``(a, b)`` position pairs: edges to erase once the arc is in — the two
-    corner stubs a fillet leaves behind, which SketchUp «cleans out» after
-    the face has been split, so the rounded face survives and the corner
+    corner stubs a fillet leaves behind, which the classic tool «cleans out»
+    after the face has been split, so the rounded face survives and the corner
     sliver goes with its edges. Returns the executed command."""
     segments = [(pts[i], pts[i + 1]) for i in range(len(pts) - 1)]
     if close_to is not None:
@@ -156,10 +156,11 @@ def commit_arc(viewport, pts: list[QVector3D], close_to=None, trim=None):
 class ArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
     name = "Arc"
     shortcut = "A"
+    description = "Draw an arc from its two ends, then pull out its bulge."
     vcb_label = "Bulge"
 
     #: Within this many screen pixels of the tangent bulge, the arc snaps
-    #: to it (SketchUp's "Tangent at Vertex", cyan).
+    #: to it ("Tangent at Vertex", cyan).
     TANGENT_PX = 8.0
     #: Within this many screen pixels of the point on the adjacent edge at
     #: the same distance from the corner, the end point snaps to it and the
@@ -168,7 +169,7 @@ class ArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
     #: A double-click this close (px) to a two-edge corner repeats the last
     #: rounding on it.
     CORNER_PX = 20.0
-    #: Polyline segments of the next arc; SketchUp's "Ns" in the VCB.
+    #: Polyline segments of the next arc; the usual "Ns" in the VCB.
     segments: int = _SEGMENTS
     #: Distance corner→tangent points of the last fillet (shared by every
     #: arc tool instance): a double-click near another corner repeats it.
@@ -203,7 +204,7 @@ class ArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
         self._fillet = None
         self._fillet_edge_b = None
         # The last committed arc and its parameters, so "Ns" typed right
-        # after can rebuild it with another segment count (SketchUp).
+        # after can rebuild it with another segment count.
         self._last_cmd = None
         self._last_params = None
         self._viewport = None
@@ -237,6 +238,7 @@ class ArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
             if (end - self.start_point).length() < 1e-6:
                 return
             self.end_point = end
+            self.adopt_snapped_plane()   # the bulge is read on the arc's plane
             self._fillet = None
             self._fillet_edge_b = None
             if self._equidistant is not None:
@@ -254,7 +256,7 @@ class ArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
             self._commit(ctx.viewport, pts, trim=self._corner_trim(ctx.modifiers))
 
     def on_double_click(self, ctx: ToolContext) -> None:
-        """SketchUp: a double-click on the magenta point draws the fillet
+        """A double-click on the magenta point draws the fillet
         with its tangent bulge and trims the corner in one gesture; a
         double-click near another two-edge corner repeats the last
         distance. Anything else is a plain click."""
@@ -336,7 +338,7 @@ class ArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
             from core.snap import COLOR_MIDPOINT
             self.wireframe_color = (*COLOR_MIDPOINT, 1.0)
 
-    # ---- Corner rounding (SketchUp's fillet inference) ------------------------
+    # ---- Corner rounding (fillet inference) ----------------------------------
     @staticmethod
     def _edge_under(viewport, P: QVector3D):
         """``(edge, P)`` when ``P`` lies on the interior of an edge of the
@@ -484,7 +486,7 @@ class ArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
         """The two corner stubs to erase once a fillet is committed: only
         for an arc that IS the fillet (magenta), on a face, at a corner
         where exactly the two edges meet — «if three edges come together it
-        won't cut» — and never with Alt held (SketchUp's way out)."""
+        won't cut» — and never with Alt held (the usual way out)."""
         if self._fillet is None or self._bulge_kind != "fillet":
             return None
         if modifiers is not None and (modifiers & Qt.AltModifier):
@@ -499,7 +501,7 @@ class ArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
             return None
         return [(V, P1), (V, P2)]
 
-    # ---- Tangent at vertex (SketchUp) ----------------------------------------
+    # ---- Tangent at vertex ---------------------------------------------------
     def _tangent_at_start(self, viewport) -> QVector3D | None:
         """The direction an existing arc leaves its END vertex when that
         vertex is our start point — the tangent this arc can continue."""
@@ -508,7 +510,7 @@ class ArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
         if mesh is None or self.start_point is None:
             return None
         # The loose mesh first, then every placed group / component in its
-        # own space (SketchUp infers to geometry inside them from outside).
+        # own space (inference reaches geometry inside them from outside).
         spaces = [(mesh, None)]
         placements = getattr(viewport, "_placements", None)
         if callable(placements):
@@ -666,8 +668,8 @@ class ArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
         return True
 
     def on_radius_value(self, viewport, radius: float) -> bool:
-        """SketchUp's "2r": type the RADIUS instead of the bulge. The minor
-        arc is taken (like SketchUp); a radius smaller than half the chord
+        """The usual "2r": type the RADIUS instead of the bulge. The minor
+        arc is taken (as usual); a radius smaller than half the chord
         is impossible and is refused with a status message."""
         if self.end_point is None or radius <= 0:
             return False
@@ -685,7 +687,7 @@ class ArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
         if self.hover_point is not None and self._bulge_for(self.hover_point) < 0:
             sign = -1.0
         # A typed radius while the arc is magenta keeps the fillet's trim
-        # only when it IS the fillet radius (SketchUp: «enter the radius
+        # only when it IS the fillet radius («enter the radius
         # while the radius is still magenta»).
         trim = None
         if self._fillet is not None:
@@ -700,7 +702,7 @@ class ArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
         return True
 
     def on_segments_value(self, viewport, n: int) -> bool:
-        """SketchUp's "Ns": the segment count of the arc — the one being
+        """The usual "Ns": the segment count of the arc — the one being
         drawn, or the one just drawn, which is rebuilt in place."""
         if not self._set_segments(viewport, n):
             return False
@@ -728,8 +730,8 @@ class ArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
             return []
         if self.end_point is None:
             if self._start_edge is not None:
-                # Tangent to the start edge, through the cursor (SketchUp
-                # 2015+: «a tangent arc vs a dotted line»).
+                # Tangent to the start edge, through the cursor
+                # («a tangent arc vs a dotted line»).
                 tangent = self._edge_tangent(self.hover_point)
                 h = self._tangent_bulge(end=self.hover_point, tangent=tangent)
                 if h is not None:
@@ -762,6 +764,16 @@ class ArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
     def _axes(self) -> tuple[QVector3D, QVector3D]:
         normal = self.drawing_plane()[1]
         return plane_axes(normal)
+
+    def plane_points(self):
+        """Start and end: an end snapped off the plane turns the arc to the
+        axis plane holding both (``PlaneLock.snapped_plane``) — before, it
+        ended on the end's projection, nowhere near the point clicked."""
+        if self.start_point is None:
+            return []
+        return [self.start_point,
+                self.end_point if self.end_point is not None
+                else self.hover_point]
 
     def _to2(self, p, u, v):
         d = p - self.start_point
@@ -843,6 +855,7 @@ class ThreePointArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
     """
     name = "3-Point Arc"
     shortcut = "J"
+    description = "Draw an arc that passes through three points."
     vcb_label = "Segments"
 
     #: Polyline segments of the next arc: a number typed before the first
@@ -873,6 +886,7 @@ class ThreePointArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
             if (ctx.world - self.start_point).length() < 1e-6:
                 return
             self.mid_point = ctx.world
+            self.adopt_snapped_plane()
             return
         pts = self._points(ctx.world)
         if len(pts) >= 2:
@@ -907,6 +921,15 @@ class ThreePointArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
         normal = self.drawing_plane()[1]
         return plane_axes(normal)
 
+    def plane_points(self):
+        """The arc's own points: with all three, a snapped one off the plane
+        takes the plane through them (``PlaneLock.snapped_plane``)."""
+        if self.start_point is None:
+            return []
+        if self.mid_point is None:
+            return [self.start_point, self.hover_point]
+        return [self.start_point, self.mid_point, self.hover_point]
+
     def _points(self, end: QVector3D) -> list[QVector3D]:
         u, v = self._axes()
 
@@ -938,7 +961,7 @@ class ThreePointArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
 
 
 class CenterArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
-    """Compass arc (SketchUp's protractor 'Arc'): centre → start point (the
+    """Compass arc (the classic protractor 'Arc'): centre → start point (the
     radius and 0° arm) → sweep angle. The polyline samples at the same 15°
     pitch as the 24-side circle, so a centre arc drawn concentric with a
     circle lands on the exact same lattice and welds cleanly — unless a
@@ -946,10 +969,13 @@ class CenterArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
     exactly that many, whatever its sweep."""
 
     name = "Center Arc"
-    #: Shift+O, not O: in SketchUp plain O is Orbit and the centre arc has no
+    #: Shift+O, not O: by convention plain O is Orbit and the centre arc has no
     #: default key at all. Sharing O made Qt call the shortcut ambiguous and
     #: fire NEITHER — see tests/test_shortcuts.py.
     shortcut = "Shift+O"
+    description = (
+        "Draw an arc from its centre: the centre, where the arc "
+        "starts, then the angle it sweeps.")
     vcb_label = "Angle"
 
     _PITCH_DEG = 15.0
@@ -983,6 +1009,7 @@ class CenterArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
             if (ctx.world - self.start_point).length() < 1e-6:
                 return
             self.arm_point = ctx.world
+            self.adopt_snapped_plane()   # the sweep is read on the arc's plane
             return
         pts = self._points(self._sweep_to(ctx.world))
         if len(pts) >= 2:
@@ -1029,7 +1056,10 @@ class CenterArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
         if self.hover_point is None or self.start_point is None:
             return None
         if self.arm_point is None:
-            r = (self.hover_point - self.start_point).length()
+            u, v = self._axes()          # the radius drawn, as the circle's
+            d = self.hover_point - self.start_point
+            r = math.hypot(QVector3D.dotProduct(d, u),
+                           QVector3D.dotProduct(d, v))
             return ("R " + fmt_len(r), self.hover_point)
         return (f"{self._sweep_to(self.hover_point):+.1f}°", self.hover_point)
 
@@ -1045,6 +1075,16 @@ class CenterArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
     def _axes(self):
         normal = self.drawing_plane()[1]
         return plane_axes(normal)
+
+    def plane_points(self):
+        """Centre and arm: an arm snapped off the plane turns the arc to the
+        axis plane holding both (``PlaneLock.snapped_plane``). The sweep
+        point is only an angle, so it never moves the plane."""
+        if self.start_point is None:
+            return []
+        return [self.start_point,
+                self.arm_point if self.arm_point is not None
+                else self.hover_point]
 
     def _sweep_to(self, cursor: QVector3D) -> float:
         """Signed sweep (degrees) from the 0° arm to the cursor."""
@@ -1098,12 +1138,15 @@ class CenterArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
 
 
 class PieTool(CenterArcTool):
-    """SketchUp's Pie: the centre arc whose wedge CLOSES — the two radius
+    """The classic Pie: the centre arc whose wedge CLOSES — the two radius
     edges join the arc's ends to the centre and the slice becomes a face.
     Same clicks as Center Arc: centre, radius arm, sweep."""
 
     name = "Pie"
     shortcut = None
+    description = (
+        "Draw an arc from its centre whose two radii close it into a "
+        "slice-shaped face.")
 
     def _commit(self, viewport, pts: list[QVector3D]) -> None:
         centre = QVector3D(self.start_point)

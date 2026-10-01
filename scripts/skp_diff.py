@@ -2,15 +2,15 @@
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """Differential validation harness for IngeTrazo's .skp reader.
 
-Ground truth is a COLLADA file **exported from SketchUp itself** by whoever
-owns the model (File ▸ Export ▸ 3D Model ▸ .dae), placed next to the .skp
-or given with ``--dae``. The harness loads it into a headless ``Scene``,
-loads the .skp through IngeTrazo's own reader (``formats/skp.py``), and
-diffs structural fingerprints (counts, bbox, materials, groups).
+Ground truth is a COLLADA file **exported from the original program** by
+whoever owns the model (File ▸ Export ▸ 3D Model ▸ .dae), placed next to
+the .skp or given with ``--dae``. The harness loads it into a headless
+``Scene``, loads the .skp through IngeTrazo's own reader
+(``formats/skp.py``), and diffs structural fingerprints (counts, bbox,
+materials, groups).
 
-Nothing of Trimble's runs here. (Until 2026-09-28 the ground truth came
-from running Trimble's SDK through an external converter; that path was
-removed after Trimble's copyright notice.)
+Nothing proprietary runs here. (Until 2026-09-28 the ground truth came
+from the former external converter; that path was removed.)
 
 Usage::
 
@@ -124,14 +124,14 @@ def compare(ground: dict, candidate: dict, tol: float = 1e-3) -> list[str]:
 # ---- loaders -------------------------------------------------------------------
 
 def load_ground_truth(dae: Path):
-    """Load a COLLADA export made by SketchUp into a fresh Scene."""
+    """Load the reference COLLADA export of the model into a fresh Scene."""
     from core.scene import Scene
     from formats import dae as dae_format
 
     if not dae.exists():
         raise RuntimeError(
-            f"No ground truth: {dae} does not exist. Export the model from "
-            "SketchUp as COLLADA (.dae) next to the .skp, or pass --dae.")
+            f"No ground truth: {dae} does not exist. Put a COLLADA (.dae) "
+            "export of the model next to the .skp, or pass --dae.")
     scene = Scene()
     dae_format.load_dae(scene, dae)
     return scene
@@ -154,11 +154,11 @@ def load_candidate(skp: Path):
 # ---- CLI -----------------------------------------------------------------------
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description="Diff a .skp: SketchUp's own "
+    ap = argparse.ArgumentParser(description="Diff a .skp: a reference "
                                              "COLLADA export vs IngeTrazo's reader.")
     ap.add_argument("skp", type=Path, help="path to the .skp file")
     ap.add_argument("--dae", type=Path, default=None,
-                    help="SketchUp's COLLADA export of it (default: next to the .skp)")
+                    help="a COLLADA export of it (default: next to the .skp)")
     ap.add_argument("--json", action="store_true", help="machine-readable output")
     ap.add_argument("--tol", type=float, default=1e-3,
                     help="bbox tolerance in metres (default 1e-3)")
@@ -182,7 +182,7 @@ def main(argv=None) -> int:
         return 0
 
     print(f"File: {args.skp.name}   format={fmt}")
-    print("\n[ground truth — SketchUp's COLLADA export]")
+    print("\n[ground truth — reference COLLADA export]")
     for k, v in ground.items():
         print(f"  {k}: {v}")
     if candidate is None:

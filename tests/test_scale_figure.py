@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """The scale figure in a fresh document — the engineer, 1.70 m tall — OFF to the
-left of the origin (SketchUp-style), so the origin stays visible as the
+left of the origin (the usual convention), so the origin stays visible as the
 drawing reference."""
 from __future__ import annotations
 
@@ -54,7 +54,7 @@ def test_faceme_follows_the_view_direction_in_parallel_projection():
     """A parallel camera has no real eye: every face-me sprite faces the
     VIEW direction, so a figure far from the orbit target no longer turns
     away when zoomed in (Marco's front elevation, 2026-09-02). Perspective
-    keeps turning toward the eye, like SketchUp."""
+    keeps turning toward the eye, the classic way."""
     import math
     from PySide6.QtGui import QVector3D
     from views.main_window import MainWindow

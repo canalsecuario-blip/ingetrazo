@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""Click modifiers of the Select tool — SketchUp's rules (Marco, 2026-09-07:
+"""Click modifiers of the Select tool — the usual rules (Marco, 2026-09-07:
 «debería haber una opción para deseleccionar ciertas líneas o planos haciendo
 shift+clic»).
 

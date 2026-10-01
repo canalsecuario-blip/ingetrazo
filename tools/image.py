@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """Image tool: place an imported picture as a reference plane to trace over.
 
-SketchUp's rhythm, and for the same reason — you almost never want a scan at
+The classic rhythm, and for the same reason — you almost never want a scan at
 whatever size the pixels imply, you want it at the size the *drawing* needs:
 
     click a corner → drag → click again          (size it by eye)
@@ -177,7 +177,7 @@ class ImageTool(Tool):
         viewport.history.execute(AddImagePlaneCommand(image))
         self._reset()
         # One picture per import: disarm so the next click doesn't stamp a
-        # second copy (SketchUp drops you back on Select).
+        # second copy (the usual convention drops you back on Select).
         self.path = None
         if hasattr(viewport, "finish_image_placement"):
             viewport.finish_image_placement()

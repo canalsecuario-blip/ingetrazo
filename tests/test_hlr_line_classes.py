@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """Line weights by class and the poché of the vector style (professional
 sheets, 2026-09-05): the hidden-line pass tells section cuts, profiles
-(SketchUp's — silhouettes and outlines against the background) and plain
+(the usual sense — silhouettes and outlines against the background) and plain
 edges apart, chains the cut chords into closed rings, and the composer
 inks each class with its own pen and fills the rings under the lines."""
 from __future__ import annotations

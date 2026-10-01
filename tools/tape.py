@@ -2,12 +2,12 @@
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """Tape Measure tool (T): measure distances and place construction guides.
 
-SketchUp behaviour, two modes decided by what the first click lands on:
+The classic behaviour, two modes decided by what the first click lands on:
 
 - **From an edge's body** → dragging pulls out an infinite **guide line**
   parallel to that edge, at the dragged (or VCB-typed) offset. This is the
   alignment workflow: pull a guide 2.5 m off a wall, then draw against it.
-  A **guide line's body** works the same way (SketchUp; issue #22): pull a
+  A **guide line's body** works the same way (issue #22): pull a
   second guide 2 m off the first, and so on across a whole grid.
 - **From free space, or a spot on an edge** → the second click just
   **measures**: the distance shows live at the cursor and in the status bar,
@@ -18,7 +18,7 @@ SketchUp behaviour, two modes decided by what the first click lands on:
   line (Rafael, Revisión 3 — how a plan is placed against its datum).
 - **From a named point** (endpoint, corner, origin, intersection) → the
   second click, or a typed distance, leaves a **guide point** there with
-  its dashed guide segment back to the start (SketchUp's; Rafael uses it
+  its dashed guide segment back to the start (Rafael uses it
   to centre a circle or set a roof's overhang). Clicking another named
   point instead just **measures**, as does starting in free space.
 
@@ -43,6 +43,9 @@ from core.axes import AXES as _AXES  # noqa: E402
 class TapeMeasureTool(Tool):
     name = "Tape Measure"
     shortcut = "T"
+    description = (
+        "Measure distances, or pull guide lines off edges to draw "
+        "against.")
     vcb_label = "Distance"
     #: The Line tool's axis magnet, both halves (@pacaeiro, issue #41:
     #: «TAPE and PROTRACTOR should have the soft magnetic snap of X, Y,
@@ -63,7 +66,7 @@ class TapeMeasureTool(Tool):
         self._edge = None            # source edge → guide-line mode
         self._from_point = False     # started on a named point → guide point
         self._measured: float | None = None
-        #: SketchUp's Ctrl on the Tape cycles THREE ways, as its own status
+        #: Ctrl on the Tape cycles THREE ways, as the usual status
         #: bar spells out: «Ctrl = Líneas guía del ciclo / Puntos guía /
         #: Medida» (Marco's screenshot, 2026-09-17).
         #:
@@ -71,11 +74,11 @@ class TapeMeasureTool(Tool):
         #:   "point"   — a guide POINT at the measured distance
         #:   "measure" — nothing left behind
         #:
-        #: Reset on pickup, like SketchUp's + (issue #29, @pacaeiro).
+        #: Reset on pickup, like the usual + (issue #29, @pacaeiro).
         self._mode = "line"
 
     #: Snap kinds that make the first click a POINT the tape measures
-    #: from — SketchUp's guide segment needs a real point; a midpoint or a
+    #: from — a guide segment needs a real point; a midpoint or a
     #: spot on an edge is not one (Rafael: «el punto medio es ficticio»).
     _POINT_KINDS = frozenset(("endpoint", "origin", "intersection",
                               "component_origin", "center"))
@@ -86,7 +89,7 @@ class TapeMeasureTool(Tool):
               ("measure", "Guides: off — measure only"))
 
     def status_clause(self) -> str:
-        """SketchUp's own wording, kept on screen: «Ctrl = Líneas guía del
+        """The usual wording, kept on screen: «Ctrl = Líneas guía del
         ciclo/Puntos guía/Medida». The active one is bracketed, because the
         cursor's + says "this leaves something" but not WHICH of the two
         guide modes is on."""
@@ -102,13 +105,13 @@ class TapeMeasureTool(Tool):
 
     @property
     def cursor_plus(self) -> bool:
-        """SketchUp's little + beside the cursor: this one will leave a
+        """The little + beside the cursor: this one will leave a
         guide — a line or a point."""
         return self._guides
 
     # ---- Lifecycle ----------------------------------------------------------
     def on_activate(self, viewport) -> None:
-        # Picking the tool up starts in guide mode, as SketchUp does — the
+        # Picking the tool up starts in guide mode, as users expect — the
         # + «appears or disappears depending on whether you tapped Ctrl
         # SINCE YOU PICKED UP THE TOOL». Ours used to stay off for good, so
         # after one measure-only reading the guides looked broken (Marco,
@@ -122,7 +125,7 @@ class TapeMeasureTool(Tool):
 
     # ---- Keyboard -----------------------------------------------------------
     def on_key(self, viewport, key: int, modifiers) -> bool:
-        # Ctrl toggles guide creation (SketchUp: the Tape either measures or
+        # Ctrl toggles guide creation (the Tape either measures or
         # leaves a guide, and the cursor shows a + when it will) -- on the
         # RELEASE of a Ctrl pressed alone. On the press, Ctrl+Z switched
         # the mode too, silently (Alejandro Limón, #183).
@@ -162,8 +165,8 @@ class TapeMeasureTool(Tool):
             # pick_edge_ANY, not pick_edge: the plain one only ever sees
             # the loose mesh, so a click on a component's edge found
             # nothing and fell through to plain measuring (issue #28,
-            # @pacaeiro). SketchUp reads a group's edges from outside
-            # without opening it, and so does the rest of IngeTrazo — this
+            # @pacaeiro). A group's edges are read from outside
+            # without opening it by the rest of IngeTrazo — this
             # is the same picker the Down-arrow reference lock uses, which
             # hands a group's edge back as a world pseudo-edge.
             pick_any = getattr(viewport, "pick_edge_any", None)
@@ -215,7 +218,7 @@ class TapeMeasureTool(Tool):
               and kind not in self._POINT_KINDS
               and (ctx.world - self.start_point).length() > 1e-9):
             # From a named point to a free spot: a guide point there, with
-            # its segment back to the start (SketchUp). To another named
+            # its segment back to the start. To another named
             # point it only measures — nobody wants a guide on a corner.
             self._place_guide_point(viewport, ctx.world, self.start_point)
         else:

@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """Move tool: drag geometry (and everything connected to it) to a new spot.
 
-UX (SketchUp-like):
+UX (the classic push/pull modeller behaviour):
 - If there's a selection, Move acts on it; otherwise the first click grabs the
   edge / face under the cursor.
 - First click sets the grab point (a snapped handle). Move the mouse — snap,
@@ -10,7 +10,7 @@ UX (SketchUp-like):
   geometry deforms live as you drag (faces tilt, walls stretch).
 - Second click drops at the current offset. Typing a length + Enter moves
   exactly that far along the current direction; ``X;Y;Z`` + Enter is a 3D delta.
-- Tapping Ctrl toggles COPY mode (SketchUp, issue #20): the original stays
+- Tapping Ctrl toggles COPY mode (issue #20): the original stays
   put and a translated copy is created (a component instance copies as a
   sibling instance); the copy's wireframe previews at the cursor. Right after
   a copy, typing ``3x`` (or ``3*``, ``*3``) makes an external array — three
@@ -121,7 +121,7 @@ def gather_labels(ctx: ToolContext) -> list[TextLabel]:
     """Leader texts Move acts on: the selected ones, or (with nothing
     selected) the one whose text block is under the cursor — the glyphs
     overdraw all geometry, so that grab is exclusive. Their label end
-    translates while the anchor stays pinned — SketchUp's Move-on-text
+    translates while the anchor stays pinned — the classic Move-on-text
     behaviour."""
     viewport = ctx.viewport
     labels = [t for t in viewport.scene.selection if isinstance(t, TextLabel)]
@@ -159,7 +159,7 @@ _FLAT = 1e-6
 
 
 def rotation_grips(obb, eye: QVector3D) -> list:
-    """SketchUp's rotation grips on a group's box (issue #115): four on
+    """Rotation grips on a group's box (issue #115): four on
     each face turned toward *eye*, as ``(position, face_centre, normal)``.
     Taking one rotates the object in that face's plane, about the axis
     through the box centre along the normal. ``obb`` is the viewport's
@@ -191,6 +191,9 @@ def rotation_grips(obb, eye: QVector3D) -> list:
 class MoveTool(Tool):
     name = "Move"
     shortcut = "M"
+    description = (
+        "Move the selection, or what you click, to a new place; Ctrl "
+        "leaves a copy behind.")
     vcb_label = "Distance"
 
     # Drag on a camera-facing vertical plane (not the ground) so pulling the
@@ -210,7 +213,7 @@ class MoveTool(Tool):
     #: issue #31 finds them by where the cursor points and projects onto
     #: the world axis, so the move goes along X or Y exactly.
     screen_axis_px = 9.0
-    accepts_array = True  # VCB "3x" / "/3" after a copy (SketchUp arrays)
+    accepts_array = True  # VCB "3x" / "/3" after a copy (arrays)
 
     def __init__(self) -> None:
         # ``start_point`` drives the viewport's snap / axis-lock machinery, same
@@ -262,7 +265,7 @@ class MoveTool(Tool):
     def on_key(self, viewport, key: int, modifiers) -> bool:
         if self._grip_rot is not None:
             return self._grip_rot.on_key(viewport, key, modifiers)
-        # Ctrl toggles copy mode (SketchUp: move a copy, the original stays).
+        # Ctrl toggles copy mode (move a copy, the original stays).
         if key == Qt.Key_Control:
             self._copy = not self._copy
             if self._copy:
@@ -302,7 +305,7 @@ class MoveTool(Tool):
             splanes = [p for p in viewport.scene.selection
                        if isinstance(p, SectionPlane)]
             if not splanes and not viewport.scene.selection:
-                # SketchUp: Move grabs a section plane directly by hovering
+                # Move grabs a section plane directly by hovering
                 # its frame — no pre-selection needed. The cut follows live.
                 pick = getattr(viewport, "pick_section_plane", None)
                 sp = (pick(ctx.screen.x(), ctx.screen.y())
@@ -374,7 +377,7 @@ class MoveTool(Tool):
         rot = self._grip_rot or self._grip_rot_done
         if rot is not None and self.start_point is None:
             # A typed angle: exact turn while a grip is held, or the hot
-            # retype of the one just made (SketchUp).
+            # retype of the one just made.
             done = rot.on_value(viewport, value)
             if self._grip_rot is not None and rot.start_point is None:
                 self._grip_rot, self._grip_rot_done = None, rot
@@ -398,7 +401,7 @@ class MoveTool(Tool):
 
     def on_array_value(self, viewport, count: int, mode: str,
                        step: float | None = None) -> bool:
-        """SketchUp's arrays, typed right after a Move-copy: ``3x`` lays
+        """Arrays, typed right after a Move-copy: ``3x`` lays
         three copies at multiples of the distance (external), ``/3`` three
         copies dividing it (internal). Retyping re-lays the array; the
         window closes at the next click or tool change.
@@ -486,8 +489,8 @@ class MoveTool(Tool):
     # ---- Snap exclusion -----------------------------------------------------
     def snap_excluded(self):
         """What is in motion, for the snap engine to leave out of its
-        candidates: ``(edge ids, group ids)`` or ``None``. SketchUp excludes
-        the entities being moved from inference — otherwise the tool snaps
+        candidates: ``(edge ids, group ids)`` or ``None``. The entities
+        being moved are excluded from inference — otherwise the tool snaps
         to the very geometry it is dragging (issue #19, @pacaeiro). In copy
         mode nothing moves (the ghost is a wireframe), so nothing is left
         out."""
@@ -577,7 +580,7 @@ class MoveTool(Tool):
         return best
 
     def _start_grip_rotation(self, ctx: ToolContext) -> None:
-        """Hand the turn to a Rotate tool set up as SketchUp does: the
+        """Hand the turn to a Rotate tool set up the classic way: the
         protractor on the grip's face, its centre where the axis through
         the box centre pierces that face, the grip as the zero arm."""
         from tools.rotate import RotateTool
@@ -603,7 +606,7 @@ class MoveTool(Tool):
         viewport.update()
 
     def draw_overlay(self, viewport, painter) -> None:
-        """The red rotation grips — SketchUp's «+» marks on the box."""
+        """The red rotation grips — the «+» marks on the box."""
         if self._grip_rot is not None or not self._grips:
             return
         from PySide6.QtCore import QPointF
@@ -666,7 +669,7 @@ class MoveTool(Tool):
 
         Plain copied edges go through the same edge planner as the Line
         tool, so a copy laid across a face splits it and one crossing an
-        edge cuts it there, as SketchUp does (Lefteris Schetakis, #177).
+        edge cuts it there, as users expect (Lefteris Schetakis, #177).
         Faces are stamped FIRST: the planner then finds their loops closed
         and does not add a second face over them."""
         groups = list(self._groups)
@@ -817,7 +820,7 @@ class MoveTool(Tool):
             cmd = build([delta])
             if cmd is not None:
                 viewport.history.execute(cmd)
-                # SketchUp: right after the copy, "3x" / "/3" make an array.
+                # Right after the copy, "3x" / "/3" make an array.
                 self._last = {"cmd": cmd, "build": build,
                               "delta": QVector3D(delta)}
             self._reset()

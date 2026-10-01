@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""The Scale tool's grip box, against SketchUp's documented behaviour: 26
+"""The Scale tool's grip box, against the classic documented behaviour: 26
 grips on a 3D selection (8 corners scale uniformly, 12 edge midpoints scale
 two axes, 6 face centres scale one), 8 on a flat one; the anchor is the
 opposite side or — About Center — the middle; typed values read as factors,
@@ -46,7 +46,7 @@ def _tool_with_box(w=4.0, d=3.0, h=2.0):
 
 
 # ---- Grips ------------------------------------------------------------------
-def test_a_3d_selection_gets_sketchups_26_grips():
+def test_a_3d_selection_gets_the_classic_26_grips():
     tool, _ = _tool_with_box()
     kinds = {}
     for g in tool._grips:
@@ -219,7 +219,7 @@ def test_hot_retype_redoes_the_last_scale_at_the_new_factor():
 
 
 # ---- Captions ---------------------------------------------------------------
-def test_vcb_captions_follow_the_axes_like_sketchup():
+def test_vcb_captions_follow_the_axes():
     tool, _ = _tool_with_box()
     assert tool.vcb_caption() == "Scale"
     tool._grip = next(g for g in tool._grips if g.params == (1.0, 0.5, 0.5))

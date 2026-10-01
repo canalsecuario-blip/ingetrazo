@@ -21,22 +21,23 @@ by matching rounded positions (`_key`, 4 decimals). It is capable and well-teste
 - **Sticky everything.** Auto-merge welds all touching geometry, so there is no
   notion of an isolated object → Groups are forced.
 
-## What SketchUp does (validates the target)
+## What push/pull modellers do (validates the target)
 
-SketchUp is closed-source, but its API/behavior expose its model:
+The established push/pull modellers are closed-source, but their API/behavior
+expose the model:
 
 - **`Vertex`** — first-class, **shared** (a corner is one vertex, not copies).
 - **`Edge`** — connects two vertices and knows its incident faces; `edge.faces`
   is an **array of 0, 1, 2, or more** — i.e. **non-manifold** (three faces meet
-  where two walls and a floor join, and SketchUp handles it natively).
+  where two walls and a floor join, and those modellers handle it natively).
 - **`Face`** — bounded by loops of edges, with inner loops for holes
   (windows/doors).
 - **"Sticky geometry"** (auto-merge) + **Groups/Components** to isolate from it.
 
-So SketchUp uses a **shared-vertex, non-manifold B-rep** — *not* a textbook
+So they use a **shared-vertex, non-manifold B-rep** — *not* a textbook
 (manifold) half-edge. IngeTrazo arrived at the same conceptual model by
 dogfooding; the difference is purely implementation (rediscovered vs persistent
-connectivity). The migration target below is essentially SketchUp's model.
+connectivity). The migration target below is essentially that model.
 
 ## Target model (Level B + C), not textbook half-edge
 

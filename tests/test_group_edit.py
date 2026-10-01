@@ -192,7 +192,7 @@ def test_billboard_group_round_trips_and_faces_camera(tmp_path):
         assert abs((corners[3] - corners[0]).z() - 1.75) < 1e-6
 
 
-# ---- rest-of-model context while editing (SketchUp Model Info ▸ Components)
+# ---- rest-of-model context while editing (Model Info ▸ Components)
 
 class _SpanStub:
     """Just enough Viewport to exercise the span splitting: everything is
@@ -331,7 +331,7 @@ def test_upload_vbo_shrinking_keeps_the_prefix_and_the_count():
 
 # ---- oriented selection box -------------------------------------------------
 #
-# SketchUp draws a group's box in the group's OWN axes, so it hugs the object.
+# A group's box is drawn in the group's OWN axes, so it hugs the object.
 # A world-aligned box on a rotated object reads as skewed and wraps far more
 # air than object — and its corners, which are the handles you grab to move it,
 # end up nowhere near the thing.

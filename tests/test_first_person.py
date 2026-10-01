@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """First Person (tools/walkthrough.py) — a walkthrough mode that plays like
-a game, next to SketchUp's Walk and not instead of it: W/A/S/D move, Q/E go
+a game, next to the classic Walk and not instead of it: W/A/S/D move, Q/E go
 down/up, Shift runs, Alt goes through walls, and a mouse drag (right button,
 or left) turns the head.
 """

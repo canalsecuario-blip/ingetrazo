@@ -128,7 +128,7 @@ def test_a_copied_group_becomes_its_own_when_opened():
 
 def test_an_older_file_reads_its_groups_of_groups_as_groups(tmp_path):
     """Saved before the key existed: a container holding a classic group
-    can only be Make Group's (a SketchUp import places every child with a
+    can only be Make Group's (a .skp import places every child with a
     matrix) — a group. A container of placements stays a component."""
     import json
     from formats import igz

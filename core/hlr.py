@@ -248,8 +248,8 @@ def section_loops(cut_edges, tol: float | None = None) -> list:
     A watertight solid triangulated conformingly yields chords whose
     endpoints meet two by two, so walking the adjacency closes every ring;
     a chain that dead-ends (an open surface: a lone wall face, a roof
-    without walls) is dropped rather than filled — SketchUp's own section
-    fill leaks on those, we prefer to leave them white. Nested rings (a
+    without walls) is dropped rather than filled — a section fill would
+    leak on those, we prefer to leave them white. Nested rings (a
     hollow wall, a pipe) are the caller's even-odd fill rule."""
     if not len(cut_edges):
         return []
@@ -553,7 +553,7 @@ def _geometry_as_lists(tris, hard, soft, soft_n):
 
 #: Line classes of a drawing, per segment (``HlrDrawing.kinds``).
 KIND_EDGE = 0        #: a plain edge between two visible faces
-KIND_PROFILE = 1     #: silhouette / outline against the background (SketchUp's Profiles)
+KIND_PROFILE = 1     #: silhouette / outline against the background (Profiles)
 KIND_CUT = 2         #: the section plane slicing through a solid
 KIND_HIDDEN = 3      #: the part of an edge something stands in front of (dashed)
 
@@ -580,7 +580,7 @@ class HlrDrawing:
 def _surface_at(p, depth, tv2, tvz, tol) -> bool:
     """Does any of the triangles (K,3,2)/(K,3) cover the camera-plane point
     ``p`` with a surface no farther than ``depth + tol``? The adjacency test
-    behind SketchUp's Profiles: a visible edge with a covered point on each
+    behind Profiles: a visible edge with a covered point on each
     side runs between two surfaces; an uncovered side is the background (or
     a surface well behind) — the edge outlines the shape."""
     if not len(tv2):
@@ -775,7 +775,7 @@ def hlr_drawing(scene, camera, geometry=None, profiles: bool = True,
     segments classified as edge / profile / cut, plus the section-cut
     rings to fill. :func:`hlr_view` is the segments-only view of this.
 
-    Profiles (SketchUp's): soft edges where the surface turns away from the
+    Profiles: soft edges where the surface turns away from the
     eye (and open boundaries), and hard edges with the background on one
     side — tested in 2D a hair off the visible segment's midpoint, so a
     lone face's outline, a box's contour and the eave of a roof all come out
@@ -810,7 +810,7 @@ def hlr_drawing(scene, camera, geometry=None, profiles: bool = True,
         tris, hard, soft = collect_geometry(scene)
     else:
         tris, hard, soft, soft_n = geometry
-    # Active section cut (SketchUp): the composer's sheets honour it — the
+    # Active section cut: the composer's sheets honour it — the
     # whole reason sections exist here (plans and cross-cuts on paper).
     sp = (scene.active_section()
           if getattr(scene, "show_section_cuts", True)

@@ -1,8 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """Fillet (round) the edges of a solid — Rafael's «herramienta de redondeo»
-(review of 2026-09-10, C3): the one thing «SketchUp ni la tiene ni creo
-que la vaya a tener jamás».
+(review of 2026-09-10, C3).
 
 An edge shared by two faces is replaced by a strip of quads on the
 cylinder of the given radius tangent to both faces; the faces are cut back

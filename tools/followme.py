@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""Follow Me tool: sweep a profile face along a path (W) — SketchUp's three
-ways (help.sketchup.com "Extruding with Follow Me", Quick Reference Card):
+"""Follow Me tool: sweep a profile face along a path (W) — the three
+classic ways:
 
 1. **Drag along the path.** Click the profile face, then move along the
    path touching its edges: the path highlights in RED and the extrusion
@@ -40,8 +40,11 @@ _DRAG_PX = 6.0
 class FollowMeTool(Tool):
     name = "Follow Me"
     shortcut = "W"
+    description = (
+        "Sweep a face along a path of edges — mouldings, pipes, "
+        "turned shapes.")
     uses_snap = False        # picks a profile face; no snap markers
-    #: The dragged path reads RED, as SketchUp highlights it.
+    #: The dragged path reads RED, the usual highlight.
     wireframe_color = (0.85, 0.16, 0.16, 1.0)
 
     def __init__(self) -> None:

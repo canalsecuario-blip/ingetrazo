@@ -135,7 +135,7 @@ def test_beside_puts_a_horizontal_label_whole_to_one_side_of_a_vertical_cota():
 
 def test_text_along_puts_the_label_outside_an_end_and_the_drag_moves_only_it():
     """Marco, 2026-09-08: «me refería al lado de la cota, ya sea derecho o
-    izquierdo; es más, en SketchUp LayOut se puede mover el texto de la
+    izquierdo; es más, en los programas de láminas se puede mover el texto de la
     cota». The label goes outside the start / end of the line, or wherever
     the mouse drags it; the line never moves; the fields persist."""
     from PySide6.QtCore import QEvent, QPointF, Qt

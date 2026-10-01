@@ -3,7 +3,7 @@
 """Topology helpers — graph queries over the scene's edge network.
 
 Used by tools (today: ``LineTool``) to find polygons that close when a new
-edge is added. Modeled after SketchUp's behaviour: as soon as a new edge
+edge is added. Modeled after the classic behaviour: as soon as a new edge
 completes a planar cycle in the edge graph — using any combination of
 existing edges — that cycle becomes a face automatically.
 
@@ -47,7 +47,7 @@ def find_duplicate_edge(
     Coincidence uses the same tolerant position key as the cycle finder, so
     two endpoints within ≈ 0.1 mm weld to the same node. A degenerate
     (zero-length) query never matches. Returns ``None`` if no duplicate
-    exists. This is the primitive behind SketchUp-style auto-merge: drawing
+    exists. This is the primitive behind the classic auto-merge: drawing
     an edge that already exists reuses it instead of stacking a duplicate.
     """
     ka, kb = _key(a), _key(b)
@@ -1438,7 +1438,7 @@ def resolve_tjunctions(mesh, max_iter: int = 1000) -> None:
 
 
 def fold_nonplanar_faces(mesh, tolerance: float = _PLANAR_TOLERANCE) -> list:
-    """SketchUp's *autofold*: split every face a move has warped out of its
+    """*Autofold*: split every face a move has warped out of its
     plane into planar pieces along fold edges.
 
     The warped face is triangulated (earcut over its Newell plane — robust for

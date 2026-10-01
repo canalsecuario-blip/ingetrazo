@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """Pushing a rim piece right through a solid removes it (Marco, 2026-09-15:
 an arc rounded the front face's corner, the corner sliver pushed to the
-back face «debería eliminarme ese triángulo como lo hace SketchUp»).
+back face «debería eliminarme ese triángulo»).
 
 The opening lands on the far face's rim, not inside it, so it is a notch
 rather than a hole: the far face is trimmed to what remains — the arc

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """Right-click ▸ Select (issue #106, @pacaeiro): «Right now we lack options
-to select by connected, by layer, by material». SketchUp's submenu, answered
+to select by connected, by layer, by material». The usual submenu, answered
 from the current editing context."""
 from __future__ import annotations
 

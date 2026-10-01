@@ -86,7 +86,7 @@ def test_what_you_POINT_AT_wins_even_if_the_world_disagrees():
     same screen line as the blue axis, so a cursor there is offered blue —
     although in the world it is 90° away from it. That is not a bug in the
     detector, it is what screen-space inference MEANS, and it is what
-    SketchUp does: the screen is the interface, and the user is pointing at
+    users expect: the screen is the interface, and the user is pointing at
     the blue line.
 
     It matters less in the app than this test makes it look, because the
@@ -134,7 +134,8 @@ def test_the_threshold_is_in_pixels_so_it_widens_as_you_draw_short():
     """Worth pinning because it is the feel risk Marco has to judge: a
     constant pixel tolerance is a WIDER angle at short reach. Measured on
     the grid, 10 % of directions caught an axis at 30 px of reach against
-    3.4 % at 90 px. SketchUp works this way too; the number is the knob."""
+    3.4 % at 90 px. The classic tools work this way too; the number is
+    the knob."""
     near, far = V(0.6, 0.06, 0.0), V(3.0, 0.06, 0.0)
     ang_near = math.degrees(math.atan2(0.06, 0.6))
     ang_far = math.degrees(math.atan2(0.06, 3.0))

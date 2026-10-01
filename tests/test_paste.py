@@ -135,7 +135,7 @@ def test_copy_paste_group():
     assert pasted.name == "Caja" and pasted.layer == "Muros"
     assert pasted.mesh is not g.mesh        # snapshot: no aliasing the source
     # A pasted classic group is an INSTANCE of the clipboard snapshot
-    # (SketchUp: copies share the definition until edited): stamping is O(1)
+    # (copies share the definition until edited): stamping is O(1)
     # even on a 230k-face group, and begin_group_edit materializes on entry.
     assert pasted.xform is not None
     xs = sorted(round(pasted.xform.map(QVector3D(v)).x())
@@ -282,7 +282,7 @@ def test_clipboard_survives_deleting_the_original():
 
 
 def test_paste_stamps_once_and_returns_to_select():
-    # One stamp per paste (SketchUp): after the click the Select tool is back,
+    # One stamp per paste: after the click the Select tool is back,
     # nothing keeps following the cursor. The clipboard survives, so pasting
     # again stamps another copy.
     import sys

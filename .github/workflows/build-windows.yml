@@ -97,9 +97,9 @@ jobs:
           test -f dist/ingetrazo/_internal/resources/shaders/basic.vert
           test -f dist/ingetrazo/_internal/i18n/es.json
           test -f dist/ingetrazo/_internal/resources/components/components.json
-          # La plantilla .skp en blanco de openskp la generó el SDK de
-          # Trimble: desde el aviso de Trimble (2026-09-28) NO se distribuye
-          # (ingetrazo.spec la excluye y no hay exportación a SketchUp). Si
+          # La plantilla .skp en blanco de openskp la generó una herramienta
+          # propietaria: desde el 2026-09-28 NO se distribuye (ingetrazo.spec
+          # la excluye y no hay exportación a .skp). Si
           # un paquete la trae otra vez, falla aquí — y también --check.
           test ! -e dist/ingetrazo/_internal/openskp/_scaffold
           # El conversor DWG y sus DLL (#101).

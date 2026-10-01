@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """Curve entity: a drawn circle/arc's segments share a curve id so selecting one
-selects the whole curve (SketchUp), and it survives undo/redo + .igz."""
+selects the whole curve, and it survives undo/redo + .igz."""
 from __future__ import annotations
 
 import math
@@ -139,7 +139,7 @@ def _draw_user_scenario(scene, hist):
 
 
 def test_circle_crossing_square_two_contours_and_sector_face():
-    # SketchUp: the crossed circle becomes TWO separate contours, and the
+    # The usual result: the crossed circle becomes TWO separate contours, and the
     # quarter-circle sector inside the square is recognised as a face.
     scene = Scene()
     hist = History(scene)
@@ -158,7 +158,7 @@ def test_square_drawn_after_circle_splits_three_areas():
     # square lands over it. The straight-edge planner can't form the lens, so
     # build_add_edges must run the planar arrangement itself (flat + curves
     # gate) — otherwise a duplicate square face stacks over the lens
-    # (z-fighting stripes on screen). SketchUp: three areas.
+    # (z-fighting stripes on screen). Expected: three areas.
     from core.edits import build_add_edges
     from core.history import AddFaceCommand, RebuildPlanarFacesCommand
 
@@ -279,7 +279,7 @@ def test_two_overlapping_rectangles_split_into_three_regions():
     # Straight edges only (no curves): the cycle planner left the first
     # rectangle whole over the lens, so pushing 'the middle' grabbed the whole
     # rectangle (rect.igz report). The scoped planar rebuild must split the
-    # overlap into its own region — SketchUp's three areas — while deleted
+    # overlap into its own region — the three expected areas — while deleted
     # faces stay deleted (coverage semantics).
     from core.edits import build_add_edges
     from core.history import AddFaceCommand, DeleteFaceCommand
@@ -351,7 +351,7 @@ def test_paste_keeps_curve_identity():
 
 
 def test_offset_of_circle_tags_ring_and_undoes_cleanly():
-    # The offset of a circle face must select as ONE contour (SketchUp), and
+    # The offset of a circle face must select as ONE contour, and
     # undo must remove the ring exactly (the hole edges used to leak).
     from tools.circle import CircleTool
     from tools.offset import OffsetTool
@@ -448,8 +448,8 @@ def test_deleting_big_rectangle_leaves_clean_faces():
 
 def test_tangent_lines_split_circle_into_arcs():
     # Two lines merely TOUCHING the circle at vertices (endpoint snap — no
-    # crossing, no edge splits) must still break the curve there, SketchUp-
-    # style: deleting the arc between the tangent points leaves the rest.
+    # crossing, no edge splits) must still break the curve there, the
+    # classic way: deleting the arc between the tangent points leaves the rest.
     from core.edits import build_add_edge
     from core.history import EraseSelectionCommand
     scene = Scene()

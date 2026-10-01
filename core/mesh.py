@@ -15,7 +15,7 @@ connectivity is rediscovered by matching rounded positions — here a
 - the :class:`Mesh` welds coincident positions to a single vertex on insert
   ("sticky" geometry) and maintains the incidence as geometry is added/removed.
 
-This is SketchUp's model. Moving a vertex moves every edge and face that
+This is the classic surface-modeller model. Moving a vertex moves every edge and face that
 references it for free — no position-matching, no float tolerance.
 
 Built in parallel with the legacy model; the app is migrated onto it
@@ -34,7 +34,7 @@ from PySide6.QtGui import QVector3D
 _KEY_DECIMALS = 4
 
 # Monotonic id for drawn curves (circle/arc). Segments of one curve share it so
-# selection groups them, SketchUp-style. Session-scoped; ``.igz`` load bumps it
+# selection groups them as one curve. Session-scoped; ``.igz`` load bumps it
 # past any stored ids so new curves stay unique.
 _CURVE_COUNTER = 1
 
@@ -99,7 +99,7 @@ class Edge:
         self.v1 = v1
         self.faces: list[Face] = []
         # A "soft" edge is a curve segment (circle/arc): kept in the topology but
-        # hidden from the edge render, so the curve reads smooth, SketchUp-style.
+        # hidden from the edge render, so the curve reads smooth.
         self.soft: bool = False
         # A "hidden" edge is fully invisible: unlike soft it draws neither
         # as a line nor as a profile/silhouette (imported foliage cards —
@@ -108,9 +108,9 @@ class Edge:
         # Layer / tag name (None = default layer).
         self.layer = None
         # Segments of one drawn curve (circle/arc) share a ``curve`` id, so
-        # selecting one segment selects the whole curve (SketchUp curve entity).
+        # selecting one segment selects the whole curve (a curve entity).
         # ``None`` for a plain edge. A split just leaves each side's segments with
-        # the same id → the pieces select as separate arcs, like SketchUp.
+        # the same id → the pieces select as separate arcs.
         self.curve: int | None = None
 
     # Position accessors keep parity with the legacy ``Edge.a`` / ``Edge.b`` so
@@ -222,11 +222,11 @@ class Face:
         Summing in ``QVector3D`` (float32) left a horizontal face — every
         vertex at the same z — with a normal like ``(2.9e-6, 0, 1)``, and
         small faces far from the origin up to ``(6e-4, 0, 1)``. Harmless for
-        shading, fatal for texture projection: SketchUp's basis is ``Z × n``,
+        shading, fatal for texture projection: the .skp basis is ``Z × n``,
         which snaps to the world axes only for a vertical normal, so that
         noise turned the projection 90° against the plane the .skp writer
         computes in float64 from the same vertices (Marco's pool: every
-        horizontal countertop, floor and slab in SketchUp Web). Doubles make
+        horizontal countertop, floor and slab of the .skp). Doubles make
         a constant-z face exactly vertical, like the writer's own plane."""
         loop = self.loop
         count = len(loop)
@@ -254,7 +254,7 @@ class Face:
         # a sliver whose Newell normal fell in [1e-9, 1e-5] got (0, 0, 0)
         # instead of the (0, 0, 1) this function promises, and a zero normal
         # is a WILDCARD: ``dot(anything, zero) == 0`` passes every plane
-        # test. One 3 mm² sliver imported from SketchUp made every line
+        # test. One 3 mm² sliver imported from a .skp file made every line
         # drawn anywhere in its group rebuild "its" plane, wiping all 447
         # faces (Plaza Yanque, 2026-09-10). Dividing keeps the real
         # direction, which is also strictly more informative.
@@ -414,13 +414,13 @@ class Mesh:
         return [e for e in self.edges if e.curve == cid]
 
     def resplit_curves(self) -> None:
-        """Re-partition curve ids into contiguous contours (SketchUp).
+        """Re-partition curve ids into contiguous contours.
 
         A curve breaks at any vertex where other geometry attaches (a non-curve
         edge is incident) or where its own connectivity isn't a simple chain
         (curve-degree ≠ 2). Each resulting chain keeps/gets its own id — so a
-        circle crossed by a square's edges selects as two separate arcs, exactly
-        SketchUp's 'two contours'. A pristine circle stays one curve."""
+        circle crossed by a square's edges selects as two separate arcs ('two
+        contours'). A pristine circle stays one curve."""
         self._chunk_dirty = True
         self._mut_serial += 1
         global _CURVE_COUNTER
@@ -863,8 +863,8 @@ class Mesh:
     def surface_of(self, face: "Face") -> list:
         """The faces forming the same **curved surface** as ``face`` — the
         connected component reached by crossing **soft** edges (a circle/arc
-        sweep's hidden seams). SketchUp groups faces joined by softened edges
-        into one surface, so clicking/painting one acts on the whole curved
+        sweep's hidden seams). Faces joined by softened edges form one
+        surface, so clicking/painting one acts on the whole curved
         side. Returns just ``[face]`` for ordinary (hard-edged) geometry."""
         seen = {face}
         stack = [face]
@@ -1161,7 +1161,7 @@ class Mesh:
         """Drop faces occupying the same *outer* edge cycle as another — a box
         pushed flat (top welded onto bottom), or a room raised whose shared
         wall the neighbour's push already built. Two faces over one region are
-        always junk in a surface model; SketchUp keeps one. When the pair
+        always junk in a surface model; only one is kept. When the pair
         differs in holes (a plain cap collapsed onto a subdivided base), the
         one with more holes survives — it carries the user's subdivision, and
         its holes are filled by their own faces. Returns how many were
@@ -1272,8 +1272,8 @@ class Mesh:
     def collapsible_vertex(self, v: Vertex) -> bool:
         """Whether ``v`` is a redundant valence-2 collinear vertex: its two edges
         are collinear and border the same faces, so it is a spurious subdivision
-        of a straight boundary (no edge or face needs it). SketchUp keeps no such
-        vertex. Removing it lets two coplanar faces share a single edge again."""
+        of a straight boundary (no edge or face needs it); a surface model keeps
+        no such vertex. Removing it lets two coplanar faces share a single edge again."""
         if len(v.edges) != 2:
             return False
         e1, e2 = list(v.edges)
@@ -1505,7 +1505,7 @@ class Mesh:
     def dissolve_edge(self, edge: Edge) -> Optional[Face]:
         """Dissolve a *redundant* coplanar edge, merging its two faces into one.
 
-        SketchUp's coplanar-merge: an edge bordering exactly two faces that lie
+        Coplanar merge: an edge bordering exactly two faces that lie
         in the same plane (same outward normal) carries no silhouette — it is the
         seam left when a pushed wall ends up flush with an adjacent one. Splicing
         the two face loops along the shared edge and dropping the edge yields a
@@ -1564,8 +1564,8 @@ def turn_face_over(face) -> None:
     two rules meet where they should: paint on both sides pins the sides;
     paint on one side goes with the correction.
 
-    SketchUp's own Reverse Faces (``FlipFacesCommand``) swaps nothing, by
-    design: there the material follows the front, as in SketchUp."""
+    The explicit Reverse Faces command (``FlipFacesCommand``) swaps nothing,
+    by design: there the material follows the front, the classic behaviour."""
     attrs = face.attrs if face.attrs is not None else {}
     back = attrs.get("back")
     if isinstance(back, dict):

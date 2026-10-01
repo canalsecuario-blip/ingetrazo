@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""Section planes (SketchUp sections): entity, commands, tool, persistence,
+"""Section planes (sections): entity, commands, tool, persistence,
 scenes and the composer's HLR cut."""
 from __future__ import annotations
 
@@ -55,7 +55,7 @@ def test_plane_side_flip_and_roundtrip():
     sp = SectionPlane(V(0, 0, 1), V(0, 0, 1), name="Planta", symbol="1")
     assert sp.side(V(0, 0, 3)) > 0            # above = hidden side
     assert sp.side(V(0, 0, 0)) < 0
-    sp.flip()                                  # SketchUp's Reverse
+    sp.flip()                                  # the usual Reverse
     assert sp.side(V(0, 0, 3)) < 0
     again = SectionPlane.from_dict(sp.to_dict())
     assert again.name == "Planta" and again.symbol == "1"
@@ -73,7 +73,7 @@ def test_place_activates_and_keeps_one_active():
     a = SectionPlane(V(0, 0, 1), V(0, 0, 1))
     b = SectionPlane(V(0, 0, 2), V(0, 0, 1))
     hist.execute(PlaceSectionPlaneCommand(a))
-    assert scene.active_section() is a        # placing = active cut (SketchUp)
+    assert scene.active_section() is a        # placing = active cut
     hist.execute(PlaceSectionPlaneCommand(b))
     assert scene.active_section() is b        # one active per context
     assert a.active is False
@@ -166,7 +166,7 @@ def test_igz_roundtrip_and_scene_recall(tmp_path):
     assert fresh.show_section_planes is False
     assert fresh.show_section_cuts is True
 
-    # The saved view recalls the section state (SketchUp scenes).
+    # The saved view recalls the section state (scenes).
     fresh.set_active_section(None)
     fresh.show_section_planes = True
     fresh.saved_views[0].apply(fresh, cam)
@@ -229,7 +229,7 @@ def test_hlr_view_honours_the_active_section():
 def test_style_carries_section_fill():
     from core.style import Style
     st = Style()
-    assert st.section_fill is True             # SketchUp 2018+ default: on
+    assert st.section_fill is True             # the usual default: on
     st.section_fill = False
     st.section_fill_color = (0.1, 0.2, 0.3)
     again = Style.from_dict(st.to_dict())
@@ -238,7 +238,7 @@ def test_style_carries_section_fill():
 
 
 def test_move_grabs_a_section_plane_directly():
-    # SketchUp: no pre-selection — Move grabs the plane by its frame and the
+    # No pre-selection — Move grabs the plane by its frame and the
     # cut follows live; the drop is one undoable command.
     from tools.move import MoveTool
     scene = Scene()
@@ -288,7 +288,7 @@ def test_rotate_grabs_a_section_plane_directly():
 
 
 def test_scene_made_before_any_section_switches_the_cut_off(tmp_path):
-    """SketchUp saves "Active Section Planes" per scene by default: a plan
+    """Scenes save "Active Section Planes" by default (the usual convention): a plan
     scene captured before any section plane exists recalls NO active cut, so
     a section activated later never bleeds into it (Marco: "cada escena
     debería ir separada", 2026-09-02). Views from documents older than
@@ -335,7 +335,7 @@ def test_scene_made_before_any_section_switches_the_cut_off(tmp_path):
 
 
 def test_axis_locked_and_ground_planes_hide_the_camera_side():
-    """A placed plane hides the side the camera is on (SketchUp: the plane
+    """A placed plane hides the side the camera is on (the plane
     faces you), so an axis lock must point its normal at the eye. A fixed
     +Y with the camera south of the model hid the whole model in one
     click (Marco, 2026-09-03: 'se ocultó todo')."""

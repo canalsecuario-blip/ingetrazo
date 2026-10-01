@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """The overlay's annotations (dimensions, leader texts) learn what is hidden
-from the depth the frame just rendered, not from ray casts: a SketchUp 2018
+from the depth the frame just rendered, not from ray casts: a .skp (2018)
 house with 25 dimensions spent 2.8 s of EVERY frame casting 1350 rays at
 284 000 triangles (26-09-2026); an orbit frame went from 1722 ms to 50 ms.
 

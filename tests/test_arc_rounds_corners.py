@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""The 2-point Arc rounds a corner the SketchUp way (Rafael's review of
-2026-09-10, C2: «en SketchUp… te fuerza la misma distancia» on the other
+"""The 2-point Arc rounds a corner the classic way (Rafael's review of
+2026-09-10, C2: «te fuerza la misma distancia» on the other
 edge, and the arc adapts to the face).
 
 Start ON an edge and the preview is the arc tangent to it (cyan). On the
@@ -173,7 +173,7 @@ def test_bulge_phase_snaps_to_the_fillet_and_to_the_half_circle(viewport):
     # Somewhere else: plain bulge.
     tool.on_hover(_ctx(viewport, mid - toward * (half_chord * 2.5)))
     assert tool._bulge_kind is None
-    # A single click at the fillet commits AND trims (SketchUp 2015+).
+    # A single click at the fillet commits AND trims (the classic behaviour).
     tool.on_hover(_ctx(viewport, mid + toward * h_fillet))
     tool.on_click(_ctx(viewport, mid + toward * h_fillet))
     mesh = viewport.scene.mesh
@@ -223,7 +223,7 @@ def test_a_three_edge_corner_is_not_trimmed(viewport):
     _square(viewport)
     tool = _tool(viewport)
     mesh = viewport.scene.mesh
-    # A third edge standing on the corner (a post): SketchUp «won't cut».
+    # A third edge standing on the corner (a post): the fillet «won't cut».
     viewport.history.execute(build_add_edges(
         viewport.scene, [(QVector3D(2, 0, 0), QVector3D(2, 0, 1))]))
     tool.on_click(_ctx(viewport, QVector3D(1.5, 0, 0)))

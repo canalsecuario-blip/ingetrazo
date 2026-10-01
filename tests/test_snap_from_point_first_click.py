@@ -5,7 +5,7 @@
 He hovered the door's top corner with the Rectangle tool and moved right
 along the wall to start the window level with it — «te salía una línea de
 extensión para poder dibujar aquí la ventana… como que quiere, pero no sale».
-SketchUp's encouraged-point inference: the last hovered corner stays acquired
+The classic encouraged-point inference: the last hovered corner stays acquired
 and the cursor lines up with it along an axis on a dotted line. Ours only knew
 the from-point while a segment was under way.
 """
@@ -96,7 +96,7 @@ def test_the_viewport_keeps_the_hovered_corner_before_the_first_click():
 
 
 def test_hovering_a_circles_rim_encourages_its_centre(monkeypatch):
-    """Marco's capture of SketchUp (2026-09-14): with the Circle tool on
+    """Marco's reference capture (2026-09-14): with the Circle tool on
     another circle's rim, the dotted line runs from THAT circle's centre —
     the centre is an encouraged point like a corner."""
     import os
@@ -148,10 +148,10 @@ def test_hovering_a_circles_rim_encourages_its_centre(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# The rest of SketchUp's inference catalogue (Marco, 2026-09-14: «haz todas»).
+# The rest of the classic inference catalogue (Marco, 2026-09-14: «haz todas»).
 
 def test_two_encouraged_points_pin_the_cursor_where_their_axis_lines_cross():
-    """MasterSketchUp's two-point method: hover one corner, then another,
+    """The classic two-point method: hover one corner, then another,
     and the cursor snaps where the dotted line from each crosses — level
     with the lintel AND in line with the far jamb."""
     scene = _wall_with_door()
@@ -182,7 +182,7 @@ def test_the_viewport_keeps_the_last_two_encouraged_points():
 
 
 def test_guides_read_on_line_and_group_points_keep_their_colours():
-    """(Magenta group points, SketchUp's way, were tried and dropped:
+    """(Magenta group points, the classic way, were tried and dropped:
     a model made of components turned magenta everywhere — Marco.)"""
     from types import SimpleNamespace
     from views.viewport import _SnapEdge
@@ -259,7 +259,7 @@ def test_the_viewport_offers_an_arcs_sweep_midpoint_and_a_groups_origin():
 
 
 def test_an_arc_started_at_another_arcs_end_snaps_tangent_to_it():
-    """SketchUp's "Tangent at Vertex" (cyan): an arc that starts at the end
+    """The classic "Tangent at Vertex" (cyan): an arc that starts at the end
     of another arc snaps its bulge so the two run tangent — an S-curve here:
     the half circle over (0..2) continues below (2..4) with the same radius."""
     import os
@@ -304,8 +304,8 @@ def test_an_arc_started_at_another_arcs_end_snaps_tangent_to_it():
 
 
 # ---------------------------------------------------------------------------
-# Groups and components: SketchUp infers to what is inside them from outside,
-# without opening them — magenta, and the tip says "in group"/"in component".
+# Groups and components: the classic inference reaches what is inside them
+# from outside, without opening them — magenta, and the tip says "in group"/"in component".
 
 def _offscreen_vp():
     import os

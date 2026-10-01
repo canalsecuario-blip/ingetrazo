@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""SketchUp's Divide (issue #63, @pacaeiro): a line or an arc into N equal
+"""Divide (issue #63, @pacaeiro): a line or an arc into N equal
 pieces; and the undo cap (issue #56)."""
 from __future__ import annotations
 
@@ -47,7 +47,7 @@ def _length(edges):
 
 
 def test_an_arc_divided_becomes_n_independent_arcs_of_equal_length():
-    # SketchUp: a curve divided in 3 is three arcs, each its own contour.
+    # A curve divided in 3 is three arcs, each its own contour.
     m = Mesh()
     pts = [V(0, 0), V(1, 0.5), V(2, 0.8), V(3, 0.5), V(4, 0)]      # a polyline "arc"
     for a, b in zip(pts, pts[1:]):

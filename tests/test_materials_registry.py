@@ -5,7 +5,7 @@
 The design contract: baked attrs (color/texture) stay the render truth;
 ``attrs["mat"]`` adds identity. The registry rides the scene, serializes
 with the document (textures embedded like any other), and the .skp import
-keeps SketchUp's material names instead of dissolving them into anonymous
+keeps the file's material names instead of dissolving them into anonymous
 colours."""
 from __future__ import annotations
 

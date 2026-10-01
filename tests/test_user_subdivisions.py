@@ -234,7 +234,7 @@ def test_deleting_a_slit_edge_keeps_the_face():
 
 def test_deleting_one_piece_of_a_two_piece_fence():
     # Only the erased piece goes; the other survives as a free edge on the
-    # healed face (SketchUp).
+    # healed face.
     from core.history import AddFaceCommand
     from core.edits import build_add_edges
     from core.history import EraseSelectionCommand

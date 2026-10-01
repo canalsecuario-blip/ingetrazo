@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """Place-component tool: a freshly built Group follows the cursor and a click
-drops it — SketchUp's component-placement feel.
+drops it — the classic component-placement feel.
 
 The group is anchored at the CENTRE OF ITS BASE (bbox bottom), so by default
 it *tries* to sit on the ground plane: hovering empty ground lands the base
@@ -37,13 +37,13 @@ class PlaceGroupTool(Tool):
         self._instance = getattr(group, "xform", None) is not None
         # What the cursor holds: the centre of the base by default (a
         # starter settles on the ground), or a point the caller names — an
-        # imported document hangs from its own origin, like SketchUp's
+        # imported document hangs from its own origin, like the usual
         # component axes, so the footings its author drew below grade stay
         # below grade instead of being lifted onto the ground.
         self._anchor = (QVector3D(anchor) if anchor is not None
                         else self._base_center(group))
         self._offset = QVector3D(0.0, 0.0, 0.0)
-        # SketchUp's 3D-text glue: when enabled, hovering a FACE re-orients
+        # 3D-text glue: when enabled, hovering a FACE re-orients
         # the group so its front (-Y) points along the face normal — a sign
         # on a wall, text lying on a slab. No face → upright on the ground.
         self._align = align_to_face
@@ -179,7 +179,15 @@ class PlaceGroupTool(Tool):
         if self._group is None:
             return
         self._update_alignment(ctx)
-        shift = ctx.world - self._rotate(self._anchor)
+        self.place_at(ctx.viewport, ctx.world)
+
+    def place_at(self, viewport, world: QVector3D) -> None:
+        """Drop the component with its anchor at ``world``, in one undo
+        step — what a click does, for a script that already knows the
+        point (``MainWindow.import_igz_path(path, at=…)``, issue #179)."""
+        if self._group is None:
+            return
+        shift = world - self._rotate(self._anchor)
         if self._instance:
             # The pose composes into the matrix: the prototype (and every
             # nested placement under it) stays put in its own frame.
@@ -202,12 +210,12 @@ class PlaceGroupTool(Tool):
             carry_axes(self._group, self._pose_matrix(shift))   # #44
         group = self._group
         self._group = None
-        ctx.viewport.history.execute(InsertGroupCommand(group))
-        ctx.viewport.flash_status(self._placed_message())
-        window = ctx.viewport.window()
+        viewport.history.execute(InsertGroupCommand(group))
+        viewport.flash_status(self._placed_message())
+        window = viewport.window()
         if hasattr(window, "_activate_tool"):
             window._activate_tool("select")
-        ctx.viewport.update()
+        viewport.update()
 
     @staticmethod
     def _placed_message() -> str:

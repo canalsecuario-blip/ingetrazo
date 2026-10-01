@@ -7,7 +7,7 @@ six axes at once. This module is the device-free half: it turns one reading
 of the six axes into a camera move. The drivers that deliver the readings
 live in ``views/ndof_input.py`` (spacenavd on Linux, Raw Input on Windows).
 
-The mapping is SketchUp's and FreeCAD's default, «object mode»: you hold the
+The mapping is FreeCAD's default, «object mode»: you hold the
 MODEL. Move the cap right and the model goes right; lift it and the model
 rises; push it away and the model goes away (zoom out); tilt it forward and
 the model tips its top toward you; twist it and the model turns on its

@@ -20,7 +20,7 @@ OpenSKP 0.8-era data model (v0.2.0), discovered by introspection:
 * ``Instance``: ``matrix`` (a 3×3 rotation/scale row-major + a translation, 13
   floats), ``ref_idx`` (→ the placed definition's id), ``children``.
 
-SketchUp stores lengths in **inches** and is **Z-up** — same up axis as
+The .skp format stores lengths in **inches** and is **Z-up** — same up axis as
 IngeTrazo, so we only scale (inches → metres); no axis swap. The instance tree
 is flattened to world-space polygons (reference geometry, like the big-DAE
 import path). Per-face materials resolve through ``SkpModel.materials_by_id``
@@ -28,8 +28,8 @@ import path). Per-face materials resolve through ``SkpModel.materials_by_id``
 ``attrs["color"]``, and textured materials (``Material.texture``, PR openskp#4)
 become ``attrs["texture"]`` — image bytes extracted to the app's texture cache
 (see :func:`_texture_dir`), tile size in metres, rendered with IngeTrazo's planar projection
-(SketchUp's default texture behaviour; per-face UVs from the TLV are a later
-refinement). Both joins are guarded, so PyPI 0.2.0 still imports (uncoloured).
+(the .skp format's default texture behaviour; per-face UVs from the TLV are a
+later refinement). Both joins are guarded, so PyPI 0.2.0 still imports (uncoloured).
 """
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ from PySide6.QtGui import QMatrix4x4, QVector3D
 
 from core.texture import fit_uv_affine, projection_basis
 
-_INCH = 0.0254          # SketchUp internal unit → metres
+_INCH = 0.0254          # .skp internal unit → metres
 _MAX_DEPTH = 32         # guard against pathological instance nesting
 
 
@@ -49,8 +49,8 @@ def _ring_raw(defn, loop):
 
     The ring is read from the loop's CONNECTIVITY — each coedge contributes
     the vertex it shares with the next one — and NOT from ``sense``, because
-    OpenSKP changed what that flag carries. It used to be SketchUp's own
-    storage bit (0 = forward, 1 = reversed); upstream 0cd14d7 normalized it
+    OpenSKP changed what that flag carries. It used to be the .skp format's
+    own storage bit (0 = forward, 1 = reversed); upstream 0cd14d7 normalized it
     to the documented +1 / -1, and under ±1 BOTH values are truthy, so a
     boolean test silently took the same endpoint for every coedge. Every
     polygon with a reversed coedge then came out as a self-intersecting star:
@@ -217,7 +217,7 @@ def _material_attrs(model, skp_path):
     OpenSKP predates the joins.
 
     Since the material registry (core.materials) each entry also carries
-    ``"mat"``: the SketchUp material NAME — "Concreto visto" stops
+    ``"mat"``: the .skp material NAME — "Concreto visto" stops
     dissolving into an anonymous colour at the border. Returns
     ``(attrs, materials)`` where *materials* is the registry payload
     (one dict per named material, `.igz`-shaped)."""
@@ -228,9 +228,9 @@ def _material_attrs(model, skp_path):
         if tex is not None and getattr(tex, "data", None):
             if tex_dir is None:
                 tex_dir = _texture_dir(skp_path)
-            # SketchUp often stores the author's FULL original path as the
-            # texture filename ("C:\Users\...\toro.png", "P:/SketchUp
-            # projects/.../x.png") — reduce to a safe basename or the image
+            # A .skp often stores the author's FULL original path as the
+            # texture filename ("C:\Users\...\toro.png", "P:/Proyectos
+            # /.../x.png") — reduce to a safe basename or the image
             # lands in nonexistent subdirectories (or an unwritable name on
             # Windows). On a basename collision with different bytes, prefix
             # the material id.
@@ -240,7 +240,7 @@ def _material_attrs(model, skp_path):
                     _needs_tint(data, getattr(mat, "color", None)):
                 # Colourized copy ("[Name]1"): the stored image is SHARED
                 # with the source material — re-tint it toward the material
-                # colour (SketchUp shift/tint) and keep it under its own
+                # colour (the .skp shift/tint) and keep it under its own
                 # name so the base texture stays untouched. The _needs_tint
                 # guard skips materials whose declared colour already IS the
                 # image average (the legacy colourized flag is greedy —
@@ -276,7 +276,7 @@ def _material_attrs(model, skp_path):
             attrs[mid] = entry
 
     # Registry: give every named entry its identity. register() dedups —
-    # two SketchUp materials with the same name and the same recipe merge;
+    # two .skp materials with the same name and the same recipe merge;
     # same name with a different recipe gets "name (2)" so neither silently
     # repaints the other's faces. The final name lands in the shared entry
     # dict, so every face built from it carries attrs["mat"] for free.
@@ -302,7 +302,7 @@ def _face_attrs(face, attr_map, inherited=None):
     """IngeTrazo ``Face.attrs`` for an OpenSKP face, or ``None``.
 
     A face with no material of its own inherits ``inherited`` — the material
-    painted on the nearest enclosing instance (SketchUp's "paint the
+    painted on the nearest enclosing instance (the .skp "paint the
     component" rule; ``Instance.material_id``, our upstream PR openskp#5)."""
     mid = getattr(face, "material_id", None)
     if mid is None:
@@ -310,7 +310,7 @@ def _face_attrs(face, attr_map, inherited=None):
     return attr_map.get(mid) if mid is not None else None
 
 
-# SketchUp's canonical in-plane axes for a face normal — the basis its
+# The .skp format's canonical in-plane axes for a face normal — the basis its
 # per-face texture mapping is expressed in. Lives in core.texture now, as the
 # one recipe the renderer and every exporter share; this module was where it
 # was first calibrated (the controlled textura.skp) and keeps the short name.
@@ -442,12 +442,12 @@ def _face_entry(face, wl, raw_l, s0, s1, holes_sl, attr_map,
     IngeTrazo's renderer and exporters already consume. Exact for triangles;
     a per-face affine fit of the projective map otherwise.
 
-    ``layer`` is the SketchUp layer (tag) of the nearest enclosing tagged
+    ``layer`` is the .skp layer (tag) of the nearest enclosing tagged
     instance — a face with no tag of its own carries it, so hiding the tag's
-    layer in IngeTrazo hides what SketchUp would hide."""
+    layer in IngeTrazo hides what the file marks as hidden."""
     raw = raw_l[s0:s1]
     outer = wl[s0:s1]
-    # Material precedence, matching SketchUp: the face's OWN material wins —
+    # Material precedence (the .skp rule): the face's OWN material wins —
     # front side first, then back side (flipping the face so the painted
     # side fronts, what "Reverse Faces + paint" produces) — and only a face
     # with no material of its own inherits the enclosing instance's paint.
@@ -482,7 +482,7 @@ def _face_entry(face, wl, raw_l, s0, s1, holes_sl, attr_map,
             uvs = _positioned_uvs(face, raw, entry["texture"], matrix=uv_matrix,
                                   projected=projected)
         else:
-            # SketchUp's DEFAULT mapping runs in the face's LOCAL frame:
+            # The .skp DEFAULT mapping runs in the face's LOCAL frame:
             # u = (p·xr)/tile, plane basis from the local normal (the recipe
             # calibrated with the controlled textura.skp). Baking it per face
             # keeps every slat of a component sampling the same patch — a
@@ -502,7 +502,7 @@ def _face_entry(face, wl, raw_l, s0, s1, holes_sl, attr_map,
             if uvw is not None:
                 tex = {**entry["texture"], "uvw": uvw}
                 if uv_matrix is None:
-                    # SketchUp's DEFAULT projection: the file carries no
+                    # The .skp DEFAULT projection: the file carries no
                     # per-face record for it, the material's applied size IS
                     # the mapping. Marked so the exporter writes it back the
                     # same way instead of pinning an explicit one.
@@ -518,12 +518,12 @@ def _face_entry(face, wl, raw_l, s0, s1, holes_sl, attr_map,
                else getattr(face, "uv_projected", False)) \
         or getattr(face, "_projected", False)
     attrs = _bake_uvs(attrs, uv_mat, uv_proj)
-    # SketchUp paints each side on its own. A back painted DIFFERENTLY
+    # A .skp paints each side on its own. A back painted DIFFERENTLY
     # (front green wall, back roof tiles — possibly via instance
     # inheritance on the unpainted side) travels as its own material in
     # attrs["back"]; a back painted the SAME as the front is a two-sided
     # face (``back = True``); a back left unpainted is absent and shows the
-    # style's default back colour, exactly as SketchUp shows it. Flipped
+    # style's default back colour, as the file intends. Flipped
     # faces already front their painted side, so their back is the default.
     if not flipped:
         back_src = attr_map.get(getattr(face, "back_material_id", None))
@@ -629,14 +629,14 @@ def _collect(defn, xform, by_id, attr_map, out, depth, stack,
     ``xform``) and, recursively, for every definition its instances place.
 
     ``inherited`` is the material of the nearest enclosing painted instance —
-    faces with no material of their own take it (SketchUp inheritance).
+    faces with no material of their own take it (.skp inheritance).
     ``layer`` is the layer (tag) of the nearest enclosing tagged instance,
     carried onto the flattened faces the same way.
 
     When ``layer_uses`` is given, a nested instance that carries its OWN
     layer (tag) is NOT flattened here — it is recorded to become a separate
     group with that layer, so hiding the layer in IngeTrazo hides exactly
-    what SketchUp would hide (reference-group chunks render whole groups;
+    what the file marks as hidden (reference-group chunks render whole groups;
     per-face layers inside them are not filtered).
 
     When an instance references a definition in ``proto_ids``, its geometry is
@@ -681,7 +681,7 @@ def _collect(defn, xform, by_id, attr_map, out, depth, stack,
             continue
         if image_uses is not None and \
                 getattr(child, "always_faces_camera", False):
-            # SketchUp's "always face camera" component (2D people like
+            # An "always face camera" component (2D people like
             # Susan): extracted as its own billboard group.
             image_uses.append((child, placed, child_inherited, child_layer))
             continue
@@ -734,7 +734,7 @@ def _census(defn, by_id, uses, depth, stack) -> None:
 
 
 def _mark_projected_faces(defn, attr_map) -> None:
-    """Detect PROJECTED textures (SketchUp's Add Location terrain drape) and
+    """Detect PROJECTED textures (a geolocated terrain drape) and
     set ``face._projected`` on them.
 
     A projected texture shares one mapping matrix across many faces of a
@@ -796,7 +796,7 @@ def _merge_equal_protos(protos):
 
     Prototypes are keyed while building by ``(definition, inherited
     material)``, and a .skp can hold the SAME material under two ids — two
-    entries of SketchUp's material table that a component's placements paint
+    entries of the .skp material table that a component's placements paint
     with interchangeably. That split the hedge's leaves into two identical
     prototypes of 4480 and 5120 faces: 9600 faces stored twice for no reason.
     Comparing the built content catches that, and any other route to the same
@@ -860,7 +860,7 @@ def file_layer_records(model):
     no generation of the library has ever had, so the ``getattr`` default
     won every time and EVERY layer arrived visible however the author had
     left it. Rafael's ``edificio.skp`` hides ``Camera_FOV_Lines`` and
-    ``Camera_FOV_Volume``: SketchUp shows a small camera glyph, IngeTrazo
+    ``Camera_FOV_Volume``: the author saw a small camera glyph, IngeTrazo
     drew the whole frustum across the model (Marco, 2026-09-17, comparing
     screenshots). ``visible`` is still honoured if a future library grows
     it, but ``hidden`` is what decides today.
@@ -880,10 +880,11 @@ def file_layer_records(model):
 
 
 def _is_empty_model(model, skp_path, legacy_era: bool) -> bool:
-    """True when the file is a SketchUp model with nothing in it, as opposed
+    """True when the file is a .skp model with nothing in it, as opposed
     to one whose geometry the parser failed to find. The parse alone cannot
-    tell the two apart, so ask the file: a 2021+ ``.skp`` carries SketchUp's
-    own render of the model (``meta/model_thumbnail.png``), which is one flat
+    tell the two apart, so ask the file: a 2021+ ``.skp`` carries its
+    authoring program's own render of the model
+    (``meta/model_thumbnail.png``), which is one flat
     colour when there is no geometry. Legacy files, and any doubt, answer
     False — the converter stays the fallback."""
     if legacy_era or skp_path is None:
@@ -920,7 +921,7 @@ def _adapt(model, name: str, skp_path=None):
     """An ``SkpModel`` → a payload ``{"backend", "groups", "protos"}`` or
     ``None`` when it yields no geometry (the seam reports it as unreadable).
 
-    SketchUp-style structure, mirroring the DAE reference import:
+    Grouped structure, mirroring the DAE reference import:
 
     * the root's loose faces → one group named after the file;
     * each top-level instance → its own group (its subtree flattened into it),
@@ -930,7 +931,8 @@ def _adapt(model, name: str, skp_path=None):
       each copy an O(1) placement matrix (``Group.xform``).
 
     Definitions with faces that nothing instances are library entries not
-    placed in the model — SketchUp does not render those, and neither do we.
+    placed in the model — they are not part of the visible model, so we skip
+    them.
     ``skp_path`` anchors where extracted texture images land; the material
     joins are guarded so PyPI 0.2.0 still imports (uncoloured)."""
     from formats.dae import _INST_MIN_POLYS, _INST_MIN_SAVED
@@ -1012,7 +1014,7 @@ def _adapt(model, name: str, skp_path=None):
     # A definition placed ONCE is still a definition. The thresholds above ask
     # "does sharing this save memory", which is the wrong question for a
     # component placed a single time: the answer is no, and the model's
-    # structure is lost for it — the Warehouse pieces in Marco's pool (the
+    # structure is lost for it — the library pieces in Marco's pool (the
     # barbecue, the pool itself) are component definitions in the .skp and
     # arrived as flat groups, with their placement matrix baked into the
     # vertices. Keeping the placement means the group knows its own axes (the
@@ -1160,7 +1162,7 @@ def _adapt(model, name: str, skp_path=None):
     #
     # A prototype KEEPS the prototypes its own subtree places, as ``children``
     # (proto index + local matrix). Flattening them instead — the old
-    # "no proto-in-proto" rule — threw away the sharing SketchUp had already
+    # "no proto-in-proto" rule — threw away the sharing the file had already
     # done inside a component: the hedge in piscina.igz is 4480 + 5120 faces
     # placed 48 times, and it arrived as 230400 real ones, twenty-four times
     # over, for the element that is 89% of that model.
@@ -1250,7 +1252,7 @@ def _adapt(model, name: str, skp_path=None):
         })
     if scenes:
         payload["scenes"] = scenes
-    # Linear dimensions (SketchUp's Dimension tool), inches → metres. Endpoints
+    # Linear dimensions (.skp dimension entities), inches → metres. Endpoints
     # come in world space for model-root dimensions (the common case).
     dims = []
     for dm in getattr(model, "dimensions", []) or []:
@@ -1265,7 +1267,7 @@ def _adapt(model, name: str, skp_path=None):
         })
     if dims:
         payload["dimensions"] = dims
-    # Leader texts (SketchUp's Text tool), inches → metres. Only free
+    # Leader texts (.skp text entities), inches → metres. Only free
     # (point-anchored) texts carry a resolved anchor; model-root texts are
     # world space.
     texts = []

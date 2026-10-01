@@ -1,4 +1,4 @@
-"""Nested placements: a component keeps the internal sharing SketchUp gave it.
+"""Nested placements: a component keeps the internal sharing the .skp gave it.
 
 The hedge in ``piscina`` is 9600 stored faces placed 48 times inside its own
 definition. Flattening that on import produced 230400 real faces — 89% of the
@@ -155,8 +155,8 @@ def test_editing_into_a_nested_group_keeps_the_tree():
 
     This test used to assert the opposite — «inside a group you edit real
     geometry, so the internal sharing has to become real faces first,
-    SketchUp does the same» — and that last clause was simply wrong:
-    SketchUp keeps the inner groups as groups and lets you enter them one by
+    the original program does the same» — and that last clause was simply
+    wrong: the .skp keeps the inner groups as groups and lets you enter them one by
     one. Marco hit the real cost on 2026-09-11, when his plaza's nine groups
     fused into one 17 577-face mesh on a double click.
 
@@ -304,7 +304,7 @@ def test_box_selection_reaches_nested_geometry():
 
 
 def test_explode_removes_one_level():
-    """SketchUp's Explode dissolves ONE level (@pacaeiro, issue #72: «the
+    """Explode dissolves ONE level (@pacaeiro, issue #72: «the
     inside groups explode as well»). The top's own quad goes loose; the
     nested component comes out whole, carrying the top's placement, and its
     own children stay inside it. The shared prototype is never touched."""

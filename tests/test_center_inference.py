@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""La inferencia «Centro» de SketchUp.
+"""La inferencia «Centro».
 
 «Cuando dibujo un círculo o tengo un cilindro, en la cara circular
-SketchUp me marca un punto verde en el centro del círculo cuando me pongo
+el programa me marca un punto verde en el centro del círculo cuando me pongo
 en la cara; esto me sirve para dibujar, acotar, mover: es una referencia
 más» (Marco, 2026-09-11). Al pasar por la arista de una curva o por una
 cara que la tiene de borde, el centro queda como referencia (un punto

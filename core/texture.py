@@ -1,15 +1,15 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""Image textures, mapped the SketchUp way for interchange compatibility.
+"""Image textures, mapped the .skp way for interchange compatibility.
 
-A SketchUp material is a colour plus an optional texture image with a
+A .skp material is a colour plus an optional texture image with a
 **real-world tile size** (the model-unit width/height one repeat of the image
 covers). The default mapping is a **planar projection**: a face's UVs come from
 its world position projected onto the face plane, divided by the tile size. The
-projection basis depends only on the face normal — SketchUp's own, see
+projection basis depends only on the face normal — the .skp format's own, see
 :func:`projection_basis` — so coplanar faces share it and the texture tiles
 **seamlessly** across a flat surface, and a face painted here shows the image
-where SketchUp will draw it for the same file.
+where the .skp file places it.
 
 A textured face carries ``attrs["texture"] = {"path", "sw", "sh"}``. Colour and
 texture are independent (a face can have either or both).
@@ -94,7 +94,7 @@ def image_has_cutout(path, cache={}) -> bool:
     """Whether the image carries REAL transparency (some pixels see-through)
     — the signature of a photo sprite (a person, a tree, a raschel mesh)
     versus an opaque photo panel (a sign or mural). What makes a textured
-    material *translucent* in SketchUp's sense. Cached per path; an
+    material *translucent* in the .skp format's sense. Cached per path; an
     unreadable image reads as opaque."""
     cached = cache.get(path)
     if cached is not None:
@@ -173,15 +173,15 @@ class Texture:
         return Texture(d["path"], float(d.get("sw", 1.0)), float(d.get("sh", 1.0)))
 
 
-#: |Z × n| below which SketchUp projects a face with the world axes (X, ±Y)
-#: instead of the cross product — measured with the SDK, see
+#: |Z × n| below which the .skp projection maps a face with the world axes
+#: (X, ±Y) instead of the cross product — measured, see
 #: :func:`projection_basis`.
-SKETCHUP_VERTICAL_TOLERANCE = 1e-3
+VERTICAL_TOLERANCE = 1e-3
 
 
 def projection_basis(normal) -> tuple[tuple[float, float, float],
                                       tuple[float, float, float]]:
-    """SketchUp's in-plane axes for a face normal ``(nx, ny, nz)`` — the
+    """The .skp format's in-plane axes for a face normal ``(nx, ny, nz)`` — the
     basis its default texture projection AND its per-face texture matrices
     are expressed in: ``xr = normalize(Z × n)``, ``yr = n × xr``; for a
     vertical normal ``(X, Y)`` looking up and ``(−X, Y)`` looking down.
@@ -192,20 +192,20 @@ def projection_basis(normal) -> tuple[tuple[float, float, float],
     the paste preview used to project with ``core.triangulate.plane_axes``
     (world X projected onto the plane) while the ``.skp`` importer already
     used this one: on a wall facing +Y or −X the two differ by 180°, so a
-    texture painted in IngeTrazo showed upside-down against what SketchUp
-    draws for the very same file (measured through the SDK's own converter,
-    2026-09-04). Calibrated against SketchUp ground truth for every
+    texture painted in IngeTrazo showed upside-down against the reference
+    rendering of the very same file (measured through the former external
+    converter, 2026-09-04). Calibrated against that ground truth for every
     orientation, not just the axis-aligned ones.
 
     ``Z × n`` is discontinuous at the vertical: for ``n = (ε, 0, 1)`` it
-    points along +Y however small ε is, for ``(0, ε, 1)`` along −X. Real
-    SketchUp resolves that with a tolerance, measured with the SDK on
-    faces tilted by ε from 1e-10 to 1e-2 (2026-09-04): the world axes
+    points along +Y however small ε is, for ``(0, ε, 1)`` along −X. The .skp
+    reference resolves that with a tolerance, measured (2026-09-04) on
+    faces tilted by ε from 1e-10 to 1e-2: the world axes
     ``(X, ±Y)`` while ``|Z × n| < 1e-3`` (the sine of the tilt), the cross
     product from 1.0001e-3 up. The same tolerance here keeps a horizontal
     face whose normal carries float noise — up to 6e-4 on the small faces
-    of Marco's pool — projected the way SketchUp projects the plane it
-    reads back from the file; with the old 1e-9 every such face came out
+    of Marco's pool — projected the way the .skp reference projects the
+    plane it reads back from the file; with the old 1e-9 every such face came out
     turned 90°."""
     nx, ny, nz = float(normal[0]), float(normal[1]), float(normal[2])
     ln = (nx * nx + ny * ny + nz * nz) ** 0.5
@@ -213,11 +213,11 @@ def projection_basis(normal) -> tuple[tuple[float, float, float],
         nx, ny, nz = nx / ln, ny / ln, nz / ln
     xx, xy = -ny, nx                      # Z × n
     lx = (xx * xx + xy * xy) ** 0.5
-    if lx < SKETCHUP_VERTICAL_TOLERANCE:
+    if lx < VERTICAL_TOLERANCE:
         # Measured, not derived: a face looking DOWN gets (−X, +Y), the
         # 180° turn of the upward (X, Y) — not the (X, −Y) mirror the
         # reader assumed. Every underside of the pool (slabs, benches,
-        # countertops) came out upside-down until the SDK said so.
+        # countertops) came out upside-down until measurement said so.
         return ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0)) if nz > 0 \
             else ((-1.0, 0.0, 0.0), (0.0, 1.0, 0.0))
     xx, xy = xx / lx, xy / lx
@@ -226,7 +226,7 @@ def projection_basis(normal) -> tuple[tuple[float, float, float],
 
 def projection_axes(normal, rot: float = 0.0) -> tuple[QVector3D, QVector3D]:
     """:func:`projection_basis` as ``QVector3D`` axes, turned in-plane by
-    ``rot`` degrees (SketchUp's texture rotation)."""
+    ``rot`` degrees (the .skp texture rotation)."""
     n = QVector3D(normal)
     xr, yr = projection_basis((n.x(), n.y(), n.z()))
     u_axis, v_axis = QVector3D(*xr), QVector3D(*yr)
@@ -241,10 +241,10 @@ def projection_axes(normal, rot: float = 0.0) -> tuple[QVector3D, QVector3D]:
 
 def planar_uv(normal: QVector3D, positions, sw: float, sh: float,
               rot: float = 0.0):
-    """SketchUp-style planar-projected ``(u, v)`` for each world ``positions``
-    point: project onto SketchUp's plane basis for ``normal`` (so coplanar
+    """.skp-style planar-projected ``(u, v)`` for each world ``positions``
+    point: project onto the .skp plane basis for ``normal`` (so coplanar
     faces tile seamlessly), scaled by the tile size. ``rot`` turns the texture
-    in-plane by that many degrees (SketchUp's texture rotation). ``sw``/``sh``
+    in-plane by that many degrees (the .skp texture rotation). ``sw``/``sh``
     ≤ 0 fall back to 1 to avoid a divide-by-zero."""
     u_axis, v_axis = projection_axes(normal, rot)
     sw = sw if abs(sw) > 1e-9 else 1.0
@@ -356,14 +356,14 @@ def face_uv_axes(tex: dict, normal):
     ONE definition of "where does the texture sit on this face", so the
     renderer and the ``.skp`` exporter cannot drift apart — the exporter had
     no UV recipe at all and wrote textured faces with no mapping, which is
-    why a model saved from IngeTrazo opened in SketchUp with every texture
+    why a .skp saved from IngeTrazo opened elsewhere with every texture
     gone and only its average colour left.
 
     Two sources, matching what the face carries: a fitted ``uvw`` (an import
-    that brought its own texture coordinates) or, failing that, SketchUp's
+    that brought its own texture coordinates) or, failing that, the .skp
     planar projection of world position (:func:`projection_axes`), so
     coplanar faces tile seamlessly and a ``planar`` face — which the .skp
-    exporter writes with NO per-face record — lands in SketchUp exactly
+    exporter writes with NO per-face record — lands in the .skp file exactly
     where the viewport drew it."""
     uvw = tex.get("uvw")
     if uvw:
@@ -379,7 +379,7 @@ def placement_of(tex: dict, normal) -> tuple[float, float, float] | None:
     """``(sw, sh, rot)`` — the tile size and in-plane rotation a positioned
     texture (one carrying a fitted ``uvw``) shows on the face of ``normal``:
     the lengths of the tile axes dual to the map's gradients, and the angle
-    from SketchUp's projection basis to the U axis. ``None`` when the map is
+    from the .skp projection basis to the U axis. ``None`` when the map is
     missing or degenerate. What the eyedropper hands to a face on ANOTHER
     plane: the map itself only means something on its own plane, but the
     look — the scale and the turn — travels (Marco, 2026-09-15: «debería
@@ -450,8 +450,8 @@ def _rotated_map(gu, cu, gv, cv, axis_point, axis_dir, cos_t, sin_t):
 
 def continuous_maps(mesh, faces, seed, tex: dict) -> dict:
     """Per-face texture dicts that make ``tex`` run CONTINUOUSLY over a
-    curved surface — ``faces`` joined by soft edges — the way SketchUp
-    paints a cylinder or a rounded corner: the image is laid on ``seed``
+    curved surface — ``faces`` joined by soft edges — the classic way to
+    paint a cylinder or a rounded corner: the image is laid on ``seed``
     (its planar projection, or the map it already carries) and walked to
     each neighbour across their shared soft edge, turned about that edge
     into the neighbour's plane, so bricks wrap around the bend instead of
@@ -546,9 +546,9 @@ def uv_reference_points(points, normal=None):
     return centre, centre + e1 * span, centre + e2 * span
 
 
-# ---- Colourize (SketchUp's tinted materials) -----------------------------
+# ---- Colourize (tinted .skp materials) -----------------------------------
 #
-# SketchUp lets a TEXTURED material also carry a colour, and re-tints the
+# The .skp format lets a TEXTURED material also carry a colour, and re-tints the
 # image toward it. Two modes, and they are genuinely different pictures:
 # ``SHIFT`` moves every pixel by the delta between the image average and the
 # target (the stone keeps its veining, moved in tone), ``TINT`` replaces hue
@@ -601,8 +601,8 @@ def hls_to_rgb(hue, lum, sat):
 
 
 def colorize_image(data, target_rgb, ctype=COLORIZE_SHIFT):
-    """Re-tint a shared texture the way SketchUp renders a colourized
-    material copy ("[Name]1", ``type="2"``).
+    """Re-tint a shared texture the way the .skp format defines a
+    colourized material copy ("[Name]1", ``type="2"``).
 
     ``ctype`` 0 ("shift") moves every pixel's hue/lightness/saturation by
     the delta between the image average and the material colour; ``1``

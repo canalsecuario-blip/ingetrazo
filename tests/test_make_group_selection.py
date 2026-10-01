@@ -113,7 +113,7 @@ def test_agrupar_un_grupo_lo_ANIDA(win):
 
 
 def test_lo_suelto_de_la_selección_va_a_la_malla_del_contenedor(win):
-    """Como SketchUp: dentro del grupo nuevo encuentras las caras sueltas Y
+    """Como es lo habitual: dentro del grupo nuevo encuentras las caras sueltas Y
     el grupo, cada uno como lo que era."""
     scene = win.viewport.scene
     f = _quad(scene.mesh)

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""Position Texture: SketchUp's fixed pins on one face (Rafael's review of
+"""Position Texture: the classic fixed pins on one face (Rafael's review of
 2026-09-10, C1: «no encontré manera de cambiar la escala a la textura»).
 
 Right-click a textured face ▸ Texture ▸ Position. The image shows with a
@@ -8,18 +8,18 @@ dotted tile grid and four pins on the corners of the tile under the cursor:
 
 * **red** — drag to MOVE the texture (dragging the texture itself does the
   same);
-* **green** — drag to SCALE and ROTATE about the red pin. SketchUp's
+* **green** — drag to SCALE and ROTATE about the red pin. A small
   protractor appears on the red pin while you drag (Rafael, 2026-09-16:
-  «en SketchUp te bloquea a los 0, a los 45 y a los 90… si no es como un
-  poco a ojo»; Marco brought captures and a recording): a small disc of
+  «te bloquea a los 0, a los 45 y a los 90… si no es como un poco a ojo»;
+  Marco brought captures and a recording): a small disc of
   fixed screen size with the start arm across it, the wedge swept, a
   square on each arm, the current arm dashed through the green pin, and
   the angle in the Measurements box. The rotation snaps to 15° steps
   from where the drag began (0, 15, 30, 45… 90 — Rafael's 0/45/90 are
-  among them); Ctrl while dragging turns the snap off (SketchUp's «Ctrl
+  among them); Ctrl while dragging turns the snap off («Ctrl
   = Sin ajuste»);
 * **blue** — drag to SCALE vertically and SHEAR (red and green stay);
-* **yellow** — SketchUp's perspective distort. The engine maps textures
+* **yellow** — perspective distort. The engine maps textures
   with an affine map per face (what every exporter writes), so this pin is
   shown but not draggable yet.
 
@@ -33,7 +33,7 @@ Esc leaves without changes.
 The result is the face's world→UV affine map (``attrs["texture"]["uvw"]``,
 see :func:`core.texture.face_uv_axes`): the viewport, the .skp/.dae/.obj
 writers and the paint sampler all read that one map, so what is placed
-here is what SketchUp shows for the same file.
+here is what any .skp reader shows for the same file.
 """
 from __future__ import annotations
 
@@ -48,7 +48,7 @@ from tools.base import Tool, ToolContext
 
 PIN_MOVE, PIN_SCALE_ROTATE, PIN_SCALE_SHEAR, PIN_DISTORT = range(4)
 
-#: RGB of each pin, SketchUp's order: red, green, blue, yellow.
+#: RGB of each pin, in the usual order: red, green, blue, yellow.
 PIN_COLORS = ((0.86, 0.22, 0.27), (0.16, 0.62, 0.36),
               (0.20, 0.40, 0.78), (0.95, 0.78, 0.20))
 PIN_NAMES = ("Move", "Scale / Rotate", "Scale / Shear", "Distort")
@@ -134,7 +134,7 @@ class TextureMap:
     @staticmethod
     def from_face(face, tex: dict, at: QVector3D | None = None):
         """The face's current map, anchored at the tile corner below
-        ``at`` (the click point) — where SketchUp puts the red pin."""
+        ``at`` (the click point) — where the red pin classically goes."""
         normal = face.normal()
         gu, cu, gv, cv = face_uv_axes(tex, normal)
         basis = _plane_basis(gu, gv, normal)
@@ -158,10 +158,10 @@ class TexturePositionTool(Tool):
     name = "Position Texture"
     icon = "texture_position"
     uses_snap = False
-    #: The viewport shows this Qt cursor while the tool is active (SketchUp's
+    #: The viewport shows this Qt cursor while the tool is active (a
     #: hand) — the tool has no drawn icon cursor.
     qt_cursor = Qt.OpenHandCursor
-    #: Opacity of the live preview (SketchUp shows the texture translucent
+    #: Opacity of the live preview (the texture shows translucent
     #: with the dotted tile grid over it).
     preview_opacity = 0.75
     #: Pixel radius that grabs a pin.
@@ -170,7 +170,7 @@ class TexturePositionTool(Tool):
     CLICK_PX = 4.0
     #: Pin half-size, px.
     PIN_PX = 7.0
-    #: SketchUp's small protractor on the red pin while the green one
+    #: A small protractor on the red pin while the green one
     #: drags: a disc of fixed SCREEN radius. The rotation snaps to 15°
     #: steps from the drag's start WHEREVER the cursor is — Marco's
     #: recording (2026-09-18) shows the texture jumping in steps with the
@@ -296,7 +296,7 @@ class TexturePositionTool(Tool):
         self._esc_armed = False
 
     def _exit(self, viewport) -> None:
-        """Back to Select (SketchUp returns to the previous tool)."""
+        """Back to Select (the classic tool returns to the previous one)."""
         self._leave(viewport)
         win = viewport.window() if hasattr(viewport, "window") else None
         activate = getattr(win, "_activate_tool", None)
@@ -386,7 +386,7 @@ class TexturePositionTool(Tool):
             self._drag = ("texture", self.map.copy(), list(self.pin_uv))
             self._drag_start = self._on_plane(vp, ctx.screen)
             return
-        # A click outside the face: Done (SketchUp).
+        # A click outside the face: Done.
         self.commit(vp)
 
     def on_hover(self, ctx: ToolContext) -> None:
@@ -425,7 +425,7 @@ class TexturePositionTool(Tool):
         self._sweep_deg = None
         if not self._moved:
             if drag[0] == "pin":
-                # A click on a pin lifts it (SketchUp): it floats with the
+                # A click on a pin lifts it: it floats with the
                 # cursor and the next click sets it down.
                 self._lifted = drag[1]
                 self._lifted_pos = self.pins()[drag[1]]
@@ -487,7 +487,7 @@ class TexturePositionTool(Tool):
         return math.hypot(screen.x() - pr[0], screen.y() - pr[1])
 
     def _snap_rotation(self, theta: float) -> float:
-        """SketchUp's green-pin rule: the sweep snaps to 15° steps measured
+        """The green-pin rule: the sweep snaps to 15° steps measured
         from where the drag began, wherever the cursor is; Ctrl keeps it
         free at 0.1°. ``_sweep_deg`` is what the Measurements box and the
         overlay show."""
@@ -507,14 +507,14 @@ class TexturePositionTool(Tool):
 
     def value_label(self):
         """``(text, anchor)`` while the green pin rotates — the angle swept,
-        as SketchUp's Measurements box shows it; ``None`` otherwise."""
+        as the Measurements box shows it; ``None`` otherwise."""
         if self._sweep_deg is None or not self.active:
             return None
         return (f"{self._sweep_deg:+.1f}°",
                 self.map.world(*self.pin_uv[PIN_SCALE_ROTATE]))
 
     def _protractor_segments(self, viewport):
-        """SketchUp's protractor on the red pin while the green one drags,
+        """The protractor on the red pin while the green one drags,
         read off Marco's recording of 2026-09-18 frame by frame: a small
         disc of fixed SCREEN radius with the start arm drawn across it as
         a diameter, the swept wedge filled, a small square on each arm at
@@ -588,7 +588,7 @@ class TexturePositionTool(Tool):
             return m0.copy()
         return TextureMap(R, uv_r, e_u, e_v)
 
-    # ---- Menu commands (SketchUp's right-click inside the tool) ---------------
+    # ---- Menu commands (the right-click inside the tool) -------------------
     def _push_undo(self) -> None:
         self._undo.append((self.map.copy(), list(self.pin_uv)))
 
@@ -741,8 +741,8 @@ class TexturePositionTool(Tool):
                             [list(h) for h in self.face.holes], {"texture": tex})]
 
     def grid_lines(self) -> list[tuple[QVector3D, QVector3D]]:
-        """The tile lattice over the face's UV extent: SketchUp's «matrix
-        of dotted lines»."""
+        """The tile lattice over the face's UV extent: the «matrix of dotted
+        lines»."""
         if not self.active:
             return []
         uvs = [self.map.uv_of(p) for p in self.face.vertices]
@@ -781,7 +781,7 @@ class TexturePositionTool(Tool):
                 and self._drag[1] == PIN_SCALE_ROTATE and self._moved:
             disc = self._protractor_segments(viewport)
             if disc is not None:
-                # SketchUp's instrument, in its UI blue whatever the face.
+                # The instrument, in its UI blue whatever the face.
                 from PySide6.QtGui import QPolygonF
                 blue = QColor(60, 60, 225, 235)
                 R, u, v, r = disc["frame"]

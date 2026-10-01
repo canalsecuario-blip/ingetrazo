@@ -112,8 +112,8 @@ def test_turn_face_over_is_an_involution():
     assert (dict(south.attrs), list(south.loop)) == before
 
 
-def test_reverse_faces_keeps_sketchups_meaning():
-    """The user's Reverse Faces is SketchUp's: the material follows the
+def test_reverse_faces_keeps_its_classic_meaning():
+    """The user's Reverse Faces is the classic one: the material follows the
     front, so it moves to the other side. Only the automatic pass differs."""
     scene = Scene()
     south = _cube(scene.mesh)["south"]

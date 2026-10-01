@@ -41,6 +41,7 @@ from core.composition import (COMMON_SCALES, NEW_FRAME_STYLE, PAPER_SIZES_MM, RE
                               apply_frame_camera, cota_line_deg,
                               format_scale, parse_scale,
                               readable_deg, snap_mm)
+from views.color_dialog import get_color
 from core.i18n import tr
 from views.theme import style as theme_style
 from core.composition import pen_px
@@ -255,7 +256,7 @@ def view_title_texts(frame: MarcoVista) -> dict:
     uid = getattr(frame, "uid", "") or ""
     # A perspective frame is not drawn to any scale: «ESC. 1:N» under it
     # would be a lie on a printed sheet, so it reads «SIN ESCALA» — what
-    # LayOut writes under a perspective viewport (Marco, 2026-09-17).
+    # the usual convention under a perspective viewport (Marco, 2026-09-17).
     persp = bool(getattr(frame, "perspective", False))
     n = f"{frame.scale_n:g}"
     scale_field = tr("no scale") if persp else format_scale(frame.scale_n)
@@ -313,7 +314,7 @@ def view_title_extent(frame: MarcoVista) -> tuple:
 
 def _paint_title_bubble(painter: QPainter, cx: float, cy: float, d: float,
                         number: str, sheet: str, ink: QColor) -> None:
-    """LayOut's view bubble: a circle with the number, split by a rule
+    """The view bubble: a circle with the number, split by a rule
     with the sheet reference underneath when there is one."""
     pen = QPen(ink)
     pen.setWidthF(0.35)
@@ -482,7 +483,7 @@ def _paint_stale_badge(painter: QPainter, frame: MarcoVista) -> None:
 
 def _paint_view_edit_border(painter: QPainter, frame: MarcoVista) -> None:
     """The frame whose view is being edited in place: a blue dashed inset
-    border and a small tag (LayOut greys the rest of the page instead)."""
+    border and a small tag (sheet layout programs grey the page instead)."""
     pen = QPen(QColor(58, 110, 165), 0.6, Qt.DashLine)
     painter.setPen(pen)
     painter.setBrush(Qt.NoBrush)
@@ -1186,7 +1187,7 @@ def _paint_ground_mm(painter: QPainter, f: FormaItem, a: QPointF,
 def cota_label_anchor(ct: CotaItem) -> tuple:
     """The label's reference point in item space: the dimension line's
     midpoint, moved outside its start or end when ``text_along`` says so,
-    plus the free drag (``text_dx_mm``/``text_dy_mm``) — LayOut lets the
+    plus the free drag (``text_dx_mm``/``text_dy_mm``) — the usual convention lets the
     text box be dragged anywhere, and the line stays put."""
     import math as _math
     (a2x, a2y), (b2x, b2y) = ct.line_points()
@@ -1241,7 +1242,7 @@ def cota_aside_frame(ct: CotaItem) -> tuple:
 
 def paint_cota_mm(painter: QPainter, ct: CotaItem) -> None:
     """Architect-style dimension: the line runs ``sep_mm`` off the measured
-    points along their normal (LayOut-style), tied back with extension
+    points along their normal, tied back with extension
     lines; oblique ticks / arrows / bare ends; centred label of the REAL
     model distance (paper length × N).
 
@@ -1262,7 +1263,7 @@ def paint_cota_mm(painter: QPainter, ct: CotaItem) -> None:
     pen.setWidthF(ct.stroke_mm)
     painter.setPen(pen)
     # Extension lines: small gap at the measured point, small overshoot past
-    # the dimension line (the drafting convention LayOut follows). Each one
+    # the dimension line (the usual drafting convention). Each one
     # runs from ITS point to ITS foot, so a cota forced straight over two
     # points at different heights gets extension lines of different lengths
     # — which is the whole point of forcing it.
@@ -1284,7 +1285,7 @@ def paint_cota_mm(painter: QPainter, ct: CotaItem) -> None:
     text_pos = getattr(ct, "text_pos", "above") or "above"
     length = _math.hypot(ct.dx_mm, ct.dy_mm)
     if text_pos == "centered" and cota_label_is_automatic(ct):
-        # The label sits ON the line, which opens around it (LayOut's
+        # The label sits ON the line, which opens around it (the
         # "centered" text position). The opening is the label box's
         # shadow ALONG the line: a horizontal label on a vertical cota
         # only covers its own height there — measuring its width opened
@@ -2211,7 +2212,7 @@ def paint_cajetin_mm(painter: QPainter, c: Cajetin) -> None:
 # ── Canvas items ────────────────────────────────────────────────────────────
 
 class InlineTextEditor(QGraphicsTextItem):
-    """Edit a text block or a label IN PLACE on the sheet (LayOut): the same
+    """Edit a text block or a label IN PLACE on the sheet: the same
     font at the same paper size, over the item; focus-out or Ctrl+Enter
     commits (one undo step), Esc cancels."""
 
@@ -2670,8 +2671,10 @@ class _SheetItem(QGraphicsItem):
         n_sel = len(self.composer._selected_sheet_items())
         arrange_slots: dict = {}
         from views.icons import tool_icon
-        for icon, label, slot in self.composer._arrange_entries()[:8]:
+        arrange.setToolTipsVisible(True)
+        for icon, label, tip, slot in self.composer._arrange_entries()[:8]:
             act = arrange.addAction(tool_icon(icon), label)
+            act.setToolTip(tip)
             act.setEnabled(n_sel >= (3 if label.startswith(tr("Distribute"))
                                      else 2))
             arrange_slots[act] = slot
@@ -2949,7 +2952,7 @@ class FrameItem(_SheetItem):
         self._paint_selection(painter)
 
     def mouseDoubleClickEvent(self, event) -> None:
-        # LayOut: double-click a model viewport to edit its view in place.
+        # Double-click a model viewport to edit its view in place.
         self.composer.begin_view_edit(self)
         event.accept()
 
@@ -2989,7 +2992,7 @@ class TextItem(_SheetItem):
         return r
 
     def mouseDoubleClickEvent(self, event) -> None:
-        # LayOut: double-click a text block to edit it.
+        # Double-click a text block to edit it.
         self.composer.edit_text_item(self)
         event.accept()
 
@@ -3630,7 +3633,7 @@ class CotaRadialCanvasItem(_SheetItem):
 
 class CotaCanvasItem(_SheetItem):
     def mouseDoubleClickEvent(self, event) -> None:
-        # LayOut: double-click a dimension to edit its text.
+        # Double-click a dimension to edit its text.
         self.composer.edit_cota_text(self)
         event.accept()
 
@@ -3681,7 +3684,7 @@ class CotaCanvasItem(_SheetItem):
 
     def _label_path(self):
         """The label's strip in item space — what a press must hit to drag
-        the TEXT alone (LayOut: «click and drag it by its selection box»),
+        the TEXT alone («click and drag it by its selection box»),
         as opposed to the lines, which drag the whole cota."""
         from PySide6.QtGui import QPainterPath, QTransform
         import math as _math
@@ -3749,7 +3752,7 @@ class CotaCanvasItem(_SheetItem):
 
     def mouseMoveEvent(self, event) -> None:
         if self._text_dragging:
-            # LayOut: the text box goes where the mouse takes it; the
+            # The text box goes where the mouse takes it; the
             # dimension line stays.
             p0, dx0, dy0 = self._text_drag_origin
             self.prepareGeometryChange()
@@ -3902,7 +3905,7 @@ class ComposerCanvasView(QGraphicsView):
     #: Tools whose second point Shift locks to the horizontal or the
     #: vertical through the first (Marco, 2026-09-08: «cuando acote para
     #: sacar una distancia me gustaría que apretando Shift me restrinja de
-    #: forma ortogonal» — AutoCAD's Ortho, SketchUp's axis lock).
+    #: forma ortogonal» — AutoCAD's Ortho, an axis lock).
     _ORTHO_TOOLS = frozenset(("linea", "flecha", "terreno"))
 
     #: Tools whose Shift forces the DIMENSION straight instead of moving
@@ -4042,7 +4045,7 @@ class ComposerCanvasView(QGraphicsView):
     _KEEP_MM = 20.0
 
     def update_pan_range(self) -> None:
-        """Let the page be panned anywhere, as in any CAD / LayOut: the
+        """Let the page be panned anywhere, as in any CAD program: the
         scrollable area is the page grown by the viewport on every side, so
         the wheel and the middle button pan even when the whole sheet fits
         the window (Marco, 2026-09-07: «cuando hago pan con la rueda no
@@ -4253,7 +4256,7 @@ class ComposerCanvasView(QGraphicsView):
             # objetos con el mouse haciendo un cuadro»): a press on the
             # empty sheet starts a rubber band; the release picks the items
             # it encloses (dragged left→right) or touches (right→left),
-            # SketchUp's window / crossing rule, with the same modifiers as
+            # the usual window / crossing rule, with the same modifiers as
             # the model's Select tool. A tiny box is a plain click.
             self._band_start = self.mapToScene(event.position().toPoint())
             self._band_vp = event.position().toPoint()
@@ -4367,7 +4370,7 @@ class ComposerCanvasView(QGraphicsView):
         if (start_vp is None
                 or (vp - start_vp).manhattanLength() < self._BAND_CLICK_PX):
             # A click on the empty sheet: plain click empties the
-            # selection; with a modifier it leaves it alone (SketchUp).
+            # selection; with a modifier it leaves it alone.
             from tools.select import selection_mode
             if selection_mode(modifiers) == "replace":
                 self.scene().clearSelection()
@@ -5183,7 +5186,7 @@ class ComposerCanvasView(QGraphicsView):
                 and not event.isAutoRepeat()
                 and not event.modifiers() & ~Qt.KeypadModifier
                 and hasattr(self.composer, "_set_tool_mode")):
-            # Space = Select, as in the model (SketchUp): it ends whatever
+            # Space = Select, as in the model: it ends whatever
             # is being placed — a chain of dimensions is finished, as Esc
             # does — and puts the arrow back (#83, @pacaeiro: «in Model
             # view Space ends a command, in Sheet Composer it is Esc»).
@@ -5212,7 +5215,7 @@ class ComposerCanvasView(QGraphicsView):
                 event.accept()
                 return
         if event.key() == Qt.Key_Escape and self.scene() is not None:
-            # LayOut / SketchUp: Esc drops the selection.
+            # Esc drops the selection.
             self.scene().clearSelection()
             notify = getattr(self.composer, "on_selection_changed", None)
             if notify is not None:
@@ -5258,7 +5261,7 @@ class ComposerWindow(QMainWindow):
             # composer's shortcuts.
             from PySide6.QtWidgets import QMenuBar
             self.setMenuBar(QMenuBar(self))
-        # Auto-render (LayOut's "Auto"): the viewport announces every model
+        # Auto-render ("Auto"): the viewport announces every model
         # version; stale frames get a badge and, when auto is on and the
         # window is visible, the raster ones re-render by themselves after a
         # short quiet period. Vector frames (seconds each) wait for Update.
@@ -5360,9 +5363,8 @@ class ComposerWindow(QMainWindow):
         # derecha, antes de las x y y»).
         self.auto_check = QCheckBox(tr("Auto-render"))
         self.auto_check.setToolTip(tr(
-            "Re-render the views by themselves when the model changes "
-            "(LayOut's Auto). Vector views keep their badge and wait for "
-            "Update."))
+            "Re-render the views by themselves when the model changes. "
+            "Vector views keep their badge and wait for Update."))
         self.auto_check.setChecked(self._auto_render)
         self.auto_check.toggled.connect(self._set_auto_render)
         self.statusBar().addPermanentWidget(self.auto_check)
@@ -5525,7 +5527,7 @@ class ComposerWindow(QMainWindow):
     #: The drawing tools go on a bar of their own along the TOP: 23 tools in
     #: one vertical bar at 32 px ran past a laptop's 768 px and the last
     #: ones vanished behind the overflow chevron (Marco, 2026-09-14). The
-    #: sheet-item tools (14) stay at the left, as in LayOut.
+    #: sheet-item tools (14) stay at the left, the usual convention for sheets.
     DRAW_TOOLS = ("linea", "flecha", "terreno", "rect", "elipse", "poligono",
                   "cota", "cota_cadena", "cota_base", "cota_ang",
                   "cota_radio")
@@ -5535,10 +5537,12 @@ class ComposerWindow(QMainWindow):
         from PySide6.QtWidgets import QToolBar
         from views.icons import tool_icon
         tb = QToolBar(tr("Composer tools"), self)
+        tb.toggleViewAction().setStatusTip(tr("Show or hide this toolbar."))
         tb.setObjectName("composer_tools")
         tb.setOrientation(Qt.Vertical)
         tb.setIconSize(QSize(toolbar_icon_px(), toolbar_icon_px()))
         draw = QToolBar(tr("Draw"), self)
+        draw.toggleViewAction().setStatusTip(tr("Show or hide this toolbar."))
         draw.setObjectName("composer_draw")
         draw.setIconSize(QSize(toolbar_icon_px(), toolbar_icon_px()))
         group = QActionGroup(self)
@@ -6255,6 +6259,7 @@ class ComposerWindow(QMainWindow):
         from PySide6.QtWidgets import QToolBar
         from views.icons import tool_icon
         tb = QToolBar(tr("Sheet"), self)
+        tb.toggleViewAction().setStatusTip(tr("Show or hide this toolbar."))
         tb.setObjectName("sheet_toolbar")
         tb.setToolButtonStyle(Qt.ToolButtonIconOnly)   # icons, like the tools
         tb.setIconSize(QSize(toolbar_icon_px(), toolbar_icon_px()))
@@ -6353,7 +6358,7 @@ class ComposerWindow(QMainWindow):
         self.fov_spin.setToolTip(tr(
             "Field of view, like a lens: 35° is a long lens that keeps the "
             "lines calm, 60–75° is the wide angle that takes a whole "
-            "courtyard in from inside it. SketchUp's default is 35°."))
+            "courtyard in from inside it."))
         self.fov_spin.valueChanged.connect(self._on_frame_perspective)
         _row(self._persp_rows, tr("Field of view"), self.fov_spin)
         self.shadow_combo = QComboBox()
@@ -6403,7 +6408,7 @@ class ComposerWindow(QMainWindow):
         self.fh_spin.valueChanged.connect(self._on_frame_props)
         form.addRow(tr("Frame height"), self.fh_spin)
         self.style_combo = QComboBox()
-        # The model's display styles, one to one (SketchUp: LayOut viewports
+        # The model's display styles, one to one (sheet viewports
         # pick any style). "Model style" = whatever is active in the model;
         # legacy "tecnico"/"lineas" frames map onto Hidden line / Wireframe.
         from core.style import BUILTIN_STYLES, user_styles
@@ -6429,7 +6434,7 @@ class ComposerWindow(QMainWindow):
         self.title_check = QCheckBox(tr("View title"))
         self.title_check.setToolTip(tr(
             "The label of the view: a numbered bubble, the title and the "
-            "scale over a rule (LayOut), a vertical bar beside the frame, "
+            "scale over a rule, a vertical bar beside the frame, "
             "or a plain centred line. Fields like {escala}, {lamina} and "
             "{escena} expand."))
         self.title_check.toggled.connect(self._on_frame_props)
@@ -6489,9 +6494,8 @@ class ComposerWindow(QMainWindow):
         _row(self._title_rows, tr("Title size"), self.title_mm_spin)
         self.annot_check = QCheckBox(tr("Model annotations"))
         self.annot_check.setToolTip(tr(
-            "Draw the model's own cotas and texts in this frame, like "
-            "LayOut does with SketchUp's. Hide their layer in the scene "
-            "to leave them out."))
+            "Draw the model's own cotas and texts in this frame. Hide "
+            "their layer in the scene to leave them out."))
         self.annot_check.toggled.connect(self._on_frame_props)
         form.addRow(self.annot_check)
         self.annot_mm_spin = QDoubleSpinBox()
@@ -6565,8 +6569,7 @@ class ComposerWindow(QMainWindow):
             "Lines where the section plane cuts through a solid."))
         _row(self._pen_rows, tr("Section cut"), self.pen_cut_spin)
         self.pen_profile_spin = _pen_spin(0.35, tr(
-            "Silhouettes and outlines against the background — SketchUp's "
-            "Profiles."))
+            "Silhouettes and outlines against the background."))
         _row(self._pen_rows, tr("Profiles"), self.pen_profile_spin)
         self._pen_rows_raster.append(self._pen_rows[-1])
         self.pen_edge_spin = _pen_spin(0.18, tr(
@@ -6627,7 +6630,7 @@ class ComposerWindow(QMainWindow):
         fit_btn = QPushButton(tr("Frame the model"))
         fit_btn.setToolTip(tr(
             "Centre the whole model in the frame at the largest common "
-            "scale that fits (LayOut's Zoom Extents). Double-click the "
+            "scale that fits. Double-click the "
             "frame to pan, orbit, zoom and (with Shift) turn the view by "
             "hand."))
         fit_btn.clicked.connect(self._on_zoom_extents_selected)
@@ -6795,15 +6798,14 @@ class ComposerWindow(QMainWindow):
             label.setVisible(visible)
 
     def _pick_forma_color(self, attr: str, button) -> None:
-        from PySide6.QtWidgets import QColorDialog
         item = self._selected_item()
         if not isinstance(item, FormaCanvasItem):
             return
-        col = QColorDialog.getColor(QColor(getattr(item.model, attr)),
+        col = get_color(QColor(getattr(item.model, attr)),
                                     self, tr("Colour"))
         if col.isValid():
             self._panel_edit(item, {attr: col.name()})
-            button.setStyleSheet(f"background: {col.name()};")
+            button.setStyleSheet(f"QAbstractButton {{ background: {col.name()}; }}")
 
     def _page_cota(self) -> QWidget:
         w = QWidget()
@@ -6898,7 +6900,7 @@ class ComposerWindow(QMainWindow):
         form.addRow(tr("Along the line"), self.cota_text_along)
         self.cota_text_reset = QPushButton(tr("Put the text back"))
         self.cota_text_reset.setToolTip(tr(
-            "The label can be dragged anywhere with the mouse (LayOut): "
+            "The label can be dragged anywhere with the mouse: "
             "grab it by its text. This returns it to its automatic spot."))
         self.cota_text_reset.clicked.connect(self._on_cota_text_reset)
         form.addRow("", self.cota_text_reset)
@@ -8154,7 +8156,7 @@ class ComposerWindow(QMainWindow):
                 self.et_arrow.setChecked(m.arrow)
                 self.et_dot.setChecked(bool(getattr(m, "dot", True)))
                 self.et_stroke.setValue(m.stroke_mm)
-                self.et_color_btn.setStyleSheet(f"background: {m.color};")
+                self.et_color_btn.setStyleSheet(f"QAbstractButton {{ background: {m.color}; }}")
                 self.et_bg_check.setChecked(bool(m.bg_color))
                 self.et_bg_btn.setStyleSheet(
                     f"background: {m.bg_color};" if m.bg_color else "")
@@ -8170,7 +8172,7 @@ class ComposerWindow(QMainWindow):
                 self.ll_shape.setCurrentIndex(max(sidx, 0))
                 self.ll_size.setValue(float(m.size_mm))
                 self.ll_stroke.setValue(float(m.stroke_mm))
-                self.ll_color_btn.setStyleSheet(f"background: {m.color};")
+                self.ll_color_btn.setStyleSheet(f"QAbstractButton {{ background: {m.color}; }}")
                 self.ll_follow.setChecked(bool(m.follow))
                 self.ll_follow.setEnabled(bool(m.frame_uid))
                 self.props.setCurrentIndex(14)
@@ -8192,7 +8194,7 @@ class ComposerWindow(QMainWindow):
                 self.nv_line.setValue(float(m.line_mm))
                 self.nv_mirror.setChecked(bool(m.mirror))
                 self.nv_stroke.setValue(float(m.stroke_mm))
-                self.nv_color_btn.setStyleSheet(f"background: {m.color};")
+                self.nv_color_btn.setStyleSheet(f"QAbstractButton {{ background: {m.color}; }}")
                 self.props.setCurrentIndex(13)
             elif isinstance(item, PerfilItem):
                 m = item.model
@@ -8230,7 +8232,7 @@ class ComposerWindow(QMainWindow):
                 eidx = self.crad_ends.findData(m.ends)
                 self.crad_ends.setCurrentIndex(max(eidx, 0))
                 self.crad_stroke.setValue(m.stroke_mm)
-                self.crad_color_btn.setStyleSheet(f"background: {m.color};")
+                self.crad_color_btn.setStyleSheet(f"QAbstractButton {{ background: {m.color}; }}")
                 self.props.setCurrentIndex(15)
             elif isinstance(item, CotaAngularCanvasItem):
                 m = item.model
@@ -8241,7 +8243,7 @@ class ComposerWindow(QMainWindow):
                 eidx = self.cang_ends.findData(m.ends)
                 self.cang_ends.setCurrentIndex(max(eidx, 0))
                 self.cang_stroke.setValue(m.stroke_mm)
-                self.cang_color_btn.setStyleSheet(f"background: {m.color};")
+                self.cang_color_btn.setStyleSheet(f"QAbstractButton {{ background: {m.color}; }}")
                 self.cang_text_color_btn.setStyleSheet(
                     f"background: {m.text_color or m.color};")
                 abg = getattr(m, "text_bg", "") or ""
@@ -8970,26 +8972,57 @@ class ComposerWindow(QMainWindow):
             tr("{n} item(s) pasted.", n=len(pasted)), 3000)
 
     def _arrange_entries(self) -> list:
-        """(icon key, label, slot) of the Arrange commands — the toolbar and
-        the items' right-click menu share them. Align needs two selected
-        items, distribute three; group / lock / duplicate have keys."""
+        """(icon key, label, what it does, slot) of the Arrange commands —
+        the toolbar and the items' right-click menu share them. Align needs
+        two selected items, distribute three; group / lock / duplicate have
+        keys."""
         return [
-            ("arr_left", tr("Align left"), lambda: self.align_selected("left")),
-            ("arr_right", tr("Align right"), lambda: self.align_selected("right")),
-            ("arr_top", tr("Align top"), lambda: self.align_selected("top")),
-            ("arr_bottom", tr("Align bottom"), lambda: self.align_selected("bottom")),
+            ("arr_left", tr("Align left"),
+             tr("Line up the left edges of the selected items with the "
+                "leftmost one."),
+             lambda: self.align_selected("left")),
+            ("arr_right", tr("Align right"),
+             tr("Line up the right edges of the selected items with the "
+                "rightmost one."),
+             lambda: self.align_selected("right")),
+            ("arr_top", tr("Align top"),
+             tr("Line up the top edges of the selected items with the "
+                "highest one."),
+             lambda: self.align_selected("top")),
+            ("arr_bottom", tr("Align bottom"),
+             tr("Line up the bottom edges of the selected items with the "
+                "lowest one."),
+             lambda: self.align_selected("bottom")),
             ("arr_hcenter", tr("Center horizontally"),
+             tr("Line up the centres of the selected items on one vertical "
+                "line, in the middle of the selection."),
              lambda: self.align_selected("hcenter")),
             ("arr_vcenter", tr("Center vertically"),
+             tr("Line up the centres of the selected items on one "
+                "horizontal line, in the middle of the selection."),
              lambda: self.align_selected("vcenter")),
             ("arr_dist_h", tr("Distribute horizontally"),
+             tr("Space three or more selected items evenly from left to "
+                "right."),
              lambda: self.distribute_selected("x")),
             ("arr_dist_v", tr("Distribute vertically"),
+             tr("Space three or more selected items evenly from top to "
+                "bottom."),
              lambda: self.distribute_selected("y")),
-            ("arr_duplicate", tr("Duplicate (Ctrl+D)"), self.duplicate_selected),
-            ("arr_group", tr("Group (Ctrl+G)"), self.group_selected),
-            ("arr_ungroup", tr("Ungroup (Ctrl+Shift+G)"), self.ungroup_selected),
-            ("arr_lock", tr("Lock / unlock (Ctrl+L)"), self.lock_selected)]
+            ("arr_duplicate", tr("Duplicate (Ctrl+D)"),
+             tr("Place a copy of the selected items a little below and to "
+                "the right."),
+             self.duplicate_selected),
+            ("arr_group", tr("Group (Ctrl+G)"),
+             tr("Join the selected items into a group that moves as one."),
+             self.group_selected),
+            ("arr_ungroup", tr("Ungroup (Ctrl+Shift+G)"),
+             tr("Break the selected group back into its items."),
+             self.ungroup_selected),
+            ("arr_lock", tr("Lock / unlock (Ctrl+L)"),
+             tr("Lock the selected items so they cannot be moved by "
+                "accident; when they all are locked, unlock them."),
+             self.lock_selected)]
 
     def _build_arrange_toolbar(self) -> None:
         """The Arrange toolbar: shown by default since 2026-09-14 (Marco kept
@@ -9001,13 +9034,15 @@ class ComposerWindow(QMainWindow):
         from PySide6.QtGui import QAction
         from PySide6.QtWidgets import QToolBar
         tb = QToolBar(tr("Arrange"), self)
+        tb.toggleViewAction().setStatusTip(tr("Show or hide this toolbar."))
         tb.setObjectName("arrange_toolbar")
         tb.setIconSize(QSize(toolbar_icon_px(), toolbar_icon_px()))
         from views.icons import tool_icon
-        for icon, label, slot in self._arrange_entries():
+        for icon, label, tip, slot in self._arrange_entries():
             act = QAction(tool_icon(icon), label, self)
             act.setProperty("icon_key", icon)
-            act.setToolTip(label)
+            act.setToolTip(f"{label}\n{tip}")
+            act.setStatusTip(tip)
             act.triggered.connect(lambda _c, s=slot: s())
             tb.addAction(act)
         self.addToolBar(Qt.TopToolBarArea, tb)
@@ -9020,7 +9055,7 @@ class ComposerWindow(QMainWindow):
             lambda on: QSettings().setValue("composer/arrange_toolbar",
                                             "1" if on else "0"))
 
-    # ---- Copy / paste style (LayOut's Edit ▸ Copy Style / Paste Style) -------
+    # ---- Copy / paste style (Edit ▸ Copy Style / Paste Style) ----------------
     #: The look of each item kind — never its geometry or content.
     STYLE_FIELDS = {
         CotaItem: ("text_mm", "decimals", "units", "ends", "stroke_mm", "color",
@@ -9144,7 +9179,7 @@ class ComposerWindow(QMainWindow):
         self.statusBar().showMessage(
             tr("Style pasted on {n} item(s).", n=n), 3000)
 
-    # ---- Editing a frame's view in place (LayOut) ----------------------------
+    # ---- Editing a frame's view in place -------------------------------------
     @property
     def view_edit_item(self):
         return self._view_edit
@@ -9324,7 +9359,7 @@ class ComposerWindow(QMainWindow):
         self._after_view_edit(item)
 
     def zoom_extents(self, item) -> None:
-        """LayOut's Zoom Extents: centre the whole model in the frame at the
+        """Zoom Extents: centre the whole model in the frame at the
         largest common scale that still fits it."""
         import numpy as np
         from core.hlr import _to_cam, camera_basis
@@ -9784,7 +9819,7 @@ class ComposerWindow(QMainWindow):
         if isinstance(item, FrameItem):
             self.zoom_extents(item)
 
-    # ---- Auto-render (LayOut's Auto) -----------------------------------------
+    # ---- Auto-render (Auto) --------------------------------------------------
     def _on_model_version(self, version) -> None:
         """The viewport painted a new scene version: unless it is one of our
         own sheet edits, every frame is now stale."""
@@ -9986,7 +10021,7 @@ class ComposerWindow(QMainWindow):
 
     def _on_scale_committed(self) -> None:
         """Enter / focus-out on the scale box: remember a new 1:N in the
-        document (LayOut keeps only its presets; here a project's odd
+        document (not only the presets; here a project's odd
         scale, say 1:75, is one click away on the next frame)."""
         n = round(self._current_scale_n(), 3)
         if any(abs(n - k) < 1e-6 for k in self._scale_options()):
@@ -10020,12 +10055,11 @@ class ComposerWindow(QMainWindow):
         self._rebuild_canvas()
 
     def _on_pick_border_color(self) -> None:
-        from PySide6.QtWidgets import QColorDialog
-        col = QColorDialog.getColor(QColor(self.comp.border_color), self,
+        col = get_color(QColor(self.comp.border_color), self,
                                     tr("Border colour"))
         if col.isValid():
             self.comp.border_color = col.name()
-            self.border_color_btn.setStyleSheet(f"background: {col.name()};")
+            self.border_color_btn.setStyleSheet(f"QAbstractButton {{ background: {col.name()}; }}")
             self._mark_dirty()
             self._rebuild_canvas()
 
@@ -10436,7 +10470,7 @@ class ComposerWindow(QMainWindow):
         last = getattr(self, "_last_cajetin_fill", "#e9ecf0")
         item.prepareGeometryChange()
         self._panel_edit(item, {"fill_color": last if on else ""})
-        self.caj_fill_btn.setStyleSheet(f"background: {last};" if on else "")
+        self.caj_fill_btn.setStyleSheet(f"QAbstractButton {{ background: {last}; }}" if on else "")
         self._sync_cajetin_design_combo(item.model)
 
     def _on_cajetin_design(self, *_a) -> None:
@@ -10626,13 +10660,12 @@ class ComposerWindow(QMainWindow):
             f"background: {last};" if on else "")
 
     def _on_pick_text_bg(self) -> None:
-        from PySide6.QtWidgets import QColorDialog
         item = self._selected_item()
         if not isinstance(item, TextItem):
             return
         current = item.model.bg_color or getattr(self, "_last_text_bg",
                                                  "#ffffff")
-        col = QColorDialog.getColor(QColor(current), self,
+        col = get_color(QColor(current), self,
                                     tr("Background colour"))
         if col.isValid():
             self._last_text_bg = col.name()
@@ -10641,18 +10674,17 @@ class ComposerWindow(QMainWindow):
             self._updating = True
             self.text_bg_check.setChecked(True)
             self._updating = False
-            self.text_bg_btn.setStyleSheet(f"background: {col.name()};")
+            self.text_bg_btn.setStyleSheet(f"QAbstractButton {{ background: {col.name()}; }}")
 
     def _on_pick_text_color(self) -> None:
-        from PySide6.QtWidgets import QColorDialog
         item = self._selected_item()
         if not isinstance(item, TextItem):
             return
-        col = QColorDialog.getColor(QColor(item.model.color), self,
+        col = get_color(QColor(item.model.color), self,
                                     tr("Colour"))
         if col.isValid():
             self._panel_edit(item, {"color": col.name()})
-            self.text_color_btn.setStyleSheet(f"background: {col.name()};")
+            self.text_color_btn.setStyleSheet(f"QAbstractButton {{ background: {col.name()}; }}")
 
     def _on_norte_props(self, *_a) -> None:
         item = self._selected_item()
@@ -10778,7 +10810,7 @@ class ComposerWindow(QMainWindow):
         if not item.model.anchored:
             changes["z_m"] = float(self.nv_z.value())
         self._panel_edit(item, changes)
-        # the next mark inherits the look (LayOut remembers the last style)
+        # the next mark inherits the look (the last style is remembered)
         self._last_nivel_style = {k: changes[k] for k in
                                   ("text", "symbol", "datum_m", "decimals",
                                    "size_mm", "line_mm", "mirror",
@@ -10841,18 +10873,17 @@ class ComposerWindow(QMainWindow):
         last = getattr(self, "_last_text_bg", "#ffffff")
         item.prepareGeometryChange()
         self._panel_edit(item, {attr: last if on else ""})
-        button.setStyleSheet(f"background: {last};" if on else "")
+        button.setStyleSheet(f"QAbstractButton {{ background: {last}; }}" if on else "")
         if isinstance(item.model, CotaItem):
             self._remember_cota_style(item.model)
 
     def _pick_item_bg(self, attr: str, check, button) -> None:
-        from PySide6.QtWidgets import QColorDialog
         item = self._selected_item()
         if item is None or not hasattr(item.model, attr):
             return
         current = getattr(item.model, attr, "") or getattr(
             self, "_last_text_bg", "#ffffff")
-        col = QColorDialog.getColor(QColor(current), self,
+        col = get_color(QColor(current), self,
                                     tr("Background colour"))
         if col.isValid():
             self._last_text_bg = col.name()
@@ -10861,29 +10892,27 @@ class ComposerWindow(QMainWindow):
             self._updating = True
             check.setChecked(True)
             self._updating = False
-            button.setStyleSheet(f"background: {col.name()};")
+            button.setStyleSheet(f"QAbstractButton {{ background: {col.name()}; }}")
             if isinstance(item.model, CotaItem):
                 self._remember_cota_style(item.model)
 
     def _pick_item_color(self, attr: str, button) -> None:
-        from PySide6.QtWidgets import QColorDialog
         item = self._selected_item()
         if item is None:
             return
         current = getattr(item.model, attr, "") or getattr(
             item.model, "color", "#1e242c")
-        col = QColorDialog.getColor(QColor(current), self, tr("Colour"))
+        col = get_color(QColor(current), self, tr("Colour"))
         if col.isValid():
             item.prepareGeometryChange()
             self._panel_edit(item, {attr: col.name()})
-            button.setStyleSheet(f"background: {col.name()};")
+            button.setStyleSheet(f"QAbstractButton {{ background: {col.name()}; }}")
 
     def _on_pick_cota_text_color(self) -> None:
-        from PySide6.QtWidgets import QColorDialog
         item = self._selected_item()
         if not isinstance(item, CotaCanvasItem):
             return
-        col = QColorDialog.getColor(
+        col = get_color(
             QColor(item.model.text_color or item.model.color), self,
             tr("Text colour"))
         if col.isValid():
@@ -10895,8 +10924,8 @@ class ComposerWindow(QMainWindow):
                 f"background: {col.name()};")
             self._remember_cota_style(item.model)
 
-    #: Style fields a new cota inherits from the last one edited (LayOut
-    #: draws new dimensions with the current style settings).
+    #: Style fields a new cota inherits from the last one edited (the usual
+    #: convention: new dimensions take the current style settings).
     _COTA_STYLE_FIELDS = ("text_mm", "decimals", "ends", "stroke_mm",
                           "color", "offset_mm",
                           "text_color", "text_bg",
@@ -10956,15 +10985,14 @@ class ComposerWindow(QMainWindow):
             if k in self._COTA_STYLE_FIELDS and hasattr(probe, k)}
 
     def _on_pick_cota_color(self) -> None:
-        from PySide6.QtWidgets import QColorDialog
         item = self._selected_item()
         if not isinstance(item, CotaCanvasItem):
             return
-        col = QColorDialog.getColor(QColor(item.model.color), self,
+        col = get_color(QColor(item.model.color), self,
                                     tr("Colour"))
         if col.isValid():
             self._panel_edit(item, {"color": col.name()})
-            self.cota_color_btn.setStyleSheet(f"background: {col.name()};")
+            self.cota_color_btn.setStyleSheet(f"QAbstractButton {{ background: {col.name()}; }}")
 
     def _item_label(self, model) -> str:
         if isinstance(model, EtiquetaItem):
@@ -12273,6 +12301,9 @@ class ComposerWindow(QMainWindow):
         self.addAction(act)
         self._act_sidebar = act
         clean = QAction(tr("Clean screen"), self)
+        clean.setStatusTip(tr(
+            "Fold away every toolbar, panel and bar so only the sheet "
+            "shows; once more brings them all back."))
         clean.setShortcut(QKeySequence("Ctrl+0"))
         clean.setCheckable(True)
         clean.toggled.connect(self._toggle_clean_screen)
@@ -12286,6 +12317,8 @@ class ComposerWindow(QMainWindow):
         search.setShortcut(QKeySequence("F3"))
         search.triggered.connect(lambda: open_search(self))
         self.addAction(search)
+        from views.command_search import warm_up
+        warm_up(self)
 
     def command_search_area(self):
         """Where F3 opens: the sheet with its rulers, not the side panel."""

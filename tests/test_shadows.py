@@ -109,7 +109,7 @@ def test_panel_writes_scene_shadows():
 
 
 def test_panel_month_bar_and_time_zone():
-    """The SketchUp shadow bar: the day-of-year slider and the date field
+    """The classic shadow bar: the day-of-year slider and the date field
     are two views of one date, and the time-zone combo overrides the
     by-longitude default (None = automatic)."""
     from views.tray import ShadowsPanel
@@ -135,7 +135,7 @@ def test_panel_month_bar_and_time_zone():
 
 def test_time_slider_is_bounded_to_daylight():
     """Marco set UTC−10 with 22:39 and the shadows silently vanished — it
-    was night. SketchUp never lets that happen: the slider runs sunrise to
+    was night. The classic bar never lets that happen: the slider runs sunrise to
     sunset, so a zone change drags the hour back into the sun."""
     from views.tray import ShadowsPanel
     win = _Win()

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""Saved views (SketchUp's "Scenes"): capture/apply, importer conversion,
+"""Saved views ("Scenes"): capture/apply, importer conversion,
 and .igz persistence."""
 import math
 
@@ -48,7 +48,7 @@ def test_apply_shows_layers_created_after_the_view_was_saved():
     view = SavedView.capture("V", scene, cam)
     scene.layers.append(Layer("Nueva", visible=False))
     view.apply(scene, cam)
-    # Not in the view's hidden list → shows, like SketchUp.
+    # Not in the view's hidden list → shows, the usual convention.
     assert scene.layer("Nueva").visible is True
 
 

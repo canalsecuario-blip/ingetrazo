@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """The hovered edge stays acquired after the cursor leaves it.
 
-SketchUp's parallel inference (Rafael's review, 2026-09-10): while drawing a
+The classic parallel inference (Rafael's review, 2026-09-10): while drawing a
 line you brush an off-axis wall with the cursor, move away, and the draw locks
 parallel to that wall (magenta «Paralelo a arista»). Drawing parallel means
 drawing AWAY from the edge, so the reference must survive the cursor leaving

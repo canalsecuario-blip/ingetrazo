@@ -37,13 +37,13 @@ description: |
   presupuesto.
 
   IngeTrazo (pronounced EEN-heh-TRAH-soh, "the engineer's stroke") is a free,
-  open-source 3D modeler to draw as if by hand. It opens SketchUp .skp files
+  open-source 3D modeler to draw as if by hand. It opens .skp files
   with its own free reader (openskp), and brings push/pull modeling, real-sun
   shadow studies, sections, print sheets, DXF/DWG import and BIM (IFC)
   tagging. Spanish-first UI, English available.
 
-  SketchUp is a trademark of Trimble Inc.; IngeTrazo is an independent
-  project, not affiliated with or endorsed by Trimble.
+  IngeTrazo is an independent project, written from scratch and not
+  affiliated with any other software vendor.
 license: GPL-3.0-or-later
 website: https://ingetrazo.com
 contact: https://github.com/ingelibre/ingetrazo/issues

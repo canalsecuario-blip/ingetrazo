@@ -206,7 +206,7 @@ class MarcoVista:
     view_key: str = "__current__"
     #: Render style: "sombreado" (the model's ACTIVE display style),
     #: "style:<name>" (a core.style built-in preset — Hidden line,
-    #: Architectural, ... — per frame, like LayOut viewports),
+    #: Architectural, ... — per frame, like sheet viewports),
     #: "vectorial" (exact HLR vector pass), or the legacy "tecnico" /
     #: "lineas" (kept for old documents; the UI maps them onto the
     #: Hidden line / Wireframe presets).
@@ -217,7 +217,7 @@ class MarcoVista:
     paper_bg: bool = False
     #: Draw the view title under the frame («Planta — 1:100»).
     show_title: bool = False
-    #: How the title reads. "layout": LayOut's label — numbered bubble +
+    #: How the title reads. "layout": the classic sheet label — numbered bubble +
     #: title + «ESC. 1:N» over a rule; "bar": a vertical strip at the
     #: frame's left with title / subtitle / scale turned 90° (the habit of
     #: Brazilian offices' plans); "simple": the historic centred line.
@@ -247,12 +247,12 @@ class MarcoVista:
     #: Hidden from the sheet — not drawn, not printed, not picked;
     #: shown again from the Items list's eye (QGIS; Marco, 26-09).
     hidden: bool = False
-    #: In-place view edits (LayOut: double-click the viewport, then pan /
+    #: In-place view edits (double-click the viewport, then pan /
     #: orbit / zoom). ``None`` = whatever the view or scene provides.
     cam_target: Optional[list] = None      # world point the camera centres on
     cam_yaw: Optional[float] = None        # radians, overrides the view's
     cam_pitch: Optional[float] = None
-    #: PERSPECTIVE frame (LayOut's viewport switch): the view renders with a
+    #: PERSPECTIVE frame (the usual viewport switch): the view renders with a
     #: real vanishing point instead of the parallel projection every other
     #: frame uses — the 3D «como si lo viera en campo» that an axonometric
     #: never gives (Marco, 2026-09-17). Off by default and never inherited
@@ -283,7 +283,7 @@ class MarcoVista:
     #: points, anchored cotas, section marks, the DXF) turns with it.
     rot_deg: float = 0.0
     #: Draw the model's own dimensions and leader texts in the frame
-    #: (LayOut shows SketchUp's). Opt-in per frame; their layers decide
+    #: (the model's own annotations). Opt-in per frame; their layers decide
     #: per scene which ones.
     annotations: bool = False
     annot_text_mm: float = 2.8             # their text height on paper
@@ -305,7 +305,7 @@ class MarcoVista:
     border_mm: float = 0.3
     border_color: str = "#282e36"
     #: Pens of the vector style, in paper mm — the three weights that make
-    #: a drawing read as a plan: the section cut, the profiles (SketchUp's:
+    #: a drawing read as a plan: the section cut, the profiles (that is,
     #: silhouettes and outlines against the background) and the plain
     #: edges between two faces. ``profiles`` off draws every edge thin.
     pen_cut_mm: float = 0.5
@@ -722,7 +722,7 @@ class FormaItem:
 
 @dataclass(eq=False)
 class EtiquetaItem:
-    """A label with a leader (LayOut's Label, SketchUp's leader text): a
+    """A label with a leader (the classic sheet label / leader text): a
     text block on the page and a leader line to the point it names, with
     an arrow head there. The point may anchor to model geometry of a
     frame and then follows the model like a cota."""
@@ -741,9 +741,9 @@ class EtiquetaItem:
     bg_color: str = ""
     bg_opacity: float = 1.0
     arrow: bool = True
-    #: A dot where the leader leaves the words (LayOut's label leader,
-    #: AutoCAD's landing dot) — Marco, 2026-09-14: «el inicio de la línea
-    #: donde está el texto debería ser un punto».
+    #: A dot where the leader leaves the words (AutoCAD's landing dot) —
+    #: Marco, 2026-09-14: «el inicio de la línea donde está el texto
+    #: debería ser un punto».
     dot: bool = True
     stroke_mm: float = 0.25
     anchor_uid: str = ""         # frame whose geometry the point sits on
@@ -895,7 +895,7 @@ class LlamadaItem:
 
 @dataclass(eq=False)
 class CotaAngularItem:
-    """A sheet angular dimension (LayOut's Angular Dimension tool): a vertex
+    """A sheet angular dimension (the usual angular dimension tool): a vertex
     on the page, two rays to the measured points, and an arc of
     ``radius_mm`` between them carrying the angle label."""
 
@@ -996,7 +996,7 @@ class CotaItem:
     """A sheet dimension between two measured points; the label is the REAL
     model distance implied by the paper length at 1:N («3.45 m»).
 
-    LayOut-style: the dimension LINE runs parallel to the measured segment,
+    The usual sheet convention: the dimension LINE runs parallel to the measured segment,
     ``sep_mm`` away along its normal (0 = directly on the points, the pre-C5
     look), with extension lines connecting it back to the measured points.
     """
@@ -1015,7 +1015,7 @@ class CotaItem:
     ends: str = "tick"           # tick | arrow | none
     stroke_mm: float = 0.25
     color: str = "#1e242c"
-    #: Label style (LayOut's dimension text options): where the label sits
+    #: Label style (the usual dimension text options): where the label sits
     #: relative to the dimension line, whether it follows the line or stays
     #: horizontal, and its own colour ("" = the line colour).
     text_pos: str = "above"      # above | centered | below | aside | aside_below
@@ -1023,7 +1023,7 @@ class CotaItem:
     # end of the dimension line (AutoCAD's outside placement; Marco,
     # 2026-09-08: «al lado de la cota, ya sea derecho o izquierdo»).
     text_along: str = "middle"   # middle | start | end
-    # LayOut: the text box is dragged freely by the mouse — this is that
+    # The text box is dragged freely by the mouse — this is that
     # drag, page mm from the automatic spot (0, 0 = automatic).
     text_dx_mm: float = 0.0
     text_dy_mm: float = 0.0
@@ -1035,7 +1035,7 @@ class CotaItem:
     #: the cota remembers WHICH frame (its uid) and the two 3D points in
     #: model metres; the composer reprojects it whenever the frame or the
     #: model changes. The label is the distance PROJECTED on the frame's
-    #: view plane (LayOut): on an elevation the fountain's top and the
+    #: view plane: on an elevation the fountain's top and the
     #: slab's front edge read 2.40 m tall, not the 3.87 m diagonal between
     #: two points 3 m apart in depth (Marco, 2026-09-02). "" / None = a
     #: free paper dimension (the pre-anchor behaviour).
@@ -1043,7 +1043,7 @@ class CotaItem:
     a_world: Optional[list] = None
     b_world: Optional[list] = None
     #: Direction of the dimension LINE. ``""`` measures the segment
-    #: itself, the way LayOut and SketchUp do (AutoCAD calls it DIMALIGNED);
+    #: itself, the usual convention (AutoCAD calls it DIMALIGNED);
     #: ``"h"`` / ``"v"`` measure only the horizontal or vertical part of it
     #: and draw the line straight, with extension lines of DIFFERENT
     #: lengths reaching each real point (AutoCAD's DIMLINEAR).
@@ -1117,7 +1117,7 @@ class CotaItem:
 
         Returns the EXTRA segment, in item space, or ``None`` when the
         words are over the line or the drafter has dragged them away by
-        hand — then the line stays where he put it, as LayOut does.
+        hand — then the line stays where he put it.
         """
         along = getattr(self, "text_along", "middle") or "middle"
         if along not in ("start", "end"):
@@ -1164,7 +1164,7 @@ class CotaItem:
 
     def label(self) -> str:
         """Custom text when set — with ``<>`` standing for the measured
-        value (LayOut / SketchUp) — else the measurement itself."""
+        value (the usual convention) — else the measurement itself."""
         if self.text:
             return self.text.replace("<>", self.auto_label())
         return self.auto_label()
@@ -1901,7 +1901,7 @@ def apply_frame_camera(camera, frame: MarcoVista,
             lo, hi = scene.bounds()
             if lo is not None:
                 camera.target = (lo + hi) * 0.5
-    # Per-frame view edits (LayOut: double-click the viewport, then pan /
+    # Per-frame view edits (double-click the viewport, then pan /
     # orbit / zoom) override whatever the view or the scene set.
     if frame.cam_yaw is not None:
         camera.yaw = float(frame.cam_yaw)

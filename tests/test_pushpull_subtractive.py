@@ -520,7 +520,7 @@ def test_push_through_wall_makes_a_real_hole():
     ] == []
 
 
-# ---- push a bump flush back: everything dissolves, SketchUp-style -----------
+# ---- push a bump flush back: everything dissolves, the classic way ----------
 
 def test_bump_pushed_flush_back_dissolves_to_clean_cube():
     """Extrude a bump out of a wall, then push its front face back level with

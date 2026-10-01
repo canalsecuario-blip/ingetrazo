@@ -161,7 +161,7 @@ def test_nested_rectangle_punches_its_mother_not_grandmother():
 # ---- inward Ctrl-stack: belt-split boundary, no coincident debris ------------
 
 def test_ctrl_inward_stack_splits_boundary_at_belt():
-    # Ctrl-push a full wall inward: SketchUp divides the surrounding faces at
+    # Ctrl-push a full wall inward: the classic tool divides the surrounding faces at
     # the belt and keeps the moved copy as an interior division. The naive
     # build's tube quads lie *on* the boundary planes; they used to survive as
     # opposite-winding coincident pairs (or pinch the host into a self-touching

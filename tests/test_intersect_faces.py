@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""SketchUp's Edit ▸ Intersect Faces (core/intersect.py): edges where faces
+"""Edit ▸ Intersect Faces (core/intersect.py): edges where faces
 cross, added to the context being edited."""
 from __future__ import annotations
 
@@ -76,7 +76,7 @@ def test_with_model_two_groups_leave_the_edges_outside_them():
     assert len(segs) == 6 and math.isclose(_length(segs), 6.0, abs_tol=1e-6)
     faces_a = len(a.mesh.faces)
     hist.execute(build_add_edges(scene, segs, detect_faces=True))
-    assert len(scene.mesh.edges) == 6                 # loose, as in SketchUp
+    assert len(scene.mesh.edges) == 6                 # loose, the usual result
     assert len(a.mesh.faces) == faces_a               # the groups untouched
     hist.undo()
     assert not scene.mesh.edges

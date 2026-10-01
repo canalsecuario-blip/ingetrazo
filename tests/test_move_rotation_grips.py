@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""Rotation grips on Move (issue #115), SketchUp's: hovering a group with
+"""Rotation grips on Move (issue #115), the usual ones: hovering a group with
 Move shows red «+» grips on the faces of its box that look at you; taking
 one turns the object in that face's plane about its centre — the protractor,
 the 15° ticks and a typed angle all as in Rotate.

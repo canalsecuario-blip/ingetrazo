@@ -20,9 +20,9 @@ Pedro Caeiro <pacaeiro2@sapo.pt>  (github.com/pacaeiro)
     orbit, snap points inside groups, axis lock accuracy, the protractor's
     click-drag, Move with Ctrl, self-inference, guide-from-guide, guides
     drawn in front of geometry, rotate-copy arrays, and the Alt key
-    colliding with Alt+Tab. Much of IngeTrazo's parity with SketchUp's
-    everyday gestures comes from him using the program as a draftsman does
-    and writing down every one that did not answer the same.
+    colliding with Alt+Tab. Much of how IngeTrazo's everyday gestures feel
+    comes from him using the program as a draftsman does and writing down
+    every one that did not answer as expected.
     He kept going through 0.4 and 0.5 (#27–#106): axis locks and their
     snaps, local axes in groups and components (#44), the sheet composer,
     Fillet 3D, Orient Faces, copy/paste between documents, and many more —
@@ -46,7 +46,7 @@ Rafael García Rodríguez — "Rafael 3D" (youtube.com/@Rafa3D)
     all go to waste if it does not meet the standards designers need».
 
 Ahsan Mehmood <mail.ahsanmehmood@gmail.com>  (github.com/iamahsanmehmood)
-    Author of OpenSKP, the clean-room pure-Python SketchUp reader IngeTrazo's
+    Author of OpenSKP, the clean-room pure-Python .skp reader IngeTrazo's
     native .skp import is built on, and reviewer of the patches contributed
     back upstream. His plugin pull requests (#1–#3) became the Extensions
     system.
@@ -68,10 +68,10 @@ Félix Riestra  (github.com/felixriestra)
     opens itself, and workspaces that stand in for the model.
 
 Gabriel Rodríguez Arregin  (github.com/canalsecuario-blip)
-    The Back color in Styles (pull request #99): SketchUp's Front/Back
-    colour pair, the tint of faces seen from behind.
-    Edit ▸ Invert Selection (pull request #113), SketchUp's Ctrl+Shift+I,
-    leaving out what is hidden or locked.
+    The Back color in Styles (pull request #99): the Front/Back colour
+    pair, the tint of faces seen from behind.
+    Edit ▸ Invert Selection (pull request #113), on Ctrl+Shift+I, leaving
+    out what is hidden or locked.
     Edit ▸ Repeat Last Command (Shift+R): the last tool or one-shot
     command comes back on the current selection.
     Command search (pull request #168): F3 runs any command by name, as in
@@ -89,7 +89,7 @@ José Castro Basso — FADU–UDELAR, Montevideo  (github.com/castrobasso)
 
 Sherod Taylor  (github.com/sherodtaylor)
     The First Person tool (pull request #86): walking the model like a
-    game with W/A/S/D and mouse look, beside SketchUp's Walk.
+    game with W/A/S/D and mouse look, beside the Walk tool.
 
 liuandy  (github.com/liujvnes)
     Simplified Chinese translation of the interface (issue #123, some
@@ -98,6 +98,21 @@ liuandy  (github.com/liujvnes)
 deedend  (github.com/deedend)
     Italian translation of the interface (pull request #182, some
     2 110 strings): IngeTrazo's fifth language.
+
+Rainjalin  (github.com/Rainjalin)
+    Indonesian translation of the interface (issue #216, some 2 230
+    strings): IngeTrazo's sixth language.
+
+Bane Andreev  (Biro Andreev, Belgrade / Zagreb)
+    Architect. The Windowizer example extension: parametric windows from
+    faces, one container per window with its frame and panes, and the wall
+    opened and closed again — a port of Rick Wilson's Windowizer 3
+    (2004-2005, whose notice it keeps). His notes on the extension API gave
+    it add_menu, add_context_menu and per-group extension data.
+
+Rony Leonel Janampa Monago  (github.com/Ronyleonel6)
+    The Polygon properties example extension (issue #229, MIT): area,
+    centroid and second moments of a face, for sections and slabs.
 
 Carlos Martins  (github.com/fafecm)
     Bug reports with screen recordings that made each one reproducible:

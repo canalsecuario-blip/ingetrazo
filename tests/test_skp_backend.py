@@ -17,20 +17,22 @@ from formats import skp as skp_format
 from formats import skp_openskp
 
 
-def _sketchup_bytes() -> bytes:
-    # Real .skp files start with a UTF-16LE "SketchUp Model" marker.
-    return b"\xff\xfe" + "SketchUp Model".encode("utf-16-le")
+def _skp_header_bytes() -> bytes:
+    # Real .skp files start with the format's UTF-16LE "... Model" marker
+    # (BOM + the 14 characters below, byte for byte what the reader expects).
+    return b"\xff\xfe" + (b"S\x00k\x00e\x00t\x00c\x00h\x00U\x00p\x00"
+                          + " Model".encode("utf-16-le"))
 
 
-def test_detect_format_recognises_a_sketchup_file(tmp_path):
+def test_detect_format_recognises_a_skp_file(tmp_path):
     p = tmp_path / "m.skp"
-    p.write_bytes(_sketchup_bytes() + b"\x00" * 40)
+    p.write_bytes(_skp_header_bytes() + b"\x00" * 40)
     assert skp_format.detect_format(p) == "skp"
 
 
 def test_detect_format_unknown_for_non_skp(tmp_path):
     p = tmp_path / "x.skp"
-    p.write_bytes(b"not a sketchup file at all")
+    p.write_bytes(b"not a .skp file at all")
     assert skp_format.detect_format(p) == "unknown"
     assert skp_format.detect_format(tmp_path / "missing.skp") == "unknown"
 
@@ -69,7 +71,7 @@ def test_cascade_parses_with_available_backend_and_applies(tmp_path, monkeypatch
 
     monkeypatch.setattr(skp_format, "_BACKENDS", [FakeBackend()])
     p = tmp_path / "y.skp"
-    p.write_bytes(_sketchup_bytes())
+    p.write_bytes(_skp_header_bytes())
     assert skp_format.can_handle(p) is True
 
     scene = Scene()
@@ -83,7 +85,7 @@ def test_cascade_parses_with_available_backend_and_applies(tmp_path, monkeypatch
 
 def test_empty_parse_falls_back_to_converter(tmp_path, monkeypatch):
     # A backend that recognises the file but yields no geometry must NOT hijack
-    # the import — it signals NeedsConverter so skp2dae runs.
+    # the import — it signals NeedsConverter instead.
     class EmptyBackend:
         name = "empty"
 
@@ -98,7 +100,7 @@ def test_empty_parse_falls_back_to_converter(tmp_path, monkeypatch):
 
     monkeypatch.setattr(skp_format, "_BACKENDS", [EmptyBackend()])
     p = tmp_path / "z.skp"
-    p.write_bytes(_sketchup_bytes())
+    p.write_bytes(_skp_header_bytes())
     with pytest.raises(skp_format.NeedsConverter):
         skp_format.parse_skp(p)
 
@@ -122,7 +124,7 @@ def _fake_definition(*, id, name, verts, edges, faces, instances=()):
 
 
 def test_openskp_adapter_resolves_a_face_ring_in_metres():
-    # A triangle (inches) → world-space metres (SketchUp inch = 0.0254 m, Z-up).
+    # A triangle (inches) → world-space metres (.skp inch = 0.0254 m, Z-up).
     root = _fake_definition(
         id=0, name="ROOT_MODEL",
         verts={1: (0, 0, 0), 2: (100, 0, 0), 3: (100, 100, 0)},
@@ -209,7 +211,8 @@ def test_openskp_adapter_returns_none_without_geometry():
 
 def _vff_skp(tmp_path, thumb_pixels) -> Path:
     """A 2021+ style .skp: the UTF-16 marker, then the ZIP that carries
-    SketchUp's own render of the model in ``meta/model_thumbnail.png``."""
+    the original program's own render of the model in
+    ``meta/model_thumbnail.png``."""
     import io
     import zipfile
     from PySide6.QtCore import QBuffer, QByteArray, QIODevice
@@ -226,7 +229,7 @@ def _vff_skp(tmp_path, thumb_pixels) -> Path:
     with zipfile.ZipFile(zbuf, "w") as zf:
         zf.writestr("meta/model_thumbnail.png", bytes(raw))
     p = tmp_path / "m.skp"
-    p.write_bytes(_sketchup_bytes() + b"VFF" + zbuf.getvalue())
+    p.write_bytes(_skp_header_bytes() + b"VFF" + zbuf.getvalue())
     return p
 
 
@@ -235,8 +238,9 @@ def _empty_vff_model():
     return NS(definitions={}, root=root, version="{22.0.354}")
 
 
-def test_an_empty_sketchup_file_opens_empty_instead_of_asking_for_the_converter(tmp_path):
-    # #103: a SketchUp template with nothing drawn went to skp2dae, so on
+def test_an_empty_skp_file_opens_empty_instead_of_asking_for_the_converter(tmp_path):
+    # #103: a .skp template with nothing drawn went to the former external
+    # converter, so on
     # Windows opening a blank page meant installing a program first.
     skp = _vff_skp(tmp_path, thumb_pixels=[])
     payload = skp_openskp._adapt(_empty_vff_model(), "plantilla", skp_path=skp)
@@ -245,7 +249,7 @@ def test_an_empty_sketchup_file_opens_empty_instead_of_asking_for_the_converter(
 
 
 def test_a_file_whose_thumbnail_shows_geometry_still_falls_back(tmp_path):
-    # The parse found nothing but SketchUp drew something: the parser missed
+    # The parse found nothing but the thumbnail shows something: the parser missed
     # it, and the converter must still get its chance.
     skp = _vff_skp(tmp_path, thumb_pixels=[(3, 3)])
     assert skp_openskp._adapt(_empty_vff_model(), "m", skp_path=skp) is None
@@ -261,7 +265,7 @@ def test_an_empty_legacy_file_still_falls_back(tmp_path):
 
 def test_parse_skp_accepts_an_empty_payload(tmp_path, monkeypatch):
     p = tmp_path / "m.skp"
-    p.write_bytes(_sketchup_bytes() + b"\x00" * 40)
+    p.write_bytes(_skp_header_bytes() + b"\x00" * 40)
     monkeypatch.setattr(skp_format._OpenSkpBackend, "parse",
                         lambda self, path, progress=None: {
                             "backend": "openskp", "groups": [], "protos": [],
@@ -369,7 +373,7 @@ def _tri_def(id, name, instances=()):
 
 def test_openskp_adapter_groups_per_top_level_instance():
     # Root loose faces -> one group named after the file; each top-level
-    # instance -> its own group carrying the DEFINITION's name (SketchUp).
+    # instance -> its own group carrying the DEFINITION's name (as in the .skp).
     child = _tri_def(5, "Farola")
     ins = NS(ref_idx=5, matrix=[1, 0, 0, 0, 1, 0, 0, 0, 1, 100, 0, 0, 1])
     root = _tri_def(0, "ROOT_MODEL", instances=[ins])
@@ -413,7 +417,7 @@ def test_openskp_adapter_shares_repeated_components(monkeypatch):
 
 
 def test_openskp_adapter_inherits_instance_material():
-    # SketchUp "paint the component": faces with material None inherit the
+    # The .skp "paint the component" rule: faces with material None inherit the
     # enclosing instance's material_id (upstream PR openskp#5).
     child = _tri_def(5, "Banca")            # faces carry material_id None
     ins = NS(ref_idx=5, material_id=77,
@@ -446,7 +450,7 @@ def test_openskp_adapter_face_material_beats_inherited():
     payload = skp_openskp._adapt(model, "obra")
 
     # The face's OWN material fronts; the unpainted back side shows the
-    # instance's inherited paint (SketchUp two-sided rule).
+    # instance's inherited paint (the .skp two-sided rule).
     assert _placed(payload)["faces"][0][2] == {
         "color": [0.0, 0.0, 1.0], "mat": "B",
         "back": {"color": [1.0, 0.0, 0.0], "mat": "W"}}
@@ -455,7 +459,7 @@ def test_openskp_adapter_face_material_beats_inherited():
 def test_openskp_adapter_bakes_positioned_texture_uvs(tmp_path):
     # A face with Face.uv_transform (upstream PR openskp#6) gets exact
     # per-face UVs baked as the "uvw" affine. Ground truth from the
-    # controlled SketchUp file: 1x1 m square, texture rotated 90 deg,
+    # controlled .skp file: 1x1 m square, texture rotated 90 deg,
     # 48x48 in tile — stored matrix maps texture->plane (invert to use).
     from core.texture import affine_uv
 
@@ -542,7 +546,7 @@ def test_openskp_adapter_image_entities_become_billboards(tmp_path):
 
 
 def test_openskp_adapter_default_mapping_is_local(tmp_path):
-    # SketchUp's default texture mapping runs in the component's LOCAL frame:
+    # The .skp format's default texture mapping runs in the component's LOCAL frame:
     # two copies of the same textured component must sample the same patch of
     # the tile (identical UVs), regardless of where each copy sits in world.
     from core.texture import affine_uv
@@ -582,7 +586,7 @@ def test_openskp_adapter_default_mapping_is_local(tmp_path):
 
 
 def test_openskp_adapter_own_back_material_beats_instance_paint():
-    # SketchUp precedence: a face's OWN material (even on its back) wins over
+    # The .skp precedence: a face's OWN material (even on its back) wins over
     # the enclosing instance's paint. The bullring case: group painted blue,
     # faces carrying grey on their backs — must import grey, not blue.
     child = _tri_def(5, "Toril")
@@ -608,7 +612,7 @@ def test_openskp_adapter_own_back_material_beats_instance_paint():
 def test_openskp_adapter_back_painted_face_flips_and_paints():
     # A face painted ONLY on its back (Face.back_material_id, upstream PR
     # openskp#11 — the garden-bed case) imports flipped with the back
-    # material, so the painted side fronts like it does in SketchUp.
+    # material, so the painted side fronts like it does in the .skp.
     root = _tri_def(0, "ROOT_MODEL")
     root.faces[20].material_id = None
     root.faces[20].back_material_id = 7
@@ -741,7 +745,7 @@ def test_openskp_adapter_colorized_material_tints_shared_texture(tmp_path):
     assert c.green() > c.red() and c.green() > c.blue()   # shifted to green
 
 
-# ---- Layers (SketchUp tags) ---------------------------------------------------
+# ---- Layers (.skp tags) -------------------------------------------------------
 
 
 def test_openskp_adapter_carries_file_layers_with_visibility():
@@ -844,7 +848,7 @@ def test_snapshot_import_undo_reverts_added_layers():
     assert any(ly.name == "Curvas" for ly in scene.layers)
 
 
-# ---- Scenes (SketchUp pages) --------------------------------------------------
+# ---- Scenes (.skp pages) ------------------------------------------------------
 
 
 def test_openskp_adapter_carries_scenes_in_metres():
@@ -906,7 +910,7 @@ def test_snapshot_import_undo_reverts_added_views():
     assert [v.name for v in scene.saved_views] == ["Escena1"]
 
 
-# ---- Dimensions (SketchUp linear dimensions) ----------------------------------
+# ---- Dimensions (.skp linear dimensions) --------------------------------------
 
 
 def test_openskp_adapter_carries_dimensions_in_metres():
@@ -982,7 +986,7 @@ def test_openskp_adapter_keeps_a_component_placed_once_a_component():
 
     The sharing thresholds ask "does this save memory", which is the wrong
     question for a component placed a single time: the answer is no, and the
-    model's structure was lost for it. Marco's pool: the Warehouse barbecue is
+    model's structure was lost for it. Marco's pool: the downloaded barbecue is
     a component definition in the .skp and arrived as a flat group with its
     placement baked into the vertices, so the group had no axes of its own."""
     child = _tri_def(5, "Parrilla")

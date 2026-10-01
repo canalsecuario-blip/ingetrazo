@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """Line tool: click points to draw edges; auto-close polygons.
 
-Behavior mirrors SketchUp:
+Behavior follows the classic convention:
 - First click sets the start point of a fresh chain.
 - Each next click finalises a segment and chains into the next one.
 - Snapping to the chain's first point (snap kind ``"close"``) finishes the
@@ -26,6 +26,7 @@ from tools.base import Tool, ToolContext
 class LineTool(Tool):
     name = "Line"
     shortcut = "L"
+    description = "Draw edges point by point; closing a loop makes a face."
     vcb_label = "Length"
 
     #: The axis inference MAGNETISES, it does not merely light up.
@@ -150,7 +151,7 @@ class LineTool(Tool):
 
         ``value`` is either:
         - ``float``  → length along the current rubber-band direction
-                        (negative = the opposite way, SketchUp-style).
+                        (negative = the opposite way, the usual convention).
         - 3-tuple    → ``(dx, dy, dz)`` delta added to the start point,
                         which makes inclined / elevated lines trivial to
                         construct numerically (start, then type "3;4;5"
@@ -192,7 +193,7 @@ class LineTool(Tool):
         """Build the command for a new edge. ``build_add_edge`` welds
         coincident edges, splits any existing edge the new one crosses
         (introducing a shared vertex), and attaches a face when the new edge
-        closes a planar cycle — the SketchUp-style "any planar loop becomes a
+        closes a planar cycle — the classic "any planar loop becomes a
         face" behaviour, now correct even when the loop relies on a crossing."""
         cam = getattr(viewport, "camera", None)
         eye = cam.eye() if cam is not None and hasattr(cam, "eye") else None

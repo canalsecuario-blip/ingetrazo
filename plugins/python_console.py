@@ -3,7 +3,7 @@
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """Python Console plugin — a live REPL over the open document.
 
-The SketchUp Ruby Console equivalent: inspect the model, script geometry,
+The classic scripting console: inspect the model, script geometry,
 prototype the next plugin — against the running application, no restart.
 
 What makes this one a good citizen of IngeTrazo (and where it differs from
@@ -358,6 +358,9 @@ class PythonConsoleTool(Tool):
     """Extensions-menu entry that opens (or raises) the console."""
     name = "Python Console"
     shortcut = "Ctrl+Shift+P"
+    description = (
+        "Open a Python prompt over the open document, to inspect it "
+        "or script it.")
     uses_snap = False
 
     def on_activate(self, viewport) -> None:

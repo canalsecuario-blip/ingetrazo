@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """Fillet tool: round the edges of a solid (Rafael's «herramienta de
-redondeo», review of 2026-09-10, C3 — the one SketchUp never had).
+redondeo», review of 2026-09-10, C3).
 
 Click an edge (or use the selected edges), move the cursor away from it
 to set the radius — the rounded strip forms live — and click again; or
@@ -28,6 +28,7 @@ class FilletTool(Tool):
     name = "Fillet 3D"
     icon = "fillet"
     shortcut = None
+    description = "Round the edges of a solid to the radius you set."
     uses_snap = False
     vcb_label = "Radius"
     wireframe_color = (0.13, 0.17, 0.23, 1.0)

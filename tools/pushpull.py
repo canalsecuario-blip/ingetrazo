@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """Push/Pull tool: extrude a face along its normal.
 
-UX (SketchUp-like):
+UX (the usual push/pull convention):
 - Hover a face; the cursor picks the front-most face under it.
 - First click: lock onto that face and start a drag along its normal.
 - Subsequent mouse motion slides the extrusion preview (wireframe of
@@ -178,7 +178,7 @@ _MIN_EXTRUDE = 2e-4
 def _paint_of(face) -> dict:
     """The base face's paint, ready to stamp on the geometry a push creates.
 
-    SketchUp extrudes the material with the shape: pull a textured rectangle
+    The material extrudes with the shape: pull a textured rectangle
     up and the four sides come out textured too, not bare. Only the moved cap
     inherited it here, so a pushed rectangle gave a box with one painted face
     (Marco, 2026-08-27).
@@ -188,7 +188,7 @@ def _paint_of(face) -> dict:
     stands up out of that plane leaves the image constant along the extrusion
     — the texture smears into stripes. Dropped, each new face falls to the
     default planar projection in its OWN plane at the material's tile size,
-    which is what SketchUp draws; ``planar`` says so out loud, so the .skp
+    which is what a .skp reader draws; ``planar`` says so out loud, so the .skp
     exporter writes the default projection instead of pinning a matrix.
 
     The cap is not handled here: it is the base's continuation, keeps the full
@@ -223,12 +223,15 @@ def _seam_planes_along(mesh, segments) -> list:
 
 class PushPullTool(Tool):
     name = "Push / Pull"
-    #: P is SketchUp's key for this tool (Marco, 2026-09-10: «p como
-    #: sketchup»). U, the one IngeTrazo used until today, stays as a second
+    #: P is the usual key for this tool (Marco, 2026-09-10). U, the one
+    #: IngeTrazo used until today, stays as a second
     #: shortcut on this same action — a decade of muscle memory is worth a
     #: line of code, and it costs nothing: P is what the card says.
     shortcut = "P"
     shortcut_alt = "U"
+    description = (
+        "Push or pull a face to extrude it into a solid or cut it "
+        "back.")
     uses_snap = False  # picks a face to extrude; no snap markers
     hover_group_edges = True  # …but its distance infers to a group's edge too
     vcb_label = "Distance"
@@ -245,7 +248,8 @@ class PushPullTool(Tool):
     preview_cull_back = True
 
     # Last committed distance (signed along the base's outward normal), shared
-    # across activations: double-click repeats it on another face, SketchUp-style.
+    # across activations: double-click repeats it on another face, as
+    # push/pull users expect.
     last_distance: float | None = None
 
     def __init__(self) -> None:
@@ -255,15 +259,15 @@ class PushPullTool(Tool):
         self.dragging: bool = False
         # Ctrl held = "push/pull a copy": the base face stays in place (a slab
         # division), the extrusion stacks as a new segment instead of growing
-        # the neighbours — how floors are stacked in SketchUp.
+        # the neighbours — the classic way to stack floors.
         self._keep_base: bool = False
         # Deepest allowed inward push (positive, along −normal), computed at
-        # drag start; None = unbounded. SketchUp's "Offset limited to" clamp.
+        # drag start; None = unbounded. The "Offset limited to" clamp.
         self._limit_in: float | None = None
         # The Group whose face is being pushed (None = the loose mesh). The
         # machinery can run on a group's isolated mesh, but the GESTURE no
         # longer offers it: a face inside a group you have not opened is not
-        # pushable, as in SketchUp. See _refuse_closed_group.
+        # pushable. See _refuse_closed_group.
         self._group = None
         self._hover_group = None
         # Whether the base face is embedded in a solid (its boundary edges are
@@ -297,7 +301,7 @@ class PushPullTool(Tool):
         # The drag shows the naive sweep as an overlay — cap plus wall quads,
         # nothing touched in the mesh — and the real pipeline (stitch,
         # per-plane rebuild, hermeticity guard) runs ONCE, at the commit. This
-        # is how SketchUp drags: the shape you pull against is the same either
+        # is the classic drag: the shape you pull against is the same either
         # way, and the cleanup of coincident geometry is not something you can
         # read mid-drag anyway. Running it per mouse-move cost ~0.3 s a frame
         # on an imported barbecue.
@@ -348,7 +352,7 @@ class PushPullTool(Tool):
             self._inference_kind = None
             self.hovered_face, self._hover_group = viewport.pick_face_any(
                 ctx.screen.x(), ctx.screen.y())
-            # Shade the face that would be pushed, SketchUp-style, so the target
+            # Shade the face that would be pushed, so the target
             # is unmistakable before clicking. A face inside a group that is not
             # open gets NO shading: it is not going to be pushed, and promising
             # it with a highlight is how the wrong thing gets modified.
@@ -426,7 +430,8 @@ class PushPullTool(Tool):
 
     def on_double_click(self, ctx: ToolContext) -> None:
         """Repeat the last committed distance on the face under the cursor,
-        SketchUp-style. Works both as a fresh double-click (the first press
+        as push/pull users expect. Works both as a fresh double-click (the
+        first press
         already locked the face) and right after a commit (the next quick
         click arrives as a double-click)."""
         viewport = ctx.viewport
@@ -470,7 +475,7 @@ class PushPullTool(Tool):
         if not self.dragging or self.base_face is None or value == 0.0:
             return False
         # A positive value goes the way the user is dragging (default +normal);
-        # a negative one reverses it, SketchUp-style.
+        # a negative one reverses it.
         sign = -1.0 if self.extrusion < 0.0 else 1.0
         self.extrusion = sign * value
         self._clamp_extrusion(viewport)
@@ -628,12 +633,10 @@ class PushPullTool(Tool):
 
         The tool used to push it anyway — an instance even opened a short
         editing session behind your back and shared the result to every copy
-        («better than SketchUp», 2026-06-10). In a real drawing that reads as
+        (2026-06-10). In a real drawing that reads as
         the model changing where you did not point: a group is a box, and you
-        open a box before reaching inside (Marco, 2026-09-10). SketchUp's own
-        troubleshooting page says it plainly — "the Push/Pull tool cannot
-        extrude objects that are a part of a Component or Group... double-click
-        the Group or Component to edit it".
+        open a box before reaching inside (Marco, 2026-09-10) — the usual
+        convention: double-click the group or component to edit it first.
 
         Refusing has to SPEAK: a tool that does nothing without a word is the
         one that reads as broken.
@@ -652,14 +655,14 @@ class PushPullTool(Tool):
 
     def _show_prism_preview(self, viewport) -> None:
         """Preview a prism extend/shrink by translating the cap in the MODEL,
-        the way SketchUp does — the walls follow it and the old shape simply
+        the classic way — the walls follow it and the old shape simply
         is not there any more.
 
         The overlay cannot do that. It can only ADD faces on top, so pushing
         the end of a block left the original cap's edges cutting across the
         block being formed, and pushing in left the whole original block
-        standing around the pocket (Marco, 2026-08-27, with SketchUp beside
-        it for comparison).
+        standing around the pocket (Marco, 2026-08-27, with a reference
+        modeller beside it for comparison).
 
         Reversible by ARITHMETIC, not by a snapshot: the frame moves the cap
         by the delta since the last one, and the revert moves it back by the
@@ -736,7 +739,7 @@ class PushPullTool(Tool):
     # ---- Internals ----------------------------------------------------------
     def _compute_inward_limit(self, scene) -> None:
         """How far the face can be pushed *into* the solid before the sweep
-        would shoot past blocking geometry — SketchUp's "Offset limited to" rule.
+        would shoot past blocking geometry — the "Offset limited to" rule.
 
         A blocker is a parallel face on the material side (−normal: solids are
         committed outward) that overlaps the base loop laterally but can't be
@@ -840,7 +843,7 @@ class PushPullTool(Tool):
         if self._limit_in is not None and self.extrusion < -self._limit_in:
             self.extrusion = -self._limit_in
             if viewport is not None:
-                # SketchUp calls this "Offset limited to", where *offset* is
+                # The usual name is "Offset limited to", where *offset* is
                 # the push distance — but here Offset is another tool (F), and
                 # in Spanish the message named it: «Equidistancia limitada a
                 # 0.02 m» in the middle of a push, with no reason given. A
@@ -853,7 +856,7 @@ class PushPullTool(Tool):
 
     def _infer_reference_distance(self, ctx: ToolContext):
         """Distance making the moved face level with the model geometry under the
-        cursor — SketchUp's mid-push inference ("push until even with that
+        cursor — the classic mid-push inference ("push until even with that
         corner / that face"). Scans the *clean* mesh (the caller reverts the live
         preview first, so the forming solid's own moving vertices never feed
         back). A model **vertex** within the snap threshold wins first (a precise
@@ -944,7 +947,7 @@ class PushPullTool(Tool):
             self._inference_kind = "guide_line"
             return dist
 
-        # No corner nearby: the EDGE under the cursor — SketchUp's "On edge"
+        # No corner nearby: the EDGE under the cursor — the usual "On edge"
         # while pushing (Marco's capture, 2026-09-14: the half cylinder
         # pushed until level with the slab's far edge). The point on the
         # edge nearest the cursor ray sets the distance; the base's own
@@ -1224,8 +1227,9 @@ class PushPullTool(Tool):
         push *through* an interior partition, a hole rim detached from a column
         anchored to it, a degenerate collapse — the result is **refused**: the
         solid is restored untouched rather than committing a non-watertight mesh
-        that would poison volume/area takeoff and IFC/STL export. SketchUp
-        commits the mess; a solid modeler feeding a quantity engine must not.
+        that would poison volume/area takeoff and IFC/STL export. A surface
+        modeler commits the mess; a solid modeler feeding a quantity engine
+        must not.
 
         The guard only fires on a mesh that *was* a valid closed solid; a flat
         sheet (a recess in a surface, the first flat→solid extrude) legitimately
@@ -1409,7 +1413,7 @@ class PushPullTool(Tool):
         # Ctrl ("push/pull a copy") forces the free-extrusion semantics: the
         # base face stays in place as a slab division and no through-hole is
         # punched — the stacked segment and its belt of edges are the point,
-        # exactly like SketchUp. The solid rebuild still runs: the kept base /
+        # the classic behaviour. The solid rebuild still runs: the kept base /
         # inward cap are interior partitions the rebuild preserves, the belt
         # survives as crease boundaries (``keep_keys``), and an inward stack's
         # tube quads dissolve into the boundary faces they overlap instead of
@@ -1673,8 +1677,8 @@ class PushPullTool(Tool):
                 continue
             # Landing FLUSH on the far face with the opening on its rim — the
             # corner piece left by a rounding arc pushed right through
-            # (Marco, 2026-09-15: «debería eliminarme ese triángulo como lo
-            # hace SketchUp»). Not a hole: the far face is trimmed to what
+            # (Marco, 2026-09-15: «debería eliminarme ese triángulo»). Not a
+            # hole: the far face is trimmed to what
             # is left of it (the arc becomes its outline) and the cap goes.
             if abs(dist - abs(d)) <= 1e-4:
                 remainder = subtract_loop_from_face(g, back_loop)
