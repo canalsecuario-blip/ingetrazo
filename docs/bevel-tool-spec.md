@@ -278,7 +278,7 @@ centro, radio, ángulos, puntos extremos y la cara que encierra.
    geometría. Hay que guardar por id: tipo (círculo/arco/polígono), centro,
    normal, radio, ángulo inicial y final, sentido. Persistirlo en el formato
    de archivo y en `EDGE_FLAG_NAMES`/serialización.
-2. **Curvas antiguas o importadas (SKP, DXF)** sin metadatos: **ajustar** un
+2. **Curvas antiguas o importadas (DXF u otros formatos)** sin metadatos: **ajustar** un
    círculo por los vértices (mínimos cuadrados) y aceptar solo si el error es
    menor que una tolerancia; si no, avisar «no es un arco».
 3. **Reconstrucción**: quitar los segmentos viejos, insertar los nuevos con
