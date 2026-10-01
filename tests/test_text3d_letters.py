@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""3D Text as SketchUp does it: one group per letter, and the text stays
+"""3D Text the classic way: one group per letter, and the text stays
 editable afterwards (Rafael's review, 2026-09-16)."""
 from __future__ import annotations
 
@@ -119,9 +119,9 @@ def test_rebuild_from_a_container_without_letters_uses_identity():
 
 
 def test_select_double_click_on_a_text_enters_it_like_any_group():
-    """Double-click keeps SketchUp's meaning — it ENTERS the group, whose
-    children are the letters (Marco, 2026-09-18: «en SketchUp no hay opción
-    de editar texto»). Re-editing the text is the right-click's job."""
+    """Double-click keeps its usual meaning — it ENTERS the group, whose
+    children are the letters (Marco, 2026-09-18: «no hay opción de editar
+    texto»). Re-editing the text is the right-click's job."""
     from types import SimpleNamespace
     from tools.select import SelectTool
 

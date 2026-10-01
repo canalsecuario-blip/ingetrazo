@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""Display styles — SketchUp's Styles, scoped to what serves plans/printing.
+"""Display styles — Styles, scoped to what serves plans/printing.
 
 A style bundles how the model DRAWS (not what it is): the face mode, edge
 look and background. It feeds the viewport live and, through scenes, the
@@ -8,15 +8,16 @@ sheet composer (frames rendered in the live look inherit the active style;
 the composer's own "tecnico"/"lineas" overrides map to Hidden line /
 Wireframe).
 
-Face modes (SketchUp's Face Styles):
+Face modes (Face Styles):
 - ``textures``    Shaded with textures — the default working look.
 - ``shaded``      Colours only: textured faces draw in their texture's
-                  average colour (SketchUp shows the material colour).
+                  average colour (the material colour).
 - ``hidden_line`` Flat white faces + edges — THE printing/plan style.
 - ``monochrome``  Flat default front/back colours, no materials — the
                   reversed-face checker.
 - ``wireframe``   Edges only, no faces (nothing occludes).
-- ``xray``        Everything translucent, edges always visible.
+- ``xray``        Everything translucent, edges always visible — the ones
+                  behind a face washed toward the background.
 
 Deferred (documented, not lost): back edges, depth cue, extensions,
 endpoints, jitter, watermarks, per-material edge colour.
@@ -28,7 +29,7 @@ from dataclasses import dataclass, field
 FACE_MODES = ("textures", "shaded", "hidden_line", "monochrome",
               "wireframe", "xray")
 
-#: SketchUp's default back-face blue-grey: a visible back face means "you are
+#: The classic default back-face blue-grey: a visible back face means "you are
 #: looking at the inside" (or at a genuinely inverted face).
 DEFAULT_BACK_COLOR = (0.62, 0.70, 0.78)
 
@@ -39,9 +40,13 @@ class Style:
     face_mode: str = "textures"
     edges: bool = True
     profiles: bool = True                    # silhouette/profile edge pass
+    # Back Edges (K): the edges hidden behind faces, drawn dashed, over an
+    # opaque model — where a bar continues behind a face in a shop drawing
+    # (issue #234). Off in every preset.
+    back_edges: bool = False
     edge_color: tuple = (0.13, 0.17, 0.23)
     front_color: tuple = (1.0, 1.0, 1.0)     # hidden line / monochrome faces
-    # Back-face tint (SketchUp's Back color). ``None`` = automatic: the
+    # Back-face tint (Back color). ``None`` = automatic: the
     # document's adopted tint (``scene.back_face_color``, e.g. from an
     # imported .skp) or ``DEFAULT_BACK_COLOR``. A picked colour wins over
     # both — see ``effective_back_color``.
@@ -53,8 +58,8 @@ class Style:
     # historical constants, so old documents look identical.
     sky_color: tuple = (0.925, 0.935, 0.945)
     ground_color: tuple = (0.815, 0.820, 0.815)
-    # SketchUp 2018+ Section Fill: paint the cut-through areas of solids.
-    # Lives in the STYLE, exactly like SketchUp's modeling settings.
+    # Section Fill: paint the cut-through areas of solids.
+    # Lives in the STYLE, with the other modeling settings.
     section_fill: bool = True
     section_fill_color: tuple = (0.35, 0.37, 0.41)
 
@@ -64,6 +69,7 @@ class Style:
             "face_mode": self.face_mode,
             "edges": self.edges,
             "profiles": self.profiles,
+            "back_edges": self.back_edges,
             "edge_color": list(self.edge_color),
             "front_color": list(self.front_color),
             "back_color": (list(self.back_color)
@@ -87,6 +93,7 @@ class Style:
             face_mode=mode,
             edges=bool(raw.get("edges", d.edges)),
             profiles=bool(raw.get("profiles", d.profiles)),
+            back_edges=bool(raw.get("back_edges", d.back_edges)),
             edge_color=tuple(raw.get("edge_color", d.edge_color)),
             front_color=tuple(raw.get("front_color", d.front_color)),
             back_color=_opt_rgb(raw.get("back_color")),
@@ -119,7 +126,7 @@ def _opt_rgb(raw) -> tuple | None:
 def effective_back_color(style, scene=None) -> tuple:
     """The back-face tint that actually draws: the style's own
     ``back_color`` if picked, else the document's adopted tint
-    (``scene.back_face_color``), else SketchUp's default blue-grey."""
+    (``scene.back_face_color``), else the classic default blue-grey."""
     picked = getattr(style, "back_color", None)
     if picked is not None:
         return tuple(picked[:3])
@@ -129,7 +136,7 @@ def effective_back_color(style, scene=None) -> tuple:
     return DEFAULT_BACK_COLOR
 
 
-# The best of SketchUp's collections, adapted: Default (working look),
+# The usual style collections, adapted: Default (working look),
 # Architectural (clean white presentation), and the classic face styles.
 def style_by_name(name: str) -> Style | None:
     """A COPY of the style called ``name`` — a built-in preset first, then

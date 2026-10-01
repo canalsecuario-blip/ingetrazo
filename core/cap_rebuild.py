@@ -246,7 +246,7 @@ def _union_outline(solid_regions_xy, keep_segs=None) -> list:
     ``keep_segs`` (2D segments) are **creases**: edges a perpendicular face
     stands on. Union edges *lying on* one never cancel, so the union keeps a
     face boundary there — two roof slabs over a dividing wall stay two faces
-    with a visible ridge, SketchUp-style. The test is geometric (midpoint on
+    with a visible ridge, as users expect. The test is geometric (midpoint on
     segment): the arrangement splits edges at crossings, so an endpoint-pair
     match would lose the crease on the split-off pieces."""
     dir_count: dict = defaultdict(int)
@@ -510,7 +510,7 @@ def rebuild_plane(mesh, origin: QVector3D, normal: QVector3D,
     # riser a step's pulled-up square rises against: the old face and the
     # fresh side cover the same spot with OPPOSITE windings, and material
     # now reads on both sides because the push put it there. That strip is
-    # inside the solid; it goes, as in SketchUp. Kept as a «partition» it
+    # inside the solid; it goes, as it should. Kept as a «partition» it
     # left the side standing inside the solid, three faces on its edges,
     # and the guard refused the pull (issue #94, @xyont: «cannot pull up…
     # push down working properly»). Only that exact pairing: any other old

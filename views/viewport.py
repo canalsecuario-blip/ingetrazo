@@ -9,13 +9,13 @@ moderngl lands when we start dealing with real meshes.
 Wayland requires every frame to be drawn explicitly: ``paintGL`` always
 calls ``glClear`` first to avoid showing stale GPU memory.
 
-Navigation (SketchUp-like):
+Navigation:
 - Middle-button drag: orbit
 - Shift + Middle-button drag: pan
 - Wheel: zoom
 - P: toggle perspective / parallel projection
 
-Axis lock (active while drawing) — SketchUp-style:
+Axis lock (active while drawing):
 - Right arrow: toggle lock to X (red)
 - Left arrow:  toggle lock to Y (green)
 - Up arrow:    toggle lock to Z (blue)
@@ -90,6 +90,7 @@ from PySide6.QtGui import (
     QPen,
     QPolygonF,
     QSurfaceFormat,
+    QVector2D,
     QVector3D,
     QVector4D,
 )
@@ -140,7 +141,7 @@ def _active_cut(scene):
     """The section plane actually CUTTING (cuts shown + one active), or
     None. A module function so stub viewports in tests degrade gracefully;
     picks and snaps filter by it — what the cut hides is not clickable nor
-    snappable (SketchUp)."""
+    snappable."""
     if not getattr(scene, "show_section_cuts", True):
         return None
     active = getattr(scene, "active_section", None)
@@ -210,9 +211,12 @@ GL_SRC_ALPHA = 0x0302
 GL_ONE_MINUS_SRC_ALPHA = 0x0303
 GL_POLYGON_OFFSET_FILL = 0x8037
 GL_CULL_FACE = 0x0B44
+GL_CW = 0x0900
+GL_CCW = 0x0901
 GL_FRONT = 0x0404
 GL_BACK = 0x0405
 GL_LEQUAL = 0x0203
+GL_GREATER = 0x0204
 GL_FALSE = 0
 GL_TRUE = 1
 GL_FRAMEBUFFER = 0x8D40
@@ -325,7 +329,7 @@ def _cache_ver(vp):
 
 #: How the rest of the model reads while a group is open for editing.
 #: ``normal`` draws it as always, ``fade`` washes it out behind the group
-#: being edited (SketchUp's default), ``hide`` leaves it out of the frame.
+#: being edited (the default), ``hide`` leaves it out of the frame.
 EDIT_REST_MODES = ("normal", "fade", "hide")
 #: How far the context is mixed TOWARD the background (0 = untouched, 1 =
 #: gone). It is a wash, not an opacity: the context keeps writing depth, so it
@@ -333,6 +337,35 @@ EDIT_REST_MODES = ("normal", "fade", "hide")
 #: the group in its surroundings, faint enough that what you are editing reads
 #: as the subject.
 EDIT_REST_FADE = 0.75
+
+#: X-ray: how opaque each translucent face layer is. Layers stack, so a face
+#: seen through another reads darker and an opening (no face) stays clear.
+XRAY_FACE_OPACITY = 0.6
+#: X-ray: edges hidden behind a face are washed this far toward the
+#: background (0 = like a visible edge, 1 = gone), so the form still reads
+#: and you can tell which edges have a face in front of them.
+XRAY_HIDDEN_EDGE_FADE = 0.6
+
+#: Dot colour of a SELECTED face (the usual selection orange) and the one it
+#: switches to on a surface that is itself orange/red, where orange dots
+#: would vanish into the paint.
+SELECTION_DOT_COLOR = (0.95, 0.45, 0.16)
+SELECTION_DOT_ALT_COLOR = (0.10, 0.25, 0.85)
+
+
+def selection_dot_color(surface) -> tuple:
+    """The dot colour that reads on a face side painted ``surface`` (an RGB
+    triple, or ``None`` when unknown, e.g. a texture): the selection orange,
+    unless the surface is orange-ish or red-ish itself (hue within ~50° of
+    red, with enough saturation and value to look coloured), where the dots
+    turn blue so a selected face still tells itself apart."""
+    if surface is None:
+        return SELECTION_DOT_COLOR
+    import colorsys
+    h, s, v = colorsys.rgb_to_hsv(*(float(c) for c in surface[:3]))
+    if s >= 0.35 and v >= 0.35 and (h <= 0.14 or h >= 0.96):
+        return SELECTION_DOT_ALT_COLOR
+    return SELECTION_DOT_COLOR
 
 
 def _box_edges(frame, lo, hi) -> bytes:
@@ -356,6 +389,12 @@ def _load_edit_rest_mode() -> str:
     return mode if mode in EDIT_REST_MODES else "fade"
 
 
+def _load_hide_similar() -> bool:
+    from PySide6.QtCore import QSettings
+    return str(QSettings().value("display/hide_similar_components",
+                                 "0")) == "1"
+
+
 def _load_invert_wheel() -> bool:
     from PySide6.QtCore import QSettings
     return str(QSettings().value("nav/invert_wheel", "0")) != "0"
@@ -365,7 +404,7 @@ def _load_invert_orbit_y() -> bool:
     """Preferences ▸ orbit with the vertical axis reversed.
 
     Off by default: `OrbitCamera.orbit` grabs the model in both axes, the
-    way SketchUp does. This is for the hands that learned the other feel —
+    classic way. This is for the hands that learned the other feel —
     including the ones that learned it from IngeTrazo before 0.3.16, when
     the vertical axis was inverted by mistake.
     """
@@ -388,9 +427,9 @@ _AXIS_DIRS = {"x": (1.0, 0.0, 0.0), "y": (0.0, 1.0, 0.0), "z": (0.0, 0.0, 1.0)}
 
 
 def _axes_vertices(spacing: float, pos_len: float = 1.0e5):
-    """SketchUp-style axes: a long solid line in the positive direction and an
+    """Drawing axes: a long solid line in the positive direction and an
     **evenly-spaced** dashed line in the negative (constant world ``spacing``, so
-    the dashes converge toward the horizon by perspective — like SketchUp, not
+    the dashes converge toward the horizon by perspective — the classic look, not
     spreading apart). ``spacing`` scales with the camera distance so the on-screen
     density stays stable across zoom. Returns ``(coords, spans)`` where ``spans``
     maps ``'x'|'y'|'z'`` → ``(first_vertex, vertex_count)`` for a per-axis draw."""
@@ -399,11 +438,11 @@ def _axes_vertices(spacing: float, pos_len: float = 1.0e5):
     spacing = max(spacing, 1e-4)
     # Short dots, not half-duty dashes: GL lines are stuck at 1px (Mesa
     # clamps glLineWidth), so the dash LENGTH is what sets the perceived
-    # weight — SketchUp's negative axes read as fine dotted lines.
+    # weight — the negative axes should read as fine dotted lines.
     dash = spacing * 0.18
     n = 520                          # dashes → reach = spacing*n past the model
     # The DRAWING axes (core.axes): the world's at the top level, the open
-    # group's own — at its origin — inside it (SketchUp, issue #44).
+    # group's own — at its origin — inside it (issue #44).
     from core import axes as _axes
     o = _axes.ORIGIN
     ox, oy, oz = o.x(), o.y(), o.z()
@@ -604,11 +643,27 @@ def _parse_number(tok: str):
         v += float(m.group(1))
     # A number too long for a float comes back as inf, and inf − inf is
     # NaN a few steps later: a coordinate no tool can recover from (#185).
-    return v if math.isfinite(v) else None
+    # So does a finite one too big for the geometry's float32 coordinates
+    # (1e34 overflows them): nothing typed in a model is ever that large.
+    return v if math.isfinite(v) and abs(v) <= _MAX_TYPED else None
+
+
+#: The largest number the value box takes (in whatever unit it is typed):
+#: a UTM northing is ~1e7 m, a kilometre in millimetres 1e6.
+_MAX_TYPED = 1e9
+
+
+def _is_chord(modifiers) -> bool:
+    """Ctrl or Alt held — a shortcut, not typing. Both together is AltGr on
+    Windows, which types characters, so that one still types."""
+    ctrl = bool(modifiers & Qt.ControlModifier)
+    alt = bool(modifiers & Qt.AltModifier)
+    return (ctrl or alt or bool(modifiers & Qt.MetaModifier)) \
+        and not (ctrl and alt)
 
 
 def _merge_mixed_numbers(fields: list) -> list:
-    """SketchUp's ``1 1/2"``: a whole number followed by a fraction field is
+    """The usual ``1 1/2"``: a whole number followed by a fraction field is
     ONE mixed number, not two fields — joined with the hyphen form."""
     out = []
     i = 0
@@ -629,7 +684,7 @@ def _merge_mixed_numbers(fields: list) -> list:
 
 
 def _parse_length_field(field: str):
-    """One typed length in metres: metric or imperial, SketchUp's forms.
+    """One typed length in metres: metric or imperial, the usual forms.
 
     ``2`` (metres) · ``30cm`` · ``1500mm`` · ``2"`` / ``2in`` · ``1'`` /
     ``1ft`` · ``1'6"`` · ``3/4"`` · ``1'3/4"``. A leading minus is kept.
@@ -761,13 +816,13 @@ class Viewport(QOpenGLWidget):
     coordinateChanged = Signal(str)
 
     # Soft warm white painted on faces with no material colour — like the matte
-    # cardstock of an architecture model (SketchUp's near-white default).
+    # cardstock of an architecture model (a near-white default).
     DEFAULT_FACE_COLOR = (0.96, 0.95, 0.925)
     # Fixed world light (from above, slightly front-right) for the subtle diffuse
-    # face shading. World-fixed so shading is stable while orbiting, like SketchUp.
+    # face shading. World-fixed so shading is stable while orbiting.
     _LIGHT = QVector3D(0.35, 0.25, 1.0).normalized()
 
-    # Tooltip text shown next to the snap marker, SketchUp-style. English source
+    # Tooltip text shown next to the snap marker. English source
     # strings; translated at draw time via ``tr`` (see i18n/es.json).
     #: How close (px) the cursor must come to an acquired circle centre
     #: for its green dot to show — beyond that the reference stays silent.
@@ -855,7 +910,7 @@ class Viewport(QOpenGLWidget):
         # Reference-edge state (Down arrow → parallel / perpendicular).
         self.reference_edge = None
         self.reference_mode: Optional[str] = None  # None | "parallel" | "perpendicular"
-        # Linear-inference toggle (SketchUp's Alt): "all" | "off" | "parallel_perp".
+        # Linear-inference toggle (Alt): "all" | "off" | "parallel_perp".
         self.linear_inference_mode = "all"
         #: A bare Alt is down and nothing else has happened since — the tap
         #: that cycles the mode on release (issue #26).
@@ -866,7 +921,7 @@ class Viewport(QOpenGLWidget):
         # active inference, held until Shift is released.
         self._shift_lock: Optional[tuple] = None
         self._hover_edge = None  # last edge under cursor (candidate for capture)
-        # SketchUp's Center inference: the centre of the last circle or arc
+        # Center inference: the centre of the last circle or arc
         # the cursor visited (its edge, or a face it bounds), kept as a
         # reference until another circle takes its place or the tool
         # changes — «me marca un punto verde en el centro del círculo…
@@ -874,12 +929,12 @@ class Viewport(QOpenGLWidget):
         # ``(centre, radius, key)``.
         self._center_ref = None
         # Edge/corner/face hovered while drawing, held as soft references
-        # (SketchUp "from point" / "through point" / "perpendicular to face"
+        # ("from point" / "through point" / "perpendicular to face"
         # acquisition). Cleared when no segment is in progress.
         self._acquired_edge = None
         self._acquired_point = None
         self._acquired_face_normal = None
-        # SketchUp's encouraged points: the last two points the cursor
+        # Encouraged points: the last two points the cursor
         # PAUSED on (a corner, a circle's centre). The 'from point' dotted
         # line runs from them — from both at once where their axis lines
         # cross. Pausing, not merely crossing: sweeping over a vertex on the
@@ -895,7 +950,7 @@ class Viewport(QOpenGLWidget):
         # Pixel radius for point snaps (endpoint, origin, close). 12 px felt
         # mushy when the cursor was running along an existing edge: as long
         # as the cursor was within 12 px of either end of a short edge,
-        # endpoint snap kept firing. SketchUp is tighter — the green dot
+        # endpoint snap kept firing. It must be tighter — the green dot
         # only lights up right at the vertex.
         self.snap_threshold_px = 9.0
         # On-edge snap gets a bigger radius than point snaps: an edge is a large
@@ -931,6 +986,9 @@ class Viewport(QOpenGLWidget):
         self._sel_faces_vao = None
         self._sel_faces_vbo = None
         self._sel_faces_count = 0
+        # [(front_rgb, back_rgb, first_vertex, count)] — one run per dot
+        # colour pair inside the selected-faces buffer.
+        self._sel_faces_spans = []
         self._faces_vao = None
         self._faces_vbo = None
         self._faces_count = 0
@@ -954,11 +1012,12 @@ class Viewport(QOpenGLWidget):
         self._vbo_parts: dict = {}
 
         # How the rest of the model reads while you are INSIDE a group
-        # (SketchUp's Model Info ▸ Components). "fade" keeps the context
+        # (Model Info ▸ Components). "fade" keeps the context
         # visible but out of the way, "hide" drops it from the frame
         # entirely — on a heavy import that is also the fastest, since a
         # hidden group never reaches the VBOs. See `edit_rest_mode`.
         self._edit_rest_mode = _load_edit_rest_mode()
+        self.scene.hide_similar_components = _load_hide_similar()
         self._invert_wheel = _load_invert_wheel()
         self._invert_orbit_y = _load_invert_orbit_y()
         self._msaa = _load_msaa()
@@ -1020,7 +1079,7 @@ class Viewport(QOpenGLWidget):
         # A mouse-look drag for a tool with ``on_look`` (First Person):
         # (button, last local point) while a button is held, else None.
         self._look_drag = None
-        # SketchUp-style navigation mode for trackpad users with no middle
+        # Navigation mode for trackpad users with no middle
         # mouse button: when set ("orbit" / "pan"), a left-drag drives the
         # camera instead of the active tool. None means a drawing tool is in
         # charge of the left button.
@@ -1140,6 +1199,8 @@ class Viewport(QOpenGLWidget):
         self._loc_shadow_overlay = self._program.uniformLocation(
             "u_shadow_overlay")
         self._loc_stipple = self._program.uniformLocation("u_stipple")
+        self._loc_viewport_px = self._program.uniformLocation("u_viewport_px")
+        self._loc_dash_px = self._program.uniformLocation("u_dash_px")
         self._depth_program = self._compile_depth_program()
         self._loc_d_mvp = self._depth_program.uniformLocation("u_mvp")
         self._loc_d_clip_plane = self._depth_program.uniformLocation(
@@ -1206,7 +1267,7 @@ class Viewport(QOpenGLWidget):
         # to the widget's single-sample FBO is the resolve (MSAA read → plain
         # draw is the legal direction). The widget surface itself stays
         # single-sample — see __init__. Sample count from Preferences
-        # (Graphics in SketchUp); changing it just voids _fbo_size.
+        # (Graphics); changing it just voids _fbo_size.
         fmt.setSamples(getattr(self, "_msaa", 4))
         self._scene_fbo = QOpenGLFramebufferObject(size[0], size[1], fmt)
         if fmt.samples() and self._scene_fbo.format().samples() == 0:
@@ -1267,8 +1328,8 @@ class Viewport(QOpenGLWidget):
             # thickening lines and text proportionally.
             painter.scale(width_px / lw, height_px / lh)
             if not annotations_only:
-                # A sheet frame wants the model's annotations (LayOut shows
-                # SketchUp's dimensions and texts) but never the guides or
+                # A sheet frame wants the model's annotations (the usual
+                # convention for sheets: dimensions and texts) but never the guides or
                 # the section-plane frames.
                 self._draw_guides(painter)
                 self._draw_section_planes(painter)
@@ -1316,14 +1377,14 @@ class Viewport(QOpenGLWidget):
         self._gl.glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
         self._gl.glDisable(GL_CULL_FACE)
 
-        # Effective display style (SketchUp Styles): the composer's
+        # Effective display style (Styles): the composer's
         # plano_style override maps onto the same face modes; otherwise the
         # scene's active style drives faces, edges and background.
         style = self._effective_style()
         mode = style.face_mode
         self._frame_style = style
 
-        # Active section cut (SketchUp): ONE world-space plane; the kept
+        # Active section cut: ONE world-space plane; the kept
         # side is where dot(n, p - origin) <= 0. Applies to model geometry
         # only — sky, axes, terrain, previews and overlays stay uncut.
         self._clip_vec = None
@@ -1377,7 +1438,7 @@ class Viewport(QOpenGLWidget):
         self._program.setUniformValue1f(self._loc_fade, 0.0)
 
         # Sky / ground backdrop with a horizon anchored to the camera pitch —
-        # premium SketchUp feel. Fixed on zoom (it's the point at infinity),
+        # premium modeller feel. Fixed on zoom (it's the point at infinity),
         # moves only on orbit. Skipped over the base map / terrain (which supply
         # their own ground).
         if (self.plano_style is None and style.sky
@@ -1406,7 +1467,7 @@ class Viewport(QOpenGLWidget):
         self._draw_image_planes()
         _fmark("ground")
 
-        # No grid — the infinite axes are the spatial reference (SketchUp).
+        # No grid — the infinite axes are the spatial reference.
 
         # Persistent edges + faces
         self._sync_edges()
@@ -1500,7 +1561,7 @@ class Viewport(QOpenGLWidget):
                     self._loc_back_color, QVector4D(fr[0], fr[1], fr[2], 1.0))
             elif mode == "monochrome":
                 # Flat default front colour + the back tint — the classic
-                # reversed-face checker (SketchUp Monochrome).
+                # reversed-face checker (Monochrome style).
                 self._program.setUniformValue(self._loc_use_vcolor, 0)
                 fr = style.front_color
                 self._set_color(fr[0], fr[1], fr[2], 1.0)
@@ -1515,7 +1576,8 @@ class Viewport(QOpenGLWidget):
             if mode == "xray":
                 # X-ray: translucent faces that do not occlude — edges stay
                 # fully visible because nothing writes depth.
-                self._program.setUniformValue1f(self._loc_opacity, 0.55)
+                self._program.setUniformValue1f(self._loc_opacity,
+                                                XRAY_FACE_OPACITY)
                 self._gl.glDepthMask(GL_FALSE)
             self._faces_vao.bind()
             if split_f is None:
@@ -1523,7 +1585,7 @@ class Viewport(QOpenGLWidget):
                     self._gl.glDrawArrays(GL_TRIANGLES, _vs, _vc)
             else:
                 # Context first, washed toward the background but fully
-                # opaque and still writing depth (SketchUp's faded rest of
+                # opaque and still writing depth (the faded rest of
                 # model reads as haze, not as glass); then the group itself
                 # at full strength.
                 self._program.setUniformValue1f(self._loc_fade,
@@ -1563,7 +1625,7 @@ class Viewport(QOpenGLWidget):
             self._tex_faces_vao.release()
             self._gl.glDisable(GL_POLYGON_OFFSET_FILL)
         elif self._tex_faces_count > 0 and mode == "shaded":
-            # SketchUp "Shaded": textured faces draw in their texture's
+            # "Shaded" style: textured faces draw in their texture's
             # AVERAGE colour (the material colour), keeping the run shading.
             self._gl.glEnable(GL_POLYGON_OFFSET_FILL)
             self._gl.glPolygonOffset(1.0, 1.0)
@@ -1596,7 +1658,8 @@ class Viewport(QOpenGLWidget):
             self._gl.glPolygonOffset(1.0, 1.0)
             self._program.setUniformValue(self._loc_use_tex, 1)
             if mode == "xray":
-                self._program.setUniformValue1f(self._loc_opacity, 0.55)
+                self._program.setUniformValue1f(self._loc_opacity,
+                                                XRAY_FACE_OPACITY)
                 self._gl.glDepthMask(GL_FALSE)
             self._tex_faces_vao.bind()
             run_parts = getattr(self, "_tex_run_parts", None)
@@ -1634,7 +1697,7 @@ class Viewport(QOpenGLWidget):
             self._program.setUniformValue(self._loc_use_tex, 0)
             self._gl.glDisable(GL_POLYGON_OFFSET_FILL)
 
-        # The default back (SketchUp): a painted face shows its material on
+        # The default back: a painted face shows its material on
         # the side you painted and the style's blue-grey on the other, so
         # the reverse of a wall reads as the reverse. Every face whose back
         # is unpainted — and whose front is opaque; glass, water and a mesh
@@ -1687,7 +1750,7 @@ class Viewport(QOpenGLWidget):
             self._program.setUniformValue(self._loc_shadow_enable, 0)
 
         # Back-side material overrides (faces painted DIFFERENTLY per side,
-        # SketchUp two-sided paint): drawn with front-face culling so they
+        # two-sided paint from .skp): drawn with front-face culling so they
         # only show from behind, without the face passes' polygon offset so
         # they win the depth test over the front copy there.
         if (self._back_vcol_run[1] > 0 or self._back_tex_runs) \
@@ -1723,7 +1786,7 @@ class Viewport(QOpenGLWidget):
 
         self._draw_section_fill(mode, style)
 
-        # Translucent material runs (SketchUp trans with useTrans): drawn
+        # Translucent material runs (.skp trans with useTrans): drawn
         # after everything opaque, blended, depth-tested but not depth-
         # written, so glass/mesh screens show what's behind them.
         if (self._tcol_runs or self._ttex_runs
@@ -1791,7 +1854,7 @@ class Viewport(QOpenGLWidget):
             self._gl.glDisable(GL_POLYGON_OFFSET_FILL)
             self._gl.glDepthMask(GL_TRUE)
 
-        # Face-me billboards (SketchUp 2D people): per-frame textured cutout
+        # Face-me billboards (2D people): per-frame textured cutout
         # — skipped on plan sheets and line styles: a coloured cutout person
         # on a technical drawing gives the raster away; scale figures belong
         # to the shaded looks only.
@@ -1813,17 +1876,36 @@ class Viewport(QOpenGLWidget):
             self._gl.glPolygonOffset(1.0, 1.0)
             self._gl.glDepthMask(GL_FALSE)
             if self._sel_faces_count > 0:
-                self._set_color(0.95, 0.45, 0.16, 0.35)  # selection orange tint
+                # Selected faces: an opaque DOT pattern, not a tint — the
+                # old 35% orange wash over a back face read as just another
+                # back face. Each run carries the dot colour for its front
+                # and for its back side, picked against that side's paint.
+                self._program.setUniformValue(self._loc_stipple, 3)
                 self._sel_faces_vao.bind()
-                self._gl.glDrawArrays(GL_TRIANGLES, 0, self._sel_faces_count)
+                for front, back, start, count in self._sel_faces_spans:
+                    self._set_color(*front, 1.0)
+                    self._program.setUniformValue(
+                        self._loc_back_color, QVector4D(*back, 1.0))
+                    self._gl.glDrawArrays(GL_TRIANGLES, start, count)
                 self._sel_faces_vao.release()
-            if isinstance(self._hover_entity, Face):
-                hover_count = self._upload_hover_face(self._hover_entity)
+                self._program.setUniformValue(self._loc_stipple, 0)
+            hovered = self._hover_entity
+            if isinstance(hovered, Face) and hovered not in self.scene.selection:
+                # The face under the cursor (Select, Push/Pull, Paint,
+                # Offset, Follow Me...) wears the same dots as a selected
+                # one, so every tool points at a face the same way. An
+                # already selected face is skipped: it shows its dots.
+                hover_count = self._upload_hover_face(hovered)
                 if hover_count > 0:
-                    self._set_color(0.30, 0.55, 0.95, 0.28)  # hover blue tint
+                    front, back = self._selection_dot_colors(hovered)
+                    self._set_color(*front, 1.0)
+                    self._program.setUniformValue(
+                        self._loc_back_color, QVector4D(*back, 1.0))
+                    self._program.setUniformValue(self._loc_stipple, 3)
                     self._hover_faces_vao.bind()
                     self._gl.glDrawArrays(GL_TRIANGLES, 0, hover_count)
                     self._hover_faces_vao.release()
+                    self._program.setUniformValue(self._loc_stipple, 0)
             self._gl.glDepthMask(GL_TRUE)
             self._gl.glDisable(GL_POLYGON_OFFSET_FILL)
 
@@ -1837,7 +1919,7 @@ class Viewport(QOpenGLWidget):
         self._draw_groups_preview(mvp)
         self._draw_hidden_ghosts(mvp)
 
-        # Axes — long solid positive + evenly-dashed negative per axis (SketchUp).
+        # Axes — long solid positive + evenly-dashed negative per axis.
         # Dash spacing scales with the camera distance so the on-screen density
         # stays stable across zoom. Depth-write OFF so the ground axes don't cull
         # geometry sitting on z=0; drawn BEFORE user edges so an edge along an
@@ -1921,12 +2003,32 @@ class Viewport(QOpenGLWidget):
         # sub-pixel offsets to reach it — exports only, never the screen.
         _jit_e = self._line_jitter(self._export_edge_px, w, h)
         _jit_p = self._line_jitter(self._export_profile_px, w, h)
-        for _dx, _dy in _jit_e:
-            if _dx or _dy:
+        # X-ray draws every edge, but the ones BEHIND a face come out washed
+        # toward the background: the faces' depth (never written by their
+        # translucent pass) is laid down here, the edges beyond it drawn
+        # first in the faded colour, then the ones in front at full strength.
+        # From above, an open box keeps every edge dark and a lidded one
+        # greys the edges under the lid — you see whether a face is there.
+        xray_edges = mode == "xray" and show_edges
+        if xray_edges:
+            self._xray_face_depth()
+            bg = style.background
+            k = XRAY_HIDDEN_EDGE_FADE
+            _edge_passes = ((tuple(ec[i] + (bg[i] - ec[i]) * k
+                                   for i in range(3)), True),
+                            (tuple(ec[:3]), False))
+        else:
+            _edge_passes = ((tuple(ec[:3]), False),)
+        for (_ecol, _hidden), (_dx, _dy) in (
+                (_p, _j) for _p in _edge_passes for _j in _jit_e):
+            if xray_edges:
+                self._gl.glDepthFunc(GL_GREATER if _hidden else GL_LEQUAL)
+                self._gl.glDepthMask(GL_FALSE if _hidden else GL_TRUE)
+            if len(_jit_e) > 1:
                 self._program.setUniformValue(self._loc_mvp,
                                               _shifted_mvp(mvp, _dx, _dy))
             if self._edges_count > 0 and show_edges:
-                self._set_color(ec[0], ec[1], ec[2], 1.0)
+                self._set_color(*_ecol, 1.0)
                 self._edges_vao.bind()
                 _espans = getattr(self, "_frame_edge_spans",
                                   ((0, self._edges_count),))
@@ -1948,14 +2050,23 @@ class Viewport(QOpenGLWidget):
                             self._gl.glDrawArrays(GL_LINES, _vs, _vc)
                 self._edges_vao.release()
             if show_edges:
-                self._set_color(ec[0], ec[1], ec[2], 1.0)
+                self._set_color(*_ecol, 1.0)
                 self._draw_instanced_edges()
+        if xray_edges:
+            # Back to X-ray's depth: the faces never occlude, so selected
+            # and hovered edges behind them still show.
+            self._gl.glDepthFunc(GL_LEQUAL)
+            self._gl.glDepthMask(GL_TRUE)
+            self._gl.glClear(GL_DEPTH_BUFFER_BIT)
+        elif (show_edges and getattr(style, "back_edges", False)
+                and mode != "wireframe"):
+            self._draw_back_edges(tuple(ec[:3]), w, h)
         if len(_jit_e) > 1:
             self._program.setUniformValue(self._loc_mvp, mvp)
 
         # Profile (silhouette) edges: soft seams of a curved surface are hidden,
         # except where the surface turns away from the viewer — the cylinder's
-        # outline. View-dependent, so rebuilt every frame, SketchUp-style.
+        # outline. View-dependent, so rebuilt every frame.
         if show_edges and style.profiles:
             sil_count = self._upload_silhouette_edges()
             if sil_count > 0:
@@ -1993,7 +2104,7 @@ class Viewport(QOpenGLWidget):
         # Rubber band preview. Loose drawing tools float it on top (depth test
         # off, so it never z-fights with coincident axes). Push/Pull's solid
         # preview keeps depth testing on, so the forming box's back edges are
-        # hidden behind its faces — SketchUp-style hidden-line removal.
+        # hidden behind its faces — classic hidden-line removal.
         depth_wire = (
             getattr(self.active_tool, "wireframe_depth_tested", False)
             if self.active_tool is not None
@@ -2209,13 +2320,13 @@ class Viewport(QOpenGLWidget):
         if (_NO_INSTANCING or getattr(g, "xform", None) is None
                 or getattr(g, "billboard", False)):
             return False
-        if g.xform.determinant() < 0.0:
-            # A MIRRORED placement: the instanced draw runs the prototype's
-            # own triangles through the matrix, which turns them inside out
-            # for GL (front becomes back). The consolidated path draws the
-            # instance chunk, whose winding is put right — see
-            # ``_instance_chunk``. Mirrors are rare; the cost is nothing.
-            return False
+        # A MIRRORED placement turns the prototype's triangles inside out
+        # for GL (front becomes back). It used to fall back to the
+        # consolidated path, one baked copy per placement — «mirrors are
+        # rare», until an industrial model brought 6 203 of them, 4.2
+        # million faces baked one by one (issue #158). It draws instanced
+        # now, in batches of its own under a clockwise front face
+        # (``_front_face``).
         from core.group import effective_material
         base = self._proto_base_chunk(g.mesh, effective_material(g))
         # Translucent / back-side / glass content still rides the
@@ -2261,6 +2372,8 @@ class Viewport(QOpenGLWidget):
                        # @pacaeiro).
                        bool(getattr(sc, "show_hidden_objects", False)),
                        bool(getattr(sc, "show_hidden_geometry", False)),
+                       # Hide Similar Components drops placements too.
+                       bool(getattr(sc, "hide_similar_components", False)),
                        tuple((ly.name, ly.visible, ly.locked) for ly in sc.layers)]
 
         loose = sc.mesh
@@ -2367,7 +2480,7 @@ class Viewport(QOpenGLWidget):
                     seen.add(id(child))
                 proxy.mesh = child.mesh
                 # A nested entity with no tag of its own inherits the
-                # parent's (SketchUp); and when the parent's tag is hidden or
+                # parent's (the .skp convention); and when the parent's tag is hidden or
                 # locked the whole instance goes with it, whatever its
                 # children are tagged.
                 proxy.layer = forced or child.layer or node.layer
@@ -2398,6 +2511,55 @@ class Viewport(QOpenGLWidget):
         walk(group, getattr(group, "xform", None), hidden=bool(group.hidden))
         return out
 
+    def _placement_bbox(self, g):
+        """World AABB of an instanced placement from its PROTOTYPE's local
+        box and the placement matrix — eight corners, no bake. Reading it
+        off ``_group_chunk(g)`` baked the whole placement to world
+        coordinates only to take its box: on the model of issue #158 that
+        was 21 000 baked copies of geometry the instanced pass never uses."""
+        return self._placement_frame(g)[0]
+
+    def _placement_frame(self, g):
+        """``(world bbox, inverse matrix)`` of an instanced placement,
+        cached per placement and keyed on its matrix and its prototype's
+        bake: the silhouette pass asks for both for every placement at up
+        to 12 Hz, and working them out in Python each time cost ~7 ms a
+        pass on the plaza's 1 359 placements (release check, 30-09)."""
+        from core.group import effective_material
+        base = self._proto_base_chunk(g.mesh, effective_material(g))
+        m = g.xform
+        key = (base.get("uid"), tuple(m.data()))
+        cache = getattr(self, "_placement_frames", None)
+        if cache is None:
+            cache = self._placement_frames = {}
+        hit = cache.get(id(g))
+        if hit is not None and hit[0] == key:
+            return hit[1]
+        bb = base.get("bbox")
+        box = None
+        if bb:
+            (x0, y0, z0), (x1, y1, z1) = bb
+            pts = [m.map(QVector3D(x, y, z))
+                   for x in (x0, x1) for y in (y0, y1) for z in (z0, z1)]
+            box = ((min(p.x() for p in pts), min(p.y() for p in pts),
+                    min(p.z() for p in pts)),
+                   (max(p.x() for p in pts), max(p.y() for p in pts),
+                    max(p.z() for p in pts)))
+        inv, ok = m.inverted()
+        if len(cache) > 4 * max(64, len(getattr(self, "_inst_pool", (0, ()))[1]
+                                         if getattr(self, "_inst_pool", None)
+                                         else ())):
+            cache.clear()                  # ids of placements long gone
+        val = (box, inv if ok else None)
+        cache[id(g)] = (key, val)
+        return val
+
+    def _front_face(self, mirrored: bool) -> None:
+        """Clockwise front faces for a MIRRORED batch — the mirror flips the
+        winding of every prototype triangle, and GL decides front and back
+        (``gl_FrontFacing``, the culled back-tint pass) by winding."""
+        self._gl.glFrontFace(GL_CW if mirrored else GL_CCW)
+
     def _gather_instanced(self):
         """Visible, eligible instances grouped by prototype mesh — computed
         once per frame (faces pass), reused by the edges pass. Instances are
@@ -2426,7 +2588,7 @@ class Viewport(QOpenGLWidget):
                 if not self._instanced_eligible(g):
                     continue
                 groups.append(g)
-                boxes.append(self._group_chunk(g).get("bbox"))
+                boxes.append(self._placement_bbox(g))
             # Boxless chunks (unknown extents) always draw: give them an
             # infinite box so the vectorised test keeps them.
             lo = np.array([b[0] if b else (-np.inf,) * 3 for b in boxes],
@@ -2458,8 +2620,9 @@ class Viewport(QOpenGLWidget):
         for i in np.flatnonzero(keep):
             g = groups[i]
             paint = effective_material(g)
-            out.setdefault((id(g.mesh), _material_sig(paint)),
-                           (g.mesh, paint, []))[2].append(g)
+            mirrored = g.xform.determinant() < 0.0
+            out.setdefault((id(g.mesh), _material_sig(paint), mirrored),
+                           (g.mesh, paint, [], mirrored))[2].append(g)
         self._frame_instanced = out
         return out
 
@@ -2647,10 +2810,12 @@ class Viewport(QOpenGLWidget):
         self._gl.glEnable(GL_POLYGON_OFFSET_FILL)
         self._gl.glPolygonOffset(1.0, 1.0)
         if mode == "xray":
-            self._program.setUniformValue1f(self._loc_opacity, 0.55)
+            self._program.setUniformValue1f(self._loc_opacity,
+                                            XRAY_FACE_OPACITY)
             self._gl.glDepthMask(GL_FALSE)
-        for mesh, paint, groups in by_proto.values():
+        for mesh, paint, groups, mirrored in by_proto.values():
             entry = self._ensure_proto_draw(mesh, paint)
+            self._front_face(mirrored)
             for lote, fade in self._instanced_batches(groups):
                 if not lote:
                     continue
@@ -2723,6 +2888,7 @@ class Viewport(QOpenGLWidget):
                         GL_TRIANGLES, 0, entry["dback_count"], n)
                     entry["dback_vao"].release()
                     self._gl.glDisable(GL_CULL_FACE)
+        self._front_face(False)
         self._program.setUniformValue1f(self._loc_fade, 0.0)
         if mode == "xray":
             self._program.setUniformValue1f(self._loc_opacity, 1.0)
@@ -2735,7 +2901,7 @@ class Viewport(QOpenGLWidget):
         if not by_proto:
             return
         extra = self.context().extraFunctions()
-        for mesh, paint, groups in by_proto.values():
+        for mesh, paint, groups, _mirrored in by_proto.values():
             entry = self._ensure_proto_draw(mesh, paint)
             n = self._update_inst_matrices(entry, groups)
             if entry["vcol_count"]:
@@ -2749,12 +2915,57 @@ class Viewport(QOpenGLWidget):
                     extra.glDrawArraysInstanced(GL_TRIANGLES, s0, cnt, n)
                 entry["tex_vao"].release()
 
+    def _draw_back_edges(self, color, w: int, h: int) -> None:
+        """Back Edges (K, issue #234): the edges a face hides, dashed, over
+        the opaque model — where a bar or a frame member continues behind
+        a face in a shop drawing. The faces already wrote their depth
+        (pushed back by the polygon offset, so an edge lying ON a face is
+        not «behind» it): what fails that test is drawn with GL_GREATER and
+        a dash measured along each line, without writing depth."""
+        dpr = max(1.0, float(self.devicePixelRatioF()))
+        self._program.setUniformValue(self._loc_viewport_px,
+                                      QVector2D(float(w), float(h)))
+        self._program.setUniformValue1f(self._loc_dash_px, 4.0 * dpr)
+        self._program.setUniformValue(self._loc_stipple, 4)
+        self._gl.glDepthFunc(GL_GREATER)
+        self._gl.glDepthMask(GL_FALSE)
+        self._set_color(*color, 1.0)
+        if self._edges_count > 0:
+            self._edges_vao.bind()
+            for _vs, _vc in getattr(self, "_frame_edge_spans",
+                                    ((0, self._edges_count),)):
+                self._gl.glDrawArrays(GL_LINES, _vs, _vc)
+            self._edges_vao.release()
+        self._draw_instanced_edges()
+        self._gl.glDepthFunc(GL_LEQUAL)
+        self._gl.glDepthMask(GL_TRUE)
+        self._program.setUniformValue(self._loc_stipple, 0)
+
+    def _xray_face_depth(self) -> None:
+        """Write every face's depth and no colour — X-ray's translucent
+        face pass leaves the depth buffer without them. Same polygon offset
+        as the faces, so an edge lying ON a face still counts as in front."""
+        self._gl.glColorMask(False, False, False, False)
+        self._gl.glEnable(GL_POLYGON_OFFSET_FILL)
+        self._gl.glPolygonOffset(1.0, 1.0)
+        if self._faces_count > 0:
+            self._faces_vao.bind()
+            self._gl.glDrawArrays(GL_TRIANGLES, 0, self._faces_count)
+            self._faces_vao.release()
+        if self._tex_faces_count > 0:
+            self._tex_faces_vao.bind()
+            self._gl.glDrawArrays(GL_TRIANGLES, 0, self._tex_faces_count)
+            self._tex_faces_vao.release()
+        self._draw_instanced_raw()
+        self._gl.glDisable(GL_POLYGON_OFFSET_FILL)
+        self._gl.glColorMask(True, True, True, True)
+
     def _draw_instanced_edges(self) -> None:
         by_proto = getattr(self, "_frame_instanced", None)
         if not by_proto:
             return
         extra = self.context().extraFunctions()
-        for mesh, paint, groups in by_proto.values():
+        for mesh, paint, groups, _mirrored in by_proto.values():
             entry = self._ensure_proto_draw(mesh, paint)
             if not entry["edge_count"]:
                 continue
@@ -2902,7 +3113,7 @@ class Viewport(QOpenGLWidget):
         """The right-click's last resort: a LOCKED image under the cursor
         (its layer still visible and unlocked). A locked image refuses
         clicks by design, but the context menu is the only door back to
-        Unlock / Delete — SketchUp offers Unlock on a right-click too.
+        Unlock / Delete — the usual place to offer Unlock.
         Without this a locked scan could never be selected again (Marco,
         2026-09-14, the orthomosaic that arrives locked)."""
         images = getattr(self.scene, "image_planes", None)
@@ -2953,7 +3164,7 @@ class Viewport(QOpenGLWidget):
 
     def finish_image_placement(self) -> None:
         """Called by the Image tool once a picture is placed: drop back to
-        Select, the way SketchUp does after a one-shot placement."""
+        Select, the classic behaviour after a one-shot placement."""
         win = self.window()
         if hasattr(win, "activate_select_tool"):
             win.activate_select_tool()
@@ -2970,7 +3181,7 @@ class Viewport(QOpenGLWidget):
         img = QImage(path)
         tex = None
         if not img.isNull():
-            tex = QOpenGLTexture(img.mirrored())  # OBJ/SketchUp V is bottom-up
+            tex = QOpenGLTexture(img.mirrored())  # OBJ/.skp V is bottom-up
             tex.setWrapMode(QOpenGLTexture.Repeat)
             tex.setMinificationFilter(QOpenGLTexture.LinearMipMapLinear)
             tex.setMagnificationFilter(QOpenGLTexture.Linear)
@@ -2978,7 +3189,7 @@ class Viewport(QOpenGLWidget):
             # atlas bleed erase or darken the leaves at distance, and the
             # Bayer dither turns the rest into ghost speckle. Tag them: the
             # textured passes sample the top level only and cut hard at 0.5
-            # — crisp SketchUp-style vegetation at every zoom.
+            # — crisp cutout vegetation at every zoom.
             if img.hasAlphaChannel():
                 small = img.scaled(64, 64).convertToFormat(
                     QImage.Format_Alpha8)
@@ -2994,7 +3205,7 @@ class Viewport(QOpenGLWidget):
         return tex
 
     def _texture_avg_color(self, path: str) -> tuple[float, float, float]:
-        """Average colour of a texture image — SketchUp's "Shaded" face style
+        """Average colour of a texture image — the "Shaded" face style
         shows the material COLOUR instead of its texture. Cached per path."""
         cache = getattr(self, "_tex_avg_cache", None)
         if cache is None:
@@ -3020,7 +3231,7 @@ class Viewport(QOpenGLWidget):
             cache[path] = c
         return c
 
-    #: Default back-face colour, SketchUp's blue-grey: a visible back face
+    #: Default back-face colour, the classic blue-grey: a visible back face
     #: means "you are looking at the inside" (or at a genuinely inverted
     #: face) — honest feedback the winding-proof shading used to hide. The
     #: active style's Back color overrides it (core/style.py).
@@ -3033,6 +3244,31 @@ class Viewport(QOpenGLWidget):
         # passes override it just before their draws.
         self._program.setUniformValue(self._loc_back_color,
                                       QVector4D(r, g, b, a))
+
+    def _selection_dot_colors(self, face) -> tuple:
+        """``(front_dot, back_dot)``: the selection dot colour for each side
+        of ``face``, each picked against the paint that side shows — its
+        material colour (or the open group's paint), the two-sided back
+        paint, or the style's back-face tint."""
+        from core.group import effective_material
+        from core.materials import effective_attrs
+        attrs = effective_attrs(face.attrs,
+                                effective_material(self.scene.edit_group))
+        tex = attrs.get("texture")
+        if tex is not None and tex.get("path"):
+            front = None                      # a texture: colour unknown
+        else:
+            front = tuple(attrs.get("color") or self.DEFAULT_FACE_COLOR)
+        back_attr = attrs.get("back")
+        if back_attr is True:
+            back = front                      # both sides wear the front
+        elif isinstance(back_attr, dict):
+            col = back_attr.get("color")
+            back = tuple(col) if col is not None else None
+        else:
+            back = effective_back_color(
+                getattr(self.scene, "display_style", None), self.scene)
+        return selection_dot_color(front), selection_dot_color(back)
 
     def _set_back_face_color(self) -> None:
         # The style's Back color wins; else the scene's adopted tint (from
@@ -3052,10 +3288,10 @@ class Viewport(QOpenGLWidget):
         # abs(): shading depends on the face's plane, not its winding — a
         # flat plan whose faces happen to wind downward still reads bright,
         # while a solid keeps its top-bright / sides-toned maquette look.
-        # The 0.62..1.0 range matches SketchUp's default-style contrast
+        # The 0.62..1.0 range matches the classic default-style contrast
         # (measured on user models: its shaded walls sit near 0.65 of the
         # lit tone) — the previous 0.80..1.0 read as "unshaded"/wrong
-        # colour next to a SketchUp render of the same building.
+        # colour next to a reference render of the same building.
         d = abs(QVector3D.dotProduct(normal.normalized(), self._LIGHT))
         return round((0.62 + 0.38 * d) * 32.0) / 32.0
 
@@ -3117,7 +3353,7 @@ class Viewport(QOpenGLWidget):
     #: them. Nothing but the document boundary makes them all stale at once.
     _DOCUMENT_CACHES = ("_group_chunks", "_inst_chunks", "_fp_memo",
                         "_proto_wrappers", "_proto_draw", "_faceme_cache",
-                        "_proto_pts_store", "_container_obb",
+                        "_proto_pts_store", "_container_obb", "_placement_frames",
                         # Also keyed by id(): a face-me's placed sprite, the
                         # nested-placement proxies and the arc midpoints per
                         # mesh. A group of the next document born at a dead
@@ -3486,7 +3722,7 @@ class Viewport(QOpenGLWidget):
         self._tile_geom = (key, runs)
         return runs
 
-    # Sky (top) and ground (bottom) backdrop colours — subtle two-tone, SketchUp.
+    # Sky (top) and ground (bottom) backdrop colours — subtle two-tone.
     _SKY_RGB = (0.925, 0.935, 0.945)
     _GROUND_RGB = (0.815, 0.820, 0.815)
 
@@ -3580,7 +3816,7 @@ class Viewport(QOpenGLWidget):
             gquad(-1.0, hy, c_gnd1, c_gnd0)
         self._program.setUniformValue(self._loc_use_vcolor, 0)
         self._sky_grad_vao.release()
-        # A subtle horizon line where sky meets ground (SketchUp), in a tone
+        # A subtle horizon line where sky meets ground, in a tone
         # derived from the two haze colours so custom skies keep it legible.
         if -1.0 < hy < 1.0:
             line = array("f", [-1.0, hy, 0.0, 1.0, hy, 0.0])
@@ -3596,7 +3832,7 @@ class Viewport(QOpenGLWidget):
 
     # ---- Sun shadows (core/sun.py) ------------------------------------------
     _SHADOW_MAP_SIZE = 2048
-    #: SketchUp's documented rule: materials under 70 % opacity cast no
+    #: The .skp translucency rule: materials under 70 % opacity cast no
     #: shadow — the sun passes through glass.
     _SHADOW_OPACITY_MIN = 0.7
 
@@ -3743,7 +3979,7 @@ class Viewport(QOpenGLWidget):
             self._faces_vao.bind()
             if self._faces_count > 0:
                 self._gl.glDrawArrays(GL_TRIANGLES, 0, self._faces_count)
-            # SketchUp's translucency rule: under 70 % opacity a material
+            # The .skp translucency rule: under 70 % opacity a material
             # casts NO shadow (glass lets the sun through); at or above it,
             # it casts like a solid.
             for a, _fc, start, count in self._tcol_runs:
@@ -3783,7 +4019,7 @@ class Viewport(QOpenGLWidget):
         finally:
             self._frame_planes = saved
         extra = self.context().extraFunctions()
-        for mesh, paint, groups in by_proto.values():
+        for mesh, paint, groups, _mirrored in by_proto.values():
             entry = self._ensure_proto_draw(mesh, paint)
             n = self._update_inst_matrices(entry, groups)
             prog.bind()                # entry building binds the main program
@@ -3811,7 +4047,7 @@ class Viewport(QOpenGLWidget):
                 entry["tex_vao"].release()
         # Billboard people cast their SILHOUETTE, as a quad turned toward
         # the sun — a camera-facing caster would swing its shadow while the
-        # camera orbits (SketchUp's face-me "shadows face sun"). Vector-art
+        # camera orbits (face-me "shadows face sun"). Vector-art
         # and mesh face-me stay non-casting (documented deferral).
         sun = getattr(self, "_frame_sun", None)
         bbs = [g for g in self._placements()
@@ -3861,7 +4097,7 @@ class Viewport(QOpenGLWidget):
         """The on-ground shadow catcher: a world plane just under z=0 that
         draws ONLY the shadow — translucent black where the sun is blocked,
         fully transparent where it is not, so the plane itself has no
-        visible colour or edges (SketchUp's on-ground shadows). Skipped
+        visible colour or edges (on-ground shadows). Skipped
         over the map, terrain and photo mesh, which bring their own ground;
         depth writes OFF so below-ground geometry still draws over it and a
         real floor AT z=0 never z-fights."""
@@ -3943,7 +4179,7 @@ class Viewport(QOpenGLWidget):
         freeze, the moving groups leave the consolidated VBOs (one resync)
         and their chunk arrays upload ONCE to scratch VBOs that paintGL
         draws with a translated MVP — a drag frame touches no arrays at
-        all. SketchUp-grade group dragging on a 230k-face group.
+        all. Smooth group dragging on a 230k-face group.
 
         ``external=True`` previews OFF-scene template groups (Paste's
         clipboard): same scratch upload, but nothing leaves the consolidated
@@ -4188,7 +4424,7 @@ class Viewport(QOpenGLWidget):
         return bool(n_vcol or n_edges or runs)
 
     def _draw_hidden_ghosts(self, mvp) -> None:
-        """SketchUp's View ▸ Hidden Objects / Hidden Geometry: what Hide put
+        """View ▸ Hidden Objects / Hidden Geometry: what Hide put
         away is drawn as a see-through grid (faces) and dotted lines
         (edges) — its own pass over scratch VBOs, so the normal passes and
         their caches never learn about it. Depth-tested, so it sits where
@@ -4378,7 +4614,7 @@ class Viewport(QOpenGLWidget):
                 self.scene.selection.discard(s)
 
         # Inside a group, the surroundings can fade out or leave the frame
-        # altogether (SketchUp's Model Info ▸ Components). Hidden means gone
+        # altogether (Model Info ▸ Components). Hidden means gone
         # from the VBOs, not merely skipped at draw time — that is what makes
         # it the fast mode on a heavy import.
         hide_rest = self._rest_is_hidden()
@@ -4500,7 +4736,7 @@ class Viewport(QOpenGLWidget):
                     # until the commit (user report).
                     continue
                 # A selected group reads as its BOUNDING BOX, the way
-                # SketchUp shows one — twelve segments instead of the whole
+                # modellers usually show one — twelve segments instead of the whole
                 # object. Highlighting the geometry meant uploading every
                 # edge AND a triangle copy of every face on each click: the
                 # 230k-face hedge in piscina.igz pushed 416k edges through
@@ -4512,18 +4748,26 @@ class Viewport(QOpenGLWidget):
             self._selected_vbo, "sel_edges",
             [sel_loose.tobytes()] + sel_edge_parts) // 12
 
-        sel_face_loose = array("f")
+        sel_face_runs: dict = {}     # (front_dot, back_dot) -> array
         for ent in self.scene.selection:
             if isinstance(ent, Face):
+                buf = sel_face_runs.setdefault(
+                    self._selection_dot_colors(ent), array("f"))
                 for t0, t1, t2 in ent.triangulate():
-                    sel_face_loose.extend([
+                    buf.extend([
                         t0.x(), t0.y(), t0.z(),
                         t1.x(), t1.y(), t1.z(),
                         t2.x(), t2.y(), t2.z(),
                     ])
+        self._sel_faces_spans = []
+        first = 0
+        for (front, back), buf in sel_face_runs.items():
+            n = len(buf) // 3
+            self._sel_faces_spans.append((front, back, first, n))
+            first += n
         self._sel_faces_count = self._upload_vbo(
             self._sel_faces_vbo, "sel_faces",
-            [sel_face_loose.tobytes()]) // 12
+            [buf.tobytes() for buf in sel_face_runs.values()]) // 12
 
         # Faces: triangulate each face (fan when simple, hole-aware when the
         # face has been divided) into one VBO, but grouped by material colour
@@ -4563,7 +4807,7 @@ class Viewport(QOpenGLWidget):
 
         def bucket_back(face):
             # attrs["back"]: the face is painted DIFFERENTLY on its back side
-            # (SketchUp two-sided paint). Emit an override copy that a culled
+            # (.skp two-sided paint). Emit an override copy that a culled
             # pass shows only from behind. Returns True when the back is
             # TRANSLUCENT — then the front copy must not show from behind
             # (it gets back-face culling), or the two sides would blend.
@@ -4616,7 +4860,7 @@ class Viewport(QOpenGLWidget):
             col = attrs.get("color")
             base = tuple(col) if col is not None else self.DEFAULT_FACE_COLOR
             # Bake a subtle diffuse shade from the face normal against a fixed
-            # world light — the matte-model look of SketchUp. World-fixed, so
+            # world light — the matte-model look. World-fixed, so
             # it doesn't change as you orbit. The shaded colour rides per
             # vertex, so the whole pass is ONE draw call.
             r, g, b = self._shaded_color(base, self._normal_of(face))
@@ -4808,7 +5052,7 @@ class Viewport(QOpenGLWidget):
             self._tex_runs.append((key, run_start, start - run_start))
             self._tex_run_parts.append(run_parts)
         # Where the OPAQUE textured block ends: the shadow depth pass draws
-        # up to here, then adds only the translucent runs SketchUp says cast
+        # up to here, then adds only the translucent runs that .skp rules cast
         # (opacity ≥ 70 %) — glass must let the sun through.
         self._tex_opaque_count = start
         self._ttex_runs = []
@@ -4881,9 +5125,9 @@ class Viewport(QOpenGLWidget):
         matte face shading as colour faces). UVs come from
         ``core.texture.face_uv_axes`` — the face's fitted world→UV affine
         map when present (``uvw`` — an import carrying its own texture
-        coordinates), else SketchUp's planar projection of each vertex's
+        coordinates), else the .skp planar projection of each vertex's
         world position. The SAME function the .skp exporter writes from, so
-        the viewport cannot drift from what SketchUp will show (it did: a
+        the viewport cannot drift from what the .skp file will show (it did: a
         private copy of the projection here used a different basis)."""
         key = (tex["path"], self._shade_factor(self._normal_of(face)))
         buf = by_texture.get(key)
@@ -4901,7 +5145,7 @@ class Viewport(QOpenGLWidget):
     def _faceme_dir(self, anchor: QVector3D) -> QVector3D:
         """Direction a face-me sprite at ``anchor`` turns toward (not yet
         flattened or normalised). Perspective: toward the eye, so figures
-        left and right of centre turn slightly, like SketchUp. Parallel: the
+        left and right of centre turn slightly. Parallel: the
         VIEW direction for every sprite — a parallel camera has no real eye,
         and using the fictitious one made a figure far from the orbit target
         turn 45° away when zoomed in (Marco: "Sumari no se ve bien en vista
@@ -4972,13 +5216,13 @@ class Viewport(QOpenGLWidget):
                 tex = t["path"]
                 break
         # tex may stay None for a vector-art face-me (solid-colour faces,
-        # e.g. SketchUp's 2D person): picking/outline/snap still need the
+        # e.g. a 2D person from a .skp file): picking/outline/snap still need the
         # quad; the legacy textured-quad render skips texture-less groups.
         if w < 1e-9 or h < 1e-9:
             return None
         # Facing: the camera by default; the shadow pass passes the SUN so a
         # figure's cast silhouette holds still while the camera orbits
-        # (SketchUp's face-me "shadows face sun").
+        # (face-me "shadows face sun").
         d = face_dir if face_dir is not None else self._faceme_dir(anchor)
         d = QVector3D(d.x(), d.y(), 0.0)
         if d.length() < 1e-6:
@@ -4992,7 +5236,7 @@ class Viewport(QOpenGLWidget):
 
     def _draw_billboards(self) -> None:
         """Per-frame pass: each face-me billboard is a textured cutout quad
-        turned toward the camera (SketchUp's 2D people). Depth-tested, so it
+        turned toward the camera (2D people). Depth-tested, so it
         hides behind walls correctly; the shader discards transparent texels."""
         groups = [g for g in self._placements()
                   if getattr(g, "billboard", False)
@@ -5041,7 +5285,7 @@ class Viewport(QOpenGLWidget):
         """Selection cue for face-me billboards: an orange outline around the
         quad AS DRAWN this frame (it rotates toward the camera). Tinting the
         group's static mesh painted a stray plane through the figure —
-        SketchUp shows a selected 2D person as an outlined box too."""
+        the usual convention shows a selected 2D person as an outlined box too."""
         sel = [g for g in self.scene.selection
                if isinstance(g, Group) and getattr(g, "billboard", False)
                and self.scene.entity_visible(g)]
@@ -5095,7 +5339,7 @@ class Viewport(QOpenGLWidget):
             if tex is not None and tex.get("path"):
                 self._append_textured_face(by_tex, f, tex)
                 continue
-            # Solid-colour face (a vector-art person like SketchUp's Susan):
+            # Solid-colour face (a vector-art person from a .skp file):
             # same interleaved layout, uv ignored, drawn with u_color.
             col = tuple(f.attrs.get("color") or (0.96, 0.95, 0.925))
             buf = by_color.setdefault(col, array("f"))
@@ -5311,6 +5555,12 @@ class Viewport(QOpenGLWidget):
             e_np = np.array([eye.x(), eye.y(), eye.z()])
             planes = getattr(self, "_frame_planes", None)
             for g in groups:
+                if getattr(g, "xform", None) is not None:
+                    got = self._instance_silhouette(g, eye, planes)
+                    if got is not None:
+                        if got:
+                            chunks.append(got)
+                        continue
                 ch = self._group_chunk(g)
                 if ch["soft_pts"] is None:
                     continue
@@ -5335,6 +5585,42 @@ class Viewport(QOpenGLWidget):
         count = len(raw) // 12
         self._sil_last = (key, now, count)
         return count
+
+    def _instance_silhouette(self, g, eye, planes):
+        """Silhouette bytes of a component placement, worked out on the
+        PROTOTYPE's shared arrays — ``None`` when it cannot be (a singular
+        matrix), and the caller bakes as before.
+
+        Which side of a plane the eye is on does not change under the
+        placement's affine map, and a mirror flips BOTH faces of a soft
+        edge at once, so «its faces straddle the view» reads the same with
+        the eye taken into local coordinates. Only the edges that pass are
+        carried to the world. Baking every placement to world coordinates
+        for this test was the last per-placement bake of a frame: with
+        profiles on, the 21 000 placements of issue #158 baked 14 million
+        faces the instanced draw never needed."""
+        import numpy as np
+        from core.group import effective_material
+        base = self._proto_base_chunk(g.mesh, effective_material(g))
+        if base["soft_pts"] is None:
+            return b""
+        bb, inv = self._placement_frame(g)
+        if planes is not None and bb is not None \
+                and not self._aabb_visible(planes, bb[0], bb[1]):
+            return b""
+        if inv is None:
+            return None
+        le = inv.map(eye)
+        e_np = np.array([le.x(), le.y(), le.z()])
+        s0 = np.einsum("ij,ij->i", base["soft_n0"], base["soft_c0"] - e_np)
+        s1 = np.einsum("ij,ij->i", base["soft_n1"], base["soft_c1"] - e_np)
+        mask = base["soft_single"] | ((s0 < 0) != (s1 < 0))
+        if not mask.any():
+            return b""
+        m = np.array(g.xform.data(), dtype=np.float64).reshape(4, 4, order="F")
+        seg = base["soft_pts"].reshape(-1, 6)[mask].astype(np.float64)
+        pts = seg.reshape(-1, 3) @ m[:3, :3].T + m[:3, 3]
+        return pts.astype(np.float32).tobytes()
 
     def _upload_hover_edge(self, edge: Edge) -> int:
         """Upload the hovered edge — or, for a curve segment, its whole contour
@@ -5440,7 +5726,7 @@ class Viewport(QOpenGLWidget):
             self._set_back_face_color()          # leave the real tint behind
         if by_texture:
             # A tool may want its textured preview translucent (Position
-            # Texture shows the image through, SketchUp-style).
+            # Texture shows the image through).
             opacity = float(getattr(tool, "preview_opacity", 1.0) or 1.0)
             if opacity < 1.0:
                 self._program.setUniformValue1f(self._loc_opacity, opacity)
@@ -5568,7 +5854,7 @@ class Viewport(QOpenGLWidget):
         self._draw_rubber_band_overlay(painter)
         self._draw_guide_preview(painter)
 
-        # The acquired circle centre (SketchUp's Center inference): a small
+        # The acquired circle centre (Center inference): a small
         # green dot at the centre of the last circle or arc the cursor
         # visited — shown only once the cursor comes NEAR it, not the whole
         # time you are on the face («solo debería aparecer cuando me ponga
@@ -5609,7 +5895,7 @@ class Viewport(QOpenGLWidget):
         # Borders of the reference images, so one lying flat is still findable.
         self._draw_image_outlines(painter)
 
-        # The Scale tool's grip box (SketchUp's yellow box with green grips).
+        # The Scale tool's grip box (yellow box with green grips).
         self._draw_scale_box(painter)
         self._draw_section_planes(painter)
         # Tool-owned overlay (the Flip planes; the future Axes gizmo): a tool
@@ -5786,7 +6072,7 @@ class Viewport(QOpenGLWidget):
                 painter.drawLine(QPointF(px - 8, py - 8), QPointF(px + 8, py + 8))
                 painter.drawLine(QPointF(px - 8, py + 8), QPointF(px + 8, py - 8))
         elif snap.kind == "center":
-            # The centre of a circle: a filled dot, as SketchUp draws it.
+            # The centre of a circle: a filled dot.
             painter.setPen(halo)
             painter.setBrush(Qt.NoBrush)
             painter.drawEllipse(QPointF(px, py), 6.5, 6.5)
@@ -5805,7 +6091,7 @@ class Viewport(QOpenGLWidget):
             painter.setBrush(QColor.fromRgbF(r, g, b, 0.30))
             painter.drawRect(rect)
         elif snap.kind in ("midpoint", "arc_midpoint"):
-            # Cyan diamond, SketchUp-style.
+            # Cyan diamond.
             diamond = QPolygonF([
                 QPointF(px, py - 9), QPointF(px + 9, py),
                 QPointF(px, py + 9), QPointF(px - 9, py),
@@ -5832,7 +6118,7 @@ class Viewport(QOpenGLWidget):
             painter.setPen(mark)
             painter.drawEllipse(QPointF(px, py), 6.5, 6.5)
 
-        # Tooltip text next to the marker (SketchUp shows "On Edge", etc.).
+        # Tooltip text next to the marker ("On Edge", etc.).
         label = self._SNAP_LABELS.get(snap.kind)
         if snap.kind == "aligned" and snap.axis == "z":
             label = "Level with point"
@@ -5856,7 +6142,7 @@ class Viewport(QOpenGLWidget):
 
     def _edit_group_box_corners(self):
         """The eight corners of the dashed box around the group being edited
-        — the visual cue that you are INSIDE it (SketchUp draws the same
+        — the visual cue that you are INSIDE it (the classic dashed
         box) — or None. Drawn in the GL pass, depth-tested."""
         group = self.scene.edit_group
         if group is None:
@@ -5871,7 +6157,7 @@ class Viewport(QOpenGLWidget):
         from core.group import oriented_box_corners
         return oriented_box_corners(*self._group_obb(group))
 
-    # ---- Section planes (SketchUp sections) ----------------------------------
+    # ---- Section planes ------------------------------------------------------
     def _set_section_clip(self, on: bool) -> None:
         """Enable/disable the active section cut around a model-geometry pass
         (``gl_ClipDistance`` in basic.vert). No-op when no cut is active."""
@@ -5890,8 +6176,8 @@ class Viewport(QOpenGLWidget):
 
     def section_plane_frame(self, sp) -> list:
         """Four world corners of the plane's drawn frame: the model's bounds
-        projected onto the plane, with a margin (SketchUp sizes the plane
-        object to the model)."""
+        projected onto the plane, with a margin (the plane object is sized
+        to the model)."""
         u, v = plane_axes(sp.normal)
         lo, hi = self.scene.bounds()
         if lo is None:
@@ -5952,7 +6238,7 @@ class Viewport(QOpenGLWidget):
                 width = 1.4
             if selected:
                 width += 1.2
-            # SketchUp draws the frame edges dashed.
+            # The frame edges are drawn dashed.
             pen = QPen(col, width, Qt.SolidLine if selected else Qt.DashLine)
             painter.setPen(pen)
             for a, b in px:
@@ -5971,7 +6257,7 @@ class Viewport(QOpenGLWidget):
                     k = min(14.0, ln * 0.18) / ln
                     painter.drawLine(QPointF(c[0], c[1]),
                                      QPointF(c[0] + dx * k, c[1] + dy * k))
-            # SketchUp: the section SYMBOL rides in a little balloon at EVERY
+            # The section SYMBOL rides in a little balloon at EVERY
             # corner of the frame.
             symbol = (sp.symbol or "").strip()
             if symbol:
@@ -6068,12 +6354,12 @@ class Viewport(QOpenGLWidget):
         return segs
 
     def _draw_section_fill(self, mode, style) -> None:
-        """SketchUp 2018+ Section Fill: paint the areas where the active cut
+        """Section Fill: paint the areas where the active cut
         slices THROUGH a solid. Per-pixel GL capping — wherever the visible
         surface is a BACK face, the eye is looking at the inside of a solid
         opened by the clip, so the plane fills it. Open (non-watertight)
-        surfaces can leak the fill, exactly SketchUp's own troubleshoot
-        case. Lives in the style (style.section_fill), like SketchUp."""
+        surfaces can leak the fill, the classic troubleshoot
+        case. Lives in the style (style.section_fill)."""
         if getattr(self, "_clip_vec", None) is None:
             return
         if not getattr(style, "section_fill", True):
@@ -6134,7 +6420,7 @@ class Viewport(QOpenGLWidget):
         self._set_section_clip(True)
 
     def _draw_section_cut_edges(self) -> None:
-        """SketchUp's thick section-cut lines: quads in the cut plane, sized
+        """Thick section-cut lines: quads in the cut plane, sized
         ~2.5 px, nudged toward the CLIPPED side so they never z-fight the
         remaining geometry. Skipped when cuts are hidden."""
         if getattr(self, "_clip_vec", None) is None:
@@ -6256,7 +6542,7 @@ class Viewport(QOpenGLWidget):
                 QVector3D(px + ux * hi, py + uy * hi, pz + uz * hi))
 
     def _draw_scale_box(self, painter: QPainter) -> None:
-        """SketchUp's scaling box: yellow edges, green grips, the grabbed grip
+        """The scaling box: yellow edges, green grips, the grabbed grip
         and its anchor in red. Drawn from whatever the active tool reports via
         ``scale_box_state()`` (duck-typed, so this file needs no tool import);
         while an operation is live the box rides the same matrix the geometry
@@ -6268,7 +6554,7 @@ class Viewport(QOpenGLWidget):
         state = state_fn()
         if state is None:
             return
-        box_pen = QPen(QColor(214, 174, 0), 1)          # SketchUp yellow
+        box_pen = QPen(QColor(214, 174, 0), 1)          # grip-box yellow
         painter.setPen(box_pen)
         for a, b in state["segments"]:
             seg = self._clip_segment_front(a, b)
@@ -6333,7 +6619,7 @@ class Viewport(QOpenGLWidget):
                 (x0 + t1 * dx, y0 + t1 * dy))
 
     def _draw_guides(self, painter: QPainter) -> None:
-        """The small crosses of guide POINTS, SketchUp-style scaffolding.
+        """The small crosses of guide POINTS, the usual scaffolding.
 
         Guide LINES are not here any more: they are drawn in the GL pass so
         the depth buffer hides them behind geometry (issue #23). A cross is
@@ -6577,7 +6863,7 @@ class Viewport(QOpenGLWidget):
         """Left edge of a leader-text block whose leader ends at ``p_pos``.
 
         The block sits on the side of the leader end AWAY from the anchor
-        (SketchUp): to the right when the anchor is left of the label, to the
+        (the usual convention): to the right when the anchor is left of the label, to the
         LEFT when the leader arrives from the right — otherwise the leader
         runs straight through the words (Marco's "Pileta de piedra basalto"
         label, 2026-09-02). Shared by the paint pass and the text pick so
@@ -6745,7 +7031,7 @@ class Viewport(QOpenGLWidget):
         px, py = pixel
         # The same colours and words as the snap markers: a corner is the
         # endpoint green, an edge the on-edge red, a face the on-face blue
-        # — SketchUp says "On edge" while you push level with one.
+        # — the classic cue says "On edge" while you push level with one.
         from core.snap import COLOR_ENDPOINT, COLOR_ON_EDGE, COLOR_ON_FACE
         rgb, label = {
             "edge": (COLOR_ON_EDGE, "on_edge"),
@@ -7029,7 +7315,7 @@ class Viewport(QOpenGLWidget):
                 return own
         captured = getattr(tool, "work_plane", None) if tool is not None else None
         if captured is not None:
-            # SketchUp's escape hatch: orbiting down to the horizon means "I
+            # The escape hatch: orbiting down to the horizon means "I
             # want to draw UPWARD now". A first click on a horizontal face
             # (the ground, a slab) captures its plane and would pin the whole
             # chain flat forever; at near-horizon views, where the horizontal
@@ -7086,7 +7372,7 @@ class Viewport(QOpenGLWidget):
 
         base = self._start_point_plane(tool, start)
         if cursor is not None and self.axis_lock is None:
-            # SketchUp's On Face for the SECOND point (Move's target, the
+            # On Face for the SECOND point (Move's target, the
             # tape's far end, a line's end): the cursor over another face
             # lands ON that face. The axis inference still wins — a line
             # drawn straight up over a slab keeps rising instead of dropping
@@ -7562,7 +7848,7 @@ class Viewport(QOpenGLWidget):
                 # out in the style's back colour, its yellow base and blue
                 # panels gone («hice mirror a un componente y sus texturas
                 # desaparecen», Marco, 2026-09-11). Swapping two corners of
-                # each triangle keeps the front the front, as SketchUp does.
+                # each triangle keeps the front the front.
                 a = a.reshape(-1, 3, stride)[:, [0, 2, 1], :].reshape(-1, stride)
             return a.tobytes()
         try:
@@ -7842,7 +8128,7 @@ class Viewport(QOpenGLWidget):
         from core.materials import back_is_default
         for f in mesh.faces:
             if f.attrs.get("hidden"):
-                # SketchUp's Hide on a face: out of the chunk entirely — not
+                # Hide on a face: out of the chunk entirely — not
                 # drawn, not picked, not snapped. Its edges stay (below).
                 continue
             fattrs = effective_attrs(f.attrs, paint)
@@ -8308,7 +8594,7 @@ class Viewport(QOpenGLWidget):
         del_contexto = self._context_placements()
         tocables = {id(g) for g in del_contexto}
         # What the snap engine may LAND ON is the whole model. Inside a
-        # group SketchUp still infers against the rest — faded, but every
+        # group the snap still infers against the rest — faded, but every
         # corner and edge of it is a reference. Holding only the context
         # here meant no green dot on the pavement while moving a nested
         # group onto it («me debería salir un punto verde de la referencia»,
@@ -8646,7 +8932,7 @@ class Viewport(QOpenGLWidget):
         """The edge a CLICK means: like :meth:`pick_edge`, but an edge the
         user cannot see never wins — a soft edge (the seams of a smooth
         surface, which are not drawn) unless hidden geometry is shown, and
-        an edge behind the model. SketchUp's rule, and what made a
+        an edge behind the model. The usual rule, and what made a
         cylinder's side unclickable (@pacaeiro, issue #71: the invisible
         seams, front and back, took up to 90 % of the side at normal zoom).
         Tools that want the tube's seam as a reference keep pick_edge."""
@@ -8944,7 +9230,7 @@ class Viewport(QOpenGLWidget):
         """The edge under the cursor, loose OR a group's (as a world
         pseudo-edge with ``in_group``), nearest first — what the linear
         inferences hover: parallel / perpendicular to a component's edge,
-        the reference lock, Push/Pull level with it (SketchUp reads groups
+        the reference lock, Push/Pull level with it (groups are read
         from outside without opening them)."""
         loose = self.pick_edge(screen_x, screen_y)
         proj = self._gedge_screen()
@@ -8973,7 +9259,7 @@ class Viewport(QOpenGLWidget):
     POINT_INFERENCE_PX = 40.0
 
     def _component_origin_points(self, px: float, py: float) -> list:
-        """SketchUp's "Component Origin Point": each placed group's own
+        """The "Component Origin Point": each placed group's own
         origin (its insertion point), as a degenerate pseudo-edge when it
         lies near the cursor. One projection per placement."""
         import numpy as np
@@ -9005,7 +9291,7 @@ class Viewport(QOpenGLWidget):
         return out
 
     def _arc_midpoints(self, px: float, py: float) -> list:
-        """SketchUp's "Arc Midpoint": the middle of each loose arc's sweep
+        """The "Arc Midpoint": the middle of each loose arc's sweep
         (the point on the arc bisecting its two ends — not any facet's
         midpoint). Closed curves (circles) have none. Computed once per
         scene version, offered when near the cursor."""
@@ -9137,8 +9423,8 @@ class Viewport(QOpenGLWidget):
                 if seg is not None:
                     lines.append(_SnapEdge(*seg))
         near = self._nearby_group_edges(px, py) if px is not None else []
-        # What a transform tool is dragging must not attract snaps (SketchUp
-        # leaves the entities in motion out of inference; issue #19): the
+        # What a transform tool is dragging must not attract snaps (the
+        # entities in motion stay out of inference; issue #19): the
         # tool names the edges/groups in motion and they are dropped here.
         excl = getattr(self.active_tool, "snap_excluded", None)
         excl = excl() if callable(excl) else None
@@ -9153,7 +9439,12 @@ class Viewport(QOpenGLWidget):
             arcs = getattr(self, "_arc_midpoints", None)
             if arcs is not None:
                 near += arcs(px, py)
-        near += self._selection_box_points()
+        box_pts = self._selection_box_points()
+        if excl is not None and excl[1]:
+            # A selected group's box corners are the group itself: Scale
+            # dragging it must not land its grip on its own box (#233).
+            box_pts = self._selection_box_points(skip=excl[1])
+        near += box_pts
         valid = getattr(self, "_valid_center_ref", None)   # stub VPs in tests
         ref = valid() if callable(valid) else None
         if ref is not None:
@@ -9165,7 +9456,7 @@ class Viewport(QOpenGLWidget):
                                       center=True))
         sp = _active_cut(self.scene)
         if sp is not None:
-            # What the cut hides must not attract snaps (SketchUp): drop
+            # What the cut hides must not attract snaps: drop
             # edges whose BOTH endpoints are on the hidden side.
             def _kept(e):
                 return not (sp.side(e.a) > 1e-6 and sp.side(e.b) > 1e-6)
@@ -9303,7 +9594,7 @@ class Viewport(QOpenGLWidget):
         pos = placement_points(group, protos)
         frame = group_frame(group)
         if frame is not None:
-            # A group that knows its own axes is boxed on them — SketchUp's
+            # A group that knows its own axes is boxed on them — the
             # selection box and Scale grips follow the object's axes
             # (issue #44), turned however the object is.
             _o, x, y, z = frame_axes(frame)
@@ -9469,11 +9760,11 @@ class Viewport(QOpenGLWidget):
         self._center_ref = fresh
         return fresh
 
-    def _selection_box_points(self) -> list:
+    def _selection_box_points(self, skip=()) -> list:
         """The corners of a selected group's bounding box, as degenerate
         pseudo-edges so the snap engine offers them as endpoints.
 
-        SketchUp makes those corners grabbable: with a group selected they are
+        Those corners are grabbable: with a group selected they are
         what you take hold of to move it somewhere exact, and the green dot
         tells you the grab landed. The box is the group's selection cue here
         too (see ``_sync_edges``), so the corners were already on screen —
@@ -9483,6 +9774,8 @@ class Viewport(QOpenGLWidget):
         for ent in self.scene.selection:
             if not isinstance(ent, Group) or getattr(ent, "billboard", False):
                 continue
+            if id(ent) in skip:
+                continue
             from core.group import oriented_box_corners
             for p in oriented_box_corners(*self._group_obb(ent)):
                 pts.append(_SnapEdge(p, QVector3D(p)))
@@ -9491,7 +9784,7 @@ class Viewport(QOpenGLWidget):
     def _axis_source_cue(self, snap, px_x: float, px_y: float):
         """Before its first click, a tool that reads the model axes as a
         source (the Tape: ``axis_source``) shows the cursor is ON the red,
-        green or blue axis — SketchUp's small square on the axis line.
+        green or blue axis — the classic small square on the axis line.
         Without the cue the axis looked ungrabbable (Marco, testing
         Rafael's guide from an axis, 2026-09-21): the pick worked, nothing
         said so. Only where the engine found nothing better."""
@@ -9513,7 +9806,7 @@ class Viewport(QOpenGLWidget):
     def pick_axis(self, screen_x: float, screen_y: float):
         """The model axis line under the cursor — ``"x"`` / ``"y"`` /
         ``"z"`` — or ``None``. The Tape reads an axis as a guide source
-        (Rafael, Revisión 3: in SketchUp «pinchas el eje y sacas una guía
+        (Rafael, Revisión 3: «pinchas el eje y sacas una guía
         paralela a 20 m del origen» before anything is drawn)."""
         from core.guide import GUIDE_HALF_LEN
         from core import axes as _axes
@@ -9692,7 +9985,7 @@ class Viewport(QOpenGLWidget):
         return tris, hard, soft, soft_n
 
     def _effective_style(self):
-        """The display style this frame draws with (SketchUp Styles): the
+        """The display style this frame draws with (Styles): the
         composer's ``plano_style`` override maps onto the same face modes,
         then a ``style_override``, else the scene's active style. Shared by
         the paint pass and the snap engine so what the eye sees and what
@@ -9720,7 +10013,7 @@ class Viewport(QOpenGLWidget):
         """Copy the frame's depth out of the (multisampled) scene FBO into a
         single-sample one and read it back once. The overlay then answers
         «is this point hidden?» with a lookup instead of a ray cast against
-        the whole model: a SketchUp 2018 house with 25 dimensions spent
+        the whole model: a house from a 2018 .skp with 25 dimensions spent
         2.8 s of every frame casting 1350 rays against 284 000 triangles
         (Juan José Noriega's files, 26-09-2026); the read-back is ~8 ms."""
         try:
@@ -9806,7 +10099,7 @@ class Viewport(QOpenGLWidget):
         from being reported as occluded by its own face.
 
         X-ray and wireframe show everything, so nothing hides a snap there
-        (SketchUp: switch to X-ray to dimension the floor of a pool through
+        (the usual trick: switch to X-ray to dimension the floor of a pool through
         its water). Hidden-line and shaded keep the visible-only rule.
         """
         if self._effective_style().face_mode in ("xray", "wireframe"):
@@ -10023,8 +10316,8 @@ class Viewport(QOpenGLWidget):
     # ---- Tool management ----------------------------------------------------
     def set_active_tool(self, tool: Optional[Tool]) -> None:
         if self.active_tool is tool and self.nav_mode is None:
-            # Picking the tool you already hold starts it over, as SketchUp
-            # does: the first point is released, the locks let go. Issue
+            # Picking the tool you already hold starts it over, the classic
+            # behaviour: the first point is released, the locks let go. Issue
             # #34 (@pacaeiro): «If I'm drawing a line and have the first
             # point defined… if I press (L) again, the command should
             # reset». It used to be a no-op.
@@ -10070,12 +10363,12 @@ class Viewport(QOpenGLWidget):
         self.update()
 
     def _apply_tool_cursor(self) -> None:
-        """The pointer becomes the active tool's icon (SketchUp); Select and
+        """The pointer becomes the active tool's icon; Select and
         unknown tools keep the standard arrow.
 
         A tool that does something else under a modifier says so with the
         pointer: Paint holds Alt to SAMPLE a face's material instead of
-        painting it, and SketchUp swaps the bucket for an eyedropper while
+        painting it, and the cursor swaps the bucket for an eyedropper while
         it is down."""
         from PySide6.QtWidgets import QApplication
         from views.icons import tool_cursor
@@ -10090,14 +10383,14 @@ class Viewport(QOpenGLWidget):
             # explicitly whether Alt is down.
             if PaintTool.sample_armed or getattr(self, "_alt_down", False):
                 icon = "eyedropper"
-        # SketchUp's guide-mode plus: the Tape and the Protractor say with
+        # The guide-mode plus: the Tape and the Protractor say with
         # it whether this measurement will leave a guide behind (issue #29).
         plus = bool(getattr(self.active_tool, "cursor_plus", False))
         cur = (tool_cursor(icon, plus)
                if self.active_tool is not None else None)
         if cur is None and self.active_tool is not None:
             # A tool without a drawn icon can still ask for a stock Qt
-            # cursor (Position Texture shows SketchUp's hand).
+            # cursor (Position Texture shows a hand).
             shape = getattr(self.active_tool, "qt_cursor", None)
             if shape is not None:
                 from PySide6.QtGui import QCursor
@@ -10109,7 +10402,7 @@ class Viewport(QOpenGLWidget):
 
     def _apply_nav_cursor(self) -> None:
         """The pointer for a camera nav mode: orbit / pan / the magnifier
-        (SketchUp shows each navigation tool's own icon)."""
+        (each navigation tool shows its own icon)."""
         from views.icons import tool_cursor
         if self.nav_mode in ("orbit", "pan", "zoom", "zoom_window"):
             cur = tool_cursor(self.nav_mode)
@@ -10153,7 +10446,7 @@ class Viewport(QOpenGLWidget):
         # A classic group's snapshot becomes an identity INSTANCE of its
         # fresh mesh: every stamp is an O(1) sibling of the clipboard
         # prototype instead of a full deep copy per paste (the 230k-face
-        # hedge took seconds per stamp). SketchUp semantics hold: pasted
+        # hedge took seconds per stamp). Component semantics hold: pasted
         # copies share the definition until edited — begin_group_edit
         # already materializes instances on entry. The prototype's chunk is
         # pre-seeded from the SOURCE group's cached entry (content-identical
@@ -10265,7 +10558,7 @@ class Viewport(QOpenGLWidget):
 
     # ---- Group-edit context (Groups v2) --------------------------------------
     def begin_group_edit(self, group) -> None:
-        """Enter a group for editing (SketchUp double-click-into-group). A
+        """Enter a group for editing (double-click-into-group). A
         component instance opens on a world copy of its definition; the
         session's commands are remembered so leaving can fold them into ONE
         undoable share-back."""
@@ -10281,7 +10574,7 @@ class Viewport(QOpenGLWidget):
             # A copied GROUP shares its geometry with the other copies only
             # until it is edited: opening it makes it its own, one undo
             # step, instead of editing every copy like a component
-            # (issue #90 — SketchUp's groups behave the same way).
+            # (issue #90 — the classic behaviour of groups).
             from core.history import MakeUniqueCommand
             self.history.execute(MakeUniqueCommand(group))
         was_instance = (getattr(group, "xform", None) is not None
@@ -10330,7 +10623,7 @@ class Viewport(QOpenGLWidget):
         return " ▸ ".join(nombres) if nombres else ""
 
     def end_one_group_edit(self) -> None:
-        """Step out ONE level — SketchUp's Esc, which leaves you inside the
+        """Step out ONE level — Esc, which leaves you inside the
         parent when the group you were editing lived in another group."""
         self._leave_group_edit(todos=False)
 
@@ -10351,6 +10644,9 @@ class Viewport(QOpenGLWidget):
         self.reset_document_caches()
         seen = max(getattr(self, "_versions_seen", 0), self.scene.version, scene.version)
         scene.version = self._versions_seen = seen + 1
+        # A view preference, not document content: it follows the viewport.
+        scene.hide_similar_components = bool(
+            getattr(self.scene, "hide_similar_components", False))
         self.scene = scene
         self.history = history
         from core import units as _units
@@ -10426,6 +10722,25 @@ class Viewport(QOpenGLWidget):
         QSettings().setValue("display/edit_rest_mode", mode)
         # "hide" keeps the rest out of the VBOs entirely, so switching to or
         # from it changes what is uploaded, not just how it is drawn.
+        self._edges_version = -1
+        self.update()
+
+    def set_hide_similar_components(self, on: bool) -> None:
+        """Hide Similar Components: the other instances of the
+        component being edited leave the frame. Persisted like the rest
+        mode; the version bump re-keys the pick index."""
+        on = bool(on)
+        from PySide6.QtCore import QSettings
+        QSettings().setValue("display/hide_similar_components",
+                             "1" if on else "0")
+        if bool(getattr(self.scene, "hide_similar_components", False)) == on:
+            return
+        self.scene.hide_similar_components = on
+        if on:
+            for ent in list(self.scene.selection):
+                if self.scene.similar_hidden(ent):
+                    self.scene.selection.discard(ent)
+        self.scene.version += 1
         self._edges_version = -1
         self.update()
 
@@ -10519,7 +10834,7 @@ class Viewport(QOpenGLWidget):
             self._apply_tool_cursor()
 
     def set_nav_mode(self, mode: Optional[str]) -> None:
-        """Enter a SketchUp-style camera navigation mode ("orbit" / "pan").
+        """Enter a camera navigation mode ("orbit" / "pan").
 
         For trackpad users with no middle mouse button: while a nav mode is
         active the left-drag drives the camera (orbit or pan). The active
@@ -10549,7 +10864,7 @@ class Viewport(QOpenGLWidget):
 
     # ---- Input --------------------------------------------------------------
     def contextMenuEvent(self, ev) -> None:
-        """Right-click: select what's under the cursor (SketchUp-style) and open
+        """Right-click: select what's under the cursor and open
         a context menu of actions relevant to the current selection."""
         win = self.window()
         # A tool with its own right-click menu (Position Texture: Done /
@@ -10584,7 +10899,7 @@ class Viewport(QOpenGLWidget):
 
     def mousePressEvent(self, ev) -> None:
         # A new gesture starts with the inferences back on: the Alt
-        # toggle lasts ONE operation, as in SketchUp. Mid-operation (the
+        # toggle lasts ONE operation. Mid-operation (the
         # second click of a line) the tool is still busy and nothing moves.
         self._release_linear_mode()
         self._input_t = _time_mod.monotonic()   # P0: input→paint latency
@@ -10599,14 +10914,14 @@ class Viewport(QOpenGLWidget):
             self._orbit_pivot = self._orbit_pivot_at(
                 ev.position().x(), ev.position().y())
             self._pan_depth = self._depth_of(self._orbit_pivot)
-            # SketchUp: while the wheel-drag lasts, the pointer becomes the
+            # While the wheel-drag lasts, the pointer becomes the
             # orbit (or pan) icon; the tool cursor comes back on release.
             from views.icons import tool_cursor
             cur = tool_cursor("pan" if self._pan_mode else "orbit")
             if cur is not None:
                 self.setCursor(cur)
             return
-        # SketchUp-style nav buttons: left-drag orbits/pans the camera.
+        # Nav buttons: left-drag orbits/pans the camera.
         # Hold Shift while orbiting to pan temporarily (matches MMB+Shift).
         if ev.button() == Qt.LeftButton and self.nav_mode is not None:
             if self.nav_mode == "zoom_window":
@@ -10627,12 +10942,12 @@ class Viewport(QOpenGLWidget):
                 self._depth_of(self._orbit_pivot_at(
                     ev.position().x(), ev.position().y()))
                 if self._pan_mode else None)
-            # The orbit/pan icon stays through the drag (SketchUp).
+            # The orbit/pan icon stays through the drag.
             self._apply_nav_cursor()
             return
         if ev.button() == Qt.LeftButton and self.active_tool is not None:
             # Triple click: a press landing right after a double-click at the
-            # same spot (Qt has no native triple event). SketchUp: select all
+            # same spot (Qt has no native triple event): select all
             # connected.
             if self._is_triple_click(ev):
                 self._last_double = None
@@ -10944,7 +11259,7 @@ class Viewport(QOpenGLWidget):
             # Only the tools that snap can use a centre; Select and
             # Push/Pull never pay for the fit. Hovering the rim ENCOURAGES
             # the centre like a corner: the dotted axis line then runs from
-            # it (SketchUp; Marco's capture, 2026-09-14 — a circle placed
+            # it (Marco's capture, 2026-09-14 — a circle placed
             # in line with another's centre).
             self._hover_center = self._update_center_ref(
                 ev.position().x(), ev.position().y())
@@ -10952,7 +11267,7 @@ class Viewport(QOpenGLWidget):
         # While a segment is being drawn, hovering an edge acquires it as a soft
         # parallel reference; the acquisition is dropped once nothing is in
         # progress, so it never goes stale across separate draws. A hovered
-        # CORNER is kept even before the first click (SketchUp's encouraged
+        # CORNER is kept even before the first click (an encouraged
         # point): the first corner of a window lines up with the door's on a
         # dotted line from it (Rafael's review, 2026-09-10).
         drawing = (
@@ -11059,7 +11374,7 @@ class Viewport(QOpenGLWidget):
                 return
             dx = end.x() - start.x()
             dy = end.y() - start.y()
-            # The box reads the same modifiers as a click (SketchUp): Shift
+            # The box reads the same modifiers as a click: Shift
             # toggles what it catches — the way you rub a wall out of a big
             # catch — Ctrl adds and Shift+Ctrl removes.
             mode = selection_mode(ev.modifiers())
@@ -11110,14 +11425,14 @@ class Viewport(QOpenGLWidget):
 
     def wheelEvent(self, ev) -> None:
         self._input_t = _time_mod.monotonic()   # P0: input→paint latency
-        # Zoom toward the cursor (SketchUp-style): keep the point under the
+        # Zoom toward the cursor: keep the point under the
         # pointer fixed on screen, not the origin. During a wheel burst the
         # focus is CACHED: zoom_to pins that world point, so re-picking every
         # tick both wasted ~25 ms/tick against a big model (the zoom felt
         # heavy) and let float error drift the pinned point.
         import time as _time
         steps = ev.angleDelta().y() / 120.0
-        if self._invert_wheel:          # Preferences ▸ General (SketchUp's
+        if self._invert_wheel:          # Preferences ▸ General (the usual
             steps = -steps              # Compatibility ▸ invert wheel)
         pos = ev.position()
         now = _time.monotonic()
@@ -11200,7 +11515,8 @@ class Viewport(QOpenGLWidget):
         if ev.type() == QEvent.ShortcutOverride and self._tool_claims_key(ev):
             ev.accept()
             return True
-        if ev.type() == QEvent.ShortcutOverride and self._value_buffer:
+        if (ev.type() == QEvent.ShortcutOverride and self._value_buffer
+                and not _is_chord(ev.modifiers())):
             t = ev.text().lower()
             if t and (t.isdigit() or t in (".", ",", ";", " ", "-", ":",
                                            "\"", "'", "/", "m", "c", "r",
@@ -11269,7 +11585,7 @@ class Viewport(QOpenGLWidget):
             return
 
         # 3b. Alt: cycle linear inferences — ONLY while an operation is in
-        #     progress, which is what SketchUp does. Its status bar offers
+        #     progress, the classic behaviour. Its status bar offers
         #     «Alt = Activar/desactivar "Inferencias lineales"» after the
         #     first click of a line and not before, and the three states are
         #     ours exactly: all → off → parallel/perp.
@@ -11313,7 +11629,7 @@ class Viewport(QOpenGLWidget):
     def _release_linear_mode(self) -> None:
         """Back to «all inferences» once the operation is over.
 
-        The toggle lasts ONE operation in SketchUp, and Marco checked it
+        The toggle lasts ONE operation (the classic behaviour), and Marco checked it
         against the real thing (2026-09-17): «desactivo con alt, termino de
         dibujar la línea, aprieto la flechita y aprieto otra vez la línea y
         está activo la inferencia». Ours was sticky — switched off it stayed
@@ -11336,7 +11652,7 @@ class Viewport(QOpenGLWidget):
     def _release_axis_lock_after_operation(self, committed: bool = False) -> None:
         """Drop the arrow-key axis lock when the operation that used it ends.
 
-        SketchUp's rule, reported by @pacaeiro (issue #30): «if you're
+        The classic rule, reported by @pacaeiro (issue #30): «if you're
         drawing a line and press Arrow to lock X and finish drawing the
         line, the X lock is released automatically. In ingeTrazo the Axis
         lock keeps active». Ours only came off in the Esc cascade, so the
@@ -11365,7 +11681,7 @@ class Viewport(QOpenGLWidget):
     def _cycle_linear_inference_mode(self) -> None:
         """Alt: cycle linear inferences all → off → parallel/perp → all.
 
-        SketchUp's own toggle, states and all — its status bar reads «Alt =
+        The classic toggle, states and all — the usual status bar reads «Alt =
         Activar/desactivar "Inferencias lineales"» while a line is being
         drawn. Offered only DURING an operation there, and here too since
         issue #26. Point snaps (endpoint, midpoint, …) stay on; explicit
@@ -11384,7 +11700,7 @@ class Viewport(QOpenGLWidget):
         """The Esc cascade (standard CAD), ONE step per press: a typed value
         buffer, then a sticky constraint (axis lock / reference), then the
         tool's in-progress action, then the selection, then — nothing in
-        progress — step out ONE level of the open group (SketchUp), and
+        progress — step out ONE level of the open group, and
         finally the tool's own cancel. The window's «Cancel current tool»
         action (shortcut Esc, which fires BEFORE this widget's key event)
         calls this too: it used to carry its own copy of the cascade,
@@ -11406,8 +11722,9 @@ class Viewport(QOpenGLWidget):
             tool.on_cancel(self)
             self._release_linear_mode()
             return
-        if self.scene.selection:
+        if self.scene.selection or self.extension_pick is not None:
             self.scene.clear_selection()
+            self.clear_extension_pick()
             self.update()
             return
         if self.scene.edit_group is not None:
@@ -11415,6 +11732,57 @@ class Viewport(QOpenGLWidget):
             return
         if tool is not None:
             tool.on_cancel(self)
+
+    # ---- Items an extension lets the user select (issue #205) ---------------
+    #: The one extension item selected — ``(entry, item_id, scene version)``
+    #: — or None. Kept APART from ``scene.selection``, which only ever holds
+    #: the model's own entities, so nothing that walks the selection (Move,
+    #: layers, zoom, copy) meets a thing it does not know.
+    extension_pick = None
+
+    def pick_extension_item(self, px: float, py: float):
+        """The first extension item under the pixel, as ``(entry, id)``."""
+        for entry in getattr(self, "_ext_pickables", ()):
+            try:
+                item = entry["pick"](self, px, py)
+            except Exception:  # noqa: BLE001 — an extension's bug, not ours
+                import logging
+                logging.getLogger(__name__).exception("pickable failed")
+                continue
+            if item is not None:
+                return entry, item
+        return None
+
+    def set_extension_pick(self, hit) -> None:
+        """Select one extension item (``hit`` from pick_extension_item),
+        telling the extension what was let go and what was taken."""
+        self.clear_extension_pick()
+        entry, item = hit
+        self.extension_pick = (entry, item, self.scene.version)
+        if entry.get("on_select") is not None:
+            entry["on_select"](item)
+        self.update()
+
+    def clear_extension_pick(self, notify: bool = True) -> None:
+        pick = self.extension_pick
+        self.extension_pick = None
+        if pick is not None and notify and pick[0].get("on_select") is not None:
+            pick[0]["on_select"](None)
+
+    def delete_extension_pick(self) -> bool:
+        """Supr on a selected extension item: the extension deletes it (as
+        its own undo step). A pick older than the document's last change
+        is dropped instead — after an undo the id may name another item."""
+        pick = self.extension_pick
+        if pick is None:
+            return False
+        entry, item, version = pick
+        self.clear_extension_pick()
+        if version != self.scene.version or entry.get("delete") is None:
+            return version != self.scene.version
+        entry["delete"](item)
+        self.update()
+        return True
 
     def release_constraints(self) -> bool:
         """Drop the sticky drawing constraints — the arrow-key axis lock and
@@ -11523,7 +11891,7 @@ class Viewport(QOpenGLWidget):
     def _alt_tapped(self) -> bool:
         """A clean Alt tap (press and release, nothing in between) toggles
         Paint's eyedropper and it STAYS until one sample is taken or Alt is
-        tapped again — SketchUp since 2021.1 (Marco, 2026-09-23: «se alterna
+        tapped again — the usual behaviour (Marco, 2026-09-23: «se alterna
         con Alt, no es que se mantenga presionado»). Holding Alt and
         clicking still samples, as before."""
         if self.nav_mode is not None or getattr(
@@ -11591,7 +11959,7 @@ class Viewport(QOpenGLWidget):
 
     def _capture_shift_lock(self) -> None:
         """On Shift press, freeze the active inference's direction so it holds
-        even as the cursor wanders off it (SketchUp's inference lock)."""
+        even as the cursor wanders off it (inference lock)."""
         self._shift_lock = None
         snap = self.last_snap
         tool = self.active_tool
@@ -11620,13 +11988,13 @@ class Viewport(QOpenGLWidget):
         - ``"3;4;5"`` or ``"3 4 5"``       → 3D delta from the start point
                                               (passed as a ``(dx, dy, dz)`` tuple).
         - ``"-2"``                          → negative value (tools that take a
-                                              direction flip it, SketchUp-style).
+                                              direction flip it).
         - ``"30cm"`` / ``"1500mm"`` / ``"2m"`` → unit suffix per field; bare
                                               numbers are metres (project unit).
         Comma is the decimal separator; ``;`` and space are field
-        separators (SketchUp convention adapted to our locale) -- except for
+        separators (the usual convention adapted to our locale) -- except for
         a tool that only takes several values (``vcb_comma_lists``, the
-        Rectangle): there ``200,100`` is two fields, as in SketchUp (#152).
+        Rectangle): there ``200,100`` is two fields (#152).
         See :meth:`_parse_value_buffer`.
         """
         if self.active_tool is None:
@@ -11657,7 +12025,7 @@ class Viewport(QOpenGLWidget):
                 self._set_value_buffer("")
                 return True
             if isinstance(value, tuple) and value and value[0] == "ratio":
-                # A slope typed as rise:run (SketchUp "3:12") — only angle
+                # A slope typed as rise:run ("3:12") — only angle
                 # tools understand it; it reaches them as plain degrees.
                 if getattr(self.active_tool, "accepts_angle_ratio", False):
                     self.active_tool.on_value(self, value[1])
@@ -11670,7 +12038,7 @@ class Viewport(QOpenGLWidget):
                 self._set_value_buffer("")
                 return True
             if isinstance(value, tuple) and value and value[0] == "array":
-                # SketchUp's arrays: "3x" (external) / "/3" (internal) right
+                # Arrays: "3x" (external) / "/3" (internal) right
                 # after a Move-copy. Only tools that declare it understand.
                 handler = getattr(self.active_tool, "on_array_value", None)
                 if handler is not None:
@@ -11684,7 +12052,7 @@ class Viewport(QOpenGLWidget):
                 self._set_value_buffer("")
                 return True
             if isinstance(value, tuple) and value and value[0] == "radius":
-                # SketchUp's "2r": the 2-point arc takes a RADIUS instead
+                # "2r": the 2-point arc takes a RADIUS instead
                 # of the bulge. Only tools that declare it understand.
                 handler = getattr(self.active_tool, "on_radius_value", None)
                 if handler is not None:
@@ -11692,7 +12060,7 @@ class Viewport(QOpenGLWidget):
                 self._set_value_buffer("")
                 return True
             if getattr(self.active_tool, "accepts_absolute_length", False):
-                # SketchUp's Scale reads "2" as a factor but "2m" as the new
+                # Scale reads "2" as a factor but "2m" as the new
                 # absolute size; the parser collapses both to metres, so the
                 # unit's presence is re-detected here and tagged, the same
                 # pattern as the arc's "2r" radius suffix.
@@ -11711,9 +12079,15 @@ class Viewport(QOpenGLWidget):
             self._set_value_buffer(self._value_buffer[:-1])
             return True
 
+        if _is_chord(getattr(ev, "modifiers", lambda: Qt.NoModifier)()):
+            # Alt+1, Ctrl+2…: a shortcut, not a digit for the value box. It
+            # was taken as one while a value was being typed, so the view
+            # shortcut never fired and each try added a «1» — a 35-digit
+            # number, inf in the geometry's floats, then NaN (#185).
+            return False
         arrays = getattr(self.active_tool, "accepts_array", False)
         if arrays and text == "*":
-            # "*3" / "3*": the array multiplier (SketchUp also takes "x").
+            # "*3" / "3*": the array multiplier ("x" works too).
             self._set_value_buffer(self._value_buffer + text)
             return True
         if arrays and text.lower() == "x" and self._current_token_tail():
@@ -11729,12 +12103,12 @@ class Viewport(QOpenGLWidget):
                      or text.lower() in ("m", "c", "r", "i", "n", "f", "t")):
             # A field separator (space / ;) with an empty buffer isn't VCB
             # input — let it fall through so Space can act as the Select
-            # shortcut (SketchUp-style). It only separates fields mid-number.
+            # shortcut. It only separates fields mid-number.
             if text in (";", " ") and not self._value_buffer:
                 return False
             # A unit letter with an empty buffer is a tool shortcut (M = Move,
             # C = Circle, R = Rectangle), not VCB input — only buffer it
-            # after a digit. "r" is SketchUp's radius suffix for arcs (2r).
+            # after a digit. "r" is the radius suffix for arcs (2r).
             if (text.lower() in ("m", "c", "r", "i", "n", "f", "t")
                     and not self._current_token_tail()):
                 return False
@@ -11745,7 +12119,7 @@ class Viewport(QOpenGLWidget):
             # Minus only opens a token (a sign, not an operator).
             if text == "-" and self._current_token_tail():
                 return True
-            # Colon (slope rise:run, SketchUp "3:12"): mid-token only, once.
+            # Colon (slope rise:run, "3:12"): mid-token only, once.
             if text == ":":
                 tail = self._current_token_tail()
                 if not tail or ":" in self._value_buffer:
@@ -11767,7 +12141,7 @@ class Viewport(QOpenGLWidget):
         ``on_value`` accepts the arity it understands and ignores the rest.
         Fields may carry a unit suffix — ``m``/``cm``/``mm``, and imperial
         ``in`` or ``"``, ``ft`` or ``'``, feet-and-inches ``1'6"``, fractions
-        ``3/4"`` (SketchUp's forms, so a 2×4 is typed ``2";4"`` while the
+        ``3/4"`` (the usual forms, so a 2×4 is typed ``2";4"`` while the
         span stays ``3.2``). Bare numbers are metres, and a leading minus is
         kept (direction tools flip on it).
 
@@ -11776,22 +12150,22 @@ class Viewport(QOpenGLWidget):
         2.5 × 1.2 -- Spanish and Portuguese write decimals that way) --
         EXCEPT when ``comma_lists`` is set and the entry has no ``;`` and no
         space: then commas separate fields, so ``200,100`` is 200 × 100 as
-        in SketchUp. ``comma_lists`` is the caller's word that the tool takes
+        usual. ``comma_lists`` is the caller's word that the tool takes
         only several values (the Rectangle), where a lone decimal could never
         be meant; a user who wants decimals there separates with ``;``
-        (``1,5;2,5``), which is SketchUp's own rule in comma-decimal locales."""
+        (``1,5;2,5``), which is the usual rule in comma-decimal locales."""
         if (comma_lists and ";" not in buffer
                 and not any(ch.isspace() for ch in buffer.strip())):
             buffer = buffer.replace(",", " ")
         normalized = buffer.replace(",", ".").replace(";", " ")
         stripped = normalized.strip()
-        # SketchUp's arrays after a copy: "3x" / "3*" / "*3" (external) and
+        # Arrays after a copy: "3x" / "3*" / "*3" (external) and
         # "/3" / "3/" (internal). Only tools with ``accepts_array`` get them.
         m = re.fullmatch(r"(?:(\d+)\s*[x*]|[x*]\s*(\d+))", stripped.lower())
         if m is not None:
             return ("array", int(m.group(1) or m.group(2)), "x")
         # "5x10m": five copies ten metres apart in one entry (#111) — the
-        # count and the spacing that SketchUp asks for in two steps.
+        # count and the spacing that would otherwise take two steps.
         m = re.fullmatch(r"(\d+)\s*[x*]\s*(.+)", stripped.lower())
         if m is not None:
             step = Viewport._parse_value_buffer(m.group(2))
@@ -11809,7 +12183,7 @@ class Viewport(QOpenGLWidget):
                 return None
             return ("radius", float(m.group(1)))
         if stripped.lower().endswith("s") and ":" not in stripped:
-            # SketchUp's "12s": the segment count of an arc / the sides of
+            # "12s": the segment count of an arc / the sides of
             # a circle. Only tools that declare it understand.
             import re as _re
             m = _re.fullmatch(r"(\d+)s", stripped.lower())
@@ -11817,7 +12191,7 @@ class Viewport(QOpenGLWidget):
                 return None
             return ("segments", int(m.group(1)))
         if ":" in normalized:
-            # Slope as rise:run (SketchUp "3:12", "1:6") → ("ratio", degrees).
+            # Slope as rise:run ("3:12", "1:6") → ("ratio", degrees).
             m = re.fullmatch(
                 r"\s*(-?(?:\d+\.?\d*|\.\d+)):(\d+\.?\d*|\.\d+)\s*", normalized)
             if m is None:

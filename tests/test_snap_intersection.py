@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""Edge / guide-line intersection inference — SketchUp's green X.
+"""Edge / guide-line intersection inference — the classic green X.
 
 Every other ``"intersection"`` in the snap engine is directional (it needs an
 active lock line: an axis lock, a perpendicular draw, an extension). Two
@@ -132,7 +132,7 @@ def test_parallel_guides_are_not_an_intersection():
 
 def test_skew_guides_do_not_invent_a_point():
     # Cross in projection but 1 m apart in Z → they never actually meet, so no
-    # green X (SketchUp only marks a real crossing).
+    # green X (only a real crossing is marked).
     a = _guide(V(0, 1, 0), (1, 0, 0))
     c = _guide(V(2, 0, 1), (0, 1, 0))
     scene = _scene(a, c)

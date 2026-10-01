@@ -13,7 +13,7 @@ layout(location = 5) in vec4 a_inst2;
 layout(location = 6) in vec4 a_inst3;
 
 uniform mat4 u_mvp;
-// Active section cut (SketchUp): world-space plane as (n, d) with the KEPT
+// Active section cut: world-space plane as (n, d) with the KEPT
 // side where dot(n, p) + d >= 0. Enabled only around the model-geometry
 // passes (sky, axes, terrain, previews stay uncut). All vertex buffers are
 // WORLD coordinates (group chunks bake their transform), so one plane
@@ -26,6 +26,10 @@ out vec3 v_color;
 // World position for the shadow lookup (every buffer is world-space or
 // carries its instance matrix, so this is exact for both).
 out vec3 v_world;
+// The vertex's clip position, un-interpolated: along a line every fragment
+// gets the PROVOKING vertex's, so the fragment shader can measure how far
+// along the line it is — the dash of Back Edges (u_stipple 4, issue #234).
+flat out vec4 v_line_clip;
 
 void main() {
     v_uv = a_uv;
@@ -40,4 +44,5 @@ void main() {
         ? dot(world, u_clip_plane)
         : 1.0;
     gl_Position = u_mvp * world;
+    v_line_clip = gl_Position;
 }

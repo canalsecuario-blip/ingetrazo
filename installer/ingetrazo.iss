@@ -74,17 +74,17 @@ english.SkpDefault=Open .skp files with IngeTrazo (double-click)
 english.FileAssociations=File associations:
 english.IgzDocument=IngeTrazo document
 english.DaeModel=COLLADA model (IngeTrazo)
-english.SkpModel=SketchUp model (IngeTrazo)
+english.SkpModel=SKP model (IngeTrazo)
 spanish.SkpDefault=Abrir archivos .skp con IngeTrazo (doble clic)
 spanish.FileAssociations=Asociaciones de archivos:
 spanish.IgzDocument=Documento de IngeTrazo
 spanish.DaeModel=Modelo COLLADA (IngeTrazo)
-spanish.SkpModel=Modelo de SketchUp (IngeTrazo)
+spanish.SkpModel=Modelo SKP (IngeTrazo)
 brazilianportuguese.SkpDefault=Abrir arquivos .skp com o IngeTrazo (clique duplo)
 brazilianportuguese.FileAssociations=Associações de arquivos:
 brazilianportuguese.IgzDocument=Documento do IngeTrazo
 brazilianportuguese.DaeModel=Modelo COLLADA (IngeTrazo)
-brazilianportuguese.SkpModel=Modelo do SketchUp (IngeTrazo)
+brazilianportuguese.SkpModel=Modelo SKP (IngeTrazo)
 
 [Tasks]
 Name: "skpdefault"; Description: "{cm:SkpDefault}"; \
@@ -133,8 +133,8 @@ Root: HKA; Subkey: "Software\Classes\IngeTrazo.Document\shell\open\command"; \
 
 ; ── .dae / .skp — standard interchange formats: "Open with" only ────────────
 ; We DO NOT take over the default program or the file icon (Windows ties the
-; shown icon to the default handler, and stealing .dae/.skp from Blender/
-; SketchUp would surprise the user). Instead we register a ProgId and add it to
+; shown icon to the default handler, and stealing .dae/.skp from the
+; programs the user already has would surprise them). Instead we register a ProgId and add it to
 ; each extension's OpenWithProgids list, so IngeTrazo appears in the right-click
 ; "Open with" menu. The ProgId carries the branded icon, which only takes visual
 ; effect if the user later chooses IngeTrazo as the default for these files.
@@ -159,7 +159,7 @@ Root: HKA; Subkey: "Software\Classes\.skp\OpenWithProgids"; \
     Flags: uninsdeletevalue
 ; Optional task: make IngeTrazo the DEFAULT opener for .skp (double-click).
 ; Checked by default — .skp now opens natively (openskp backend). Users who
-; keep SketchUp desktop installed can untick it; uninstall removes the value
+; prefer another program for .skp can untick it; uninstall removes the value
 ; and Windows falls back to the previous handler.
 Root: HKA; Subkey: "Software\Classes\.skp"; ValueType: string; \
     ValueData: "IngeTrazo.skp"; Tasks: skpdefault; Flags: uninsdeletevalue

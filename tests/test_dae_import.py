@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""COLLADA (.dae) import — SketchUp-style documents."""
+"""COLLADA (.dae) import — documents as .skp modellers export them."""
 from __future__ import annotations
 
 from core.orient import is_closed, signed_volume
@@ -86,7 +86,7 @@ def test_y_up_and_inches_convert_to_zup_metres(tmp_path):
 
 
 def test_instanced_component_with_transform(tmp_path):
-    # SketchUp components: geometry lives in library_nodes, the scene
+    # Exported components: geometry lives in library_nodes, the scene
     # instances it with a transform.
     body = f"""<?xml version="1.0"?>
 <COLLADA {_NSDECL} version="1.4.1">
@@ -123,8 +123,8 @@ def test_instanced_component_with_transform(tmp_path):
     assert 10.0 in xs and 11.0 in xs               # the translate applied
 
 
-def test_big_import_mirrors_sketchup_groups(tmp_path, monkeypatch):
-    """A reference-size DAE splits into one Group per SketchUp assembly
+def test_big_import_mirrors_the_source_groups(tmp_path, monkeypatch):
+    """A reference-size DAE splits into one Group per source assembly
     (group / component instance / the root's own loose geometry) instead of
     one monolithic blob — so a farola is selectable/movable on its own and
     the loose editing mesh never swallows the model."""
@@ -158,7 +158,7 @@ def test_big_import_mirrors_sketchup_groups(tmp_path, monkeypatch):
   </library_nodes>
   <library_visual_scenes>
     <visual_scene id="scene">
-      <node id="root" name="SketchUp">
+      <node id="root" name="Model">
         <instance_geometry url="#tri"/>
         <node id="f1" name="farola"><translate>10 0 0</translate>
           <instance_node url="#comp"/></node>
@@ -177,7 +177,7 @@ def test_big_import_mirrors_sketchup_groups(tmp_path, monkeypatch):
     load_dae(scene, p)
     assert not scene.mesh.faces                     # nothing lands loose
     names = sorted(g.name for g in scene.groups)
-    assert names == ["SketchUp", "farola", "pergola"]
+    assert names == ["Model", "farola", "pergola"]
     by_name = {g.name: g for g in scene.groups}
     assert len(by_name["pergola"].mesh.faces) == 1  # quad fused back
     # the farola instance carries its baked transform
@@ -198,7 +198,7 @@ def test_empty_document_raises(tmp_path):
 
 def _textured_quad_dae(tmp_path, image_name="brick.png"):
     """A quad textured with a real image file, split into two triangles with
-    explicit TEXCOORDs (offsets 0=vertex, 1=uv) — the SketchUp export shape."""
+    explicit TEXCOORDs (offsets 0=vertex, 1=uv) — the shape of the reference .dae."""
     import shutil
     img = tmp_path / image_name
     from core.paths import app_root
@@ -295,7 +295,7 @@ def test_textured_import_missing_image_falls_back_to_color(tmp_path):
 
 def test_faceme_sprite_imports_as_mesh_billboard(tmp_path):
     """A component that is a single vertical plane textured with an
-    alpha-cutout image (SketchUp face-me people/animals/trees) imports as a
+    alpha-cutout image (face-me people/animals/trees) imports as a
     billboard group whose geometry turns toward the camera — COLLADA drops
     the 'always face camera' flag, so the shape+alpha heuristic recovers it."""
     p, img = _textured_quad_dae(tmp_path, image_name="sprite.png")
@@ -334,7 +334,7 @@ def test_opaque_photo_panel_stays_static(tmp_path):
 def test_repeated_components_share_one_prototype(tmp_path, monkeypatch):
     """A component instanced several times imports as SHARED-prototype
     instance groups: one mesh, N transforms — the memory lever for big
-    SketchUp files. Moving one instance must not touch its siblings."""
+    exported models. Moving one instance must not touch its siblings."""
     quad = """
     <geometry id="quad"><mesh>
       <source id="qp"><float_array id="qpa" count="12">0 0 0  1 0 0  1 1 0  0 1 0</float_array>
@@ -355,7 +355,7 @@ def test_repeated_components_share_one_prototype(tmp_path, monkeypatch):
   </library_nodes>
   <library_visual_scenes>
     <visual_scene id="scene">
-      <node id="root" name="SketchUp">
+      <node id="root" name="Model">
         <node id="i1"><instance_node url="#comp"/></node>
         <node id="i2"><translate>10 0 0</translate><instance_node url="#comp"/></node>
         <node id="i3"><translate>20 0 0</translate><instance_node url="#comp"/></node>

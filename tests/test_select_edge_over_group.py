@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """A loose line drawn on a group's face is selectable by clicking it: the
-visible edge outranks the group behind it (SketchUp). A line hidden behind
+visible edge outranks the group behind it. A line hidden behind
 the group does not steal the click. (Marco, 2026-09-04: 'hice una línea en
 la cara de ese bloque, quiero seleccionarla y no selecciona')."""
 from __future__ import annotations

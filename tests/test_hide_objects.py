@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""SketchUp's Hide on OBJECTS (groups and components), and scenes that
+"""Hide on OBJECTS (groups and components), and scenes that
 remember it.
 
 Rafael, 2026-09-16 (38:40): «yo lo que quería hacer era una escena en
@@ -75,8 +75,8 @@ def test_hide_command_takes_the_object_out_of_sight_and_undo_brings_it_back():
 
 
 def test_hide_command_also_hides_faces_and_edges():
-    """SketchUp hides faces too (Marco, 2026-09-18: «en SketchUp también
-    puedes ocultar caras»)."""
+    """Hide works on faces too (Marco, 2026-09-18: «también puedes
+    ocultar caras»)."""
     scene = Scene()
     history = History(scene)
     _box(scene.mesh)

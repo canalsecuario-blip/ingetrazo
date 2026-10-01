@@ -17,6 +17,5 @@ this file is the reminder.
 
 Sandbox: wayland + fallback-x11 + dri + `--filesystem=home`, **plus
 network** — unlike IngeCAD, IngeTrazo fetches base-map tiles, the terrain
-DEM and geocoding results (Track G). No skp2dae fallback inside the
-sandbox (it is a Wine satellite); the pure-Python openskp backend covers
-every .skp era natively.
+DEM and geocoding results (Track G). The pure-Python openskp backend
+covers every .skp era natively.

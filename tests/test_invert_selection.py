@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""SketchUp's Edit ▸ Invert Selection (Ctrl+Shift+I).
+"""Edit ▸ Invert Selection (Ctrl+Shift+I).
 
 What is selected drops out, everything else in the open context comes in —
 but only what a click or a box could pick: nothing hidden, nothing on a
@@ -165,7 +165,7 @@ def test_inside_a_group_only_its_contents_count():
 
 # ---- the window: menu, shortcut, status bar ---------------------------------
 
-def test_edit_menu_offers_it_with_sketchups_shortcut():
+def test_edit_menu_offers_it_with_the_usual_shortcut():
     from PySide6.QtGui import QAction
     from views.main_window import MainWindow
     win = MainWindow()

@@ -127,7 +127,7 @@ class SceneDatum:
     lat: float
     lon: float
     alt: float = 0.0
-    # North angle (SketchUp's "north angle"): where true north lies, in
+    # North angle: where true north lies, in
     # degrees CLOCKWISE from the model's +Y (green) axis. 0 = the green axis
     # points north. It turns the base map, terrain and every geographic
     # import under the model instead of the model under them — so a plaza

@@ -53,7 +53,7 @@ def test_delete_erases_the_hovered_edge_and_its_face():
     vp._hover_entity = edge
     assert delete_selection_or_hover(vp) is True
     assert edge not in scene.mesh.edges
-    assert scene.mesh.faces == []                    # SketchUp: face follows
+    assert scene.mesh.faces == []                    # the face follows
 
 
 def test_a_selection_wins_over_the_hover():

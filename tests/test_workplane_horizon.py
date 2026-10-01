@@ -4,7 +4,7 @@
 
 A first click on a horizontal face (the ground, a slab) captures its plane and
 pins the drawing chain flat — which made drawing a line UPWARD impossible: the
-SketchUp gesture is to orbit down to the horizon, where the horizontal plane
+classic gesture is to orbit down to the horizon, where the horizontal plane
 is unreadable anyway, and draw up. At near-horizon views a HORIZONTAL captured
 plane now yields to the vertical plane through the start point; vertical
 captured planes (walls) are untouched.

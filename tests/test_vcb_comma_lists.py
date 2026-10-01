@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""#152: the Rectangle's VCB takes "200,100" as two values, like SketchUp,
+"""#152: the Rectangle's VCB takes "200,100" as two values, the usual convention,
 while a comma stays the decimal separator everywhere a single value makes
 sense ("2,5" is 2.5) and whenever ";" or a space already separates fields."""
 from __future__ import annotations

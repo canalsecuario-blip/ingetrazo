@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""Export ▸ SketchUp must survive a CLASSIC group nested in a container.
+"""The .skp writer must survive a CLASSIC group nested in a container.
 
 A group that owns its geometry has no ``xform``: its mesh is already in the
 coordinates its parent expects — that is what "classic" means, as opposed
@@ -11,7 +11,7 @@ off it, so exporting a container with such a child died with
 
 Found on 2026-09-17 exporting Marco's own Plaza Yanque to .skp — «Group 8»,
 a classic group with a mesh, sitting inside a container. His flagship model
-could not be exported to SketchUp at all.
+could not be exported to .skp at all.
 
 For a classic child the right placement is the IDENTITY: there is nothing
 to transform, the geometry is where it says it is.

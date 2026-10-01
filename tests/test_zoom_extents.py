@@ -76,7 +76,7 @@ def test_a_point_and_a_huge_model_stay_in_range():
 def test_zoom_extents_frames_the_scale_figure_in_a_new_document():
     """A new document holds only the scale figure; Zoom Extents used to do
     nothing there (the figure is left out of the scene bounds), where
-    SketchUp's frames the figure (Marco, 23-09)."""
+    the classic Zoom Extents frames the figure (Marco, 23-09)."""
     from PySide6.QtWidgets import QApplication
     QApplication.instance() or QApplication([])
     from views.main_window import MainWindow

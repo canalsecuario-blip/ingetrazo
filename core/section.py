@@ -1,13 +1,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""Section planes — SketchUp's sections (help.sketchup.com "Slicing a Model
-to Peer Inside").
+"""Section planes — slicing a model to peer inside.
 
 A section plane is an object in the model: an origin + a unit normal. The
 ACTIVE plane cuts the display — everything on the normal's side disappears
 (``Reverse`` flips it). Only ONE plane can be the active cut in the model
-context, exactly like SketchUp; placing a new plane makes it the active one.
-Planes carry a name and a symbol (SketchUp 2018+) shown on their frame.
+context, the usual convention; placing a new plane makes it the active one.
+Planes carry a name and a symbol shown on their frame.
 
 The cut is display-only scaffolding, never topology: geometry is untouched,
 the renderer clips (``gl_ClipDistance``), picks/snaps filter by the plane,
@@ -78,7 +77,7 @@ class SectionPlane:
         self.uid = _take_uid(uid)
 
     def flip(self) -> None:
-        """SketchUp's Reverse: the cut hides the other side."""
+        """Reverse: the cut hides the other side."""
         self.normal = -self.normal
 
     def side(self, p: QVector3D) -> float:

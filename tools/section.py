@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""Section Plane tool — SketchUp's Tools ▸ Section Plane.
+"""Section Plane tool — Tools ▸ Section Plane.
 
-Official flow (help.sketchup.com "Slicing a Model to Peer Inside"):
+Flow:
 - The plane glyph follows the cursor, aligned to the face underneath.
 - Hold Shift to LOCK the current orientation; the arrow keys orient the
   plane's normal to an axis — Up = blue (Z), Right = red (X), Left = green
@@ -30,6 +30,7 @@ from core.axes import AXES as _AXES  # noqa: E402
 
 class SectionPlaneTool(Tool):
     name = "Section Plane"
+    description = "Place a plane that cuts the model open to show its inside."
     uses_snap = True
 
     @property
@@ -62,7 +63,7 @@ class SectionPlaneTool(Tool):
 
     # ---- Input --------------------------------------------------------------
     def on_key(self, viewport, key: int, modifiers) -> bool:
-        # SketchUp: Up = blue (Z), Right = red (X), Left = green (Y),
+        # Arrow keys: Up = blue (Z), Right = red (X), Left = green (Y),
         # Down = parallel to face (back to hover inference).
         picks = {Qt.Key_Up: "z", Qt.Key_Right: "x", Qt.Key_Left: "y"}
         if key == Qt.Key_Down:
@@ -115,7 +116,7 @@ class SectionPlaneTool(Tool):
             if callable(sync):
                 sync()
         viewport.history.execute(PlaceSectionPlaneCommand(plane))
-        # SketchUp prompts for a name and symbol right after placing.
+        # Prompt for a name and symbol right after placing.
         prompt = getattr(window, "prompt_section_name", None)
         if prompt is not None:
             prompt(plane)
@@ -123,7 +124,7 @@ class SectionPlaneTool(Tool):
             "Section plane placed — double-click toggles the cut; "
             "Move/Rotate reposition it"), 4000)
         viewport.update()
-        # One plane per pick-up, then back to Select — SketchUp's tool ends
+        # One plane per pick-up, then back to Select — the tool ends
         # after placing (issue #62, @pacaeiro: «There's no need to create
         # several section planes continually»).
         back = getattr(window, "_activate_tool", None)
@@ -158,7 +159,7 @@ class SectionPlaneTool(Tool):
 
     def _toward_camera(self, n: QVector3D) -> QVector3D:
         """The cut hides the normal's side, and a freshly placed plane hides
-        the side the CAMERA is on (SketchUp: the plane faces you; what lies
+        the side the CAMERA is on (the plane faces you; what lies
         beyond stays until you move the plane into it). A face normal
         already points at the viewer; an axis lock or the ground default
         must be turned the same way — a fixed +Y with the camera south of

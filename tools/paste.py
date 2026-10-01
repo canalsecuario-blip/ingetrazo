@@ -4,8 +4,8 @@
 
 After Copy/Cut fills ``viewport.clipboard``, Paste activates this tool: the copied
 faces, edges and groups follow the cursor as a live preview (snapping like any
-draw), and a click stamps them into the scene ONCE and returns to Select
-(SketchUp). The clipboard is kept — paste again for another copy.
+draw), and a click stamps them into the scene ONCE and returns to Select.
+The clipboard is kept — paste again for another copy.
 """
 from __future__ import annotations
 
@@ -133,7 +133,7 @@ class PasteTool(Tool):
             return
         if not self.stamp(ctx.viewport, ctx.world - self._clip["ref"]):
             return
-        # One stamp per paste (SketchUp): hand back to Select. The clipboard
+        # One stamp per paste: hand back to Select. The clipboard
         # survives, so Ctrl+V stamps another copy.
         window = getattr(ctx.viewport, "window", None)
         window = window() if callable(window) else None
@@ -143,7 +143,7 @@ class PasteTool(Tool):
 
     @classmethod
     def in_place(cls, viewport) -> bool:
-        """Paste in Place (SketchUp): stamp the clipboard at the exact
+        """Paste in Place: stamp the clipboard at the exact
         coordinates it was copied from, no cursor placement. The tools work
         in world coordinates inside an open group too, so copying in one
         context and pasting in place in another moves geometry into or out

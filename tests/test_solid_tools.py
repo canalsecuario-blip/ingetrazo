@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""SketchUp's Solid Tools (core/solids.py, tools/solid_tools.py): what
-SketchUp's help says each one does, on two overlapping boxes."""
+"""Solid Tools (core/solids.py, tools/solid_tools.py): what the classic
+documentation says each one does, on two overlapping boxes."""
 from __future__ import annotations
 
 import math
@@ -64,7 +64,7 @@ def test_an_open_box_is_not_a_solid():
     assert solids.solid_volume(a) is None
 
 
-def test_nested_groups_disqualify_as_in_sketchup():
+def test_nested_groups_disqualify():
     a, b = _pair()
     a.adopt([b])
     assert solids.solid_volume(a) is None

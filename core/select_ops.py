@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""SketchUp's right-click ▸ Select: grow a selection by what it touches or
+"""Right-click ▸ Select: grow a selection by what it touches or
 by what it shares (issue #106, @pacaeiro).
 
 Every function answers from the CURRENT editing context — the loose mesh the
@@ -16,7 +16,7 @@ from core.mesh import Edge, Face
 
 def all_connected(entities) -> list:
     """Everything physically connected to *entities* — the whole solid —
-    walked through shared vertices (SketchUp's triple click)."""
+    walked through shared vertices (the classic triple click)."""
     seeds = []
     for e in entities:
         if isinstance(e, Face):
@@ -53,7 +53,7 @@ def all_connected(entities) -> list:
 
 def bounding_edges(entities) -> list:
     """The edges that outline the selected faces: those with exactly ONE of
-    the selected faces on them (SketchUp's Select ▸ Bounding Edges)."""
+    the selected faces on them (Select ▸ Bounding Edges)."""
     faces = {e for e in entities if isinstance(e, Face)}
     out = []
     seen = set()
@@ -82,8 +82,8 @@ def _face_edges(face):
 def material_key(face):
     """What «the same material» means for a face: its named material when
     it has one, otherwise its colour and texture image. ``None`` = unpainted
-    (the default material, which is a material too — SketchUp selects all
-    the unpainted faces from an unpainted one)."""
+    (the default material, which is a material too — the usual convention
+    selects all the unpainted faces from an unpainted one)."""
     attrs = getattr(face, "attrs", None) or {}
     if attrs.get("mat"):
         return ("mat", attrs["mat"])
@@ -111,7 +111,7 @@ def same_material(scene, entities) -> list:
 
 def same_layer(scene, entities) -> list:
     """Every edge, face and group in the current context on one of the
-    selected entities' layers (SketchUp's Select ▸ All on Same Tag)."""
+    selected entities' layers (Select ▸ All on Same Tag)."""
     layers = {layer_of(e) for e in entities
               if isinstance(e, (Face, Edge)) or _is_group(e)}
     if not layers:

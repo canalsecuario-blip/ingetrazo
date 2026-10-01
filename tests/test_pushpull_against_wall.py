@@ -5,7 +5,7 @@ meet outer face… push down working properly»).
 
 A square drawn on a step's lower tread, touching the riser, pulled UP: its
 side lands flat against the riser. That strip is inside the solid now, so
-the riser loses it and the side is never built — as in SketchUp. The riser
+the riser loses it and the side is never built — the classic result. The riser
 used to stay as an «interior partition» with the side standing on it, and
 the guard refused the pull; with that fixed, the riser and the tread (both
 U-shaped now) were probed from their vertex average, which sits in the

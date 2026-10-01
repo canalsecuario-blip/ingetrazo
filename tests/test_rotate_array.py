@@ -9,7 +9,7 @@ the rotate+copy angle, instead of quantity». The tool did not even declare
 ``accepts_array``, so the viewport dropped the "x" and only the digit
 reached it.
 
-SketchUp's behaviour, and the one these pin: after a rotate-copy, ``3x``
+The classic behaviour, and the one these pin: after a rotate-copy, ``3x``
 lays three copies at multiples of the angle (30° → 30/60/90) and ``/3``
 three copies dividing it (90° → 30/60/90). Retyping re-lays the array and
 the whole thing is ONE undo step.

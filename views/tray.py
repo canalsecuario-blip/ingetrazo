@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""Right-side dockable tray (SketchUp-style), built from QDockWidget.
+"""Right-side dockable tray, built from QDockWidget.
 
 Holds collapsible sections:
 - **Materiales** — a palette of colour + texture swatches ("En el modelo" and a
@@ -24,7 +24,6 @@ from PySide6.QtCore import QObject, QPoint, QRect, QSettings, QSize, Qt
 from PySide6.QtGui import QColor, QIcon, QImage, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
-    QColorDialog,
     QComboBox,
     QDateEdit,
     QDockWidget,
@@ -51,6 +50,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from views.color_dialog import get_color
 from core.i18n import tr
 from views.theme import style as theme_style
 from views.filedialogs import file_dialogs
@@ -187,7 +187,7 @@ def _color_pixmap(rgb, size=_SWATCH) -> QPixmap:
 
 
 def _default_pixmap(size=_SWATCH) -> QPixmap:
-    """SketchUp's «Default» material swatch: the front's cream and the
+    """The «Default» material swatch: the front's cream and the
     back's blue-grey split on the diagonal."""
     from PySide6.QtGui import QPainter, QPolygonF
     from PySide6.QtCore import QPointF
@@ -411,7 +411,7 @@ class BaseMapPanel(QWidget):
         self._coord_mode.setCurrentIndex(max(idx, 0))
         self._apply_coord_mode()
 
-        # North angle (SketchUp's north angle): turns the map, terrain and
+        # North angle: turns the map, terrain and
         # every geographic import UNDER the model — the model, its standard
         # views and axis locks stay square. 0 = the green axis points north.
         self._north_label = QLabel(tr("North:"))
@@ -1043,7 +1043,7 @@ class BaseMapPanel(QWidget):
 
 
 class ComponentsPanel(QWidget):
-    """SketchUp-style components tray: a grid of clickable thumbnails.
+    """Components tray: a grid of clickable thumbnails.
 
     The thumbnails are STATIC images — the 2D people are their own PNGs and
     the 3D starters ship pre-rendered PNGs in ``resources/components/thumbs``
@@ -1112,8 +1112,8 @@ class ComponentsPanel(QWidget):
         custom.clicked.connect(window._on_insert_faceme_image)
         lay.addWidget(custom)
 
-        # "In model": what THIS drawing contains, the way SketchUp's
-        # Components tray lists it. The grid above is a library to insert
+        # "In model": what THIS drawing contains, the way a components
+        # tray usually lists it. The grid above is a library to insert
         # from; it says nothing about what you already have, which is what
         # you actually look for when you want to find or re-place a piece.
         lay.addWidget(QLabel(f"<b>{tr('In model')}</b>"))
@@ -1163,7 +1163,7 @@ class ComponentsPanel(QWidget):
 
 
 class PartsPanel(QWidget):
-    """The parts of the selected component — SketchUp's Outliner, one level
+    """The parts of the selected component — an outliner, one level
     deep, measured like a cut list.
 
     Select a component made of parts (an imported model, or one regrouped
@@ -1632,7 +1632,7 @@ class MaterialsPanel(QWidget):
         self._preview.setFixedSize(_SWATCH, _SWATCH)
         self._preview.setFrameShape(QFrame.Box)
         row.addWidget(self._preview)
-        # SketchUp's «Default» swatch: paints the material OFF a side.
+        # The «Default» swatch: paints the material OFF a side.
         default_btn = _swatch_button(
             _default_pixmap(),
             tr("Default material (no material) — paint with it to remove "
@@ -1640,7 +1640,7 @@ class MaterialsPanel(QWidget):
         default_btn.clicked.connect(self._apply_default)
         root.addLayout(row)
 
-        # SketchUp's "edit material": tile width/height + rotation, tucked
+        # The usual "edit material": tile width/height + rotation, tucked
         # behind an Edit toggle so the panel stays clean. Edits the active
         # texture for future paints, and Apply re-stamps the selected
         # textured faces (undoable).
@@ -1688,7 +1688,7 @@ class MaterialsPanel(QWidget):
         edit_row.addWidget(self._rot_box)
         edit_row.addStretch(1)
 
-        # SketchUp's colourized material: a textured material also carries a
+        # Colourized material (.skp format): a textured material also carries a
         # COLOUR, and the image is re-tinted toward it. Two genuinely
         # different pictures — Shift keeps the stone's veining and moves it
         # in tone, Tint greyscales first and keeps only the lightness.
@@ -1767,7 +1767,7 @@ class MaterialsPanel(QWidget):
         theme_style(lbl, "color:{muted}; margin-top:6px; font-size:11px;")
         return lbl
 
-    # ---- Library (categorised, SketchUp-style) -------------------------------
+    # ---- Library (categorised) ------------------------------------------------
     #: Category ids from the manifest → display names (translated).
     CATEGORY_NAMES = {
         "brick": "Brick", "concrete": "Concrete", "stone": "Stone",
@@ -1825,7 +1825,7 @@ class MaterialsPanel(QWidget):
             root.addWidget(body)
             return grid
 
-        # ONE Colours section (SketchUp has a Colors category too): RAL
+        # ONE Colours section (the usual Colors category): RAL
         # Classic in code order — which is family order, yellows through
         # blacks, without carving the tray up into nine more headings to
         # click through. The eight unnamed swatches that used to sit at the
@@ -2041,8 +2041,12 @@ class MaterialsPanel(QWidget):
         mat = scene.materials.get(name)
         menu = QMenu(button)
         if color is not None:
+            # The dialog opens once the menu has closed: a modal opened
+            # inside the menu's own event loop came back without a colour.
+            from PySide6.QtCore import QTimer
             menu.addAction(tr("Edit colour…"),
-                           lambda: self._edit_named_color(name, color))
+                           lambda: QTimer.singleShot(
+                               0, lambda: self._edit_named_color(name, color)))
         if mat is not None:
             sub = menu.addMenu(tr("Finish for the render"))
             pic = (mat.texture or {}).get("path")
@@ -2081,7 +2085,7 @@ class MaterialsPanel(QWidget):
         existing = scene.materials.get(name)
         base = (existing.color if existing and existing.color
                 else tuple(current_rgb))
-        chosen = QColorDialog.getColor(
+        chosen = get_color(
             QColor.fromRgbF(*base[:3]), self,
             tr("Edit material: {name}", name=name))
         if not chosen.isValid():
@@ -2150,11 +2154,21 @@ class MaterialsPanel(QWidget):
 
     def _on_pick_tint(self) -> None:
         base = self._tint or (0.7, 0.7, 0.7)
-        chosen = QColorDialog.getColor(
-            QColor.fromRgbF(*base[:3]), self, tr("Tint the texture"))
+        colour_only = not PaintTool.current_texture
+        if colour_only and self._tint is None and \
+                not PaintTool.current_is_default:
+            base = PaintTool.current_color
+        chosen = get_color(
+            QColor.fromRgbF(*base[:3]), self,
+            tr("Colour") if colour_only else tr("Tint the texture"))
         if not chosen.isValid():
             return
-        self._tint = (chosen.redF(), chosen.greenF(), chosen.blueF())
+        rgb = (chosen.redF(), chosen.greenF(), chosen.blueF())
+        if colour_only and self._recolour_active(rgb):
+            # A plain colour changes at once: nothing to tint, no Apply.
+            self._refresh_preview()
+            return
+        self._tint = rgb
         if not self._tint_mode.isEnabled():
             self._tint_mode.setEnabled(True)
         self._refresh_tint_swatch()
@@ -2202,9 +2216,48 @@ class MaterialsPanel(QWidget):
             self._window.statusBar().showMessage(
                 tr("Texture updated on {n} faces", n=len(targets)), 2500)
         elif not PaintTool.current_texture:
-            self._window.statusBar().showMessage(
-                tr("Pick a texture (or select textured faces) first"), 2500)
+            # A plain colour is active: the Color row changes IT — the
+            # place everyone looks for (Marco, testing 0.5.7, tinted a
+            # colour material here and nothing happened: tinting needs a
+            # texture, and the right-click edit was out of sight).
+            if not self._recolour_active(self._tint):
+                self._window.statusBar().showMessage(
+                    tr("Pick a texture (or select textured faces) first"),
+                    2500)
         self._refresh_preview()
+
+    def _recolour_active(self, rgb) -> bool:
+        """Give the active plain colour ``rgb``: a named material is edited
+        and restamped on every face and group that wears it (one undo
+        step); an anonymous colour becomes the colour to paint next.
+        False when there is no colour to change."""
+        if rgb is None or PaintTool.current_is_default:
+            return False
+        rgb = tuple(float(c) for c in rgb[:3])
+        mat = PaintTool.current_material
+        scene = self._window.viewport.scene
+        if mat is not None and mat.name in scene.materials:
+            from core.history import RestampMaterialCommand
+            from core.materials import Material
+            old = scene.materials[mat.name]
+            new_mat = Material(mat.name, color=rgb, opacity=old.opacity,
+                               finish=old.finish)
+            self._window.viewport.history.execute(
+                RestampMaterialCommand(mat.name, new_mat))
+            self._window.viewport.notify_scene_changed()
+            PaintTool.current_material = new_mat
+            PaintTool.current_color = rgb
+            self._window.statusBar().showMessage(
+                tr("Material '{name}' updated on every face that wears it",
+                   name=mat.name), 3000)
+            return True
+        PaintTool.current_color = rgb
+        if mat is not None:
+            from core.materials import Material
+            PaintTool.current_material = Material(mat.name, color=rgb)
+        self._window.statusBar().showMessage(
+            tr("Active colour changed — click faces to paint it"), 3000)
+        return True
 
     def _apply_texture(self, path: str, size: float | None = None,
                        sw: float | None = None,
@@ -2225,7 +2278,7 @@ class MaterialsPanel(QWidget):
 
     def _add_color(self) -> None:
         r, g, b = PaintTool.current_color
-        chosen = QColorDialog.getColor(QColor.fromRgbF(r, g, b), self, tr("Color"))
+        chosen = get_color(QColor.fromRgbF(r, g, b), self, tr("Color"))
         if chosen.isValid():
             # Optional identity: a named colour becomes a registry material
             # (registered on first paint) and shows in per-material takeoffs.
@@ -2259,7 +2312,7 @@ class MaterialsPanel(QWidget):
         self._refresh_preview()
 
     def _apply_default(self) -> None:
-        """SketchUp's «Default» material: paint with it to take a side's
+        """The «Default» material: paint with it to take a side's
         material off (@pacaeiro, #47)."""
         PaintTool.current_is_default = True
         PaintTool.current_texture = None
@@ -2385,7 +2438,7 @@ class DimensionStylePanel(QWidget):
 
     def _pick_color(self) -> None:
         c = self._style().get("color", [45, 55, 75])
-        chosen = QColorDialog.getColor(QColor(c[0], c[1], c[2]), _dialog_parent(self),
+        chosen = get_color(QColor(c[0], c[1], c[2]), _dialog_parent(self),
                                        tr("Dimension color"))
         if chosen.isValid():
             self._style()["color"] = [chosen.red(), chosen.green(), chosen.blue()]
@@ -2399,7 +2452,7 @@ class DimensionStylePanel(QWidget):
 
 
 class StylesPanel(QWidget):
-    """Live editor for ``scene.display_style`` — SketchUp's Styles panel.
+    """Live editor for ``scene.display_style`` — the Styles panel.
 
     The top combo picks a style (built-ins + the user's saved library); the
     controls below edit the ACTIVE style in place, live — the viewport reads
@@ -2443,6 +2496,11 @@ class StylesPanel(QWidget):
         self._profiles = QCheckBox(tr("Profiles"))
         self._profiles.toggled.connect(self._apply_edits)
         grid.addWidget(self._profiles, 3, 0)
+        self._back_edges = QCheckBox(tr("Back edges"))
+        self._back_edges.setToolTip(tr(
+            "Draw the edges hidden behind faces as dashed lines."))
+        self._back_edges.toggled.connect(self._apply_edits)
+        grid.addWidget(self._back_edges, 3, 1)
 
         grid.addWidget(QLabel(tr("Front color:")), 4, 0)
         self._front_c = self._swatch(
@@ -2450,7 +2508,7 @@ class StylesPanel(QWidget):
             "front_color")
         grid.addWidget(self._front_c, 4, 1)
 
-        # SketchUp's Back color: the tint of faces seen from behind (the
+        # Back color: the tint of faces seen from behind (the
         # inside of a solid, or a reversed face).
         grid.addWidget(QLabel(tr("Back color:")), 5, 0)
         self._back_c = self._swatch(
@@ -2512,7 +2570,8 @@ class StylesPanel(QWidget):
     @staticmethod
     def _css(color) -> str:
         r, g, b = (max(0, min(255, round(c * 255))) for c in color[:3])
-        return f"background: rgb({r},{g},{b}); min-height: 18px;"
+        return (f"QAbstractButton {{ background: rgb({r},{g},{b}); "
+                "min-height: 18px; }")
 
     def refresh(self) -> None:
         """Mirror the active style and the user library (called on loads,
@@ -2538,6 +2597,7 @@ class StylesPanel(QWidget):
                 self._mode.findData(style.face_mode))
             self._edges.setChecked(style.edges)
             self._profiles.setChecked(style.profiles)
+            self._back_edges.setChecked(getattr(style, "back_edges", False))
             self._sky.setChecked(style.sky)
             self._fill.setChecked(style.section_fill)
             self._edge_c.setStyleSheet(self._css(style.edge_color))
@@ -2570,6 +2630,7 @@ class StylesPanel(QWidget):
         style.face_mode = self._mode.currentData()
         style.edges = self._edges.isChecked()
         style.profiles = self._profiles.isChecked()
+        style.back_edges = self._back_edges.isChecked()
         style.sky = self._sky.isChecked()
         style.section_fill = self._fill.isChecked()
         self._window._sync_style_menu()
@@ -2580,7 +2641,7 @@ class StylesPanel(QWidget):
         if style is None:
             return
         c = self._shown_color(attr)
-        chosen = QColorDialog.getColor(
+        chosen = get_color(
             QColor.fromRgbF(*(float(v) for v in c[:3])), _dialog_parent(self), title)
         if not chosen.isValid():
             return
@@ -2658,7 +2719,7 @@ class StylesPanel(QWidget):
 
 
 class ShadowsPanel(QWidget):
-    """SketchUp's Shadow Settings, driven by the REAL sun (core/sun.py):
+    """Shadow settings, driven by the REAL sun (core/sun.py):
     on/off, the local date and hour the sun stands at, and how dark the
     shade goes. Edits write ``scene.shadows`` (document data, saved in the
     ``.igz``) and repaint — the viewport re-derives the sun position and
@@ -2683,7 +2744,7 @@ class ShadowsPanel(QWidget):
         self._date.dateChanged.connect(self._on_date_edited)
         grid.addWidget(self._date, 1, 1)
 
-        # SketchUp's month bar: a day-of-year slider with the month initials
+        # The month bar: a day-of-year slider with the month initials
         # underneath — drag it and the asoleamiento sweeps the year.
         self._doy = QSlider(Qt.Horizontal)
         style_slider(self._doy)
@@ -2703,7 +2764,7 @@ class ShadowsPanel(QWidget):
         row = QHBoxLayout()
         self._time = QSlider(Qt.Horizontal)
         style_slider(self._time)
-        # Range follows DAYLIGHT for the date/zone/site (SketchUp: the
+        # Range follows DAYLIGHT for the date/zone/site (the
         # slider runs sunrise → sunset, so the sun can never be dragged
         # below the horizon and "shadows silently off" cannot happen).
         self._time.setRange(0, 24 * 60 - 1)
@@ -2850,7 +2911,7 @@ class ShadowsPanel(QWidget):
         self._apply()
 
     def _on_add_location(self) -> None:
-        """SketchUp's Add Location, scoped to the sun: pick the site on the
+        """Add Location, scoped to the sun: pick the site on the
         map and it becomes the model's geographic datum (which is also what
         the Terrain workspace reads — one location, one truth)."""
         from georef.tiles import DEFAULT_SOURCE_ID, PRESETS
@@ -2883,7 +2944,7 @@ class ShadowsPanel(QWidget):
         sh.utc_offset = self._tz.currentData()
         self._time_lbl.setText(f"{sh.hour:02d}:{sh.minute:02d}")
         # A date/zone/site change moves the daylight window; the slider
-        # follows it (and clamps the hour back into the sun, SketchUp-style).
+        # follows it (and clamps the hour back into the sun).
         self._updating = True
         try:
             self._sync_daylight(sh, write_back=True)
@@ -2900,14 +2961,14 @@ class ShadowsPanel(QWidget):
         self._window.viewport.update()
 
 
-#: What a layer can be assigned to (SketchUp tags faces, edges, objects
-#: and annotations alike).
+#: What a layer can be assigned to (faces, edges, objects and annotations
+#: alike are tagged).
 _TAGGABLE = (Face, Edge, Group, Dimension, TextLabel)
 
 
 class EntityInfoPanel(QWidget):
-    """Facts about the current selection, plus the one thing SketchUp's
-    Entity Info lets you CHANGE here: the layer (its Tag field). Rafael
+    """Facts about the current selection, plus the one thing an Entity
+    Info panel lets you CHANGE here: the layer (its Tag field). Rafael
     went looking for it exactly here — «debo de tener que ir a las
     propiedades del objeto… no sé cómo cambiarlo de aquí» (2026-09-16,
     39:00) — and found only the Layers panel's button, which he did not
@@ -2925,6 +2986,20 @@ class EntityInfoPanel(QWidget):
         self._label.setTextFormat(Qt.RichText)
         self._label.setStyleSheet("font-size: 12px;")
         lay.addWidget(self._label)
+        # The name of ONE group or component, edited here — where everyone
+        # looks for it (issue #214: «there seems to be no way to name this
+        # group»). The Parts panel could already rename, out of sight.
+        from PySide6.QtWidgets import QLineEdit
+        name_row = QHBoxLayout()
+        self._name_caption = QLabel(tr("Name:"))
+        self._name_edit = QLineEdit()
+        self._name_edit.setToolTip(
+            tr("The name of the selected group or component — Enter keeps it"))
+        self._name_edit.editingFinished.connect(self._on_name_edited)
+        name_row.addWidget(self._name_caption)
+        name_row.addWidget(self._name_edit, 1)
+        lay.addLayout(name_row)
+        self._named = None               # the group the field is showing
         row = QHBoxLayout()
         self._layer_caption = QLabel(tr("Layer:"))
         self._layer_box = QComboBox()
@@ -2940,7 +3015,8 @@ class EntityInfoPanel(QWidget):
         # library) slid up and down with every click (Marco, 23-09, four
         # screenshots). The layer row keeps its place when hidden, and the
         # text keeps room for the four lines a face or a solid shows.
-        for w in (self._layer_caption, self._layer_box):
+        for w in (self._layer_caption, self._layer_box,
+                  self._name_caption, self._name_edit):
             pol = w.sizePolicy()
             pol.setRetainSizeWhenHidden(True)
             w.setSizePolicy(pol)
@@ -2950,11 +3026,39 @@ class EntityInfoPanel(QWidget):
         self._label.setMinimumHeight(QFontMetrics(font).lineSpacing() * 4 + 4)
         self._layer_caption.hide()
         self._layer_box.hide()
+        self._name_caption.hide()
+        self._name_edit.hide()
 
     def refresh(self) -> None:
         sel = list(self._window.viewport.scene.selection)
         self._label.setText(self._describe(sel))
+        self._refresh_name(sel)
         self._refresh_layer(sel)
+
+    # ---- Name field ---------------------------------------------------------
+    def _refresh_name(self, sel: list) -> None:
+        one = sel[0] if len(sel) == 1 and isinstance(sel[0], Group) else None
+        self._name_caption.setVisible(one is not None)
+        self._name_edit.setVisible(one is not None)
+        changed = one is not self._named
+        self._named = one
+        if one is None:
+            return
+        # Not while typing into it — unless the selection moved on.
+        if changed or not self._name_edit.hasFocus():
+            self._name_edit.setText(one.name or "")
+
+    def _on_name_edited(self) -> None:
+        group = self._named
+        if group is None:
+            return
+        name = self._name_edit.text().strip()
+        if not name or name == (group.name or ""):
+            self._name_edit.setText(group.name or "")    # empty: keep it
+            return
+        from core.history import RenameGroupCommand
+        self._window.viewport.history.execute(RenameGroupCommand(group, name))
+        self._window.viewport.update()
 
     # ---- Layer field --------------------------------------------------------
     def _refresh_layer(self, sel: list) -> None:
@@ -3022,13 +3126,13 @@ class EntityInfoPanel(QWidget):
             if isinstance(e, GeoPath):
                 return self._describe_geopath(e)
             if isinstance(e, Group):
-                # SketchUp's «Solid Group» / «Solid Component» with its
+                # The usual «Solid Group» / «Solid Component» with its
                 # volume, the Solid Tools' own test (core.solids).
                 vol = self._solid_volume(e)
                 solid = (f"<br>{tr('Volume')}: {vol:.3f} m³"
                          if vol is not None else "")
                 if e.is_component():
-                    # SketchUp's Entity Info tells a component from a group and
+                    # Entity Info usually tells a component from a group and
                     # says how many copies share the definition. Without it the
                     # two are indistinguishable here, which also made an import
                     # that flattened components impossible to spot.
@@ -3037,7 +3141,6 @@ class EntityInfoPanel(QWidget):
                     title = (tr("Solid Component") if vol is not None
                              else tr("Component"))
                     return (f"<b>{title}</b><br>"
-                            f"{tr('Name')}: {e.name}<br>"
                             f"{tr('Faces')}: {len(e.mesh.faces)}<br>"
                             f"{tr('In model')}: {kin}{solid}")
                 title = tr("Solid Group") if vol is not None else tr("Group")
@@ -3330,7 +3433,7 @@ class LayersPanel(QWidget):
         self._touch()
 
     def _on_purge(self) -> None:
-        """SketchUp's "Purge Unused" for tags: sweep the layers nothing
+        """The classic "Purge Unused" for tags: sweep the layers nothing
         carries. One undoable step, and it says what it did — a silent
         sweep of a panel the user did not look at is how a deliberate
         empty layer disappears without anyone noticing."""
@@ -3369,7 +3472,7 @@ class LayersPanel(QWidget):
                 tr("Click a layer in the list first, then Assign."), 3000)
             return
         name = item.data(0, Qt.UserRole)
-        # Annotations are tagged too (SketchUp): a "Anotaciones" layer a
+        # Annotations are tagged too: a "Anotaciones" layer a
         # scene hides gives a clean plan without duplicating the model.
         targets = [ent for ent in scene.selection
                    if isinstance(ent, (Face, Edge, Group, Dimension, TextLabel))]
@@ -3392,7 +3495,7 @@ class LayersPanel(QWidget):
 
 
 class ScenesPanel(QWidget):
-    """Saved views — SketchUp's "Scenes": named camera + layer-visibility
+    """Saved views — "Scenes": named camera + layer-visibility
     snapshots. Double-click recalls one; the buttons capture the current
     view, update the selected scene from it, or delete it. Together with
     layers this is the '2D that emerges' workflow bottled: "Planta" = top

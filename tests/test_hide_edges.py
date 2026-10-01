@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""Hide/unhide edges (SketchUp's Edit ▸ Hide scoped to edges).
+"""Hide/unhide edges (Edit ▸ Hide scoped to edges).
 
 ``Edge.hidden`` predates this feature (imported foliage cards use it); what
 these pin down is the *reversible* path: the command restores mixed states

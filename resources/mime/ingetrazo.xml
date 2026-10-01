@@ -10,7 +10,7 @@
     .dae → model/vnd.collada+xml           (COLLADA — standard type; we only
                                             attach an icon to it, keeping its
                                             existing semantics/openers)
-    .skp → application/vnd.sketchup.skp    (SketchUp model)
+    .skp → application/vnd.sketchup.skp    (registered media type for .skp)
 
   Installed by scripts/install_desktop.sh into ~/.local/share/mime/packages/
   followed by update-mime-database.
@@ -33,8 +33,8 @@
   </mime-type>
 
   <mime-type type="application/vnd.sketchup.skp">
-    <comment>SketchUp model</comment>
-    <comment xml:lang="es">Modelo de SketchUp</comment>
+    <comment>SKP model</comment>
+    <comment xml:lang="es">Modelo SKP</comment>
     <icon name="application-vnd.sketchup.skp"/>
     <glob pattern="*.skp"/>
   </mime-type>

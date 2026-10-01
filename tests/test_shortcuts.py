@@ -18,7 +18,7 @@ says it in these words: "instead of creating a Qt ambiguity that disables
 the key for both"). Nobody applied the same rule to the built-ins among
 themselves. This file does.
 
-The camera keys come from SketchUp's own card: Orbit O, Pan H, Zoom Z, Zoom
+The camera keys come from the usual reference card: Orbit O, Pan H, Zoom Z, Zoom
 Extents Shift+Z. The Protractor and the Center Arc have NO default shortcut
 there, so they are the ones that yield — and they keep a Shift+key so they
 stay reachable.
@@ -102,8 +102,8 @@ def test_ninguna_accion_pisa_el_atajo_de_otra(ventana):
         + "; ".join(f"{t} -> {n}" for t, n in sorted(chocan.items())))
 
 
-def test_las_teclas_de_camara_son_las_de_sketchup(ventana):
-    """O / H / Z / Shift+Z, tal cual la tarjeta de referencia de SketchUp."""
+def test_las_teclas_de_camara_son_las_habituales(ventana):
+    """O / H / Z / Shift+Z, tal cual la tarjeta de referencia habitual."""
     _calentar(ventana)
     for tecla, modificador, esperado in (
             (Qt.Key_O, Qt.NoModifier, "Orbit"),
@@ -122,10 +122,10 @@ def test_las_dos_herramientas_que_cedieron_siguen_a_mano(ventana):
     assert _pulsar(ventana, Qt.Key_O, Qt.ShiftModifier) == ["Center Arc"]
 
 
-#: Lo que SketchUp SÍ trae atado de fábrica y nosotros respetamos, de su
-#: tarjeta 2026. Lo que falta de esa lista es deliberado y está anotado
-#: abajo; lo que sobra son teclas que allá están libres.
-TARJETA_SKETCHUP = {
+#: Lo que la tarjeta de referencia habitual SÍ trae atado de fábrica y
+#: nosotros respetamos (edición 2026). Lo que falta de esa lista es
+#: deliberado y está anotado abajo; lo que sobra son teclas que allá están libres.
+TARJETA_HABITUAL = {
     "Space": "Select", "B": "Paint", "E": "Eraser", "L": "Line",
     "R": "Rectangle", "C": "Circle", "A": "Arc", "M": "Move",
     "Q": "Rotate", "S": "Scale", "F": "Offset", "T": "Tape Measure",
@@ -135,23 +135,23 @@ TARJETA_SKETCHUP = {
 # Divergencias a propósito, para que nadie las "arregle" sin decidirlo:
 #   U       = Empujar/Tirar   (segundo atajo del MISMO comando: la tecla que
 #                              IngeTrazo usó hasta el 2026-09-10)
-#   Mayús+P = Perspectiva/paralela (SketchUp no le da tecla ninguna)
-#   K       = Rectángulo rotado    (SketchUp: aristas traseras; el rotado no
+#   Mayús+P = Perspectiva/paralela (la tarjeta no le da tecla ninguna)
+#   K       = Rectángulo rotado    (allá: aristas traseras; el rotado no
 #                                   tiene tecla allá)
 #   F2      = Zoom a extensión     (segundo atajo, además de Shift+Z)
 #   D J W X Y = Cota, Arco 3 puntos, Sígueme, Texto, Ruta — sin tecla allá.
 
 
-def test_respetamos_la_tarjeta_de_sketchup(ventana):
+def test_respetamos_la_tarjeta_habitual(ventana):
     atajos = _todos_los_atajos(ventana)
-    for tecla, nombre in TARJETA_SKETCHUP.items():
+    for tecla, nombre in TARJETA_HABITUAL.items():
         assert atajos.get(tecla) == [nombre], (
-            f"{tecla} debería ser {nombre!r} como en SketchUp, "
+            f"{tecla} debería ser {nombre!r} como en la tarjeta, "
             f"y tiene {atajos.get(tecla)}")
 
 
-def test_el_arco_de_A_es_el_de_comba_como_en_sketchup(ventana):
-    """SketchUp ata A al «2 Point Arc» (cuerda y comba). El nuestro se llama
+def test_el_arco_de_A_es_el_de_comba(ventana):
+    """La tarjeta ata A al «2 Point Arc» (cuerda y comba). El nuestro se llama
     solo «Arc», y es ese: su cuadro pide la comba."""
     from tools.arc import ArcTool
     assert ArcTool.shortcut == "A"
@@ -159,7 +159,7 @@ def test_el_arco_de_A_es_el_de_comba_como_en_sketchup(ventana):
 
 
 def test_la_p_es_empujar_tirar_y_la_u_sigue_valiendo(ventana):
-    """«P como SketchUp» (Marco, 2026-09-10). La U no se tira: es el mismo
+    """La P es Empujar/Tirar (Marco, 2026-09-10). La U no se tira: es el mismo
     comando con dos atajos, que es lo legal — dos ACCIONES con un atajo es
     lo que Qt mata."""
     _calentar(ventana)
@@ -181,14 +181,18 @@ def test_la_barra_muestra_el_atajo_configurado_y_no_el_de_fabrica(ventana):
     escribía la tecla UNA vez, al arrancar; ahora sigue a la acción."""
     from PySide6.QtGui import QKeySequence
     linea = ventana._tool_actions["line"]
-    assert linea.toolTip().endswith("(L)")
+
+    def primera(act):              # la segunda línea dice qué hace
+        return act.toolTip().split("\n")[0]
+
+    assert primera(linea).endswith("(L)")
     linea.setShortcuts([QKeySequence("Ctrl+Alt+L")])
-    assert "Ctrl+Alt+L" in linea.toolTip()
-    assert "(L)" not in linea.toolTip()
+    assert "Ctrl+Alt+L" in primera(linea)
+    assert "(L)" not in primera(linea)
     linea.setShortcuts([])
-    assert "(" not in linea.toolTip()                 # sin atajo, sin paréntesis
+    assert "(" not in primera(linea)                 # sin atajo, sin paréntesis
     linea.setShortcuts([QKeySequence("L")])
-    assert linea.toolTip().endswith("(L)")
+    assert primera(linea).endswith("(L)")
     ze = ventana._act_zoom_extents
     ze.setShortcuts([QKeySequence("Ctrl+E")])
-    assert "Ctrl+E" in ze.toolTip()                   # el que venía escrito a mano
+    assert "Ctrl+E" in primera(ze)                   # el que venía escrito a mano

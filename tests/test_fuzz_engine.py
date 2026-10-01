@@ -278,7 +278,7 @@ def _check_mesh_invariants(mesh, was_closed, user_segments, ctx: str,
                 and not _edge_on_user_segment(e, user_segments)):
             # A seam is a bug only when *this* commit minted its edge: edges
             # left by earlier commits (and their split pieces) persist
-            # SketchUp-style (they are structure now, A.4) and were already
+            # the classic way (they are structure now, A.4) and were already
             # vetted when they appeared.
             raise AssertionError(
                 f"{ctx}: unmerged coplanar seam at "
@@ -341,7 +341,7 @@ def _meshes(scene):
 def _pre_state(scene) -> dict:
     """Per-mesh state captured before an op: closedness + existing edge
     segments. A coplanar seam lying on an edge that already existed (or a
-    split piece of one) is kept structure (A.4 — SketchUp persists old edges;
+    split piece of one) is kept structure (A.4 — old edges persist;
     only the op's own fresh seams must dissolve, which the directed benches
     assert)."""
     return {
@@ -404,7 +404,7 @@ def run_sequence(scenario: str, seed: int, n_ops: int = 8) -> None:
             if _push(scene, hist, face, dist, group=owner, keep_base=keep):
                 if keep:
                     # Ctrl = stack a segment: the kept base and its unmerged
-                    # strips are deliberate divisions (SketchUp keeps them
+                    # strips are deliberate divisions (the classic tool keeps them
                     # split), so the push's fresh edges count as structural
                     # for the seam check — like hand-drawn subdivisions.
                     segs = user.setdefault(owner, [])

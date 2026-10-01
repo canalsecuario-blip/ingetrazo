@@ -9,7 +9,8 @@ corners — and gives up the moment one of them disappears, because it has no
 way to DROP a segment. On a real drawing that happens constantly: Marco's
 paved slab, whose boundary carries the segmented bite the round plaza takes
 out of it, refused any inward offset past 2.65 cm (Plaza Yanque,
-2026-09-10). SketchUp does it, because it removes what collapses.
+2026-09-10). The classic offset does it, because it removes what
+collapses.
 
 The recipe here is the standard one, and it costs little because the hard
 part already exists: :mod:`core.arrangement` computes every intersection,

@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""SketchUp's Solid Tools: Outer Shell, Union, Subtract, Trim, Intersect,
+"""Solid Tools: Outer Shell, Union, Subtract, Trim, Intersect,
 Split (the operations live in :mod:`core.solids`).
 
-Two ways in, as in SketchUp:
+Two ways in:
 
 * **Pre-selection** — select the solids, then pick the tool: Outer Shell,
   Union and Intersect run at once on every solid selected; Split on two.
@@ -161,35 +161,49 @@ class SolidTool(Tool):
 
 class OuterShellTool(SolidTool):
     name = "Outer Shell"
+    description = (
+        "Merge the selected solids into one, keeping only their outer "
+        "skin.")
     op = solids.OUTER_SHELL
 
 
 class UnionTool(SolidTool):
     name = "Union"
+    description = "Join solids into a single solid."
     op = solids.UNION
 
 
 class SubtractTool(SolidTool):
     name = "Subtract"
+    description = (
+        "Cut the first solid clicked out of the second, and remove "
+        "the first.")
     op = solids.SUBTRACT
 
 
 class TrimTool(SolidTool):
     name = "Trim"
+    description = (
+        "Cut the first solid clicked out of the second, and keep the "
+        "first.")
     op = solids.TRIM
 
 
 class IntersectTool(SolidTool):
     name = "Intersect"
+    description = "Keep only the part where the solids overlap."
     op = solids.INTERSECT
 
 
 class SplitTool(SolidTool):
     name = "Split"
+    description = (
+        "Split two overlapping solids into their separate parts and "
+        "their common part.")
     op = solids.SPLIT
 
 
-#: Tool key → class, in SketchUp's help order (toolbar and menu).
+#: Tool key → class, in the classic order (toolbar and menu).
 SOLID_TOOLS = (
     ("outer_shell", OuterShellTool), ("solid_union", UnionTool),
     ("solid_subtract", SubtractTool), ("solid_trim", TrimTool),

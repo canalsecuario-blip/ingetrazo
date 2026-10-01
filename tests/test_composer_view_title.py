@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""The professional view title (sheets plan, 2026-09-05, point 2): LayOut's
+"""The professional view title (sheets plan, 2026-09-05, point 2): the usual
 numbered bubble + title + «ESC. 1:N» over a rule, the vertical bar of the
 Brazilian plans, or the old simple line — fields expanded, the frame's
 box grown to fit, paint-only (no render redone)."""

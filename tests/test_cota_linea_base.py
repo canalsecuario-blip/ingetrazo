@@ -67,7 +67,7 @@ def test_if_the_text_grows_the_line_grows():
 
 
 def test_a_hand_dragged_label_leaves_the_line_where_it_was():
-    """LayOut lets the box be dragged anywhere and the line stays put;
+    """Sheet layout programs let the box be dragged anywhere and the line stays put;
     rule 4 is about the words sitting outside an END, not about a drag."""
     assert _ct(text_along="end", text_dx_mm=8.0).text_tail() is None
 

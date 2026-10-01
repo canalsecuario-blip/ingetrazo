@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""Colourizing a texture — SketchUp's colour on a textured material.
+"""Colourizing a texture — a colour on a textured material.
 
 Asked for by Marco while modelling Plaza Yanque: "when I edit a material's
 texture, say the flagstone, I should be able to change the colour too".

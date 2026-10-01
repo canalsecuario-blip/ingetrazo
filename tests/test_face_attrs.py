@@ -166,7 +166,7 @@ def test_attrs_survive_snapshot_roundtrip():
 
 
 def test_flip_faces_command_reverses_winding_and_undoes():
-    # SketchUp's Reverse Faces: flips the normal, undo flips back, identity
+    # Reverse Faces: flips the normal, undo flips back, identity
     # of the Face object is preserved throughout.
     from core.history import FlipFacesCommand, History
     from core.scene import Scene

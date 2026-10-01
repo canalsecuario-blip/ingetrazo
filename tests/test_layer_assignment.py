@@ -6,7 +6,7 @@ Rafael, 2026-09-16 (39:00–40:00): «no sé cómo cambiar el objeto de capa…
 las propiedades del objeto… no lo veo. Botón derecho… no lo veo tampoco.
 Asignar selección… algo no había seleccionado bien». The only road was
 the Layers panel's button, silent when nothing was selected or no layer
-highlighted. Now Entity Info has SketchUp's field, the right-click has a
+highlighted. Now Entity Info has a Layer field, the right-click has a
 Layer submenu, and all three go through one undoable command.
 """
 from __future__ import annotations

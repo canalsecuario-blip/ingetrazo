@@ -6,7 +6,7 @@ uniform sampler2D u_tex;
 uniform int u_use_texture;
 uniform int u_use_vcolor;
 // Uniform opacity of the current draw (1.0 = opaque pass). Translucent
-// material runs (SketchUp trans with useTrans) draw last with this < 1.
+// material runs (.skp trans with useTrans) draw last with this < 1.
 uniform float u_opacity;
 // 1 while drawing face-me billboards: a HARD alpha cut at 0.5 instead of
 // the Bayer dither below. Their mipmapped edge alpha would otherwise
@@ -17,7 +17,7 @@ uniform int u_hard_cutout;
 // their vertex colours) — 1.0 everywhere else (billboards, previews).
 uniform float u_shade;
 // While a group is open for editing, the model AROUND it is washed toward
-// the background (SketchUp's faded rest of model). A mix, not blending:
+// the background (the classic faded rest of model). A mix, not blending:
 // the pass stays opaque and keeps writing depth, so the context still
 // occludes itself. Drawing it translucent instead let every surface show
 // through every other one and turned coplanar faces into colour speckle.
@@ -33,20 +33,30 @@ uniform mat4 u_light_vp;
 uniform float u_shadow_dark;
 uniform float u_shadow_bias;
 // Unit vector toward the sun — with shadows on, faces are shaded BY THE SUN
-// (SketchUp's "use sun for shading"): the per-fragment normal comes from
+// ("use sun for shading"): the per-fragment normal comes from
 // screen derivatives of the world position (exact on flat faces, no vertex
 // data needed), oriented toward the viewer so the VISIBLE side is judged.
 uniform vec3 u_sun_dir;
 // 1 while drawing the ground-shadow catcher: instead of a coloured surface
 // it outputs ONLY the shadow, as translucent black — where the sun reaches
 // it is fully transparent, so the plane has no visible shape or edges
-// (SketchUp's on-ground shadows are these same floating dark stains).
+// (the usual on-ground shadows are these same floating dark stains).
 uniform int u_shadow_overlay;
-// SketchUp's View ▸ Hidden Objects / Hidden Geometry: hidden things are
+// View ▸ Hidden Objects / Hidden Geometry: hidden things are
 // drawn as a see-through screen-space GRID (1 = faces: a 1 px line every
 // 4 px each way) or DOTTED (2 = edges). Fragments off the pattern are
 // discarded, so what lies behind shows through the weave. 0 = off.
+// 3 = SELECTED faces: an opaque 2x2 px dot every 6 px each way, so the
+// face's own colour keeps showing between the dots and a selected face
+// never reads as a tinted one (an orange wash over the blue-grey back
+// looked like just another back face).
 uniform int u_stipple;
+// Back Edges (u_stipple 4): a dash measured ALONG the line from its
+// provoking vertex, in window pixels — a screen pattern breaks on a
+// diagonal (a line along x + y = const is all dash or all gap).
+flat in vec4 v_line_clip;
+uniform vec2 u_viewport_px;
+uniform float u_dash_px;
 
 in vec2 v_uv;
 in vec3 v_color;
@@ -118,6 +128,13 @@ void main() {
             discard;
     } else if (u_stipple == 2) {
         if (mod(gl_FragCoord.x + gl_FragCoord.y, 6.0) >= 3.0) discard;
+    } else if (u_stipple == 3) {
+        if (mod(gl_FragCoord.x, 6.0) >= 2.0 || mod(gl_FragCoord.y, 6.0) >= 2.0)
+            discard;
+    } else if (u_stipple == 4) {
+        vec2 o = (v_line_clip.xy / v_line_clip.w * 0.5 + 0.5) * u_viewport_px;
+        if (mod(length(gl_FragCoord.xy - o), 2.0 * u_dash_px) >= u_dash_px)
+            discard;
     }
     vec4 c;
     if (u_use_texture == 1) {
@@ -140,14 +157,14 @@ void main() {
             c = vec4(texel.rgb * u_shade, texel.a * u_opacity);
         }
     } else {
-        // SketchUp-style face culling colours: front = paper white, back =
+        // Classic face culling colours: front = paper white, back =
         // blue-grey. Orientation is guaranteed outward by the engine, so a
         // visible back face means "you are looking at the inside" (or at a
         // genuinely inverted face).
         // u_use_vcolor: the batched face pass carries its per-face shaded
         // colour as a vertex attribute — ONE draw call for the whole model
         // instead of one per colour run. That pass draws imported REFERENCE
-        // groups, whose faces show their own colour on both sides (SketchUp
+        // groups, whose faces show their own colour on both sides (the .skp format
         // paints each side; thin ironwork would otherwise flash the back
         // tint). The back tint stays on the user's own drawing (u_color
         // path), where it is honest "you are looking at the inside" feedback.
@@ -162,7 +179,7 @@ void main() {
                              * (1.0 - shadow_light()));
             return;
         }
-        // Sun shading + cast shadows, composed the SketchUp way: the sun
+        // Sun shading + cast shadows, composed the classic way: the sun
         // side of the model is bright, the far side sits at the flat shade
         // tone, and the map only speaks where the face actually SEES the
         // sun — a face turned away never samples it, which also kills every

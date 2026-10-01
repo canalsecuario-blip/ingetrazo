@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """The Rotated Rectangle draws in a PLANE, which is the point of the tool.
 
-Marco, 2026-09-10, after reading how SketchUp's works: «sospecho que no es
+Marco, 2026-09-10, after reading how the classic tool works: «sospecho que no es
 igual». It was not. `work_plane` was declared, reset and read — and never
 assigned — so `_perp` always fell back to world +Z:
 
@@ -139,11 +139,11 @@ def test_an_arrow_lock_beats_the_face_under_the_cursor():
     assert abs(abs(normal.normalized().z()) - 1.0) < 1e-6
 
 
-# ---- el tercer paso es ancho Y ÁNGULO (el transportador de SketchUp) -------
+# ---- el tercer paso es ancho Y ÁNGULO (el transportador clásico) -----------
 #
-# «Quiero dibujar un rectángulo que esté perpendicular así como en SketchUp»
-# (Marco, 2026-09-10, con la captura de SketchUp for Web al lado: «Anchura,
-# Ángulo: 3.79 m, 90.0»). El transportador de SketchUp gira sobre la ARISTA
+# «Quiero dibujar un rectángulo que esté perpendicular» (Marco, 2026-09-10,
+# con una captura de referencia al lado: «Anchura, Ángulo: 3.79 m, 90.0»).
+# El transportador clásico gira sobre la ARISTA
 # BASE, así que con la base tumbada el ancho se levanta hasta ponerse de pie.
 # Capturar el plano en el primer clic —lo que ya se arregló— no da eso.
 

@@ -378,7 +378,7 @@ def test_a_turned_group_survives_the_skp_round_trip(tmp_path):
 def test_a_flattened_skp_group_keeps_its_instance_axes():
     """The groups the .skp import flattens into world coordinates (tagged
     subtrees, containers of shared children) still face the way their
-    SketchUp instance did."""
+    .skp instance did."""
     from formats import skp as skp_format
     turn = _frame_at(V(3, 0), 30.0)
     square = [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (1.0, 1.0, 0.0), (0.0, 1.0, 0.0)]

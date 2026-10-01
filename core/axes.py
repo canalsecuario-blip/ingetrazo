@@ -3,7 +3,7 @@
 """The DRAWING AXES: the one red/green/blue every tool and inference reads.
 
 At the top level they are the world's. Inside a group or component they are
-that context's own axes (issue #44, @pacaeiro; SketchUp: «when you open a
+that context's own axes (issue #44, @pacaeiro: «when you open a
 group for editing you see its axes, not the model axes» — inferences,
 arrow-key locks, the rectangle, the ground plane and the standard views all
 follow them, level by level).

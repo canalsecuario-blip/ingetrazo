@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """What Move / Rotate drag is left out of the snap candidates (issue #19).
 
-SketchUp excludes the entities in motion from inference. Ours fed the snap
+The classic inference excludes the entities in motion. Ours fed the snap
 engine the whole scene, so dragging a face along a wall snapped to the face's
 own (moving) corners — "self inference", as @pacaeiro named it.
 """

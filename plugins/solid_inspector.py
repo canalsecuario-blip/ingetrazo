@@ -5,7 +5,7 @@
 IngeTrazo's engine guarantees hermetic solids and its BIM layer only
 reports a volume when the object is closed. When Model Info (or the BIM
 tray) says "(not watertight)", this plugin answers the next question:
-*where is the hole?* — the same job SketchUp users know from thomthom's
+*where is the hole?* — the same job push/pull modellers know from thomthom's
 Solid Inspector².
 
 One row per solid candidate (the geometry you are editing, plus every
@@ -255,6 +255,9 @@ class SolidInspectorTool(Tool):
     """Extensions-menu entry that opens (or raises) the inspector."""
     name = "Solid Inspector"
     shortcut = None
+    description = (
+        "Find out why a group is not a solid, and show the edges to "
+        "blame.")
     uses_snap = False
 
     def on_activate(self, viewport) -> None:

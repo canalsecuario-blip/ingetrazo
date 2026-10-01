@@ -4,7 +4,7 @@
 la cámara en su acercamiento mínimo.» The pan moved by the distance to the
 orbit target, which zooming in shrinks to 2 cm, whatever lay under the
 cursor. Now it moves by the depth of the point grabbed, so that point
-stays under the cursor (SketchUp) — in perspective; parallel views scale
+stays under the cursor — in perspective; parallel views scale
 the same everywhere."""
 from __future__ import annotations
 

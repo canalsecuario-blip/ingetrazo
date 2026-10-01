@@ -1,9 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""Scale tool (S) — SketchUp's grip box, built from the official doc
-("Scaling Your Model or Parts of Your Model", help.sketchup.com).
+"""Scale tool (S) — the classic grip box.
 
-The rhythm SketchUp documents:
+The rhythm:
 
 - Activating with a selection wraps it in a **yellow box with green grips**
   (26 on a 3D box: 8 corners + 12 edge midpoints + 6 face centres; 8 on a
@@ -20,14 +19,14 @@ The rhythm SketchUp documents:
   Official doc words them as taps that "toggle this functionality".
 - The Measurements box takes a **plain number as a factor** ("2" doubles),
   **per-axis factors** separated by ``;`` (our locale's field separator),
-  a **negative factor to mirror** through the anchor (SketchUp: type -1, or
+  a **negative factor to mirror** through the anchor (type -1, or
   drag a grip past its anchor), and a **number with a unit suffix as the
   new absolute size** of the grip's first axis ("2m" makes that side 2 m).
   Right after committing, typing + Enter redoes the scale at the new value
   (the hot-retype window Rotate already has).
 
 The box sits on the object's OWN axes when a single group or component is
-selected (SketchUp; issue #44), and on the drawing axes otherwise — the
+selected (issue #44), and on the drawing axes otherwise — the
 world's at the top level, the open group's inside it. It is kept in that
 frame's coordinates (``_lo``/``_hi``), mapped to the world to draw and pick.
 
@@ -48,7 +47,7 @@ from tools.move import gather_images, gather_targets
 
 _MIN_FACTOR = 1e-4
 # Below this extent an axis is flat: it gets no grips and never scales
-# (a 2D face shows SketchUp's 8-grip box instead of a degenerate 26).
+# (a 2D face shows the 8-grip box instead of a degenerate 26).
 _FLAT = 1e-6
 _AXIS_NAMES = ("Red", "Green", "Blue")     # X east, Y north, Z up (Z-up)
 
@@ -72,10 +71,20 @@ class _Grip:
 class ScaleTool(Tool):
     name = "Scale"
     shortcut = "S"
+    description = (
+        "Resize the selection by dragging the grips of its box; the "
+        "corners keep its proportions.")
     vcb_label = "Scale"
-    uses_snap = False                      # grips, not geometry, take the click
+    @property
+    def uses_snap(self) -> bool:
+        """Only while a grip is held: then a corner, a midpoint or an edge
+        of ANOTHER object sets the size — scale «to» it (issue #233,
+        @ales-limon). Before the grab, the grips take the click, not the
+        geometry."""
+        return self._grip is not None
+
     # The VCB tags unit-suffixed entries for us ("2m" = absolute size), so a
-    # bare "2" can mean ×2 the way SketchUp reads it.
+    # bare "2" can mean ×2, the usual reading.
     accepts_absolute_length = True
 
     def __init__(self) -> None:
@@ -99,7 +108,7 @@ class ScaleTool(Tool):
         self._factors = (1.0, 1.0, 1.0)    # live preview factors
         self._grabbed_px = None            # screen pos at grab (drag detect)
         self._moved = False
-        # SketchUp's tap toggles.
+        # A tap toggles.
         self.about_center = False
         self.uniform = False
         # Hot retype window (same mechanism as Rotate).
@@ -241,7 +250,7 @@ class ScaleTool(Tool):
                                         lo.z() + (hi.z() - lo.z()) * t[2]))
 
     def _anchor_for(self, grip: _Grip) -> QVector3D:
-        """SketchUp: the point straight opposite the grip — or the box centre
+        """The point straight opposite the grip — or the box centre
         while About Center is toggled on."""
         if self.about_center:
             return self._to_world((self._lo + self._hi) * 0.5)
@@ -278,6 +287,66 @@ class ScaleTool(Tool):
         s = (e - b * d0) / denom
         return a + u * s
 
+    #: What a held grip may land on: named points and edges, projected onto
+    #: the grip's line. Not a face (the grip would jump across every
+    #: surface it passes) and not the engine's own directional inferences.
+    _TARGET_KINDS = frozenset({
+        "endpoint", "midpoint", "intersection", "center", "origin",
+        "on_edge", "on_line", "from_point", "close", "guide",
+        "component_origin", "arc_midpoint"})
+
+    def snap_excluded(self):
+        """What is being scaled stays out of the snap engine, or the grip
+        would land on the very geometry it resizes. ``(edge ids, group
+        ids)`` as Move gives it."""
+        if self._grip is None:
+            return None
+        edges = {id(e) for v in self._verts for e in getattr(v, "edges", ())}
+        return edges, {id(g) for g in self._groups}
+
+    def _snapped_point(self, ctx):
+        snap = getattr(ctx, "snap", None) if ctx is not None else None
+        if snap is None or snap.kind not in self._TARGET_KINDS:
+            return None
+        return QVector3D(snap.point)
+
+    def _factors_from_point(self, p: QVector3D):
+        """The factors that put the held grip level with world point ``p``:
+        ``p`` projected onto the anchor→grip line (one axis, or a corner /
+        Shift), or per axis for an edge grip."""
+        grip, anchor = self._grip, self._anchor
+        g0 = self._grip_pos(grip)
+        uniform = self.uniform or grip.kind(self._active_axes()) == "corner"
+        if uniform or len(grip.mask) == 1:
+            axis_dir = g0 - anchor
+            length = axis_dir.length()
+            if length < 1e-12:
+                return None
+            f = QVector3D.dotProduct(p - anchor, axis_dir) / (length * length)
+            if uniform:
+                ext = self._extents()
+                return tuple(f if ext[i] > _FLAT else 1.0 for i in range(3))
+            factors = [1.0, 1.0, 1.0]
+            factors[grip.mask[0]] = f
+            return tuple(factors)
+        gl = self._to_local(g0) - self._to_local(anchor)
+        pl = self._to_local(p) - self._to_local(anchor)
+        factors = [1.0, 1.0, 1.0]
+        for i in grip.mask:
+            ga = (gl.x(), gl.y(), gl.z())[i]
+            if abs(ga) < 1e-12:
+                return None
+            factors[i] = (pl.x(), pl.y(), pl.z())[i] / ga
+        return tuple(factors)
+
+    def _factors_for(self, ctx, viewport, sx: float, sy: float):
+        p = self._snapped_point(ctx)
+        if p is not None:
+            got = self._factors_from_point(p)
+            if got is not None:
+                return got
+        return self._factors_from_cursor(viewport, sx, sy)
+
     def _factors_from_cursor(self, viewport, sx: float, sy: float):
         grip, anchor = self._grip, self._anchor
         g0 = self._grip_pos(grip)
@@ -287,7 +356,7 @@ class ScaleTool(Tool):
         uniform = self.uniform or grip.kind(self._active_axes()) == "corner"
         if uniform or len(grip.mask) == 1:
             # Cursor tracked along the anchor→grip line; crossing the anchor
-            # flips the factor negative — SketchUp's drag-past-zero mirror.
+            # flips the factor negative — the drag-past-zero mirror.
             axis_dir = g0 - anchor
             length = axis_dir.length()
             if length < 1e-12:
@@ -345,7 +414,7 @@ class ScaleTool(Tool):
         sx, sy = ctx.screen.x(), ctx.screen.y()
 
         if self._grip is not None:         # second click commits
-            factors = self._factors_from_cursor(viewport, sx, sy)
+            factors = self._factors_for(ctx, viewport, sx, sy)
             if factors is not None:
                 self._commit(viewport, factors)
             return
@@ -357,7 +426,7 @@ class ScaleTool(Tool):
                 return
 
         # No grip hit: with nothing selected, a click picks the entity under
-        # the cursor and boxes it (SketchUp's click-to-scale).
+        # the cursor and boxes it (click-to-scale).
         if not viewport.scene.selection:
             groups, positions = gather_targets(ctx)
             images = gather_images(ctx)
@@ -415,7 +484,7 @@ class ScaleTool(Tool):
                 self._hover_grip = hover
                 viewport.update()
             return
-        factors = self._factors_from_cursor(viewport, sx, sy)
+        factors = self._factors_for(ctx, viewport, sx, sy)
         if factors is None:
             return
         if any(abs(f) < _MIN_FACTOR for f in factors):
@@ -429,7 +498,7 @@ class ScaleTool(Tool):
         viewport.update()
 
     def on_release(self, viewport) -> None:
-        """SketchUp accepts both rhythms: click-move-click AND drag-release.
+        """Both rhythms are accepted: click-move-click AND drag-release.
         A release after a real drag commits; a release in place leaves the
         operation live for the second click."""
         if self._grip is None or not self._moved:
@@ -501,7 +570,7 @@ class ScaleTool(Tool):
         return False
 
     def _typed_factors(self, value, absolute: bool, spec=None):
-        """Map a typed value onto per-axis factors, SketchUp's reading:
+        """Map a typed value onto per-axis factors, the usual reading:
         one number = the grip's factor; ``a;b`` / ``a;b;c`` = one per axis of
         the grip; with a unit suffix the numbers are the new absolute sizes
         (metres) instead of factors."""
@@ -646,7 +715,7 @@ class ScaleTool(Tool):
             cmd = build(factors)
             if cmd is not None:
                 viewport.history.execute(cmd)
-                # SketchUp: right after scaling, a typed value redoes it.
+                # Right after scaling, a typed value redoes it.
                 self._last = {"cmd": cmd, "build": build, "spec": spec}
         self._grip = None
         self._anchor = None
@@ -674,7 +743,7 @@ class ScaleTool(Tool):
 
     # ---- Feedback -----------------------------------------------------------
     def vcb_caption(self) -> str:
-        """SketchUp captions the Measurements box by the axes in play."""
+        """Caption the Measurements box by the axes in play."""
         grip = self._grip or self._hover_grip
         if grip is None:
             return "Scale"
@@ -684,7 +753,7 @@ class ScaleTool(Tool):
         return f"{names} Scale"
 
     def value_label(self):
-        """The live factor readout beside the box, SketchUp-style: one number
+        """The live factor readout beside the box: one number
         for a uniform scale, one per axis otherwise."""
         if self._grip is None:
             return None

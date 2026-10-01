@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """Protractor click-drag tilts the instrument off the orthogonal planes.
 
-Issue #10 (@pacaeiro): SketchUp's Protractor takes a click-AND-DRAG from the
+Issue #10 (@pacaeiro): the classic Protractor takes a click-AND-DRAG from the
 vertex to set its axis along the drag, so the angle is measured (and the guide
 placed) in a plane that is not one of the three axis planes. Rotate already
 had the gesture; the Protractor now shares it. A plain click keeps the

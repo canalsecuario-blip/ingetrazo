@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""SketchUp-compatible textures: planar UV projection, the SetFaceTexture
+""".skp-compatible textures: planar UV projection, the SetFaceTexture
 command, OBJ export with vt + map_Kd, and .igz round-trip."""
 from __future__ import annotations
 
@@ -229,7 +229,7 @@ def test_igz_container_is_byte_identical_across_saves(tmp_path, monkeypatch):
 
 def test_igz_packs_back_side_textures_without_touching_the_scene(tmp_path,
                                                                  monkeypatch):
-    # attrs["back"] carries its own material (SketchUp paints both sides) —
+    # attrs["back"] carries its own material (a .skp paints both sides) —
     # its image must travel too, and packing must not mutate the live face.
     monkeypatch.setenv("INGETRAZO_TEXTURE_CACHE", str(tmp_path / "cache"))
     scene = Scene()
@@ -274,7 +274,7 @@ def test_textured_obj_round_trips_the_texture(tmp_path):
 
 def test_planar_uv_rotation_and_scale():
     # Bigger tile size = fewer repeats; rotation turns the UV frame in-plane
-    # (SketchUp's edit-material W/H/Rot).
+    # (the usual edit-material W/H/Rot).
     from PySide6.QtGui import QVector3D
 
     from core.texture import planar_uv
@@ -645,14 +645,14 @@ def test_cache_names_stay_short_and_keep_their_extension(tmp_path, monkeypatch):
     assert out.name.endswith(short) and out.read_bytes() == b"img"
 
 
-def test_projection_basis_snaps_to_the_world_axes_like_sketchup():
-    """SketchUp's ``Z × n`` basis is discontinuous at the vertical, and real
-    SketchUp resolves it with a tolerance: measured with the SDK on faces
+def test_projection_basis_snaps_to_the_world_axes_like_the_skp_format():
+    """The .skp ``Z × n`` basis is discontinuous at the vertical, and the
+    original program resolves it with a tolerance: measured with the SDK on faces
     tilted from 1e-10 to 1e-2 (2026-09-04), the world axes hold while the
     sine of the tilt is below 1e-3 and the cross product takes over from
     1.0001e-3. A horizontal face whose float32 normal carries noise (the
     pool's small countertops: up to 6e-4) must project like the exact
-    plane SketchUp reads back, not turn 90° with the direction of the
+    plane the original program reads back, not turn 90° with the direction of the
     noise."""
     from core.texture import projection_basis
     exact = projection_basis((0.0, 0.0, 1.0))

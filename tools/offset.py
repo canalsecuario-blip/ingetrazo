@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """Offset tool: offset a face's boundary in its plane (walls with thickness).
 
-SketchUp's Offset (F): pick a face, drag (or type a distance) and a parallel
+Offset (F): pick a face, drag (or type a distance) and a parallel
 loop appears offset from the boundary. The face splits into a ring (the wall
 footprint) and an inner face (the room), so the ring can then be pushed up into
 walls with thickness — the casita's first hito.
@@ -41,6 +41,9 @@ def _point_segment_distance(p: QVector3D, a: QVector3D, b: QVector3D) -> float:
 class OffsetTool(Tool):
     name = "Offset"
     shortcut = "F"
+    description = (
+        "Draw a copy of a face's outline at an even distance inside "
+        "or outside it — walls with thickness.")
     uses_snap = False  # picks a face; no snap markers
     vcb_label = "Offset"
     wireframe_color = (0.13, 0.17, 0.23, 1.0)
@@ -62,7 +65,7 @@ class OffsetTool(Tool):
         self._chain: bool = False
         self._closed: bool = True
         #: A run taken from the selection when the tool was picked up
-        #: (SketchUp: select the edges, then Offset): the first click
+        #: (select the edges, then Offset): the first click
         #: starts the offset instead of picking.
         self._armed: bool = False
 
@@ -188,7 +191,7 @@ class OffsetTool(Tool):
 
     # ---- Edges mode (issue #40) ----------------------------------------------
     def _arm_from_selection(self, viewport) -> None:
-        """SketchUp's other way in: the edges were selected BEFORE the tool
+        """The other way in: the edges were selected BEFORE the tool
         was picked up. Two or more edges and nothing else → their run is
         the thing to offset, and the first click starts the drag."""
         scene = getattr(viewport, "scene", None)

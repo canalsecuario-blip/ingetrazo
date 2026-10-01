@@ -6,7 +6,7 @@ Rafael, 2026-09-16 (02:20), second review: the corner of the first window
 gives its dotted line along its own wall «estupendamente», but to start a
 window on another wall at the same height there was nothing — «que la
 línea guía se extendiera por aquí y yo pudiera fijar la ventana aquí…
-tampoco eso lo hace SketchUp». It does not: 'from point' is the axis LINE
+tampoco eso lo hace el programa clásico». It does not: 'from point' is the axis LINE
 through the corner, which meets a perpendicular wall in one point and the
 opposite wall never. The horizontal PLANE through the corner meets both
 walls in a line, and that line is what the cursor now snaps to (rule 8e,

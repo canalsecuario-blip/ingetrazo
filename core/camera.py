@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """Orbital camera for the 3D viewport.
 
-Z-up convention (SketchUp, Blender, FreeCAD): X red (east), Y green (north),
+Z-up convention (Blender, FreeCAD): X red (east), Y green (north),
 Z blue (up). The camera orbits around a ``target`` point in spherical
 coordinates (``yaw``, ``pitch``, ``distance``). Both perspective and parallel
 ("orthographic") projections are supported.
@@ -38,7 +38,7 @@ class OrbitCamera:
         self.znear = 0.1
         self.zfar = 10000.0
         self.perspective = True
-        #: SketchUp's Two-Point Perspective: vertical lines stay vertical
+        #: Two-Point Perspective: vertical lines stay vertical
         #: (José Castro Basso, FADU–UDELAR, for teaching architectural
         #: drawing). Only in perspective; see ``_level_forward``.
         self.two_point = False
@@ -76,7 +76,7 @@ class OrbitCamera:
         return QVector3D(sign * math.cos(self.yaw), sign * math.sin(self.yaw),
                          0.0)
 
-    # ---- First person (SketchUp's Position Camera / Look Around / Walk) -----
+    # ---- First person (Position Camera / Look Around / Walk) ---------------
     # The orbit model stays: a walkthrough only ever asks "the eye is HERE,
     # looking THERE", and that is a target at ``distance`` along the look
     # direction. Nothing else in the viewport has to learn a second camera.
@@ -177,7 +177,7 @@ class OrbitCamera:
 
     # ---- Navigation ---------------------------------------------------------
     def orbit(self, dx_pixels: float, dy_pixels: float, viewport_h: int) -> None:
-        """Turn the model under the cursor, SketchUp/Blender style.
+        """Turn the model under the cursor, Blender style.
 
         Both axes GRAB THE MODEL: drag right and the model swings right,
         drag down and it tips down — you come up over it and see its top.
@@ -245,7 +245,7 @@ class OrbitCamera:
         ``depth`` is how far in front of the eye the point grabbed under
         the cursor lies: in perspective, a pixel spans more the deeper it
         is, so moving by that depth keeps the grabbed point under the
-        cursor, as SketchUp does. Without it the pan used the distance to
+        cursor, as users expect. Without it the pan used the distance to
         the orbit target, which zooming in shrinks to 2 cm: at full zoom a
         wall metres away barely moved (Alejandro Limón, #184). Parallel
         views scale the same at every depth and ignore it."""
@@ -280,7 +280,7 @@ class OrbitCamera:
     def zoom_to(self, steps: float, focus: QVector3D,
                 min_step: float = 0.0) -> None:
         """Zoom keeping the world point ``focus`` (under the cursor) fixed on
-        screen, SketchUp-style. The whole frame scales toward ``focus``, so both
+        screen, as usual. The whole frame scales toward ``focus``, so both
         the distance and the target move by the same factor.
 
         Two escapes from the "stuck" close-up (the orbit distance pinned at
@@ -311,7 +311,7 @@ class OrbitCamera:
         self.two_point = False
 
     def toggle_two_point(self) -> None:
-        """SketchUp's Camera ▸ Two-Point Perspective; turning it on also
+        """Camera ▸ Two-Point Perspective; turning it on also
         turns a parallel view back into a perspective."""
         self.two_point = not self.two_point
         if self.two_point:

@@ -45,7 +45,7 @@ class Scene:
     groups: list = field(default_factory=list)
     # Annotation entities (static dimensions) — not geometry, drawn as overlays.
     dimensions: list = field(default_factory=list)
-    # Leader-text annotations (SketchUp's Text tool) — same overlay treatment.
+    # Leader-text annotations (the Text tool) — same overlay treatment.
     text_labels: list = field(default_factory=list)
     # Georef traced paths (roads / boundaries / alignments) — first-class georef
     # entities, kept out of the topology mesh entirely (Track G).
@@ -60,7 +60,7 @@ class Scene:
     # or photo you trace over. Display-only like the terrain and for the same
     # reason (invariant #4): reference to draw on top of, never topology.
     image_planes: list = field(default_factory=list)
-    # Layers / tags (SketchUp): labels with visibility + lock. The default
+    # Layers / tags: labels with visibility + lock. The default
     # layer always exists; entities reference layers by name.
     layers: list = field(default_factory=lambda: [
         __import__("core.layers", fromlist=["Layer"]).Layer(
@@ -71,7 +71,7 @@ class Scene:
     # attrs (color/texture) as the render truth and optionally carry
     # attrs["mat"] = name. See core/materials.py.
     materials: dict = field(default_factory=dict)
-    # Saved views (SketchUp's "Scenes"): named camera + layer-visibility
+    # Saved views ("Scenes"): named camera + layer-visibility
     # snapshots (core.saved_views.SavedView). Presentation state, no geometry.
     saved_views: list = field(default_factory=list)
     # Sheet compositions (core.composition.Composicion) — the print layouts.
@@ -97,7 +97,7 @@ class Scene:
     #: extremos no tiene para cambiarla», 2026-09-20).
     #: The camera the document was last saved with — target, distance, yaw,
     #: pitch, fov, perspective — so opening it shows what its author saw
-    #: (SketchUp keeps the camera in the file). ``None`` = never saved.
+    #: (.skp files keep the camera too). ``None`` = never saved.
     #: @pacaeiro, issue #60: «If I do a New drawing, or open a drawing, the
     #: Camera stays in the position where it was before».
     camera_home: dict | None = None
@@ -115,26 +115,31 @@ class Scene:
         "norma": "iso", "base_step_mm": 8.0, "ends": "arrow"})
     # Back-face tint override (RGB 0..1), e.g. adopted from an imported
     # .skp's style so unpainted faces read like they did for the author.
-    # ``None`` = the viewport's default SketchUp blue-grey.
+    # ``None`` = the viewport's default blue-grey.
     back_face_color: tuple | None = None
-    # Active display style (SketchUp Styles): face mode, edges, background.
+    # Active display style (Styles): face mode, edges, background.
     # The viewport reads it every frame; scenes snapshot it (core/style.py).
     display_style: object = field(default_factory=lambda: _make_style())
     # Sun shadows (core/sun.py): whether they draw, and the local date/time
     # the sun stands at. Document data — the shadow study is a deliverable.
     shadows: object = field(default_factory=lambda: _make_shadows())
-    # Section planes (SketchUp sections, core/section.py). At most ONE is
+    # Section planes (core/section.py). At most ONE is
     # ``active`` (the cut) in the model context; the two flags mirror
-    # SketchUp's View ▸ Section Planes / Section Cuts toggles.
+    # View ▸ Section Planes / Section Cuts toggles.
     section_planes: list = field(default_factory=list)
     show_section_planes: bool = True
-    # SketchUp's View ▸ Hidden Objects / Hidden Geometry: hidden objects
+    # View ▸ Hidden Objects / Hidden Geometry: hidden objects
     # (groups, components) and hidden geometry (faces, edges) are drawn
     # as a see-through grid and become selectable — the way back to
     # Unhide ▸ Selected. Never drawn normally: ``entity_visible`` stays
     # False for hidden things; the ghost pass draws them.
     show_hidden_objects: bool = False
     show_hidden_geometry: bool = False
+    # Camera ▸ Component Edit ▸ Hide Similar Components: while a
+    # component instance is open, its sibling instances (the other copies of
+    # the same definition) leave the frame instead of fading with the rest.
+    # A view preference, not document content: only read while editing.
+    hide_similar_components: bool = False
     show_section_cuts: bool = True
     # Georeferencing anchor (Track G). ``None`` until the user sets a datum;
     # once set, geodetic ↔ local-metre conversion goes through it. Terrain and
@@ -162,7 +167,7 @@ class Scene:
     # inside a group" keep working unchanged.
     edit_group: object | None = None
     _loose_mesh: object | None = None
-    #: The open contexts, outermost first — SketchUp's nested editing. Each
+    #: The open contexts, outermost first — nested editing. Each
     #: entry is ``{"group", "mesh", "share"}``: the group, the mesh ``scene.mesh``
     #: pointed at before entering it, and its pending instance share-back.
     _edit_stack: list = field(default_factory=list)
@@ -200,7 +205,7 @@ class Scene:
 
     @staticmethod
     def _object_hidden(entity) -> bool:
-        """SketchUp's Hide on an OBJECT (a group or component). Edges carry
+        """Hide on an OBJECT (a group or component). Edges carry
         a ``hidden`` of their own with older, narrower semantics (they stay
         in the topology and the draw passes skip them themselves), so only
         a group answers here."""
@@ -209,7 +214,7 @@ class Scene:
 
     @staticmethod
     def _face_hidden(entity) -> bool:
-        """SketchUp's Hide on a face: ``attrs["hidden"]``."""
+        """Hide on a face: ``attrs["hidden"]``."""
         attrs = getattr(entity, "attrs", None)
         return bool(attrs and attrs.get("hidden"))
 
@@ -223,11 +228,39 @@ class Scene:
         # render, pick, snap, bounds, export — whatever its layer says.
         # The hidden-things view does NOT change that: it draws them as a
         # ghost in its own pass and only makes them selectable.
-        if self.entity_hidden(entity):
+        if self.entity_hidden(entity) or self.similar_hidden(entity):
             return False
         return self._layer_state(entity)[0]
 
+    def edit_definition(self):
+        """The shared prototype mesh of the component instance open at the
+        innermost level, or ``None`` (at the root, or inside a classic
+        group)."""
+        if not self._edit_stack:
+            return None
+        return self._edit_stack[-1].get("definition")
+
+    def similar_hidden(self, entity) -> bool:
+        """Out of the frame by Hide Similar Components: another instance of
+        the definition being edited (or a nested placement of one). Nothing
+        is hidden at the root, so saving and exporting never see it."""
+        if not self.hide_similar_components or not self._edit_stack:
+            return False
+        if not hasattr(entity, "children") or entity is self.edit_group:
+            return False
+        definition = self.edit_definition()
+        if definition is None:
+            return False
+        for g in (entity, getattr(entity, "owner", None)):
+            if (g is not None and g is not self.edit_group
+                    and getattr(g, "xform", None) is not None
+                    and getattr(g, "mesh", None) is definition):
+                return True
+        return False
+
     def entity_selectable(self, entity) -> bool:
+        if self.similar_hidden(entity):
+            return False
         if self._object_hidden(entity) and not self.show_hidden_objects:
             return False
         if self._face_hidden(entity) and not self.show_hidden_geometry:
@@ -240,7 +273,7 @@ class Scene:
         from core.purge import iter_groups
         return {g.uid: g for g in iter_groups(self.groups)}
 
-    # ---- Sections (SketchUp section planes) ----------------------------------
+    # ---- Sections (section planes) -------------------------------------------
     def active_section(self):
         """The section plane currently cutting the model, or ``None``."""
         for sp in self.section_planes:
@@ -250,13 +283,13 @@ class Scene:
 
     def set_active_section(self, plane) -> None:
         """Make ``plane`` the ONE active cut (None deactivates all) —
-        SketchUp: one active cut per context."""
+        one active cut per context."""
         for sp in self.section_planes:
             sp.active = sp is plane
 
     # ---- Group-edit context (Groups v2) --------------------------------------
     def begin_group_edit(self, group) -> None:
-        """Enter a group: tools and commands now edit ITS mesh (SketchUp's
+        """Enter a group: tools and commands now edit ITS mesh (the usual
         double-click-into-group).
 
         Entering a CHILD of the group already open pushes a level instead of
@@ -278,10 +311,15 @@ class Scene:
         anterior = self.mesh
         self._edit_share = None
         # The context's own axes (issue #44), read BEFORE anything below
-        # rewrites the placement: SketchUp draws inside a group on the
+        # rewrites the placement: drawing inside a group happens on the
         # group's axes, level by level.
         from core.group import group_frame
         frame = group_frame(group)
+        # The definition its sibling instances share, read before the entry
+        # below swaps the instance onto a world copy (Hide Similar).
+        is_comp = getattr(group, "is_component", None)
+        definition = (group.mesh if callable(is_comp) and is_comp()
+                      else None)
         if getattr(group, "children", None):
             # A container: its children stay children. What CANNOT stay is a
             # transform on it, because the tools work in world coordinates —
@@ -296,7 +334,7 @@ class Scene:
             # A component instance: the tools work in world coordinates, so
             # the session edits a world-space COPY of the definition. On
             # leaving, the copy goes back into the shared prototype (local
-            # coordinates) and every sibling shows the edit — SketchUp's
+            # coordinates) and every sibling shows the edit — classic
             # component editing. Make Unique first to edit one copy only.
             from core.group import transformed_mesh
             proto, xform = group.mesh, group.xform
@@ -308,7 +346,7 @@ class Scene:
             self._loose_mesh = anterior
         self._edit_stack.append(
             {"group": group, "mesh": anterior, "share": self._edit_share,
-             "frame": frame})
+             "frame": frame, "definition": definition})
         self.mesh = group.mesh
         self.edit_group = group
         self.selection.clear()
@@ -346,7 +384,7 @@ class Scene:
         group.xform = QMatrix4x4()
 
     def end_one_group_edit(self) -> None:
-        """Leave the INNERMOST group only — SketchUp's Esc, which steps out
+        """Leave the INNERMOST group only — Esc, which steps out
         one level and leaves you inside the parent."""
         self._leave_level()
 
@@ -473,7 +511,7 @@ class Scene:
     def select(self, edges: Iterable, additive: bool = False,
                mode: str | None = None) -> None:
         """Put *edges* (any entities) into the selection the way *mode*
-        says — SketchUp's click modifiers: ``"replace"`` (a plain click),
+        says — the usual click modifiers: ``"replace"`` (a plain click),
         ``"add"`` (Ctrl), ``"toggle"`` (Shift: what is in goes out, what is
         out comes in) and ``"remove"`` (Shift+Ctrl). ``additive=True`` is
         the old spelling of ``"add"`` and still works; an explicit *mode*
@@ -511,7 +549,7 @@ class Scene:
         return self.version - self.view_version
 
     def invert_selection(self) -> int:
-        """SketchUp's Edit ▸ Invert Selection (Ctrl+Shift+I): select every
+        """Edit ▸ Invert Selection (Ctrl+Shift+I): select every
         entity of the open context that is NOT selected now, and drop what
         is. The universe is Select All's — the loose edges and faces, the
         context's groups (the model's, or the open group's children) and the

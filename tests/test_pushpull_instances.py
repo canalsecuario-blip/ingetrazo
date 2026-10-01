@@ -9,11 +9,11 @@ Dos reglas, y la segunda llegó después de usar la primera en obra:
    los demás no cambian»).
 2. **Desde fuera no se empuja.** La herramienta lo hacía —y en una instancia
    abría a tus espaldas una sesión de edición y compartía el resultado a
-   todas las copias, cosa que se escribió como «mejor que SketchUp» el
+   todas las copias, cosa que se escribió como «mejor que lo habitual» el
    2026-06-10—. Dibujando de verdad eso se lee como que el modelo cambia
    donde no apuntaste (Marco, 2026-09-10: «cuando un dibujo esté agrupado y
    haga push sin entrar al grupo con doble clic no debería hacer push»). Es
-   además lo que dice la propia guía de SketchUp: *the Push/Pull tool cannot
+   además la convención de los modeladores push/pull: *the Push/Pull tool cannot
    extrude objects that are a part of a Component or Group… double-click the
    Group or Component to edit it*.
 """

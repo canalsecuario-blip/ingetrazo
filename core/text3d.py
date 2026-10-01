@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""3D Text — real, editable geometry generated from font glyphs (SketchUp's
-Texto 3D).
+"""3D Text — real, editable geometry generated from font glyphs (Texto
+3D).
 
 Qt supplies the glyph outlines (``QPainterPath.addText`` →
 ``toSubpathPolygons``); each outline ring is classified outer/hole by
@@ -12,10 +12,10 @@ and export like anything drawn by hand.
 
 :func:`make_text_group` is what the app inserts: a container group with ONE
 NESTED GROUP PER LETTER (Rafael, 2026-09-16: «que cada letra aparezca como
-grupo, como en SketchUp»), carrying the parameters it was made from in
+grupo»), carrying the parameters it was made from in
 ``Group.text3d`` so the text stays EDITABLE — the right-click's «Edit 3D
 Text…» reopens the dialog and :func:`rebuild_text_group` lays the letters
-out again in place (double-click keeps SketchUp's meaning: it enters).
+out again in place (double-click keeps its usual meaning: it enters).
 
 The text STANDS UP by default: width along +X, height along +Z (base at
 z=0), thickness along +Y — so placing it with the component-placement tool

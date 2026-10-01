@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""A mesh face-me (SketchUp's Susan: many solid-colour faces on one plane)
+"""A mesh face-me (a scale figure: many solid-colour faces on one plane)
 must give the renderer a 3-D anchor. v0.3.9 built a 2-D one and paintGL
 raised IndexError on every frame — a blank viewport for any model that
 carried such a figure (plaza Yanque(2).skp, 2026-09-04)."""

@@ -68,8 +68,7 @@ modules:
       # 1. Python dependencies into /app's prefix. pytest is a test tool.
       - grep -vE '^\s*pytest\b' requirements.txt > reqs.txt
       - pip3 install --prefix=${FLATPAK_DEST} --no-warn-script-location -r reqs.txt
-      # openskp's blank template was written by Trimble's SketchUp SDK: not
-      # distributed (Trimble's notice, 2026-09-28; no SketchUp export).
+      # openskp's blank writer template is not distributed (no .skp export).
       - rm -rf ${FLATPAK_DEST}/lib/python3*/site-packages/openskp/_scaffold
       # 2. The application, as source — GPL code hides from nobody.
       #    materials/ and styles/ are importable packages; plugins/ carries

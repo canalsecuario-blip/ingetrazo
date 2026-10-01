@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """BIM tagging layer — semantics ON TOP of freeform geometry.
 
-The project's non-negotiable principle: the modeller is SketchUp-style
+The project's non-negotiable principle: the modeller is push/pull
 freedom, and BIM lives as *metadata applied to selected geometry* (the
 BlenderBIM pattern), never as rigid Revit-style primitives. A tag turns a set
 of faces (or a whole group) into a named IFC object; tagged objects feed the

@@ -3,7 +3,7 @@
 """Circle and Polygon tools: a centre click, then a radius.
 
 Both draw a regular N-gon on the work plane (a circle is just a many-sided one,
-SketchUp-style). First click sets the centre; moving sets the radius; a second
+the classic way). First click sets the centre; moving sets the radius; a second
 click (or typing the radius in the VCB) commits the loop + face. One vertex
 points toward the cursor, so a hexagon's orientation follows the mouse.
 """
@@ -23,7 +23,7 @@ from core.history import (
 
 def flat_drawing(scene, new_points) -> bool:
     """Whether the whole drawing (existing mesh + the new loop) shares one
-    plane — the gate for the SketchUp-style planar arrangement, which forms
+    plane — the gate for the classic planar arrangement, which forms
     every intersection face deterministically. 3D models keep the naive path."""
     from core.arrangement import coplanar_plane
     verts = [v.position for v in scene.mesh.vertices] + list(new_points)
@@ -60,7 +60,7 @@ class _RadialTool(AxisMagnet, PlaneLock, Tool):
     vcb_label = "Radius"
 
     def vcb_caption(self) -> str:
-        """SketchUp shows 'Sides' before the centre, 'Radius' after.
+        """'Sides' before the centre, 'Radius' after.
 
         Returns the English source label; the status bar translates it.
         """
@@ -100,7 +100,7 @@ class _RadialTool(AxisMagnet, PlaneLock, Tool):
         ctx.viewport.update()
 
     def on_segments_value(self, viewport, n: int) -> bool:
-        """SketchUp's "24s": the side count, typed at any moment."""
+        """The classic "24s": the side count, typed at any moment."""
         n = int(n)
         if n < 3:
             return False
@@ -116,7 +116,7 @@ class _RadialTool(AxisMagnet, PlaneLock, Tool):
 
     def on_value(self, viewport, value) -> bool:
         """Before the centre is placed, a typed number sets the **side count**
-        (SketchUp: type sides + Enter); after it, the number is the **radius**."""
+        (type sides + Enter); after it, the number is the **radius**."""
         if isinstance(value, tuple):
             return False
         if self.start_point is None:
@@ -155,14 +155,19 @@ class _RadialTool(AxisMagnet, PlaneLock, Tool):
     def value_label(self):
         if self.start_point is None or self.hover_point is None:
             return None
-        r = (self.hover_point - self.start_point).length()
+        # The radius DRAWN — the rim projected onto the plane — not the
+        # straight distance to the cursor, which a snap off the plane
+        # made longer than the circle («R 4.44» on a 2.41 m circle).
+        u, v = self._axes()
+        d = self.hover_point - self.start_point
+        r = math.hypot(QVector3D.dotProduct(d, u), QVector3D.dotProduct(d, v))
         from core.units import fmt_len
         return ("R " + fmt_len(r) + "  (" + tr("{n} sides", n=self.sides) + ")",
                 self.hover_point)
 
     # ---- Internals ----------------------------------------------------------
     def _cursor_preview(self):
-        """SketchUp's ring on the cursor before the centre is placed: the
+        """The ring on the cursor before the centre is placed: the
         shape at a fixed screen size, lying on the plane it would take —
         so an arrow-key lock (drawn in the axis colour) or a face under
         the cursor is visible before committing (Rafael's review: «pulsas
@@ -183,6 +188,13 @@ class _RadialTool(AxisMagnet, PlaneLock, Tool):
 
     def _axes(self) -> tuple[QVector3D, QVector3D]:
         return plane_axes(self.drawing_plane()[1])
+
+    def plane_points(self):
+        """Centre and rim: a rim snapped off the plane turns the circle to
+        the axis plane holding both (``PlaneLock.snapped_plane``)."""
+        if self.start_point is None:
+            return []
+        return [self.start_point, self.hover_point]
 
     def _points(self, center: QVector3D, rim: QVector3D) -> list[QVector3D]:
         u, v = self._axes()
@@ -205,7 +217,7 @@ class _RadialTool(AxisMagnet, PlaneLock, Tool):
         # only a *swept* curve's vertical facets — done by Push/Pull, not here.
         if flat_drawing(viewport.scene, pts):
             # Flat drawing: rebuild the plane's faces from the edge graph — the
-            # deterministic SketchUp arrangement. A circle crossing a square
+            # deterministic planar arrangement. A circle crossing a square
             # splits both and every region (the quarter inside, the rest of the
             # disc) becomes its own face; an isolated circle still yields the
             # disc. TagCurve first so the rebuild carries the curve id over.
@@ -244,10 +256,14 @@ class _RadialTool(AxisMagnet, PlaneLock, Tool):
 class CircleTool(_RadialTool):
     name = "Circle"
     shortcut = "C"
+    description = "Draw a circle from its centre and radius."
     sides = 24
 
 
 class PolygonTool(_RadialTool):
     name = "Polygon"
-    shortcut = None  # SketchUp: Polygon has no default; G = Make Component
+    shortcut = None  # Polygon has no default; G = Make Component
+    description = (
+        "Draw a regular polygon from its centre and radius; type a "
+        "number followed by «s» to change the sides.")
     sides = 6

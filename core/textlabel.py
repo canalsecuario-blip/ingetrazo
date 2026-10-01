@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""Leader text — a SketchUp-style annotation label pointing at the model.
+"""Leader text — an annotation label pointing at the model.
 
 A ``TextLabel`` records the world ``anchor`` it points at (snapped to
 geometry when placed) and an ``offset`` to where the label floats; a leader
@@ -19,7 +19,7 @@ class TextLabel:
     anchor: QVector3D
     offset: QVector3D          # displacement from the anchor to the label
     text: str
-    #: Layer (SketchUp tag) the label lives on; ``None`` = default layer.
+    #: Layer (tag) the label lives on; ``None`` = default layer.
     layer: str | None = None
 
     def position(self) -> QVector3D:

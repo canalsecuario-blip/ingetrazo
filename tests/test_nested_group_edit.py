@@ -10,7 +10,7 @@ estructura se pierde rendimiento — nueve chunks independientes pasan a ser
 uno solo y el instanciado desaparece.
 
 Esta es la fase 1: la PILA de contextos. Entrar a un hijo del grupo abierto
-empuja un nivel; `end_one_group_edit` saca uno (el Esc de SketchUp) y
+empuja un nivel; `end_one_group_edit` saca uno (el Esc habitual) y
 `end_group_edit` cierra todo, que es lo que el resto de la aplicación da por
 hecho antes de guardar o exportar.
 """
@@ -419,7 +419,7 @@ def _plaza_con_pavimento():
 def test_dentro_de_un_grupo_se_snapea_al_resto_del_modelo():
     """Mover una jardinera anidada hasta la esquina del pavimento: «me
     debería salir un punto verde de la referencia, no me aparece» (Marco,
-    2026-09-11). SketchUp infiere contra el resto del modelo aunque esté
+    2026-09-11). Lo habitual es inferir contra el resto del modelo aunque esté
     atenuado; el índice de picking solo tenía el contexto abierto."""
     scene, padre, h1, _h2, pavimento = _plaza_con_pavimento()
     vp = _visor_con_picking(scene)
@@ -437,7 +437,7 @@ def test_dentro_de_un_grupo_se_snapea_al_resto_del_modelo():
 
 def test_el_resto_del_modelo_no_se_puede_seleccionar_desde_dentro():
     """Snapeable no es seleccionable: un clic sobre el pavimento desde dentro
-    de la plaza no lo selecciona (SketchUp: el resto está fuera de alcance)."""
+    de la plaza no lo selecciona (lo habitual: el resto está fuera de alcance)."""
     scene, padre, h1, _h2, pavimento = _plaza_con_pavimento()
     vp = _visor_con_picking(scene)
     scene.begin_group_edit(padre)

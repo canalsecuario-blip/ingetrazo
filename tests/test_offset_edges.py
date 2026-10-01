@@ -3,7 +3,7 @@
 """Offset on EDGES (issue #40, @pacaeiro): the status bar promised «Click a
 face, or connected edges, to offset» and only faces worked. Now a click on
 an edge takes its connected run (open polyline or closed loop), and edges
-selected before picking the tool up are the run — SketchUp's two ways."""
+selected before picking the tool up are the run — the two usual ways."""
 from __future__ import annotations
 
 from PySide6.QtCore import QPointF, Qt

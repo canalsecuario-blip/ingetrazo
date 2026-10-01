@@ -6,7 +6,7 @@ This is the bridge between the pure geometry planner in :mod:`core.topology`
 and the undo/redo commands in :mod:`core.history`. Tools hand it the raw
 segments the user drew; it returns a single reversible command that:
 
-- splits existing edges the new segments cross (SketchUp-style auto-split),
+- splits existing edges the new segments cross (the classic auto-split),
 - breaks each new segment at those crossings,
 - welds coincident edges (via ``AddEdgeCommand``'s merge), and
 - optionally auto-faces any planar cycle the new sub-edges close.
@@ -151,8 +151,8 @@ def _plan_faces(commands, faces_snapshot, simulated, sa, sb, eye=None) -> None:
         # Both halves ARE the mother, cut in two: they keep her paint, and
         # keep it VERBATIM. They are coplanar with her, so carrying the
         # texture's world→UV map over is what makes the image run straight
-        # across the cut instead of restarting on each half — the SketchUp
-        # result. Without this, drawing a line across a textured face wiped
+        # across the cut instead of restarting on each half — the result users
+        # of push/pull modellers expect. Without this, drawing a line across a textured face wiped
         # the texture off both halves (Marco, 2026-08-27).
         keep = dict(mother.attrs) if mother.attrs else None
         commands.append(DeleteFaceCommand(mother))
@@ -176,7 +176,7 @@ def _scene_has_curves(scene) -> bool:
 
 def _append_flat_curve_rebuild(scene, commands, points) -> None:
     """Append the deterministic planar-arrangement rebuild after a draw when
-    the cycle planner alone cannot produce SketchUp's regions:
+    the cycle planner alone cannot produce the expected regions:
 
     - Whole-flat drawing WITH curves → full rebuild (every minimal region gets
       a face; a square over a circle splits into three areas).
@@ -206,7 +206,7 @@ def _append_flat_curve_rebuild(scene, commands, points) -> None:
         elif scene.mesh.faces:
             # Whole-flat, straight edges only, faces present: the SCOPED
             # rebuild with coverage semantics. Two overlapping rectangles must
-            # split into three regions (SketchUp) — the cycle planner leaves
+            # split into three regions (the classic behaviour) — the planner leaves
             # the first rectangle whole over the lens (rect.igz report) — but
             # regions nobody covered stay empty (no resurrecting faces the
             # user deleted).
@@ -302,7 +302,7 @@ def _newell(loop) -> QVector3D:
 
 
 def face_up_or_toward(loop, eye=None):
-    """The winding a brand-new face should take (SketchUp's rule for a face
+    """The winding a brand-new face should take (the usual rule for a face
     with no neighbour to agree with): a horizontal one shows its FRONT
     upwards, any other one faces the ``eye`` that drew it. A loop closed by
     hand with Line, or by Offset, came out either way — the order the cycle
@@ -339,7 +339,7 @@ def build_add_edge(scene, a: QVector3D, b: QVector3D, detect_faces: bool = True,
     if detect_faces:
         _append_face_plane_rebuild(scene, commands, [a, b])
     # When curves exist, even a single added edge can break a circle into
-    # contours (a tangent line landing on a curve vertex splits it in SketchUp),
+    # contours (a tangent line landing on a curve vertex splits it),
     # so it must go through SnapshotCompound, which runs the contour re-split —
     # and whose undo restores the reunited curve.
     if len(commands) == 1 and not _scene_has_curves(scene):
@@ -371,13 +371,13 @@ def build_add_edges(
 
 
 def divide_edges(mesh, edges, n: int) -> int:
-    """SketchUp's Divide (issue #63, @pacaeiro): split each selected edge —
+    """Divide (issue #63, @pacaeiro): split each selected edge —
     or, for an edge of a curve, the whole curve — into ``n`` pieces of
     equal length. A straight edge gets n−1 new vertices. A curve (arc,
     circle) is measured along its chain, cut where the k/n marks fall, and
     comes out as ``n`` INDEPENDENT arcs — each piece its own curve, each
-    selectable on its own, exactly what SketchUp does (a circle divided in
-    four is four quarter arcs; Marco, 2026-09-21: «hazlo como SketchUp»).
+    selectable on its own, the classic behaviour (a circle divided in
+    four is four quarter arcs; Marco, 2026-09-21).
     A mark that lands on an existing facet vertex cuts nothing there but
     still parts the curve. Faces the edges bound take the new vertices in
     their loops (``Mesh.split_edge``). Returns the number of cuts made."""
@@ -447,7 +447,7 @@ def divide_edges(mesh, edges, n: int) -> int:
 def _order_chain(chain, seed):
     """The edges of a curve in walking order as ``(edge, v_from, v_to)``
     triples, starting at one end (or at ``seed.v0`` for a closed loop) so
-    the k/n marks land where SketchUp's do. The orientation matters: a
+    the k/n marks land where users expect them. The orientation matters: a
     facet's own ``v0→v1`` may run against the walk, and a mark measured
     along the wrong way lands mirrored inside the facet."""
     if len(chain) <= 1:

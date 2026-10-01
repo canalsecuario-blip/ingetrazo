@@ -1,9 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""Flip tool — SketchUp 2023+'s Flip (mirror).
+"""Flip tool — Flip (mirror).
 
-Official flow (help.sketchup.com "Flipping, Mirroring, Rotating and
-Arrays"): with a selection, three semi-transparent planes appear over it —
+Flow: with a selection, three semi-transparent planes appear over it —
 red, green and blue, one per axis. Hovering highlights a plane; ONE CLICK
 flips the selection about it. The arrow keys pick a plane (Right = red,
 Left = green, Up = blue); tapping Ctrl toggles COPY mode, which leaves the
@@ -39,6 +38,7 @@ _PLANE_RGBA = {"x": (216, 56, 68), "y": (40, 158, 90), "z": (52, 102, 198)}
 
 class FlipTool(Tool):
     name = "Flip"
+    description = "Mirror the selection across its red, green or blue plane."
     uses_snap = False
 
     def __init__(self) -> None:
@@ -82,18 +82,26 @@ class FlipTool(Tool):
         ctx.viewport.update()
 
     def on_click(self, ctx: ToolContext) -> None:
-        viewport = ctx.viewport
         axis = self._lock_axis or self._hover_axis
         if axis is None:
             return
+        self.flip(ctx.viewport, axis, copy=self._copy)
+        self._copy = False           # the modifier arms ONE flip
+
+    def flip(self, viewport, axis: str, copy: bool = False) -> bool:
+        """Mirror the selection across its own centre, along the world
+        ``axis`` ("x" red, "y" green, "z" blue), as one undo step — what a
+        click on a plane does, and what the right-click menu's Flip Along ▸
+        Red / Green / Blue asks for (issue #178). ``copy`` leaves the
+        original in place. False when nothing is selected."""
         ok, groups, positions, faces, edges, centre = \
             self._targets(viewport, full=True)
         if not ok:
             viewport.flash_status(tr("Select the geometry to flip first"))
-            return
+            return False
         n = _AXES[axis]
         cmds: list = []
-        if self._copy:
+        if copy:
             m = mirror_matrix(centre, n)
             for g in groups:
                 copy = copy_group(g)
@@ -123,11 +131,11 @@ class FlipTool(Tool):
                 cmds.append(FlipVerticesCommand(
                     positions, centre, n, faces=faces))
         if not cmds:
-            return
+            return False
         viewport.history.execute(
             cmds[0] if len(cmds) == 1 else CompoundCommand(cmds))
-        self._copy = False           # the modifier arms ONE flip (SketchUp)
         viewport.update()
+        return True
 
     def on_cancel(self, viewport) -> None:
         self._lock_axis = None
@@ -136,7 +144,7 @@ class FlipTool(Tool):
     # ---- Overlay ------------------------------------------------------------
     def draw_overlay(self, viewport, painter) -> None:
         """The three semi-transparent axis planes over the selection; the
-        hovered / arrow-locked one highlights (SketchUp)."""
+        hovered / arrow-locked one highlights."""
         ok, _g, _p, _f, _e, centre = self._targets(viewport, full=True)
         if not ok:
             return

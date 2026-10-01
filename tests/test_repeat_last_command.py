@@ -5,7 +5,7 @@
 A tool comes back as if its key were pressed; a one-shot command (Reverse
 Faces, Make Group, Intersect…) runs again on the CURRENT selection.
 
-Only on deliberate gestures. Space stays SketchUp's Select and Enter keeps
+Only on deliberate gestures. Space stays the usual Select and Enter keeps
 doing nothing on Select: a key pressed out of habit that repeated could
 bring back the Eraser — the next click to select would erase — or run
 Explode on whatever happens to be selected (Marco, 2026-09-26: «solo
