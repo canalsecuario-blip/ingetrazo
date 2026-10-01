@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
-"""SketchUp's View ▸ Component Edit: Hide Rest of Model (Alt+Q) and Hide
+"""Camera ▸ Component Edit: Hide Rest of Model (Alt+Q) and Hide
 Similar Components (Alt+W).
 
 Hide Rest toggles the existing «rest of model while editing» mode between

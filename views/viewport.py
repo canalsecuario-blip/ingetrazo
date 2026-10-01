@@ -10726,7 +10726,7 @@ class Viewport(QOpenGLWidget):
         self.update()
 
     def set_hide_similar_components(self, on: bool) -> None:
-        """SketchUp's Hide Similar Components: the other instances of the
+        """Hide Similar Components: the other instances of the
         component being edited leave the frame. Persisted like the rest
         mode; the version bump re-keys the pick index."""
         on = bool(on)

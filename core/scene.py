@@ -135,7 +135,7 @@ class Scene:
     # False for hidden things; the ghost pass draws them.
     show_hidden_objects: bool = False
     show_hidden_geometry: bool = False
-    # SketchUp's View ▸ Component Edit ▸ Hide Similar Components: while a
+    # Camera ▸ Component Edit ▸ Hide Similar Components: while a
     # component instance is open, its sibling instances (the other copies of
     # the same definition) leave the frame instead of fading with the rest.
     # A view preference, not document content: only read while editing.

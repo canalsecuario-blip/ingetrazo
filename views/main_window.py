@@ -1171,7 +1171,7 @@ class MainWindow(QMainWindow):
             rest_menu.addAction(act)
             self._rest_actions[key] = act
 
-        # SketchUp's View ▸ Component Edit, with keys of their own: Alt+Q
+        # Camera ▸ Component Edit, with keys of their own: Alt+Q
         # toggles the rest of the model between hidden and the mode it had
         # (fade or normal), Alt+W hides the other copies of the component
         # being edited.
@@ -2749,7 +2749,7 @@ class MainWindow(QMainWindow):
             self.viewport.scene, "hide_similar_components", False)))
 
     def _on_toggle_hide_rest(self, _checked: bool = False) -> None:
-        """SketchUp's Hide Rest of Model (Alt+Q). Reads the viewport, not
+        """Hide Rest of Model (Alt+Q). Reads the viewport, not
         the checkmark, which Preferences may have left stale."""
         mode = self.viewport.edit_rest_mode
         if mode == "hide":
@@ -2760,7 +2760,7 @@ class MainWindow(QMainWindow):
         self._sync_component_edit_menu()
 
     def _on_toggle_hide_similar(self, _checked: bool = False) -> None:
-        """SketchUp's Hide Similar Components (Alt+W)."""
+        """Hide Similar Components (Alt+W)."""
         on = not bool(getattr(self.viewport.scene,
                               "hide_similar_components", False))
         self.viewport.set_hide_similar_components(on)
