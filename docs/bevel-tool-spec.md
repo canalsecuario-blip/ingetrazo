@@ -253,9 +253,8 @@ cóncavo). Los segmentos se distribuyen uniformemente en longitud de arco.
 
 ## 6. Herramienta aparte: editar cantidad de segmentos
 
-**Sí, vale la pena**, y encaja muy bien con el resto. SketchUp lo permite en
-*Entity Info* para círculos/arcos sin extruir; Blender no lo tiene para
-mallas ya creadas. En IngeTrazo sería un diferencial.
+**Sí, vale la pena**, y encaja muy bien con el resto. Blender no lo tiene
+para mallas ya creadas. En IngeTrazo sería un diferencial.
 
 ### 6.1 Qué hace
 Cambiar el número de segmentos de una curva ya dibujada (círculo, arco,
