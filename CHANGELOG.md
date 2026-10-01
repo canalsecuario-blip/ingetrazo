@@ -95,8 +95,8 @@ ejecuta, descarga ni enlaza nada de Trimble:
 - **Lo que arrastra Mover ya no tapa las inferencias de detrás**
   (@canalsecuario-blip): al deslizar un rectángulo sobre un muro, las
   esquinas y aristas del muro que quedaban debajo no enganchaban (solo en
-  Rayos X). Como en SketchUp, se infiere a través de lo que está en
-  movimiento; lo que queda quieto sigue tapando.
+  Rayos X). Ahora se infiere a través de lo que está en movimiento; lo que
+  queda quieto sigue tapando.
 
 ### Añadido
 - **Buscador de comandos (F3)**, como el F3 de Blender, la búsqueda de

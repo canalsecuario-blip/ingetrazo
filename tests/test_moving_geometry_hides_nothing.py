@@ -5,8 +5,8 @@
 The live preview moves the selection in the scene, and the occlusion rays
 hit it: sliding a rectangle across a wall hid the wall's corners and edges
 under the rectangle, and their inferences showed only in X-ray (Marco,
-2026-09-29). SketchUp infers through the entities in motion, as it already
-leaves them out of the candidates (issue #19)."""
+2026-09-29). Snaps are inferred through the entities in motion, as they are
+already left out of the candidates (issue #19)."""
 from __future__ import annotations
 
 import os

@@ -9812,8 +9812,8 @@ class Viewport(QOpenGLWidget):
         What a transform tool is dragging hides nothing either: the live
         preview moves it in the scene, so a rectangle slid across a wall
         covered the wall's own corners and edges, and their snaps showed only
-        in X-ray (Marco, 2026-09-29). SketchUp infers THROUGH the entities in
-        motion, as it leaves them out of the candidates (issue #19).
+        in X-ray (Marco, 2026-09-29). Snaps are inferred THROUGH the entities
+        in motion, as they are already left out of the candidates (issue #19).
         """
         if self._effective_style().face_mode in ("xray", "wireframe"):
             return False
