@@ -2475,5 +2475,9 @@
  "keep the base": "保留底面",
  "move the base": "移动底面",
  "Keep the base: on": "保留底面：开",
- "Keep the base: off": "保留底面：关"
+ "Keep the base: off": "保留底面：关",
+ "Join Segments": "合并线段",
+ "Join collinear segments into single lines: the selected ones, or all of them when nothing is selected.": "将共线线段合并为单条直线：选中的线段，未选择时则为全部。",
+ "Removed {n} intermediate points": "已删除 {n} 个中间点",
+ "No collinear segments to join.": "没有可合并的共线线段。"
 }

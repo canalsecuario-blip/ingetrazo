@@ -444,6 +444,62 @@ def divide_edges(mesh, edges, n: int) -> int:
     return cuts
 
 
+# How far a point may sit off the line through its neighbours and still go
+# (the mesh's own stitch tolerance, ~0.1 mm). A distance, not an angle:
+# the weld rounds every vertex, which tilts a 2 cm piece more than a real
+# 0.1° kink in a 10 m line, yet moves the point less than this.
+_JOIN_TOL = 1e-4
+
+
+def join_edges(mesh, edges) -> list:
+    """Join Segments, the inverse of Divide: every vertex where two of
+    ``edges`` meet in a straight line, with nothing else attached to it,
+    goes, and the two segments become one line. A long line drawn in
+    pieces, or one left cut by a divide or by an erased crossing, comes out
+    clean, its faces (if it bounds any) losing the needless corner.
+
+    A vertex stays when a third edge meets it, when the two segments are
+    not collinear, bound different faces, carry different flags (soft,
+    hidden, layer), or belong to a curve: an arc's facets are not
+    segments to merge. Returns the edges the selection is made of
+    afterwards, the joined lines in place of their pieces."""
+    from core.mesh import edge_flags, stamp_edge_flags
+    live = [e for e in edges if e in mesh.edges]
+    picked = set(map(id, live))
+    seen: set = set()
+    candidates = []
+    for e in live:
+        for v in (e.v0, e.v1):
+            if id(v) not in seen:
+                seen.add(id(v))
+                candidates.append(v)
+    for v in candidates:
+        if len(v.edges) != 2:
+            continue
+        e1, e2 = list(v.edges)
+        if id(e1) not in picked or id(e2) not in picked:
+            continue
+        flags = edge_flags(e1)
+        if flags != edge_flags(e2) or e1.curve is not None:
+            continue
+        if not mesh.collapsible_vertex(v):
+            continue
+        a, b = e1.other(v).position, e2.other(v).position
+        ab = b - a
+        off = QVector3D.crossProduct(v.position - a, ab).length() / ab.length()
+        if off > _JOIN_TOL:
+            continue
+        if mesh.find_edge(e1.other(v), e2.other(v)) is not None:
+            continue                     # the whole line is there already
+        joined = mesh.collapse_vertex(v)["new_edge"]
+        stamp_edge_flags(joined, flags)
+        picked.discard(id(e1))
+        picked.discard(id(e2))
+        picked.add(id(joined))
+        live.append(joined)
+    return [e for e in live if id(e) in picked and e in mesh.edges]
+
+
 def _order_chain(chain, seed):
     """The edges of a curve in walking order as ``(edge, v_from, v_to)``
     triples, starting at one end (or at ``seed.v0`` for a closed loop) so

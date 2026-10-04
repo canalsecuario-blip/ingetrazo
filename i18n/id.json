@@ -2266,5 +2266,9 @@
  "keep the base": "pertahankan alas",
  "move the base": "pindahkan alas",
  "Keep the base: on": "Pertahankan alas: aktif",
- "Keep the base: off": "Pertahankan alas: nonaktif"
+ "Keep the base: off": "Pertahankan alas: nonaktif",
+ "Join Segments": "Gabungkan segmen",
+ "Join collinear segments into single lines: the selected ones, or all of them when nothing is selected.": "Gabungkan segmen segaris menjadi satu garis: yang dipilih, atau semuanya bila tidak ada yang dipilih.",
+ "Removed {n} intermediate points": "{n} titik antara dihapus",
+ "No collinear segments to join.": "Tidak ada segmen segaris untuk digabungkan."
 }

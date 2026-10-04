@@ -2476,5 +2476,9 @@
  "keep the base": "mantieni la base",
  "move the base": "sposta la base",
  "Keep the base: on": "Mantieni la base: attivo",
- "Keep the base: off": "Mantieni la base: disattivo"
+ "Keep the base: off": "Mantieni la base: disattivo",
+ "Join Segments": "Unisci segmenti",
+ "Join collinear segments into single lines: the selected ones, or all of them when nothing is selected.": "Unisce i segmenti collineari in linee singole: quelli selezionati o, senza selezione, tutti.",
+ "Removed {n} intermediate points": "Rimossi {n} punti intermedi",
+ "No collinear segments to join.": "Nessun segmento collineare da unire."
 }

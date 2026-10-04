@@ -1109,6 +1109,13 @@ class MainWindow(QMainWindow):
         heal_action.triggered.connect(self._on_heal_overlaps)
         edit_menu.addAction(heal_action)
 
+        join_action = QAction(tr("Join Segments"), self)
+        join_action.setStatusTip(tr(
+            "Join collinear segments into single lines: the selected ones, "
+            "or all of them when nothing is selected."))
+        join_action.triggered.connect(self._on_join_segments)
+        edit_menu.addAction(join_action)
+
         rebuild_action = QAction(tr("Rebuild Faces (Planar)"), self)
         rebuild_action.setStatusTip(tr(
             "Work the faces out again from the edges: on the plane of the "
@@ -3178,6 +3185,10 @@ class MainWindow(QMainWindow):
             # Divide: a line or an arc into N equal pieces
             # (issue #63, @pacaeiro: «It's a needed command»).
             menu.addAction(tr("Divide…"), self._on_divide)
+            if len(loose_edges) > 1:
+                # Join Segments, its inverse: a line drawn in pieces
+                # back to one line.
+                menu.addAction(tr("Join Segments"), self._on_join_segments)
         if self._hideable(sel):
             menu.addAction(tr("Hide"), self._on_hide)
         if any(self.viewport.scene.entity_hidden(e)
@@ -3564,6 +3575,32 @@ class MainWindow(QMainWindow):
         self.viewport.update()
         self.statusBar().showMessage(
             tr("Divided into {n} segments", n=n), 3000)
+
+    @_repeatable("Join Segments")
+    def _on_join_segments(self) -> None:
+        """Join the selected collinear segments into single lines; with
+        no edge selected, every one of the model being edited."""
+        from core.edits import join_edges
+        from core.history import SnapshotMutation
+        scene = self.viewport.scene
+        edges = [e for e in scene.selection if isinstance(e, Edge)
+                 and e in scene.mesh.edges]
+        whole = not edges
+        if whole:
+            edges = list(scene.mesh.edges)
+        before = len(edges)
+        result: list = []
+        self.viewport.history.execute(SnapshotMutation(
+            lambda sc: result.extend(join_edges(sc.mesh, edges))))
+        joined = before - len(result)
+        if not whole:
+            scene.selection.clear()
+            scene.selection.update(result)
+        scene.version += 1
+        self.viewport.update()
+        self.statusBar().showMessage(
+            tr("Removed {n} intermediate points", n=joined) if joined
+            else tr("No collinear segments to join."), 3000)
 
     def _on_flip_along(self, axis: str) -> None:
         """Right-click ▸ Flip Along ▸ Red / Green / Blue (issue #178)."""
