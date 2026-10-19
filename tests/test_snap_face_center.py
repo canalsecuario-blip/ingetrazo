@@ -133,6 +133,14 @@ def test_a_corner_as_close_wins_the_tie():
     assert r.kind == "endpoint"
 
 
+def test_the_centre_the_operation_started_on_is_not_offered_again():
+    # A circle begun at the face's centre: its rim must not snap back onto
+    # that same centre (a zero radius, and no disc).
+    r = _snap(_square_scene(), V(1.04, 0.97), start_point=V(1, 1),
+              face_centers=[(V(1, 1), None)])
+    assert r.kind != "face_center"
+    assert not _close(r.point, V(1, 1))
+
 def test_inside_a_component_the_tip_says_so():
     r = _snap(_square_scene(), V(1.0, 1.02), face_centers=[(V(1, 1), "component")])
     assert r.kind == "face_center" and r.context == "component"

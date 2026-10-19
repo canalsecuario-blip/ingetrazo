@@ -1763,6 +1763,14 @@ def compute_snap(
             # degenerate pseudo-edges: the line rules (on edge, extension,
             # the lock's 'endpoint on the line') would read such a point as
             # a scrap of edge. After the endpoints, so a corner wins a tie.
+            #
+            # Not the point the operation started on: a circle begun at a
+            # face's centre found that same centre again under its rim, and
+            # the radius snapped back to nothing — no disc was built. A
+            # corner is geometry the drawing welds to; this point is not,
+            # and landing on it again only gives a zero-length step.
+            if start_point is not None and (point - start_point).length() < 1e-6:
+                continue
             _consider(point, "face_center", COLOR_ON_FACE, context=context)
         # A "close" already chosen stands; otherwise the nearest visible of
         # the named points and endpoints (named ones first on a tie — they
