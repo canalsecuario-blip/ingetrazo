@@ -6420,8 +6420,10 @@ class MainWindow(QMainWindow):
         relay.deleteLater()
         return result.get("payload"), result.get("exc")
 
-    def _parse_stl_threaded(self, path, scale, simplify_mode, cb):
-        """Parse an STL on a worker while delivering progress on the UI thread."""
+    def _parse_stl_threaded(self, path, scale, simplify_mode, cb,
+                            report=None):
+        """Parse an STL on a worker while delivering progress on the UI thread.
+        ``report`` receives the survey offset (``stl.parse_stl``)."""
         from PySide6.QtCore import QEventLoop, QObject, QThread, Qt, Signal
         from formats import stl as stl_format
 
@@ -6433,7 +6435,8 @@ class MainWindow(QMainWindow):
                 try:
                     mesh = stl_format.parse_stl(
                         path, progress=lambda f, t: self.progressed.emit(f, t),
-                        scale=scale, simplify_mode=simplify_mode)
+                        scale=scale, simplify_mode=simplify_mode,
+                        report=report)
                     self.finished.emit(mesh, None)
                 except Exception as exc:  # noqa: BLE001 — reported to caller
                     self.finished.emit(None, exc)
@@ -6496,8 +6499,12 @@ class MainWindow(QMainWindow):
     def _import_glb_path(self, path: Path) -> None:
         from formats import glb as glb_format
         dlg, cb = self._import_progress(tr("Importing {name}…", name=path.name))
-        cmd = SnapshotImport(
-            lambda scene: glb_format.load_glb(scene, path, progress=cb))
+        moved: dict = {}
+
+        def load(scene):
+            moved["offset"] = glb_format.load_glb(scene, path, progress=cb)
+
+        cmd = SnapshotImport(load)
         try:
             self.viewport.history.execute(cmd)
         except Exception as exc:  # noqa: BLE001
@@ -6509,12 +6516,16 @@ class MainWindow(QMainWindow):
         self.viewport.update()
         self._import_name = path.name
         self._update_title()
-        self.statusBar().showMessage(tr("Imported {name}", name=path.name), 3000)
+        self._report_import(path.name, moved.get("offset"))
 
     def _import_dae_path(self, path: Path) -> None:
         dlg, cb = self._import_progress(tr("Importing {name}…", name=path.name))
-        cmd = SnapshotImport(
-            lambda scene: dae_format.load_dae(scene, path, progress=cb))
+        moved: dict = {}
+
+        def load(scene):
+            moved["offset"] = dae_format.load_dae(scene, path, progress=cb)
+
+        cmd = SnapshotImport(load)
         try:
             self.viewport.history.execute(cmd)
         except Exception as exc:  # noqa: BLE001
@@ -6526,7 +6537,7 @@ class MainWindow(QMainWindow):
         self.viewport.update()
         self._import_name = path.name
         self._update_title()
-        self.statusBar().showMessage(tr("Imported {name}", name=path.name), 3000)
+        self._report_import(path.name, moved.get("offset"))
 
     # ---- SKP import: IngeTrazo's own reader (formats/skp.py) -----------------
     def import_skp_path(self, skp: Path) -> bool:
@@ -6724,6 +6735,26 @@ class MainWindow(QMainWindow):
             PlaceGroupTool(comp, anchor=origin).place_at(self.viewport, point)
         return comp
 
+    @staticmethod
+    def _survey_note(offset) -> str:
+        """The status-bar note for a file moved near the origin on import
+        (formats/recenter.py), or ``""`` when it was read where it is."""
+        if not offset:
+            return ""
+        return "  ·  " + tr(
+            "moved near the origin (survey coordinates); offset "
+            "{x:,.0f}, {y:,.0f} m", x=offset[0], y=offset[1])
+
+    def _report_import(self, name: str, offset=None) -> None:
+        """«Imported name», plus the offset when the file was moved near the
+        origin — then the model is framed, since it now sits elsewhere than
+        its coordinates say."""
+        if offset:
+            self._on_zoom_extents()
+        self.statusBar().showMessage(
+            tr("Imported {name}", name=name) + self._survey_note(offset),
+            8000 if offset else 3000)
+
     def _on_import_obj(self) -> None:
         path_str, _ = file_dialogs.getOpenFileName(
             self, tr("Import OBJ"), "", tr("Wavefront OBJ (*.obj);;All files (*)"))
@@ -6734,9 +6765,13 @@ class MainWindow(QMainWindow):
         if scale is None:
             return
         dlg, cb = self._import_progress(tr("Importing {name}…", name=path.name))
-        cmd = SnapshotImport(
-            lambda scene: obj_format.load_obj(scene, path, progress=cb,
-                                              scale=scale))
+        moved: dict = {}
+
+        def load(scene):
+            moved["offset"] = obj_format.load_obj(scene, path, progress=cb,
+                                                  scale=scale)
+
+        cmd = SnapshotImport(load)
         try:
             self.viewport.history.execute(cmd)
         except Exception as exc:  # noqa: BLE001
@@ -6748,7 +6783,7 @@ class MainWindow(QMainWindow):
         self.viewport.update()
         self._import_name = path.name
         self._update_title()
-        self.statusBar().showMessage(tr("Imported {name}", name=path.name), 3000)
+        self._report_import(path.name, moved.get("offset"))
 
     def _on_import_stl(self) -> None:
         from PySide6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox,
@@ -6802,8 +6837,9 @@ class MainWindow(QMainWindow):
         settings.setValue("import/stl_simplify_mode", simplify_mode)
         dlg, cb = self._import_progress(
             tr("Importing {name}…", name=path.name))
+        moved: dict = {}
         target, exc = self._parse_stl_threaded(
-            path, scale, simplify_mode, cb)
+            path, scale, simplify_mode, cb, report=moved)
         if exc is not None:
             dlg.close()
             QMessageBox.critical(self, tr("Import STL failed"), str(exc))
@@ -6821,7 +6857,7 @@ class MainWindow(QMainWindow):
         self.viewport.update()
         self._import_name = path.name
         self._update_title()
-        self.statusBar().showMessage(tr("Imported {name}", name=path.name), 3000)
+        self._report_import(path.name, moved.get("offset"))
 
     def _on_import_image(self) -> None:
         """Import a picture to trace over (``Import ▸ image``).
@@ -7183,11 +7219,7 @@ class MainWindow(QMainWindow):
         msg = tr("Imported {name}: {edges} edges in {groups} tagged groups",
                  name=shown.name, edges=stats.get("edges", 0),
                  groups=stats.get("groups", 0))
-        offset = stats.get("offset")
-        if offset:
-            msg += "  ·  " + tr(
-                "moved near the origin (survey coordinates); offset "
-                "{x:,.0f}, {y:,.0f} m", x=offset[0], y=offset[1])
+        msg += self._survey_note(stats.get("offset"))
         self.statusBar().showMessage(msg, 8000)
         return True
 

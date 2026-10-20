@@ -303,7 +303,7 @@ def suggest_unit(path) -> str:
 
 
 def load_obj(scene, path, progress=None, scale: float = 1.0,
-             matrix=None) -> None:
+             matrix=None):
     """See :func:`_load_obj_inner`. Wrapped to run with the generational GC off —
     mass vertex/edge/face construction ahead (see formats.skp.apply_payload);
     collection is merely deferred to the re-enable."""
@@ -311,15 +311,15 @@ def load_obj(scene, path, progress=None, scale: float = 1.0,
     _gc_was_enabled = gc.isenabled()
     gc.disable()
     try:
-        _load_obj_inner(scene, path, progress=progress, scale=scale,
-                        matrix=matrix)
+        return _load_obj_inner(scene, path, progress=progress, scale=scale,
+                               matrix=matrix)
     finally:
         if _gc_was_enabled:
             gc.enable()
 
 
 def _load_obj_inner(scene, path, progress=None, scale: float = 1.0,
-                    matrix=None) -> None:
+                    matrix=None):
     """Add the faces of a Wavefront OBJ at ``path`` to ``scene``'s mesh, then
     weld + merge coplanar so a triangulated file (e.g. our own export, or another
     modeller's OBJ) comes back as clean editable polygons. Material ``Kd`` colours
@@ -331,7 +331,11 @@ def _load_obj_inner(scene, path, progress=None, scale: float = 1.0,
     ``scale``: it stands a Y-up file up (:data:`Y_UP_TO_Z_UP`) and can carry
     whatever else the source says about the model — a catalogue's own
     rotation, a fit to a declared size. The file itself never says which
-    axis is the vertical, so this is the caller's to know, not a guess."""
+    axis is the vertical, so this is the caller's to know, not a guess.
+
+    A file in survey coordinates (a drone terrain in UTM) is moved near the
+    origin before any vertex is made (formats/recenter.py); returns that
+    offset, or ``None`` when the file was read where it is."""
     from core.history import run_stitch
     from core.orient import orient_outward
     from core.topology import _key
@@ -355,21 +359,41 @@ def _load_obj_inner(scene, path, progress=None, scale: float = 1.0,
     current_g = ""
     pending: list[tuple[list[QVector3D], object, object, int, tuple]] = []
 
-    for line in read_obj_text(path).splitlines():
+    def placed(parts):
+        """A ``v`` line's point in metres, Z-up, still in double precision."""
+        x = float(parts[1]) * scale
+        y = float(parts[2]) * scale
+        z = float(parts[3]) * scale
+        if matrix is not None:
+            m = matrix
+            x, y, z = (m[0] * x + m[1] * y + m[2] * z,
+                       m[3] * x + m[4] * y + m[5] * z,
+                       m[6] * x + m[7] * y + m[8] * z)
+        return x, y, z
+
+    lines = read_obj_text(path).splitlines()
+    # Measure first, in double precision: a file in survey coordinates moves
+    # near the origin BEFORE its first vertex turns single precision.
+    from formats.recenter import Bounds
+    box = Bounds()
+    for line in lines:
+        if line.startswith("v "):
+            parts = line.split()
+            try:
+                box.add(*placed(parts))
+            except (IndexError, ValueError):
+                pass
+    offset = box.offset()
+    ox, oy, oz = offset or (0.0, 0.0, 0.0)
+
+    for line in lines:
         parts = line.split()
         if not parts:
             continue
         tag = parts[0]
         if tag == "v":
-            x = float(parts[1]) * scale
-            y = float(parts[2]) * scale
-            z = float(parts[3]) * scale
-            if matrix is not None:
-                m = matrix
-                x, y, z = (m[0] * x + m[1] * y + m[2] * z,
-                           m[3] * x + m[4] * y + m[5] * z,
-                           m[6] * x + m[7] * y + m[8] * z)
-            verts.append(QVector3D(x, y, z))
+            x, y, z = placed(parts)
+            verts.append(QVector3D(x - ox, y - oy, z - oz))
         elif tag == "vt":
             try:
                 uvs.append((float(parts[1]),
@@ -469,7 +493,7 @@ def _load_obj_inner(scene, path, progress=None, scale: float = 1.0,
             path.stem, pieces, _face_attrs, tick))
         scene.version += 1
         tick(1.0, "Done")
-        return
+        return offset
 
     if len(pending) > _MAX_FUSE_LOOPS:
         from core.group import Group
@@ -492,7 +516,7 @@ def _load_obj_inner(scene, path, progress=None, scale: float = 1.0,
         scene.groups.append(Group(target))
         scene.version += 1
         tick(1.0, "Done")
-        return
+        return offset
 
     target = scene.mesh
     seed: set = set()
@@ -519,6 +543,7 @@ def _load_obj_inner(scene, path, progress=None, scale: float = 1.0,
     soften_by_smoothing_group(scene.mesh)
     drop_smoothing_groups(scene.mesh)
     scene.version += 1
+    return offset
 
 
 def _piece_name(key: tuple, number: int) -> str:

@@ -405,15 +405,16 @@ def _hide_cutout_card_edges(mesh) -> None:
             e.hidden = True
 
 
-def load_glb(scene, path, progress=None) -> None:
+def load_glb(scene, path, progress=None):
     """Add the glTF/GLB at ``path`` to ``scene`` as a reference Group named
     after the file (or the embedded Sketchfab title). GC off during the
-    bulk build, like every mass import."""
+    bulk build, like every mass import. Returns the survey offset the file
+    was moved by (formats/recenter.py), or ``None``."""
     import gc
     was = gc.isenabled()
     gc.disable()
     try:
-        _load_glb_inner(scene, path, progress=progress)
+        return _load_glb_inner(scene, path, progress=progress)
     finally:
         if was:
             gc.enable()
@@ -439,8 +440,9 @@ def _guess_scale(batches) -> float:
     return 1.0
 
 
-def _load_glb_inner(scene, path, progress=None) -> None:
+def _load_glb_inner(scene, path, progress=None):
     from core.group import Group
+    from formats.recenter import Bounds
 
     def tick(frac, text):
         if progress is not None:
@@ -454,8 +456,19 @@ def _load_glb_inner(scene, path, progress=None) -> None:
     s = 1.0 if ours else _guess_scale(batches)
     if s != 1.0:
         batches = [(tris * s, uvs, r) for tris, uvs, r in batches]
+    # The world positions are still double precision here: a file in survey
+    # coordinates moves near the origin before the mesh makes them single.
+    # (The node placements, kept in double precision by glTF itself, are
+    # where a georeferenced file usually carries its far-out position.)
+    box = Bounds()
+    for tris, _uvs, _r in batches:
+        box.add_array(tris)
+    offset = box.offset()
+    if offset:
+        batches = [(tris - offset, uvs, r) for tris, uvs, r in batches]
     mesh = build_mesh(batches, progress=progress)
     title = (js.get("asset", {}).get("extras", {}) or {}).get("title")
     name = (title or Path(path).stem)[:60]
     group = Group(mesh, name=name)
     scene.groups.append(group)
+    return offset
