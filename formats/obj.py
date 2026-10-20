@@ -14,7 +14,8 @@ from pathlib import Path, PurePosixPath
 
 from PySide6.QtGui import QVector3D
 
-from .meshexport import export_triangles, material_key, world_faces_painted
+from .meshexport import (SmoothNormals, _corner, export_triangles,
+                         material_key, world_faces_painted)
 
 # Cream painted on faces with no material colour (mirrors the viewport default).
 _DEFAULT_COLOR = (0.96, 0.95, 0.925)
@@ -25,7 +26,9 @@ def save_obj(scene, path) -> None:
     become ``Kd`` materials; textured faces become ``map_Kd`` materials with the
     image copied next to the .obj and per-vertex ``vt`` from the same planar
     projection the viewport uses — so the model opens with matching textures in
-    other modellers (Blender, ...)."""
+    other modellers (Blender, ...). Every corner carries a ``vn``: smooth
+    across soft edges, so curved surfaces open round, and the face's own
+    flat normal everywhere else."""
     import shutil
     from core.texture import planar_uv
 
@@ -51,22 +54,40 @@ def save_obj(scene, path) -> None:
             i = uvindex[key] = len(uvs)
         return i
 
+    nrms: list[tuple[float, float, float]] = []
+    nindex: dict[tuple, int] = {}
+
+    def nidx(n) -> int:
+        key = (round(n.x(), 5), round(n.y(), 5), round(n.z(), 5))
+        i = nindex.get(key)
+        if i is None:
+            nrms.append((n.x(), n.y(), n.z()))
+            i = nindex[key] = len(nrms)
+        return i
+
+    def corner_n(smooth, flat, p) -> int:
+        """``vn`` index of a corner: smooth across soft edges, else flat."""
+        return nidx(smooth.get(_corner(p), flat) if smooth else flat)
+
     # material key -> {"color": rgb, "map": basename|None} and its triangles
-    # (each triangle a list of (vi, ti|None)).
+    # (each triangle a list of (vi, ti|None, ni)).
     materials: dict[tuple, dict] = {}
     groups: dict[tuple, list] = {}
     # Every face as it SHOWS: the paint of a group or component reaches the
     # faces inside that wear the default material, as in the viewport.
+    smoother = SmoothNormals()
     for face, attrs in world_faces_painted(scene):
         tex = attrs.get("texture")
         key = material_key(attrs, with_opacity=False)
+        flat = smoother.flat(face)
+        smooth = smoother.corners(face)
         if tex is not None and tex.get("path"):
             src = Path(tex["path"])
             materials.setdefault(key, {"color": (1.0, 1.0, 1.0),
                                        "map": src.name, "src": src})
             if attrs.get("mat") and "mat" not in materials[key]:
                 materials[key]["mat"] = attrs["mat"]
-            n = face.normal()
+            n = flat
             sw = tex.get("sw", 1.0) or 1.0
             sh = tex.get("sh", 1.0) or 1.0
             rot = float(tex.get("rot", 0.0))
@@ -78,7 +99,8 @@ def save_obj(scene, path) -> None:
                 else:
                     uv = planar_uv(n, list(tri), sw, sh, rot)
                 groups.setdefault(key, []).append(
-                    [(vidx(tri[k]), uvidx(uv[k])) for k in range(3)])
+                    [(vidx(tri[k]), uvidx(uv[k]), corner_n(smooth, flat, tri[k]))
+                     for k in range(3)])
         else:
             # RGB only: an AI recipe's (r, g, b, 1.0) broke the .mtl writer.
             col = tuple(attrs.get("color") or _DEFAULT_COLOR)[:3]
@@ -87,7 +109,8 @@ def save_obj(scene, path) -> None:
                 materials[key]["mat"] = attrs["mat"]
             for tri in export_triangles(face):
                 groups.setdefault(key, []).append(
-                    [(vidx(tri[k]), None) for k in range(3)])
+                    [(vidx(tri[k]), None, corner_n(smooth, flat, tri[k]))
+                     for k in range(3)])
 
     keys = list(groups.keys())
     # Registry identities (attrs["mat"]) export under their real name —
@@ -129,11 +152,13 @@ def save_obj(scene, path) -> None:
             o.write(f"v {x:.6f} {y:.6f} {z:.6f}\n")
         for u, v in uvs:
             o.write(f"vt {u:.6f} {v:.6f}\n")
+        for x, y, z in nrms:
+            o.write(f"vn {x:.6f} {y:.6f} {z:.6f}\n")
         for k in keys:
             o.write(f"usemtl {matname[k]}\n")
             for tri in groups[k]:
-                toks = [(f"{vi}/{ti}" if ti is not None else f"{vi}")
-                        for vi, ti in tri]
+                toks = [(f"{vi}/{ti}/{ni}" if ti is not None else f"{vi}//{ni}")
+                        for vi, ti, ni in tri]
                 o.write("f " + " ".join(toks) + "\n")
 
 

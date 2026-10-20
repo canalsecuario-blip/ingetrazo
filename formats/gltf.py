@@ -88,8 +88,10 @@ def _file_hierarchy(scene, only=None):
     from core.group import transformed_mesh
     from core.i18n import tr
     from core.materials import material_sig
-    from .meshexport import (_add_face, _facing_quad, _feet, _piece_paint,
-                             _resolve_finishes, _shown, _turned_toward)
+    from .meshexport import (SmoothNormals, _add_face, _facing_quad, _feet,
+                             _piece_paint, _resolve_finishes, _shown,
+                             _turned_toward)
+    smoother = SmoothNormals()
     materials: dict = {}
     meshes: dict = {}
     roots: list = []
@@ -104,7 +106,7 @@ def _file_hierarchy(scene, only=None):
     if loose:
         prims: dict = {}
         for f in loose:
-            _add_face(f, materials, prims)
+            _add_face(f, materials, prims, smoother=smoother)
         meshes["loose"] = prims
         roots.append({"name": tr("Loose geometry"), "matrix": None,
                       "mesh": "loose", "children": []})
@@ -125,7 +127,7 @@ def _file_hierarchy(scene, only=None):
                       else _facing_quad(mesh, toward))
             prims = {}
             for f in turned.faces:
-                _add_face(f, materials, prims, _shown(f, paint))
+                _add_face(f, materials, prims, _shown(f, paint), smoother)
             if prims:
                 key = ("figure", len(figures))
                 meshes[key] = prims
@@ -142,7 +144,7 @@ def _file_hierarchy(scene, only=None):
         if key not in meshes:
             prims = {}
             for f in g.mesh.faces:
-                _add_face(f, materials, prims, _shown(f, paint))
+                _add_face(f, materials, prims, _shown(f, paint), smoother)
             meshes[key] = prims
         node = {"name": getattr(g, "name", "") or tr("Group"),
                 "matrix": m, "mesh": key if meshes[key] else None,
@@ -319,10 +321,10 @@ def save_glb(scene, path, face_me=None, only=None) -> None:
             uvs: list[tuple] = []
             indices: list[int] = []
             vindex: dict[tuple, int] = {}
-            for normal, verts in tris:
-                nn = _yup(normal)
-                for pos, uv in verts:
+            for _flat, verts in tris:
+                for pos, uv, normal in verts:
                     p = _yup(pos)
+                    nn = _yup(normal)      # smooth across soft edges
                     uvk = (round(uv[0], 6), round(uv[1], 6)) if textured else (0.0, 0.0)
                     vkey = (round(p[0], 6), round(p[1], 6), round(p[2], 6),
                             round(nn[0], 4), round(nn[1], 4), round(nn[2], 4), uvk)
