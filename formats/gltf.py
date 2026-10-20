@@ -87,8 +87,9 @@ def _file_hierarchy(scene, only=None):
     from PySide6.QtGui import QVector3D
     from core.group import transformed_mesh
     from core.i18n import tr
-    from .meshexport import (_add_face, _facing_quad, _feet,
-                             _resolve_finishes, _turned_toward)
+    from core.materials import material_sig
+    from .meshexport import (_add_face, _facing_quad, _feet, _piece_paint,
+                             _resolve_finishes, _shown, _turned_toward)
     materials: dict = {}
     meshes: dict = {}
     roots: list = []
@@ -108,9 +109,12 @@ def _file_hierarchy(scene, only=None):
         roots.append({"name": tr("Loose geometry"), "matrix": None,
                       "mesh": "loose", "children": []})
 
-    def part(g, base):
+    def part(g, base, top):
         m = getattr(g, "xform", None)
         world = m if base is None else (base if m is None else base * m)
+        # What the piece's unpainted faces show: its own paint, else the
+        # top-level object's — as the viewport draws it.
+        paint = _piece_paint(g, top)
         kind = getattr(g, "billboard", False)
         if kind:
             mesh = g.mesh if world is None else transformed_mesh(g.mesh, world)
@@ -121,7 +125,7 @@ def _file_hierarchy(scene, only=None):
                       else _facing_quad(mesh, toward))
             prims = {}
             for f in turned.faces:
-                _add_face(f, materials, prims)
+                _add_face(f, materials, prims, _shown(f, paint))
             if prims:
                 key = ("figure", len(figures))
                 meshes[key] = prims
@@ -132,17 +136,19 @@ def _file_hierarchy(scene, only=None):
                         feet.x(), feet.y(), feet.z(),
                         math.atan2(facing.y(), facing.x())]}})
             return None
-        key = id(g.mesh)
+        # Copies of a component share ONE mesh in the file — unless they
+        # wear different paint, which makes them different meshes.
+        key = (id(g.mesh), material_sig(paint))
         if key not in meshes:
             prims = {}
             for f in g.mesh.faces:
-                _add_face(f, materials, prims)
+                _add_face(f, materials, prims, _shown(f, paint))
             meshes[key] = prims
         node = {"name": getattr(g, "name", "") or tr("Group"),
                 "matrix": m, "mesh": key if meshes[key] else None,
                 "children": []}
         for child in getattr(g, "children", None) or ():
-            sub = part(child, world)
+            sub = part(child, world, top)
             if sub is not None:
                 node["children"].append(sub)
         return node
@@ -152,7 +158,7 @@ def _file_hierarchy(scene, only=None):
             continue
         if only is not None and g not in only:
             continue
-        node = part(g, None)
+        node = part(g, None, g)
         if node is not None:
             roots.append(node)
     roots.extend(figures)

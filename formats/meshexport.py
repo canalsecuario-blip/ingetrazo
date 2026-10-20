@@ -120,11 +120,25 @@ def _facing_quad(mesh, toward):
     return out
 
 
+def _piece_paint(piece, top):
+    """The paint a piece's default faces show (``core.group.
+    effective_material``): its own, else the top-level object's."""
+    return (getattr(piece, "material", None)
+            or getattr(top, "material", None) or None)
+
+
+def _shown(face, paint) -> dict:
+    """The attrs ``face`` is drawn with under a container's ``paint``."""
+    from core.materials import effective_attrs
+    return effective_attrs(face.attrs, paint) or {}
+
+
 def _placements_facing(group, toward, figures: bool = True):
-    """Every placement of ``group`` in world space, face-me figures (at any
-    depth) turned toward the camera: a cut-out outline (``"mesh"``) by
-    :func:`_turned_toward`, a simple quad rebuilt by :func:`_facing_quad`.
-    ``figures=False`` leaves the figures out (:func:`faceme_figures`)."""
+    """Every placement of ``group`` in world space as ``(face, attrs)``,
+    face-me figures (at any depth) turned toward the camera: a cut-out
+    outline (``"mesh"``) by :func:`_turned_toward`, a simple quad rebuilt by
+    :func:`_facing_quad`. ``figures=False`` leaves the figures out
+    (:func:`faceme_figures`)."""
     from core.group import iter_placements, transformed_mesh
     for g, m in iter_placements(group):
         kind = getattr(g, "billboard", False)
@@ -135,7 +149,32 @@ def _placements_facing(group, toward, figures: bool = True):
             mesh = _turned_toward(mesh, toward)
         elif kind:
             mesh = _facing_quad(mesh, toward)
-        yield from mesh.faces
+        paint = _piece_paint(g, group)
+        for f in mesh.faces:
+            yield f, _shown(f, paint)
+
+
+def _group_faces(group):
+    """A group's faces in world space as ``(face, attrs)``, each with the
+    paint it shows: the face's own, else its piece's, else the group's.
+
+    When no nested piece carries paint of its own, the whole group is ONE
+    paint and comes through :func:`core.group.world_mesh` in a single
+    vectorized pass; only a group with painted pieces is walked piece by
+    piece (each through its own transform), since the merged mesh no longer
+    knows which piece a face came from."""
+    from core.group import iter_placements, transformed_mesh, world_mesh
+    pieces = list(iter_placements(group))
+    if not any(getattr(p, "material", None) for p, _m in pieces[1:]):
+        paint = getattr(group, "material", None)
+        for f in world_mesh(group).faces:
+            yield f, _shown(f, paint)
+        return
+    for p, m in pieces:
+        mesh = p.mesh if m is None else transformed_mesh(p.mesh, m)
+        paint = _piece_paint(p, group)
+        for f in mesh.faces:
+            yield f, _shown(f, paint)
 
 
 def _feet(mesh):
@@ -189,37 +228,33 @@ def world_faces(scene, face_me=None, figures: bool = True):
     a render needs them (#181). Without it they stay out, as before: a file
     has no camera for them to face. ``figures=False`` keeps them out even
     then — :func:`faceme_figures` hands them over one by one."""
-    if face_me is not None and hasattr(scene, "render_faces"):
-        for f in scene.loose_mesh.faces:
-            if scene.entity_visible(f):
-                yield f
-        from core.group import world_mesh
-        for g in getattr(scene, "groups", []):
-            if not scene.entity_visible(g):
-                continue
-            if _has_billboard(g):
-                yield from _placements_facing(g, face_me, figures)
-            else:
-                yield from world_mesh(g).faces
+    for face, _attrs in world_faces_painted(scene, face_me, figures):
+        yield face
+
+
+def world_faces_painted(scene, face_me=None, figures: bool = True):
+    """:func:`world_faces` as ``(face, attrs)``, ``attrs`` being what the
+    face SHOWS: inside a painted group or component, the faces that wear
+    the default material take the container's paint, as in the viewport
+    (``core.materials.effective_attrs``). A face's own ``attrs`` are never
+    changed — a classic group's faces are the document's own."""
+    if not hasattr(scene, "render_faces"):
+        faces = scene.mesh.faces if hasattr(scene, "mesh") else scene.faces
+        for f in faces:
+            yield f, f.attrs
         return
-    if hasattr(scene, "render_faces"):
-        groups = getattr(scene, "groups", [])
-        if not any(getattr(g, "xform", None) is not None
-                   or getattr(g, "children", None) for g in groups):
-            yield from scene.render_faces()
-            return
-        from core.group import world_mesh
-        for f in scene.loose_mesh.faces:
-            if scene.entity_visible(f):
-                yield f
-        for g in groups:
-            if not scene.entity_visible(g) or getattr(g, "billboard", False):
-                continue
-            yield from world_mesh(g).faces
-    elif hasattr(scene, "mesh"):
-        yield from scene.mesh.faces
-    else:
-        yield from scene.faces
+    for f in scene.loose_mesh.faces:
+        if scene.entity_visible(f):
+            yield f, f.attrs
+    for g in getattr(scene, "groups", []):
+        if not scene.entity_visible(g):
+            continue
+        if face_me is not None and _has_billboard(g):
+            yield from _placements_facing(g, face_me, figures)
+        elif face_me is None and getattr(g, "billboard", False):
+            continue             # a file has no camera for a figure to face
+        else:
+            yield from _group_faces(g)
 
 
 def collect_geometry(scene, face_me=None):
@@ -234,13 +269,14 @@ def collect_geometry(scene, face_me=None):
     * ``prims[key]`` is a list of triangles, each ``(normal, verts)`` with
       ``verts`` a list of three ``(position: QVector3D, uv: (u, v) | None)``.
 
-    ``key`` is ``("color", rgb)`` or ``("tex", basename)`` — identical to the
-    OBJ exporter's material keys, so painted colours and textures survive.
+    ``key`` is ``("color", rgb)`` or ``("tex", basename)`` (see
+    :func:`material_key`) — identical to the OBJ exporter's material keys,
+    so painted colours and textures survive.
     """
     materials: dict[tuple, dict] = {}
     prims: dict[tuple, list] = {}
-    for face in world_faces(scene, face_me):
-        _add_face(face, materials, prims)
+    for face, attrs in world_faces_painted(scene, face_me):
+        _add_face(face, materials, prims, attrs)
     _resolve_finishes(scene, materials)
     return materials, prims
 
@@ -252,8 +288,8 @@ def collect_geometry_split(scene, face_me):
     (see :func:`faceme_figures`); ``materials`` covers all of them."""
     materials: dict[tuple, dict] = {}
     prims: dict[tuple, list] = {}
-    for face in world_faces(scene, face_me, figures=False):
-        _add_face(face, materials, prims)
+    for face, attrs in world_faces_painted(scene, face_me, figures=False):
+        _add_face(face, materials, prims, attrs)
     figures = []
     for faces, feet, yaw in faceme_figures(scene, face_me):
         own: dict[tuple, list] = {}
@@ -265,21 +301,49 @@ def collect_geometry_split(scene, face_me):
     return materials, prims, figures
 
 
-def _add_face(face, materials, prims) -> None:
-    """One face's triangles into ``prims`` under its material's key."""
-    from core.texture import affine_uv, planar_uv
-    n = face.normal()
-    op = face.attrs.get("opacity")
+def material_key(attrs, with_opacity: bool = True) -> tuple:
+    """The key a face's triangles are grouped under in an exported file:
+    ``("tex", basename)`` for a textured face, ``("color", rgb)`` otherwise,
+    then the translucency when there is one (``with_opacity``), then the
+    registry name (``attrs["mat"]``) when the face wears a named material.
+
+    The name is part of the key so two materials that happen to look alike
+    — two whites, one picture under two names — stay two materials in the
+    file, each under its own name, instead of the second silently becoming
+    the first. Anonymous paint still merges by look, as it always did."""
+    attrs = attrs or {}
+    op = attrs.get("opacity")
     op = None if op is None or float(op) >= 0.999 else round(float(op), 3)
-    tex = face.attrs.get("texture")
+    tex = attrs.get("texture")
+    if tex is not None and tex.get("path"):
+        key: tuple = ("tex", Path(tex["path"]).name)
+    else:
+        key = ("color", tuple(attrs.get("color") or _DEFAULT_COLOR)[:3])
+    if with_opacity and op is not None:
+        key += (op,)
+    if attrs.get("mat"):
+        key += (("mat", attrs["mat"]),)
+    return key
+
+
+def _add_face(face, materials, prims, attrs=None) -> None:
+    """One face's triangles into ``prims`` under its material's key.
+    ``attrs`` is what the face shows (:func:`world_faces_painted`), its own
+    by default."""
+    from core.texture import affine_uv, planar_uv
+    attrs = face.attrs if attrs is None else attrs
+    n = face.normal()
+    op = attrs.get("opacity")
+    op = None if op is None or float(op) >= 0.999 else round(float(op), 3)
+    tex = attrs.get("texture")
+    key = material_key(attrs)
     if tex is not None and tex.get("path"):
         src = Path(tex["path"])
-        key = ("tex", src.name) if op is None else ("tex", src.name, op)
         materials.setdefault(key, {"color": (1.0, 1.0, 1.0),
                                    "map": src.name, "src": src,
                                    "opacity": op})
-        if face.attrs.get("mat") and "mat" not in materials[key]:
-            materials[key]["mat"] = face.attrs["mat"]
+        if attrs.get("mat") and "mat" not in materials[key]:
+            materials[key]["mat"] = attrs["mat"]
         sw = tex.get("sw", 1.0) or 1.0
         sh = tex.get("sh", 1.0) or 1.0
         rot = float(tex.get("rot", 0.0))
@@ -292,12 +356,11 @@ def _add_face(face, materials, prims) -> None:
     else:
         # RGB: the AI recipes paint (r, g, b, 1.0) and every writer reads
         # three channels (transparency is attrs["opacity"], above).
-        col = tuple(face.attrs.get("color") or _DEFAULT_COLOR)[:3]
-        key = ("color", col) if op is None else ("color", col, op)
+        col = tuple(attrs.get("color") or _DEFAULT_COLOR)[:3]
         materials.setdefault(key, {"color": col, "map": None,
                                    "opacity": op})
-        if face.attrs.get("mat") and "mat" not in materials[key]:
-            materials[key]["mat"] = face.attrs["mat"]
+        if attrs.get("mat") and "mat" not in materials[key]:
+            materials[key]["mat"] = attrs["mat"]
         for tri in export_triangles(face):
             pts = list(tri)
             prims.setdefault(key, []).append(

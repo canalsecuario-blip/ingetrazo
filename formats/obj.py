@@ -3,8 +3,9 @@
 """OBJ export — indexed vertices + triangles, with per-face colour as materials.
 
 Wavefront OBJ with a sidecar ``.mtl``: vertices are de-duplicated by position,
-every face is triangulated, and triangles are grouped by their material colour
-(``Face.attrs["color"]``, default cream) so each colour becomes one ``usemtl``
+every face is triangulated, and triangles are grouped by their material
+(``Face.attrs["color"]``, default cream, under its registry name when it has
+one — ``formats.meshexport.material_key``) so each becomes one ``usemtl``
 material. Opens in Blender, MeshLab, etc. with the painted colours intact.
 """
 from __future__ import annotations
@@ -13,33 +14,10 @@ from pathlib import Path, PurePosixPath
 
 from PySide6.QtGui import QVector3D
 
-from .meshexport import export_triangles
+from .meshexport import export_triangles, material_key, world_faces_painted
 
 # Cream painted on faces with no material colour (mirrors the viewport default).
 _DEFAULT_COLOR = (0.96, 0.95, 0.925)
-
-
-def _faces(scene):
-    """Every renderable face in WORLD space: loose mesh + groups. Component
-    instances share a prototype mesh in local coordinates, so their faces
-    come from a transformed copy."""
-    if hasattr(scene, "render_faces"):
-        groups = getattr(scene, "groups", [])
-        if not any(getattr(g, "xform", None) is not None for g in groups):
-            yield from scene.render_faces()
-            return
-        from core.group import world_mesh
-        for f in scene.loose_mesh.faces:
-            if scene.entity_visible(f):
-                yield f
-        for g in groups:
-            if not scene.entity_visible(g) or getattr(g, "billboard", False):
-                continue
-            yield from world_mesh(g).faces
-    elif hasattr(scene, "mesh"):
-        yield from scene.mesh.faces
-    else:
-        yield from scene.faces
 
 
 def save_obj(scene, path) -> None:
@@ -77,15 +55,17 @@ def save_obj(scene, path) -> None:
     # (each triangle a list of (vi, ti|None)).
     materials: dict[tuple, dict] = {}
     groups: dict[tuple, list] = {}
-    for face in _faces(scene):
-        tex = face.attrs.get("texture")
+    # Every face as it SHOWS: the paint of a group or component reaches the
+    # faces inside that wear the default material, as in the viewport.
+    for face, attrs in world_faces_painted(scene):
+        tex = attrs.get("texture")
+        key = material_key(attrs, with_opacity=False)
         if tex is not None and tex.get("path"):
             src = Path(tex["path"])
-            key = ("tex", src.name)
             materials.setdefault(key, {"color": (1.0, 1.0, 1.0),
                                        "map": src.name, "src": src})
-            if face.attrs.get("mat") and "mat" not in materials[key]:
-                materials[key]["mat"] = face.attrs["mat"]
+            if attrs.get("mat") and "mat" not in materials[key]:
+                materials[key]["mat"] = attrs["mat"]
             n = face.normal()
             sw = tex.get("sw", 1.0) or 1.0
             sh = tex.get("sh", 1.0) or 1.0
@@ -101,11 +81,10 @@ def save_obj(scene, path) -> None:
                     [(vidx(tri[k]), uvidx(uv[k])) for k in range(3)])
         else:
             # RGB only: an AI recipe's (r, g, b, 1.0) broke the .mtl writer.
-            col = tuple(face.attrs.get("color") or _DEFAULT_COLOR)[:3]
-            key = ("color", col)
+            col = tuple(attrs.get("color") or _DEFAULT_COLOR)[:3]
             materials.setdefault(key, {"color": col, "map": None})
-            if face.attrs.get("mat") and "mat" not in materials[key]:
-                materials[key]["mat"] = face.attrs["mat"]
+            if attrs.get("mat") and "mat" not in materials[key]:
+                materials[key]["mat"] = attrs["mat"]
             for tri in export_triangles(face):
                 groups.setdefault(key, []).append(
                     [(vidx(tri[k]), None) for k in range(3)])
