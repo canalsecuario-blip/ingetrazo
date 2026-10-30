@@ -8207,6 +8207,11 @@ class MainWindow(QMainWindow):
         # session's recovery slot no longer speaks for anyone.
         from core import autosave
         autosave.clear(self._current_path)
+        # The composer is a top-level window of its own (not a child), so
+        # it would outlive this one and keep the app running: close it too.
+        comp = getattr(self, "_composer", None)
+        if comp is not None:
+            comp.close()
         # The window arrangement (toolbars, docks, size) IS a preference.
         # Closing mid-presentation must remember the WORKSPACE, not the
         # clean screen's everything-hidden state.
