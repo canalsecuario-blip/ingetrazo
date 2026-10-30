@@ -5592,15 +5592,7 @@ class ComposerWindow(QMainWindow):
         super().changeEvent(event)
 
     def __init__(self, main_window) -> None:
-        # A top-level window of its own, not one OWNED by the model window:
-        # under Windows an owned window minimises to a stub title bar at the
-        # bottom-left of the desktop — right over the Model | Sheet tabs and
-        # the model itself — and gets no taskbar button (Marco: «el
-        # compositor de láminas al minimizarlo queda en un lugar incómodo
-        # tapando modelos y láminas»). Unowned, it minimises to its own
-        # taskbar / dock entry like a second document window. The model
-        # window keeps it alive (``_composer``) and closes it on quit.
-        super().__init__(None)
+        super().__init__(main_window)
         self.setWindowFlag(Qt.Window, True)
         self._window = main_window
         from views.floating_toolbar import watch_toolbars
